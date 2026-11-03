@@ -1,0 +1,42 @@
+import { ensureAdmin } from './core/identity.js';
+import { runMigrations } from './db/migrate.js';
+import type { Services } from './services.js';
+
+/** Startup tasks: migrations, the bootstrap owner, and demo accounts for a brand-new workspace. */
+export async function bootstrap(services: Services): Promise<void> {
+  const { config, logger, database, db, accounts } = services;
+  if (config.migrateOnStart) {
+    await runMigrations(database.pool);
+    logger.info('database migrations applied');
+  }
+  if (services.secrets.usingDevelopmentKey) {
+    logger.warn('ENCRYPTION_KEY is not set: using an insecure development key. Never do this in production.');
+  }
+  if (!config.admin) {
+    logger.warn('ADMIN_EMAIL / ADMIN_PASSWORD are not set: nobody can sign in until they are.');
+    return;
+  }
+  const result = await ensureAdmin(db, config.admin);
+  if (result.created) logger.info({ email: result.user.email }, 'owner account created');
+  if (result.passwordUpdated)
+    logger.info({ email: result.user.email }, 'owner password updated from ADMIN_PASSWORD');
+  if (result.created && config.seedDemoAccounts) {
+    await accounts.create(result.workspace.id, {
+      connectorId: 'demo',
+      name: 'main',
+      label: 'Demo — main',
+      description: 'First test account',
+      config: { greeting: 'Hello' },
+      credentials: { secret: 'demo-secret-main' },
+    });
+    await accounts.create(result.workspace.id, {
+      connectorId: 'demo',
+      name: 'second',
+      label: 'Demo — second',
+      description: 'Second test account, shows multi-account routing',
+      config: { greeting: 'Привет' },
+      credentials: { secret: 'demo-secret-second' },
+    });
+    logger.info('demo accounts created');
+  }
+}

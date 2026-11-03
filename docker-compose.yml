@@ -1,0 +1,37 @@
+# Local development: `docker compose up -d db`, then `npm run dev`.
+# Or run the whole hub in containers: `docker compose up --build`.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: anyconnect
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 10
+
+  hub:
+    build: .
+    profiles: ["full"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/anyconnect
+      PUBLIC_URL: http://localhost:3000
+      PORT: "3000"
+      NODE_ENV: development
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-you@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-to-a-long-password}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
