@@ -1,0 +1,105 @@
+import type { McpHttpHandler } from '@modelcontextprotocol/server';
+import type { AppConfig } from './config.js';
+import { createBuiltinRegistry } from './connectors/index.js';
+import type { ConnectorRegistry } from './connectors/registry.js';
+import { AccountService } from './core/accounts.js';
+import { ApiTokenService } from './core/api-tokens.js';
+import { HubTokenVerifier } from './core/auth.js';
+import { createDatabase, type Database, type Db } from './db/client.js';
+import { Hub } from './hub/hub.js';
+import { SecretBox } from './lib/crypto.js';
+import { RateLimiter } from './lib/rate-limit.js';
+import type { safeFetch } from './lib/safe-fetch.js';
+import { createLogger, type Logger } from './logger.js';
+import { createHubMcpHandler } from './mcp/handler.js';
+import { ClientRegistry } from './oauth/clients.js';
+import { OAuthServer } from './oauth/server.js';
+import { VERSION } from './version.js';
+import { SessionService } from './web/sessions.js';
+
+/** Everything the app needs, wired once. Tests build the same graph with overrides. */
+export interface Services {
+  config: AppConfig;
+  version: string;
+  logger: Logger;
+  database: Database;
+  db: Db;
+  secrets: SecretBox;
+  connectors: ConnectorRegistry;
+  accounts: AccountService;
+  apiTokens: ApiTokenService;
+  hub: Hub;
+  clients: ClientRegistry;
+  oauth: OAuthServer;
+  verifier: HubTokenVerifier;
+  sessions: SessionService;
+  rateLimiter: RateLimiter;
+  mcp: McpHttpHandler;
+  close(): Promise<void>;
+}
+
+export function createServices(
+  config: AppConfig,
+  overrides: {
+    logger?: Logger;
+    connectors?: ConnectorRegistry;
+    /** Tests: fetch Client ID Metadata Documents from localhost. */
+    allowPrivateNetwork?: boolean;
+    fetchDocument?: typeof safeFetch;
+  } = {},
+): Services {
+  const logger =
+    overrides.logger ??
+    createLogger({ level: config.logLevel, pretty: !config.isProduction && process.stdout.isTTY === true });
+  const database = createDatabase(config.database.url, { poolMax: config.database.poolMax });
+  const db = database.db;
+  const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
+  const connectors = overrides.connectors ?? createBuiltinRegistry();
+  const accounts = new AccountService(db, connectors, secrets);
+  const apiTokens = new ApiTokenService(db);
+  const hub = new Hub({ db, connectors, accounts, logger, toolTimeoutMs: config.toolTimeoutMs });
+  const clients = new ClientRegistry(db, {
+    dynamicRegistration: config.oauth.dynamicRegistration,
+    metadataDocuments: config.oauth.clientMetadataDocuments,
+    allowPrivateNetwork: overrides.allowPrivateNetwork ?? false,
+    ...(overrides.fetchDocument ? { fetchDocument: overrides.fetchDocument } : {}),
+    logger,
+  });
+  const oauth = new OAuthServer({
+    db,
+    clients,
+    issuer: config.publicUrl,
+    resource: config.mcpUrl,
+    accessTokenTtlSeconds: config.oauth.accessTokenTtlSeconds,
+    refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
+    logger,
+  });
+  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl);
+  const sessions = new SessionService(db, config.sessionTtlSeconds);
+  const rateLimiter = new RateLimiter();
+  const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
+
+  return {
+    config,
+    version: VERSION,
+    logger,
+    database,
+    db,
+    secrets,
+    connectors,
+    accounts,
+    apiTokens,
+    hub,
+    clients,
+    oauth,
+    verifier,
+    sessions,
+    rateLimiter,
+    mcp,
+    async close() {
+      rateLimiter.close();
+      await mcp.close();
+      await database.close();
+    },
+  };
+}

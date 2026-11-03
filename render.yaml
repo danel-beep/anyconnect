@@ -1,0 +1,40 @@
+# Render Blueprint — one click deploy of the hub + Postgres.
+# https://render.com/docs/blueprint-spec
+#
+# After the first deploy:
+#   1. Set ADMIN_EMAIL and ADMIN_PASSWORD in the service's Environment tab (you are asked on creation).
+#   2. Back up ENCRYPTION_KEY somewhere safe: without it stored credentials cannot be decrypted.
+services:
+  - type: web
+    name: anyconnect
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Always-on instance: the free plan sleeps after 15 minutes, which breaks AI connectors and
+    # background work. Starter is the smallest always-on plan.
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: anyconnect-db
+          property: connectionString
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+
+databases:
+  - name: anyconnect-db
+    plan: basic-256mb
+    region: frankfurt
+    databaseName: anyconnect
+    user: anyconnect
+    postgresMajorVersion: "17"
+    # Reachable only from services in the same Render account (no public access).
+    ipAllowList: []
