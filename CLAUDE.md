@@ -6,6 +6,17 @@ Postgres + Drizzle, MCP SDK v2 (`@modelcontextprotocol/server`). The owner speak
 user-facing docs and UI text are Russian-first (UI has RU/EN in `src/web/i18n.ts`); code and
 comments are English.
 
+## Principles
+
+The owner's standing rule for the whole project: build every change so the project stays easy to
+develop further. In practice:
+
+- Extend through the existing seams (connectors via the SDK, `ConnectorResolver`, `HubTokenVerifier`,
+  `RateLimiter`, `buildCatalog` modes) instead of special cases in the hub or routes.
+- Keep layers separate (`routes → mcp/oauth → hub → core → connectors`, see `docs/ARCHITECTURE.md`).
+- Schema changes go through migrations; new behavior comes with tests; docs stay current (Russian).
+- No quick hacks that will need rework later; if a shortcut is truly needed, say so in the PR.
+
 ## Commands
 
 - `npm run dev` — run with reload (needs Postgres; `docker compose up -d db`)
