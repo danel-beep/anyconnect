@@ -509,6 +509,27 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
   });
 
+  it('pages through the activity log, 30 rows at a time', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-log', email: 'log@example.com' });
+    const ws = await workspaceOf((await userByEmail('log@example.com')).id);
+    await hub.services.database.pool.query(
+      `INSERT INTO tool_calls (workspace_id, connector_id, tool_name, principal_type, status, duration_ms, created_at)
+       SELECT $1, 'demo', 'demo_call_' || n, 'api_token', 'ok', 5, now() - n * interval '1 minute'
+       FROM generate_series(1, 35) AS n`,
+      [ws.id],
+    );
+    const first = await (await browser.request('/app/activity')).text();
+    expect(first).toContain('demo_call_1<');
+    expect(first).not.toContain('demo_call_31<');
+    const more = first.match(/href="(\/app\/activity\?before=[^"#]+)#log"/)![1]!.replaceAll('&amp;', '&');
+    const second = await (await browser.request(more)).text();
+    expect(second).toContain('demo_call_31<');
+    expect(second).toContain('demo_call_35<');
+    expect(second).not.toContain('demo_call_30<');
+    expect(second).not.toContain('?before=');
+  });
+
   it('gives the custom MCP form back as filled when the address is wrong', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await oidc.signIn(browser, { sub: 'g-c', email: 'custom@example.com' });

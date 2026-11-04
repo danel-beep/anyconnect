@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { toolCalls } from '../db/schema.js';
 
@@ -61,10 +61,21 @@ export class ActivityService {
   }
 
   /** The newest calls, no older than `sinceDays` (the plan's history window) when given. */
-  async recent(workspaceId: string, opts: { limit: number; sinceDays?: number | null }, now = new Date()) {
+  /** Newest first; `before` continues a page after its last row (keyset paging). */
+  async recent(
+    workspaceId: string,
+    opts: { limit: number; sinceDays?: number | null; before?: { at: Date; id: number } | undefined },
+    now = new Date(),
+  ) {
     const conditions = [eq(toolCalls.workspaceId, workspaceId)];
     if (opts.sinceDays)
       conditions.push(gte(toolCalls.createdAt, new Date(now.getTime() - opts.sinceDays * DAY)));
+    if (opts.before) {
+      const { at, id } = opts.before;
+      conditions.push(
+        or(lt(toolCalls.createdAt, at), and(eq(toolCalls.createdAt, at), lt(toolCalls.id, id)))!,
+      );
+    }
     return this.db
       .select()
       .from(toolCalls)

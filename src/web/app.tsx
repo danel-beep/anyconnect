@@ -951,6 +951,10 @@ export interface ActivityView {
   total: number;
   errors: number;
   historyDays: number | null;
+  /** Link to the next page of the log, when there is one. */
+  more?: string | undefined;
+  /** This page continues the log (not its newest rows). */
+  paged?: boolean;
 }
 
 export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityView }> = ({
@@ -1004,7 +1008,7 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
           )}
         </div>
       </div>
-      <div class="card flush">
+      <div class="card flush" id="log">
         <div class="card-head pad">
           <h2>{t('app.activity.log')}</h2>
           <span class="small muted">
@@ -1012,6 +1016,20 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
           </span>
         </div>
         <CallsTable ctx={ctx} calls={view.calls} empty={t('app.activity.none')} withClient />
+        {view.more || view.paged ? (
+          <div class="actions start pad-x">
+            {view.paged ? (
+              <a class="btn sm" href="/app/activity#log">
+                {t('app.activity.newest')}
+              </a>
+            ) : null}
+            {view.more ? (
+              <a class="btn sm" href={view.more}>
+                {t('app.activity.more')}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
         <p class="hint pad-x">{t('app.activity.privacy')}</p>
       </div>
     </AppShell>

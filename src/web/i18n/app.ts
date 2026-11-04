@@ -109,6 +109,8 @@ export const appEn = {
   'app.services.addAnother': 'Add another',
   'app.services.notReady': 'Coming soon',
   'app.call.dashboard': 'Dashboard (test)',
+  'app.activity.more': 'Show older',
+  'app.activity.newest': 'Back to the newest',
   'app.usage.exhausted':
     'This month’s actions are used up. The AI cannot work with your services until {date}.',
   'app.usage.plan': 'Plan: {plan}',
@@ -507,6 +509,8 @@ export const appRu: Record<AppKey, string> = {
   'app.services.addAnother': 'Добавить ещё',
   'app.services.notReady': 'Скоро',
   'app.call.dashboard': 'Кабинет (проверка)',
+  'app.activity.more': 'Показать раньше',
+  'app.activity.newest': 'К последним',
   'app.usage.exhausted': 'Действия на этот месяц закончились. ИИ не сможет работать с сервисами до {date}.',
   'app.usage.plan': 'Тариф: {plan}',
   'app.services.setupVar': 'Чтобы включить, задайте на сервере',

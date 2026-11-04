@@ -431,13 +431,22 @@ export function appRoutes() {
       const entitlements = await s.entitlements.entitlements(ws);
       const historyDays = entitlements.limits.historyDays;
       const days = Math.min(30, historyDays ?? 30);
-      const [summary, rows, connectors, shell] = await Promise.all([
+      // `?before=<ISO time>~<id>` continues the log after the last row shown (30 per page).
+      const cursor = /^(\d{4}-\d\d-\d\dT[\d:.]+Z)~(\d{1,18})$/.exec(c.req.query('before') ?? '');
+      const before =
+        cursor && !Number.isNaN(Date.parse(cursor[1]!))
+          ? { at: new Date(cursor[1]!), id: Number(cursor[2]) }
+          : undefined;
+      const PAGE = 30;
+      const [summary, found, connectors, shell] = await Promise.all([
         s.activity.summary(ws, days),
-        s.activity.recent(ws, { limit: 100, sinceDays: historyDays }),
+        s.activity.recent(ws, { limit: PAGE + 1, sinceDays: historyDays, before }),
         s.connectors.list(ws),
         shellInfo(c, ws),
       ]);
       const names = new Map(connectors.map((x) => [x.id, x.name]));
+      const rows = found.slice(0, PAGE);
+      const last = rows.at(-1);
       return c.html(
         <ActivityPage
           ctx={pageCtx(c, auth.user)}
@@ -453,6 +462,11 @@ export function appRoutes() {
             total: summary.total,
             errors: summary.errors,
             historyDays,
+            more:
+              found.length > PAGE && last
+                ? `/app/activity?before=${encodeURIComponent(`${last.createdAt.toISOString()}~${last.id}`)}#log`
+                : undefined,
+            paged: Boolean(before),
           }}
         />,
       );
