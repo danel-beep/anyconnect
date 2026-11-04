@@ -1,4 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
+import { BRAND } from '../brand.js';
 import { ASSET_URLS } from './asset-urls.js';
 
 /**
@@ -30,7 +31,7 @@ export const Doc: FC<{
       <meta property="og:title" content={title} />
       {description ? <meta property="og:description" content={description} /> : null}
       <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="AnyConnect" />
+      <meta property="og:site_name" content={BRAND.name} />
       {canonical ? <meta property="og:url" content={canonical} /> : null}
       <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#232326" media="(prefers-color-scheme: dark)" />

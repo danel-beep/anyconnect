@@ -13,7 +13,7 @@ import { createLogger } from '../src/logger.js';
 import { createServices, type Services } from '../src/services.js';
 
 export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5432/anyconnect_test';
+  process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5432/manyplug_test';
 
 export const ADMIN = { email: 'owner@example.com', password: 'correct-horse-battery-staple' };
 export const TEST_KEY = Buffer.alloc(32, 7).toString('base64');

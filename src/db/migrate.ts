@@ -13,6 +13,7 @@ export const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../drizzle', import.m
 export async function runMigrations(pool: pg.Pool): Promise<void> {
   const client = await pool.connect();
   try {
+    // The lock name keeps the former product name so old and new instances share it during a deploy.
     await client.query("SELECT pg_advisory_lock(hashtext('anyconnect:migrations'))");
     try {
       await migrate(drizzle({ client, casing: 'snake_case' }), { migrationsFolder: MIGRATIONS_FOLDER });

@@ -190,10 +190,10 @@ export default defineConnector({
                 text: 'Нажмите «Подключить» и войдите в Notion.',
               },
               {
-                text: 'Выберите пространство, затем страницы, к которым AnyConnect получит доступ (Select pages). ИИ увидит только их и всё, что внутри.',
+                text: 'Выберите пространство, затем страницы, к которым Manyplug получит доступ (Select pages). ИИ увидит только их и всё, что внутри.',
               },
               {
-                text: 'Понадобятся ещё страницы? На странице в Notion откройте ••• → Connections и добавьте AnyConnect.',
+                text: 'Понадобятся ещё страницы? На странице в Notion откройте ••• → Connections и добавьте Manyplug.',
               },
             ],
           },
@@ -208,7 +208,7 @@ export default defineConnector({
                 },
               },
               {
-                text: 'Назовите её AnyConnect, выберите пространство, оставьте тип Internal и нажмите Save.',
+                text: 'Назовите её Manyplug, выберите пространство, оставьте тип Internal и нажмите Save.',
               },
               {
                 text: 'Скопируйте Internal Integration Secret (начинается с ntn_) и вставьте в форму.',
@@ -273,10 +273,10 @@ export default defineConnector({
                 text: 'Click Connect and sign in to Notion.',
               },
               {
-                text: 'Pick the workspace, then choose the pages AnyConnect may use (Select pages). The AI sees only those pages and everything inside them.',
+                text: 'Pick the workspace, then choose the pages Manyplug may use (Select pages). The AI sees only those pages and everything inside them.',
               },
               {
-                text: 'Need more pages later? On a page in Notion, open ••• → Connections and add AnyConnect.',
+                text: 'Need more pages later? On a page in Notion, open ••• → Connections and add Manyplug.',
               },
             ],
           },
@@ -291,7 +291,7 @@ export default defineConnector({
                 },
               },
               {
-                text: 'Name it AnyConnect, pick your workspace, keep the type Internal and click Save.',
+                text: 'Name it Manyplug, pick your workspace, keep the type Internal and click Save.',
               },
               {
                 text: 'Copy the Internal Integration Secret (starts with ntn_) and paste it into the form.',

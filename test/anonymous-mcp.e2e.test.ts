@@ -47,9 +47,9 @@ describe('anonymous /mcp (connect first, sign in when needed)', () => {
     await client.connect(new StreamableHTTPClientTransport(new URL(hub.mcpUrl)));
     expect(client.getInstructions()).toContain('has not signed in yet');
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(['anyconnect_connect_account', 'anyconnect_services']);
+    expect(tools.map((t) => t.name).sort()).toEqual(['manyplug_connect_account', 'manyplug_services']);
 
-    const result = await client.callTool({ name: 'anyconnect_services', arguments: {} });
+    const result = await client.callTool({ name: 'manyplug_services', arguments: {} });
     expect(result.isError).toBeFalsy();
     const data = result.structuredContent as { services: Array<Record<string, unknown>> };
     expect(data.services).toEqual([
@@ -61,7 +61,7 @@ describe('anonymous /mcp (connect first, sign in when needed)', () => {
   });
 
   it('answers a call that needs an account with a sign-in challenge', async () => {
-    for (const name of ['anyconnect_connect_account', 'demo_echo', 'anyconnect_list_accounts']) {
+    for (const name of ['manyplug_connect_account', 'demo_echo', 'manyplug_list_accounts']) {
       const res = await rpc(callTool(name));
       expect(res.status).toBe(401);
       expect(res.headers.get('www-authenticate')).toContain(
@@ -69,7 +69,7 @@ describe('anonymous /mcp (connect first, sign in when needed)', () => {
       );
     }
     // A batch with one such call is refused as a whole.
-    const batch = await rpc([callTool('anyconnect_services', 1), callTool('demo_echo', 2)]);
+    const batch = await rpc([callTool('manyplug_services', 1), callTool('demo_echo', 2)]);
     expect(batch.status).toBe(401);
   });
 
@@ -81,10 +81,10 @@ describe('anonymous /mcp (connect first, sign in when needed)', () => {
       }),
     );
     const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(['demo_echo', 'anyconnect_list_accounts']));
+    expect(names).toEqual(expect.arrayContaining(['demo_echo', 'manyplug_list_accounts']));
     await client.close();
 
-    const bad = await rpc(callTool('anyconnect_services'), { authorization: 'Bearer ac_pat_invalid' });
+    const bad = await rpc(callTool('manyplug_services'), { authorization: 'Bearer ac_pat_invalid' });
     expect(bad.status).toBe(401);
   });
 

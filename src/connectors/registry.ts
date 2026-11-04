@@ -5,7 +5,9 @@ import { actionCapabilities, actionRisk, type ConnectorDefinition, type RateLimi
 const CONNECTOR_ID = /^[a-z][a-z0-9_]{1,23}$/;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,39}$/;
 /** Tool names starting with these are reserved for the hub's own and unified (capability) tools. */
-const RESERVED_CONNECTOR_IDS = new Set(['anyconnect', 'hub', 'mcp', ...CAPABILITY_INTERFACES]);
+// The hub's own setup connector, also under the product's former name (connectors may not import
+// app code, so the names are spelled out here).
+const RESERVED_CONNECTOR_IDS = new Set(['manyplug', 'anyconnect', 'hub', 'mcp', ...CAPABILITY_INTERFACES]);
 /** Injected by the hub to pick an account, so actions cannot use it as an input name. */
 export const ACCOUNT_ARGUMENT = 'account';
 /** Injected by the hub for actions that declare `response.fields`: selects result fields. */

@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
+import { BRAND } from '../brand.js';
 import type { Db } from '../db/client.js';
 import { oauthAuthorizationCodes, oauthGrants, oauthTokens } from '../db/schema.js';
 import { generateToken, hashToken, safeEqual, sha256Base64Url } from '../lib/crypto.js';
@@ -135,7 +136,7 @@ export class OAuthServer {
       authorization_servers: [this.issuer],
       scopes_supported: [...DEFAULT_SCOPES],
       bearer_methods_supported: ['header'],
-      resource_name: 'AnyConnect',
+      resource_name: BRAND.name,
       resource_documentation: `${this.issuer}/`,
     };
   }

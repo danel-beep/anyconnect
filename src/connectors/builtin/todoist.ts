@@ -228,7 +228,7 @@ const ui: ConnectorUi = {
               text: 'Нажмите «Подключить» и войдите в Todoist.',
             },
             {
-              text: 'Нажмите Agree: AnyConnect сможет читать, добавлять, менять и удалять задачи и проекты.',
+              text: 'Нажмите Agree: Manyplug сможет читать, добавлять, менять и удалять задачи и проекты.',
             },
             {
               text: 'Готово. Ещё один аккаунт Todoist? Подключите его так же.',
@@ -298,7 +298,7 @@ const ui: ConnectorUi = {
               text: 'Click Connect and sign in to Todoist.',
             },
             {
-              text: 'Click Agree: AnyConnect may read, add, change and delete your tasks and projects.',
+              text: 'Click Agree: Manyplug may read, add, change and delete your tasks and projects.',
             },
             {
               text: 'Done. Another Todoist account? Connect it the same way.',

@@ -1,8 +1,8 @@
 {
-  "name": "anyconnect",
+  "name": "manyplug",
   "version": "0.1.0",
   "private": true,
-  "description": "AnyConnect: one cloud MCP hub that exposes all your services and accounts to ChatGPT, Claude and other AI clients.",
+  "description": "Manyplug: one cloud MCP hub that exposes all your services and accounts to ChatGPT, Claude and other AI clients.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {

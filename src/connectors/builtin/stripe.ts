@@ -171,7 +171,7 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Нажмите Create restricted key и назовите ключ AnyConnect.',
+              text: 'Нажмите Create restricted key и назовите ключ Manyplug.',
             },
             {
               text: 'Поставьте Read для Balance, Customers, PaymentIntents, Invoices и Subscriptions. Refunds — Write, только если ИИ можно делать возвраты.',
@@ -228,7 +228,7 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Click Create restricted key and name it AnyConnect.',
+              text: 'Click Create restricted key and name it Manyplug.',
             },
             {
               text: 'Set Read for Balance, Customers, PaymentIntents, Invoices and Subscriptions. Set Refunds to Write only if the AI may refund payments.',

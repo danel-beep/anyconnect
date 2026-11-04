@@ -87,7 +87,7 @@ export interface HubDeps {
   /** Replaces built-in stages or fills the policy / confirm / untrusted slots. */
   stages?: StageMap;
   /**
-   * The hub's setup tools (`anyconnect_*`, connector `anyconnect`) and the workspace operations they
+   * The hub's setup tools (`manyplug_*`, connector `manyplug`) and the workspace operations they
    * run. Without it the AI cannot manage the hub from the chat.
    */
   setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin };

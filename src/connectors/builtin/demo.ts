@@ -11,7 +11,7 @@ export default defineConnector({
   id: 'demo',
   name: 'Demo',
   description:
-    'Test service built into AnyConnect. Use it to check that the hub and multi-account routing work.',
+    'Test service built into Manyplug. Use it to check that the hub and multi-account routing work.',
   version: '1.0.0',
   config: z.object({
     greeting: z.string().max(200).default('Hello').describe('Greeting this account uses'),
@@ -27,7 +27,7 @@ export default defineConnector({
       ru: {
         name: 'Демо',
         description:
-          'Тестовый сервис AnyConnect: помогает убедиться, что хаб и работа с несколькими аккаунтами настроены верно.',
+          'Тестовый сервис Manyplug: помогает убедиться, что хаб и работа с несколькими аккаунтами настроены верно.',
         fields: {
           greeting: { label: 'Приветствие', hint: 'С него начинаются ответы этого аккаунта' },
           secret: {
@@ -82,7 +82,7 @@ export default defineConnector({
       name: 'echo',
       title: 'Echo',
       description:
-        'Returns the message back, prefixed with the greeting of the chosen account. Use it to test that the AnyConnect hub works.',
+        'Returns the message back, prefixed with the greeting of the chosen account. Use it to test that the Manyplug hub works.',
       input: z.object({
         message: z.string().min(1).max(2000).describe('Text to echo back'),
       }),

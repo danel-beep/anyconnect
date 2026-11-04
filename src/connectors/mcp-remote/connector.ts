@@ -16,7 +16,7 @@ import {
 } from '../sdk.js';
 
 /**
- * A remote MCP server (Notion, Linear, Zapier, Composio, another AnyConnect hub...) as a regular
+ * A remote MCP server (Notion, Linear, Zapier, Composio, another Manyplug hub...) as a regular
  * hub service: each account is one login to the server, every remote tool becomes an action, and
  * calls go through the hub's routing, policies and audit like any other connector.
  *
@@ -64,7 +64,7 @@ export interface RemoteMcpSpec {
 }
 
 /** The hub's own name when it talks to remote servers. */
-const CLIENT_INFO = { name: 'AnyConnect', version: '1.0.0' };
+const CLIENT_INFO = { name: 'Manyplug', version: '1.0.0' };
 /** Remote argument names the hub reserves get this suffix (and are renamed back on the call). */
 const RENAMED_SUFFIX = '_arg';
 const ACTION_NAME_MAX = 40;

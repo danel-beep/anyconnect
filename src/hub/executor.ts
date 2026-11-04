@@ -80,7 +80,7 @@ export interface CallContext {
   action: ActionDefinition;
   /**
    * What the unit acts on: one account of a service, or the workspace itself (the hub's own setup
-   * tools, connector `anyconnect`). Workspace units have no `account` / `accountRow`.
+   * tools, connector `manyplug`). Workspace units have no `account` / `accountRow`.
    */
   scope: 'account' | 'workspace';
   account?: CatalogAccount;

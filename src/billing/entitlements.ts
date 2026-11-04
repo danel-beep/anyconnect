@@ -200,7 +200,7 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   private actionsMessage(ent: Entitlements, limit: number): string {
     const reset = ent.period.resetsAt.toISOString().slice(0, 10);
     return (
-      `The AnyConnect plan limit is reached: ${limit} actions this month on the ${ent.plan.id} plan ` +
+      `The Manyplug plan limit is reached: ${limit} actions this month on the ${ent.plan.id} plan ` +
       `(resets on ${reset}). Tell the user; they can upgrade at ${this.deps.pricingUrl}. Do not retry.`
     );
   }

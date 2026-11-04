@@ -29,7 +29,7 @@ const privacy: Record<Locale, Builder> = {
   ru: ({ contact, site }) => ({
     title: 'Политика конфиденциальности',
     updated: UPDATED.ru,
-    intro: `Здесь описано, какие данные собирает сервис AnyConnect (${site}), зачем и как мы их защищаем. Коротко: мы храним только то, что нужно для работы подключений, шифруем данные для входа в сервисы и не продаём данные.`,
+    intro: `Здесь описано, какие данные собирает сервис Manyplug (${site}), зачем и как мы их защищаем. Коротко: мы храним только то, что нужно для работы подключений, шифруем данные для входа в сервисы и не продаём данные.`,
     sections: [
       {
         title: 'Какие данные мы храним',
@@ -44,7 +44,7 @@ const privacy: Record<Locale, Builder> = {
         title: 'Как данные используются',
         paragraphs: [
           'Чтобы выполнять запросы вашего ИИ-ассистента к подключённым сервисам, показывать вам историю и расход лимитов, защищать аккаунт от взлома и злоупотреблений.',
-          'Содержимое ваших сервисов проходит через AnyConnect только в момент запроса и передаётся тому ИИ-приложению, которому вы дали доступ. Мы не используем его для обучения моделей и не просматриваем его.',
+          'Содержимое ваших сервисов проходит через Manyplug только в момент запроса и передаётся тому ИИ-приложению, которому вы дали доступ. Мы не используем его для обучения моделей и не просматриваем его.',
         ],
       },
       {
@@ -58,10 +58,10 @@ const privacy: Record<Locale, Builder> = {
       {
         title: 'Данные из сервисов Google',
         paragraphs: [
-          'Если вы подключаете Gmail, Google Календарь или Google Диск, AnyConnect получает доступ только к тем данным, которые нужны для запроса вашего ИИ-ассистента: найти и прочитать письма, отправить ответ, посмотреть или создать событие, найти и прочитать файл. Данные передаются только выбранному вами ИИ-приложению и не сохраняются. Исключение: результат действия, например отправки письма, несколько минут хранится в памяти, чтобы повторный запрос не отправил письмо дважды.',
+          'Если вы подключаете Gmail, Google Календарь или Google Диск, Manyplug получает доступ только к тем данным, которые нужны для запроса вашего ИИ-ассистента: найти и прочитать письма, отправить ответ, посмотреть или создать событие, найти и прочитать файл. Данные передаются только выбранному вами ИИ-приложению и не сохраняются. Исключение: результат действия, например отправки письма, несколько минут хранится в памяти, чтобы повторный запрос не отправил письмо дважды.',
           'Мы не продаём данные из сервисов Google, не используем их для рекламы, не передаём их брокерам данных и не используем их для обучения моделей ИИ. Сотрудники не читают эти данные, кроме случаев, когда вы сами об этом попросили, когда это нужно для безопасности или этого требует закон.',
-          'Использование и передача AnyConnect любым другим приложениям информации, полученной через API Google, соответствуют правилам Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), включая требования Limited Use.',
-          'Отозвать доступ можно в любой момент: отключите аккаунт в кабинете AnyConnect или в настройках аккаунта Google (myaccount.google.com/permissions).',
+          'Использование и передача Manyplug любым другим приложениям информации, полученной через API Google, соответствуют правилам Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), включая требования Limited Use.',
+          'Отозвать доступ можно в любой момент: отключите аккаунт в кабинете Manyplug или в настройках аккаунта Google (myaccount.google.com/permissions).',
         ],
       },
       {
@@ -75,7 +75,7 @@ const privacy: Record<Locale, Builder> = {
         title: 'Сроки хранения и удаление',
         paragraphs: [
           'Журнал действий хранится столько дней, сколько предусматривает ваш тариф, затем удаляется.',
-          'Вы можете отключить любой аккаунт сервиса (его ключи удаляются сразу) или удалить свой аккаунт AnyConnect в настройках: все подключения, ключи, токены и история будут удалены.',
+          'Вы можете отключить любой аккаунт сервиса (его ключи удаляются сразу) или удалить свой аккаунт Manyplug в настройках: все подключения, ключи, токены и история будут удалены.',
         ],
       },
       {
@@ -93,7 +93,7 @@ const privacy: Record<Locale, Builder> = {
   en: ({ contact, site }) => ({
     title: 'Privacy policy',
     updated: UPDATED.en,
-    intro: `This page explains what data AnyConnect (${site}) collects, why, and how we protect it. In short: we keep only what connections need, encrypt access keys and never sell data.`,
+    intro: `This page explains what data Manyplug (${site}) collects, why, and how we protect it. In short: we keep only what connections need, encrypt access keys and never sell data.`,
     sections: [
       {
         title: 'What we store',
@@ -108,7 +108,7 @@ const privacy: Record<Locale, Builder> = {
         title: 'How we use data',
         paragraphs: [
           'To run your AI assistant’s requests to the services you connected, to show you history and usage, and to protect your account from break-ins and abuse.',
-          'Content of your services passes through AnyConnect only during a request and goes to the AI app you gave access to. We do not use it to train models and do not look at it.',
+          'Content of your services passes through Manyplug only during a request and goes to the AI app you gave access to. We do not use it to train models and do not look at it.',
         ],
       },
       {
@@ -122,10 +122,10 @@ const privacy: Record<Locale, Builder> = {
       {
         title: 'Data from Google services',
         paragraphs: [
-          'If you connect Gmail, Google Calendar or Google Drive, AnyConnect accesses only the data your AI assistant needs for a request: finding and reading emails, sending a reply, viewing or creating an event, finding and reading a file. The data goes only to the AI app you chose and is not stored, except that the result of a write action (for example, a sent email) is kept in memory for a few minutes so that a repeated request does not send it twice.',
+          'If you connect Gmail, Google Calendar or Google Drive, Manyplug accesses only the data your AI assistant needs for a request: finding and reading emails, sending a reply, viewing or creating an event, finding and reading a file. The data goes only to the AI app you chose and is not stored, except that the result of a write action (for example, a sent email) is kept in memory for a few minutes so that a repeated request does not send it twice.',
           'We do not sell data from Google services, use it for advertising, transfer it to data brokers or use it to train AI models. No person reads this data unless you ask us to, it is needed for security, or the law requires it.',
-          'AnyConnect’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.',
-          'You can revoke access at any time: disconnect the account in the AnyConnect dashboard or in your Google Account settings (myaccount.google.com/permissions).',
+          'Manyplug’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.',
+          'You can revoke access at any time: disconnect the account in the Manyplug dashboard or in your Google Account settings (myaccount.google.com/permissions).',
         ],
       },
       {
@@ -139,7 +139,7 @@ const privacy: Record<Locale, Builder> = {
         title: 'Retention and deletion',
         paragraphs: [
           'The activity log is kept for as many days as your plan includes and is then deleted.',
-          'You can disconnect any service account (its credentials are deleted at once) or delete your AnyConnect account in Settings: all connections, keys, tokens and history are removed.',
+          'You can disconnect any service account (its credentials are deleted at once) or delete your Manyplug account in Settings: all connections, keys, tokens and history are removed.',
         ],
       },
       {
@@ -160,12 +160,12 @@ const terms: Record<Locale, Builder> = {
   ru: ({ contact, site }) => ({
     title: 'Условия использования',
     updated: UPDATED.ru,
-    intro: `Эти условия действуют, когда вы пользуетесь сервисом AnyConnect (${site}). Регистрируясь, вы с ними соглашаетесь.`,
+    intro: `Эти условия действуют, когда вы пользуетесь сервисом Manyplug (${site}). Регистрируясь, вы с ними соглашаетесь.`,
     sections: [
       {
         title: 'Что делает сервис',
         paragraphs: [
-          'AnyConnect даёт ИИ-ассистентам доступ к сервисам, которые вы подключили, по протоколу MCP. Вы сами выбираете, какие аккаунты подключать, каким приложениям давать доступ и какие действия требуют подтверждения.',
+          'Manyplug даёт ИИ-ассистентам доступ к сервисам, которые вы подключили, по протоколу MCP. Вы сами выбираете, какие аккаунты подключать, каким приложениям давать доступ и какие действия требуют подтверждения.',
         ],
       },
       {
@@ -210,12 +210,12 @@ const terms: Record<Locale, Builder> = {
   en: ({ contact, site }) => ({
     title: 'Terms of service',
     updated: UPDATED.en,
-    intro: `These terms apply when you use AnyConnect (${site}). By signing up you accept them.`,
+    intro: `These terms apply when you use Manyplug (${site}). By signing up you accept them.`,
     sections: [
       {
         title: 'What the service does',
         paragraphs: [
-          'AnyConnect gives AI assistants access to services you connected, over the MCP protocol. You choose which accounts to connect, which apps get access and which actions need your confirmation.',
+          'Manyplug gives AI assistants access to services you connected, over the MCP protocol. You choose which accounts to connect, which apps get access and which actions need your confirmation.',
         ],
       },
       {

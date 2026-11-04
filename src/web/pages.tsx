@@ -1,5 +1,6 @@
 import type { Child, FC } from 'hono/jsx';
 import { useContext } from 'hono/jsx';
+import { BRAND } from '../brand.js';
 import { Doc } from './document.js';
 import { PageFrame } from './frame.js';
 import { type Translate, translator } from './i18n.js';
@@ -23,7 +24,7 @@ export const Layout: FC<{
   if (frame) return <>{frame({ title, passkeys: Boolean(script), children })}</>;
   const t = translator(lang === 'ru' ? 'ru' : 'en');
   return (
-    <Doc title={`${title} · AnyConnect`} lang={lang} noindex passkeys={script} bodyClass="auth">
+    <Doc title={`${title} · ${BRAND.name}`} lang={lang} noindex passkeys={script} bodyClass="auth">
       <div class="auth-top">
         <Brand />
         <Prefs t={t} lang={lang} />

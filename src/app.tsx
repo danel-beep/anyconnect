@@ -4,6 +4,7 @@ import { adminRoutes } from './routes/admin.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
 import { billingRoutes } from './routes/billing.js';
+import { canonicalHost } from './routes/canonical-host.js';
 import { confirmRoutes } from './routes/confirm.js';
 import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
@@ -37,6 +38,7 @@ export function createApp(services: Services) {
     );
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
+  app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
 
   app.get('/healthz', (c) => c.json({ status: 'ok', version: services.version }));
   app.get('/readyz', async (c) => {

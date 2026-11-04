@@ -1,11 +1,12 @@
 import { type Logger, pino } from 'pino';
+import { BRAND } from './brand.js';
 
 export type { Logger };
 
 export function createLogger(options: { level: string; pretty?: boolean }): Logger {
   return pino({
     level: options.level,
-    base: { service: 'anyconnect' },
+    base: { service: BRAND.slug },
     redact: {
       paths: [
         'req.headers.authorization',

@@ -114,7 +114,7 @@ export class ConnectService {
       throw new AppError(
         400,
         'oauth_app_missing',
-        `No OAuth app is configured for ${provider.name}. Register one at ${provider.appSetupUrl ?? 'the provider'} with the redirect URI ${this.deps.redirectUri} and add it in AnyConnect.`,
+        `No OAuth app is configured for ${provider.name}. Register one at ${provider.appSetupUrl ?? 'the provider'} with the redirect URI ${this.deps.redirectUri} and add it in Manyplug.`,
       );
     }
 

@@ -12,7 +12,7 @@ import { getWorkspace } from './identity.js';
 import type { OAuthAppService } from './oauth-apps.js';
 
 /**
- * Workspace administration as plain operations: what the hub's setup tools (`anyconnect_*`) and,
+ * Workspace administration as plain operations: what the hub's setup tools (`manyplug_*`) and,
  * later, the web panel do on behalf of the signed-in user. Everything a person would otherwise do in
  * a settings page is here, so the AI assistant can manage the hub end to end.
  *

@@ -42,7 +42,7 @@ function oauthErrorResponse(c: AppContext, error: unknown) {
   if (error instanceof OAuthProtocolError) {
     const headers: Record<string, string> = { ...NO_STORE };
     if (error.status === 401 && c.req.header('authorization')?.toLowerCase().startsWith('basic ')) {
-      headers['WWW-Authenticate'] = 'Basic realm="anyconnect"';
+      headers['WWW-Authenticate'] = 'Basic realm="manyplug"';
     }
     return c.json(error.toJSON(), error.status as 400 | 401, headers);
   }

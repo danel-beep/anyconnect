@@ -5,9 +5,9 @@
 export const authEn = {
   'login.google': 'Continue with Google',
   'login.withEmail': 'Sign in with email and password',
-  'login.noAccount': 'New to AnyConnect?',
+  'login.noAccount': 'New to Manyplug?',
   'login.signupLink': 'Create an account',
-  'login.fromApp': 'An AI app wants to connect to your AnyConnect. Sign in or create an account to continue.',
+  'login.fromApp': 'An AI app wants to connect to your Manyplug. Sign in or create an account to continue.',
   'login.suspended': 'This account is suspended. If you think it is a mistake, write to support.',
   'login.refused.suspended': 'This account is suspended. If you think it is a mistake, write to support.',
   'login.refused.signups_closed':
@@ -16,7 +16,7 @@ export const authEn = {
     'Google has not confirmed this email address. Try another Google account.',
   'login.externalFailed': 'Google sign-in did not complete. Try again.',
   'login.expired': 'The sign-in took too long or was opened in another browser. Try again.',
-  'signup.title': 'Create an AnyConnect account',
+  'signup.title': 'Create an Manyplug account',
   'signup.subtitle': 'Free plan, no card. It takes a minute.',
   'signup.termsA': 'By continuing you accept the',
   'signup.termsLink': 'terms of service',
@@ -54,10 +54,10 @@ export type AuthKey = keyof typeof authEn;
 export const authRu: Record<AuthKey, string> = {
   'login.google': 'Продолжить с Google',
   'login.withEmail': 'Войти по почте и паролю',
-  'login.noAccount': 'Впервые в AnyConnect?',
+  'login.noAccount': 'Впервые в Manyplug?',
   'login.signupLink': 'Зарегистрироваться',
   'login.fromApp':
-    'ИИ-приложение хочет подключиться к вашему AnyConnect. Войдите или зарегистрируйтесь, чтобы продолжить.',
+    'ИИ-приложение хочет подключиться к вашему Manyplug. Войдите или зарегистрируйтесь, чтобы продолжить.',
   'login.suspended': 'Этот профиль заблокирован. Если это ошибка, напишите в поддержку.',
   'login.refused.suspended': 'Этот профиль заблокирован. Если это ошибка, напишите в поддержку.',
   'login.refused.signups_closed': 'Аккаунта с этим адресом Google нет, а регистрация сейчас закрыта.',
@@ -65,7 +65,7 @@ export const authRu: Record<AuthKey, string> = {
     'Google не подтвердил этот адрес почты. Попробуйте другой аккаунт Google.',
   'login.externalFailed': 'Вход через Google не завершился. Попробуйте ещё раз.',
   'login.expired': 'Вход занял слишком много времени или был открыт в другом браузере. Попробуйте ещё раз.',
-  'signup.title': 'Регистрация в AnyConnect',
+  'signup.title': 'Регистрация в Manyplug',
   'signup.subtitle': 'Бесплатный тариф, без карты. Это займёт минуту.',
   'signup.termsA': 'Продолжая, вы принимаете',
   'signup.termsLink': 'условия использования',

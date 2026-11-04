@@ -247,7 +247,7 @@ export default defineConnector({
                 text: 'Создайте пароль приложения в настройках безопасности почты: шаги для вашего сервиса — прямо здесь.',
               },
               {
-                text: 'Вставьте его в форму и нажмите «Подключить». AnyConnect сразу проверит ящик.',
+                text: 'Вставьте его в форму и нажмите «Подключить». Manyplug сразу проверит ящик.',
               },
             ],
             variants: {
@@ -262,7 +262,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Откройте «Пароли приложений», введите название AnyConnect и нажмите «Создать».',
+                    text: 'Откройте «Пароли приложений», введите название Manyplug и нажмите «Создать».',
                     link: {
                       label: 'Открыть пароли приложений',
                       url: 'https://myaccount.google.com/apppasswords',
@@ -292,7 +292,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Нажмите «+», назовите пароль AnyConnect и скопируйте его (xxxx-xxxx-xxxx-xxxx).',
+                    text: 'Нажмите «+», назовите пароль Manyplug и скопируйте его (xxxx-xxxx-xxxx-xxxx).',
                   },
                   {
                     text: 'В форме укажите адрес @icloud.com, а не почту аккаунта Apple, если они отличаются.',
@@ -310,7 +310,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Выберите доступ Mail (IMAP/SMTP), назовите пароль AnyConnect и нажмите Generate.',
+                    text: 'Выберите доступ Mail (IMAP/SMTP), назовите пароль Manyplug и нажмите Generate.',
                   },
                   {
                     text: 'Скопируйте пароль и вставьте в форму.',
@@ -328,7 +328,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Откройте Яндекс ID → «Безопасность» → «Пароли приложений», выберите «Почта», назовите AnyConnect и создайте.',
+                    text: 'Откройте Яндекс ID → «Безопасность» → «Пароли приложений», выберите «Почта», назовите Manyplug и создайте.',
                     link: {
                       label: 'Открыть пароли приложений',
                       url: 'https://id.yandex.ru/security/app-passwords',
@@ -350,7 +350,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Назовите его AnyConnect, выберите полный доступ к ящику (IMAP, SMTP), скопируйте пароль и вставьте в форму.',
+                    text: 'Назовите его Manyplug, выберите полный доступ к ящику (IMAP, SMTP), скопируйте пароль и вставьте в форму.',
                   },
                 ],
               },
@@ -501,7 +501,7 @@ export default defineConnector({
                 text: 'Create an app password in your mail account’s security settings: the steps for your provider are right here.',
               },
               {
-                text: 'Paste it into the form and click Connect. AnyConnect checks the mailbox right away.',
+                text: 'Paste it into the form and click Connect. Manyplug checks the mailbox right away.',
               },
             ],
             variants: {
@@ -516,7 +516,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Open App passwords, type AnyConnect as the app name and click Create.',
+                    text: 'Open App passwords, type Manyplug as the app name and click Create.',
                     link: {
                       label: 'Open App passwords',
                       url: 'https://myaccount.google.com/apppasswords',
@@ -546,7 +546,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Click Add (+), name it AnyConnect and copy the password (xxxx-xxxx-xxxx-xxxx).',
+                    text: 'Click Add (+), name it Manyplug and copy the password (xxxx-xxxx-xxxx-xxxx).',
                   },
                   {
                     text: 'In the form, use your @icloud.com address, not the Apple Account email, if they differ.',
@@ -564,7 +564,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Choose access to Mail (IMAP/SMTP), name it AnyConnect and click Generate.',
+                    text: 'Choose access to Mail (IMAP/SMTP), name it Manyplug and click Generate.',
                   },
                   {
                     text: 'Copy the password and paste it into the form.',
@@ -582,7 +582,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Open Yandex ID → Security → App passwords, choose Mail, name it AnyConnect and create it.',
+                    text: 'Open Yandex ID → Security → App passwords, choose Mail, name it Manyplug and create it.',
                     link: {
                       label: 'Open app passwords',
                       url: 'https://id.yandex.ru/security/app-passwords',
@@ -604,7 +604,7 @@ export default defineConnector({
                     },
                   },
                   {
-                    text: 'Name it AnyConnect, choose full access to the mailbox (IMAP, SMTP), copy the password and paste it into the form.',
+                    text: 'Name it Manyplug, choose full access to the mailbox (IMAP, SMTP), copy the password and paste it into the form.',
                   },
                 ],
               },

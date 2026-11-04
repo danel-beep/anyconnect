@@ -69,12 +69,12 @@ const REGISTRATIONS: [string, Record<string, unknown>, string][] = [
     'Cursor',
     {
       client_name: 'Cursor',
-      redirect_uris: ['cursor://anysphere.cursor-retrieval/oauth/user-anyconnect/callback'],
+      redirect_uris: ['cursor://anysphere.cursor-retrieval/oauth/user-manyplug/callback'],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',
     },
-    'cursor://anysphere.cursor-retrieval/oauth/user-anyconnect/callback',
+    'cursor://anysphere.cursor-retrieval/oauth/user-manyplug/callback',
   ],
   [
     'Gemini CLI',

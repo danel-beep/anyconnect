@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BRAND } from './brand.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
 
 /**
@@ -28,9 +29,15 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  /** Public origin of the hub, e.g. https://anyconnect.onrender.com. Render sets RENDER_EXTERNAL_URL. */
+  /** Public origin of the hub, e.g. https://manyplug.com. Without it, Render's RENDER_EXTERNAL_URL is used. */
   PUBLIC_URL: optionalString,
   RENDER_EXTERNAL_URL: optionalString,
+  /**
+   * Former public origins (comma separated). Requests to them are redirected to PUBLIC_URL, so old
+   * links, bookmarks and AI app settings keep working after a domain change. RENDER_EXTERNAL_URL is
+   * added automatically when it differs from PUBLIC_URL.
+   */
+  LEGACY_PUBLIC_URLS: optionalString,
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
   /** 32-byte key (base64 or hex) used to encrypt service credentials at rest. */
@@ -113,6 +120,8 @@ export interface AppConfig {
   publicUrl: string;
   /** The MCP endpoint URL; also the OAuth protected resource identifier. */
   mcpUrl: string;
+  /** Former public hosts (lowercase `host[:port]`); requests to them are redirected to `publicUrl`. */
+  legacyHosts: string[];
   /** Whether cookies must be Secure (https public URL). */
   secureCookies: boolean;
   /** How to find the client IP behind proxies (`hops: 0` = use the socket address). */
@@ -209,6 +218,24 @@ export class ConfigError extends Error {
   override name = 'ConfigError';
 }
 
+/** Hosts of LEGACY_PUBLIC_URLS and of Render's own address, except the canonical one. */
+function legacyHosts(publicUrl: string, env: Env): string[] {
+  const raw = (env.LEGACY_PUBLIC_URLS ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (env.RENDER_EXTERNAL_URL) raw.push(env.RENDER_EXTERNAL_URL);
+  const canonical = new URL(publicUrl).host;
+  const hosts = raw.map((value) => {
+    try {
+      return new URL(normalizePublicUrl(value)).host;
+    } catch {
+      throw new ConfigError(`LEGACY_PUBLIC_URLS: not an origin: ${value}`);
+    }
+  });
+  return [...new Set(hosts)].filter((host) => host !== canonical);
+}
+
 function normalizePublicUrl(raw: string): string {
   let url: URL;
   try {
@@ -270,6 +297,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     port: env.PORT,
     publicUrl,
     mcpUrl: `${publicUrl}/mcp`,
+    legacyHosts: legacyHosts(publicUrl, env),
     secureCookies: publicUrl.startsWith('https://'),
     trustProxy,
     database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
@@ -325,7 +353,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     auth: {
       requireSecondFactor: env.REQUIRE_2FA,
       rpId: new URL(publicUrl).hostname,
-      rpName: 'AnyConnect',
+      rpName: BRAND.name,
       origin: publicUrl,
     },
     oauthApps: hubOAuthApps(env, source),

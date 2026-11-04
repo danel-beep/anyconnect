@@ -1,5 +1,6 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { BRAND } from '../brand.js';
 import { searchText, serviceMeta } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
@@ -92,7 +93,7 @@ export const AppShell: FC<{
     ...(user.isAdmin ? ([['admin', t('admin.nav.group')]] as ['admin', string][]) : []),
   ];
   return (
-    <Doc title={`${title} · AnyConnect`} lang={ctx.lang} noindex passkeys={passkeys}>
+    <Doc title={`${title} · ${BRAND.name}`} lang={ctx.lang} noindex passkeys={passkeys}>
       <a class="skip" href="#main">
         {t('ui.skip')}
       </a>

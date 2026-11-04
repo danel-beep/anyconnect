@@ -126,14 +126,14 @@ export default defineConnector({
                 text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными файлами.',
               },
               {
-                text: 'Google попросит разрешить AnyConnect смотреть и менять файлы на Диске. Нажмите «Продолжить».',
+                text: 'Google попросит разрешить Manyplug смотреть и менять файлы на Диске. Нажмите «Продолжить».',
               },
               {
                 text: 'Готово: ИИ находит файлы и читает Документы, Таблицы и PDF на этом Диске.',
               },
             ],
             tips: [
-              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите AnyConnect в аккаунте Google, раздел «Сторонние приложения и сервисы».',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google, раздел «Сторонние приложения и сервисы».',
             ],
           },
         },
@@ -177,14 +177,14 @@ export default defineConnector({
                 text: 'Click Connect and choose the Google account with the files you need.',
               },
               {
-                text: 'Google asks to let AnyConnect see and edit your Drive files. Click Continue.',
+                text: 'Google asks to let Manyplug see and edit your Drive files. Click Continue.',
               },
               {
                 text: 'Done: the AI can find files and read Docs, Sheets and PDFs on that Drive.',
               },
             ],
             tips: [
-              'To cut access, delete the account here or remove AnyConnect in your Google Account under Third-party connections.',
+              'To cut access, delete the account here or remove Manyplug in your Google Account under Third-party connections.',
             ],
           },
         },
@@ -352,7 +352,7 @@ export default defineConnector({
           });
           return fileSummary(data);
         }
-        const boundary = `anyconnect-${crypto.randomUUID()}`;
+        const boundary = `manyplug-${crypto.randomUUID()}`;
         const body = [
           `--${boundary}`,
           'Content-Type: application/json; charset=UTF-8',

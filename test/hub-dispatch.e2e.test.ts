@@ -151,36 +151,36 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
 
   it('runs several tools in one call_tools step, reporting each outcome', async () => {
     const data = json(
-      await call('anyconnect_call_tools', {
+      await call('manyplug_call_tools', {
         calls: [
           { name: 'beta_search', arguments: { query: 'a' } },
           { name: 'no_such_tool', arguments: {} },
-          { name: 'anyconnect_call_tools', arguments: { calls: [] } },
+          { name: 'manyplug_call_tools', arguments: { calls: [] } },
         ],
       }),
     );
     expect(data.results.map((r: { name: string; ok: boolean }) => [r.name, r.ok])).toEqual([
       ['beta_search', true],
       ['no_such_tool', false],
-      ['anyconnect_call_tools', false],
+      ['manyplug_call_tools', false],
     ]);
   });
 
   it('rejects empty and oversized batches, and nesting through call_tool', async () => {
-    expect((await call('anyconnect_call_tools', { calls: [] })).isError).toBe(true);
+    expect((await call('manyplug_call_tools', { calls: [] })).isError).toBe(true);
     const many = Array.from({ length: 11 }, () => ({ name: 'beta_search', arguments: { query: 'a' } }));
-    expect((await call('anyconnect_call_tools', { calls: many })).isError).toBe(true);
-    const nested = await call('anyconnect_call_tool', { name: 'anyconnect_call_tools', arguments: {} });
+    expect((await call('manyplug_call_tools', { calls: many })).isError).toBe(true);
+    const nested = await call('manyplug_call_tool', { name: 'manyplug_call_tools', arguments: {} });
     expect(nested.isError).toBe(true);
   });
 
   it('runs any catalog tool through call_tool', async () => {
-    const result = await call('anyconnect_call_tool', { name: 'beta_search', arguments: { query: 'z' } });
+    const result = await call('manyplug_call_tool', { name: 'beta_search', arguments: { query: 'z' } });
     expect(json(result)).toEqual([expect.objectContaining({ id: 'beta_main_1' })]);
   });
 
   it('finds tools and their schemas with search_tools', async () => {
-    const data = json(await call('anyconnect_search_tools', { query: 'send a message' }));
+    const data = json(await call('manyplug_search_tools', { query: 'send a message' }));
     expect(data.tools[0].name).toBe('messages_send');
     expect(data.tools[0].inputSchema).toBeDefined();
   });
@@ -195,7 +195,7 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
     await hub.services.hub.callTool(
       principal,
       catalog,
-      'anyconnect_call_tools',
+      'manyplug_call_tools',
       { calls: [{ name: 'beta_search', arguments: { query: 'a' } }] },
       { interaction },
     );

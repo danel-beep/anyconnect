@@ -20,7 +20,7 @@ import type { CallerPolicy, PolicyService } from './policy-service.js';
  */
 
 const POLICY = 'security.policy';
-const QUESTION_KEY = 'anyconnect_confirm';
+const QUESTION_KEY = 'manyplug_confirm';
 
 /** The caller's policy, loaded once per request (all units of a fan-out share the principal). */
 function policyLoader(policies: PolicyService) {
@@ -113,7 +113,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
   };
 
   const pendingText = (row: PendingCallRow, how: string) =>
-    `${how} Ask the user to confirm it ${row.channels.includes('telegram') ? 'with the button in their AnyConnect Telegram chat or ' : ''}at ${center.confirmUrl(row.id)} — then call this tool again with exactly the same arguments to get the result. Do not claim it was done before that.`;
+    `${how} Ask the user to confirm it ${row.channels.includes('telegram') ? 'with the button in their Manyplug Telegram chat or ' : ''}at ${center.confirmUrl(row.id)} — then call this tool again with exactly the same arguments to get the result. Do not claim it was done before that.`;
 
   /** What the caller gets for a held-back call, depending on where it stands. */
   const outcome = async (call: CallContext, row: PendingCallRow): Promise<ExecResult> => {

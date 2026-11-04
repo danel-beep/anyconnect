@@ -46,7 +46,7 @@ export type ToolTarget =
       fanOut: boolean;
     }
   | {
-      /** A hub setup tool (connector `anyconnect`): runs on the workspace, not on an account. */
+      /** A hub setup tool (connector `manyplug`): runs on the workspace, not on an account. */
       kind: 'workspace';
       connectorId: string;
       action: string;
@@ -111,7 +111,7 @@ export interface CatalogStats {
 export interface Catalog {
   mode: ExposureMode;
   listing: ListingMode;
-  /** Every callable tool (by name, through MCP or `anyconnect_call_tool`). */
+  /** Every callable tool (by name, through MCP or `manyplug_call_tool`). */
   tools: CatalogTool[];
   /** What `tools/list` returns. In direct listing the same as `tools`. */
   listed: CatalogTool[];

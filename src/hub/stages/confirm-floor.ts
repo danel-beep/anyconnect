@@ -11,7 +11,7 @@ export const confirmFloorStage: Middleware = async (call, next) => {
   if (call.action.requiresConfirmation && !call.preApproved) {
     call.audit.outcome = 'declined';
     return errorResult(
-      'This needs the user’s confirmation, and this hub has no way to ask for it yet. Ask the user to do it in the AnyConnect web panel.',
+      'This needs the user’s confirmation, and this hub has no way to ask for it yet. Ask the user to do it in the Manyplug web panel.',
       'permission',
     );
   }
