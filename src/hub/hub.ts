@@ -33,6 +33,8 @@ export type { ToolCallResult } from './result.js';
 
 class ToolTimeoutError extends Error {}
 
+const isTimeout = (reason: unknown) => reason instanceof DOMException && reason.name === 'TimeoutError';
+
 export interface HubDeps {
   db: Db;
   connectors: ConnectorResolver;
@@ -310,9 +312,11 @@ export class Hub {
     try {
       const ctx = await call.context();
       const value = await new Promise<unknown>((resolve, reject) => {
+        // The timeout signal aborts with a TimeoutError; comparing clocks with the deadline is not
+        // reliable (timers may fire a millisecond before Date.now() reaches it).
         const onAbort = () =>
           reject(
-            Date.now() >= call.deadline
+            isTimeout(signal.reason) || Date.now() >= call.deadline
               ? new ToolTimeoutError()
               : new ConnectorError('upstream', 'The call was cancelled'),
           );

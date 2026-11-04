@@ -134,6 +134,7 @@ export class TelegramBot {
   }
 }
 
+/** Escapes text for Telegram's HTML parse mode, also inside attribute values (`href="…"`). */
 export function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
