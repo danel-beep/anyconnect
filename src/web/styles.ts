@@ -140,6 +140,8 @@ pre.args,pre.block{background:var(--code-bg);border:1px solid var(--border);bord
 /* Tabs (progressive: without JS every panel is shown with its title) */
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;margin:0 0 18px}
 .tabs::-webkit-scrollbar{display:none}
+/* On narrow screens the tab row scrolls: its fading edge says there is more to the right */
+@media (max-width:640px){.tabs{mask-image:linear-gradient(to right,#000 82%,transparent);-webkit-mask-image:linear-gradient(to right,#000 82%,transparent);padding-right:24px}}
 .tab{appearance:none;border:0;background:none;border-radius:0;min-height:40px;padding:0 12px;color:var(--muted);font-weight:560;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--text);border-color:transparent}
 .tab[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent)}

@@ -168,7 +168,12 @@ export function appRoutes() {
     const titleOf = (r: ToolCallRow): string => {
       const connector = r.connectorId ? connectorById.get(r.connectorId) : undefined;
       const action = connector?.actions.find((a) => a.name === r.action);
-      return connector && action ? actionText(connector, action, c.get('locale')).title : r.toolName;
+      if (connector && action) return actionText(connector, action, c.get('locale')).title;
+      // An action the service no longer has (or a custom server's tool): its name, readable.
+      const prefix = `${r.connectorId ?? ''}_`;
+      const name = r.action ?? (r.toolName.startsWith(prefix) ? r.toolName.slice(prefix.length) : r.toolName);
+      const words = name.replace(/[_-]+/g, ' ').trim();
+      return words ? words[0]!.toUpperCase() + words.slice(1) : r.toolName;
     };
     return rows.map((r) => ({
       toolName: r.toolName,

@@ -457,7 +457,11 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
 
     const scoped = (id: string, access: string, confirm: string) =>
       browser.request('/app/rules/scoped', { form: { csrf: csrf!, kind: 'account', id, access, confirm } });
-    expect((await scoped(account.id, 'read', '')).status).toBe(303);
+    const saved = await scoped(account.id, 'read', '');
+    expect(saved.status).toBe(303);
+    // Rows save on change: the page comes back at the row, marked as saved.
+    expect(saved.headers.get('location')).toBe(`/app/rules?saved=${account.id}#rule-${account.id}`);
+    expect(await (await browser.request(`/app/rules?saved=${account.id}`)).text()).toContain('Сохранено');
     const rules = await hub.services.policies.listRules(ws.id);
     expect(rules).toEqual([
       expect.objectContaining({ accountId: account.id, access: 'read', confirm: null }),
@@ -536,13 +540,15 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
       [ws.id],
     );
     const first = await (await browser.request('/app/activity')).text();
-    expect(first).toContain('demo_call_1<');
-    expect(first).not.toContain('demo_call_31<');
+    // A tool the service does not list is shown by its name in words; the exact name is the tooltip.
+    expect(first).toContain('>Call 1<');
+    expect(first).toContain('title=\"demo_call_1\"');
+    expect(first).not.toContain('title=\"demo_call_31\"');
     const more = first.match(/href="(\/app\/activity\?before=[^"#]+)#log"/)![1]!.replaceAll('&amp;', '&');
     const second = await (await browser.request(more)).text();
-    expect(second).toContain('demo_call_31<');
-    expect(second).toContain('demo_call_35<');
-    expect(second).not.toContain('demo_call_30<');
+    expect(second).toContain('title=\"demo_call_31\"');
+    expect(second).toContain('title=\"demo_call_35\"');
+    expect(second).not.toContain('title=\"demo_call_30\"');
     expect(second).not.toContain('?before=');
   });
 

@@ -97,6 +97,7 @@ export function callReason(t: Translate, outcome: string | null, message: string
       return said ? t(`problem.call.${outcome}`, { message: said }) : t(`problem.call.${outcome}Bare`);
     }
     default: {
+      if (!message) return t('problem.call.unknown');
       const problem = classifyProblem(message);
       return problem.kind === 'other' && message
         ? message.replace(/\.+$/, '').slice(0, 200)
