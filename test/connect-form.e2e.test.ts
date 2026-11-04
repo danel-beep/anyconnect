@@ -153,7 +153,7 @@ describe('connect form for services without OAuth', () => {
 
   it('shows the mailbox form in Russian with server settings under "Advanced"', async () => {
     const { html } = await openForm('/connect/imap?label=Почта');
-    expect(html).toContain('Подключить Почта (IMAP/SMTP)');
+    expect(html).toContain('Подключение: Почта (IMAP/SMTP)');
     expect(html).toContain('>Адрес почты *</label>');
     expect(html).toContain('>Пароль приложения *</label>');
     expect(html).toContain('<option value="">Определить по адресу</option>');

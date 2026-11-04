@@ -138,6 +138,14 @@ export function appRoutes() {
     const grants = new Map(
       (await s.oauth.listGrants(workspaceId)).map((g) => [g.clientId, g.clientName ?? g.clientId]),
     );
+    const tokens = new Map((await s.apiTokens.list(workspaceId)).map((x) => [x.id, x.name]));
+    const t = c.get('t');
+    const clientOf = (r: ToolCallRow): string | null => {
+      if (r.principalType === 'session') return t('app.call.dashboard');
+      if (r.clientId) return grants.get(r.clientId) ?? clients.get(r.clientId) ?? null;
+      if (r.principalType === 'api_token' && r.principalId) return tokens.get(r.principalId) ?? null;
+      return null;
+    };
     return rows.map((r) => ({
       toolName: r.toolName,
       connectorId: r.connectorId ?? '',
@@ -145,7 +153,7 @@ export function appRoutes() {
       outcome: r.outcome,
       createdAt: r.createdAt,
       durationMs: r.durationMs,
-      client: (r.clientId && (grants.get(r.clientId) ?? clients.get(r.clientId))) || null,
+      client: clientOf(r),
     }));
   };
 
@@ -175,7 +183,8 @@ export function appRoutes() {
             steps: {
               ai: grants.length + tokens.length > 0,
               service: accounts.length > 0,
-              call: recentRows.length > 0,
+              // Ticked by a real request from a connected app, not by a test from the dashboard.
+              call: grants.length + tokens.length > 0 && recentRows.length > 0,
             },
             usage,
             apps: grants.length,
@@ -215,6 +224,7 @@ export function appRoutes() {
                 description: e.description,
                 connect: e.connect,
                 ready: e.ready,
+                setupVar: e.setupVar,
                 custom: e.custom,
                 accounts: e.accounts,
               })),
@@ -299,6 +309,9 @@ export function appRoutes() {
         setFlash(c, 'bad', key);
         return c.redirect(`/app/services?${new URLSearchParams({ draft: '1', name, url })}#custom`, 303);
       };
+      // Each attempt makes the hub fetch a user-supplied address: keep it to a human pace.
+      if (!s.rateLimiter.consume(`custom:${auth.workspace.id}`, 10, 10 * 60_000).allowed)
+        return retry('app.flash.customFailed');
       let added: Awaited<ReturnType<typeof s.customServices.add>>;
       try {
         added = await s.customServices.add(auth.workspace.id, {
@@ -548,6 +561,7 @@ export function appRoutes() {
           ctx={pageCtx(c, auth.user)}
           shell={shell}
           view={{
+            defaultAccess: security.defaultAccess,
             defaultConfirm: security.defaultConfirm,
             undoWindowSeconds: security.undoWindowSeconds,
             apps: clients.map((x) => ({

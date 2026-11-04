@@ -28,7 +28,13 @@ async function publicServices(c: AppContext): Promise<PublicService[]> {
   const entries = await s.admin.services(undefined);
   return entries
     .filter((e) => !HIDDEN_SERVICES.has(e.service))
-    .map((e) => ({ id: e.service, name: e.name, description: e.description, connect: e.connect }))
+    .map((e) => ({
+      id: e.service,
+      name: e.name,
+      description: e.description,
+      connect: e.connect,
+      ready: e.ready,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

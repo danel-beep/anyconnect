@@ -45,14 +45,14 @@ function consumePasskeyAttempt(c: AppContext): boolean {
 /**
  * Creates the session once every required factor is in. Replaces a session the browser already
  * had (re-confirmation), so the cookie value changes on every sign-in. Suspended users are refused
- * here, whatever the sign-in method; admin emails get their role; the saved language is applied.
+ * here, whatever the sign-in method; admins get the unlimited plan; the saved language is applied.
  */
 async function finishSignIn(c: AppContext, userId: string, amr: AuthMethod[]): Promise<void> {
   const s = c.get('services');
   const user = await s.users.require(userId);
   if (user.status !== 'active') throw new SignInRefused('suspended');
-  const synced = await s.users.syncRole(user);
-  if (synced.role === 'admin') {
+  // Admin emails are promoted in `signInExternal` (where the address is proven), not here.
+  if (user.role === 'admin') {
     // Administrators run the hub: their own workspace is not limited by visitor plans.
     const owned = (await s.users.ownedWorkspaces(user.id))[0];
     if (owned) await s.entitlements.ensurePlan(owned.id, 'unlimited');

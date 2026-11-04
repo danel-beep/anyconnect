@@ -190,6 +190,8 @@ export interface PublicService {
   name: string;
   description: string;
   connect: 'oauth' | 'form' | 'none';
+  /** False while the hub owner has not set up the service's OAuth app: shown as "coming soon". */
+  ready: boolean;
 }
 
 const blurb = (lang: string, service: PublicService) => {
@@ -207,7 +209,10 @@ const ServiceCard: FC<{ ctx: PageCtx; service: PublicService }> = ({ ctx, servic
     >
       <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={service.name} />
       <span class="grow">
-        <span class="name">{service.name}</span>
+        <span class="name">
+          {service.name}
+          {service.ready ? null : <span class="badge tiny-badge">{ctx.t('site.services.soonShort')}</span>}
+        </span>
         <span class="meta">{blurb(ctx.lang, service)}</span>
       </span>
     </a>
@@ -619,14 +624,14 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
                   <div class="meter ok">
                     <span class="w-35" />
                   </div>
-                  <span class="mono tiny">≤ 3k</span>
+                  <span class="mono tiny">{t('landing.f.context.tokens')}</span>
                 </div>
                 <div class="bar">
                   <span>{t('landing.f.context.many')}</span>
                   <div class="meter ok">
                     <span class="w-40" />
                   </div>
-                  <span class="mono tiny">≤ 3k</span>
+                  <span class="mono tiny">{t('landing.f.context.tokens')}</span>
                 </div>
               </div>
             </div>
@@ -942,7 +947,7 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
               );
             })}
           </div>
-          <div class="card">
+          <div class="card svc-missing">
             <div class="row between">
               <div class="grow">
                 <h3>{t('services.missing.title')}</h3>
@@ -996,6 +1001,12 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
                 <li>{t('service.step2', { service: service.name })}</li>
                 <li>{t('service.step3')}</li>
               </ol>
+              {service.ready ? null : (
+                <div class="notice info">
+                  {t('service.notReady', { service: service.name })}
+                  {service.id === 'gmail' || service.id === 'outlook' ? ` ${t('service.viaImap')}` : null}
+                </div>
+              )}
               <div class="actions start">
                 <a
                   class="btn primary"

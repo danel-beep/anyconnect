@@ -37,6 +37,8 @@ export interface ServiceEntry {
   /** OAuth services without an OAuth app configured cannot be connected yet. */
   ready: boolean;
   problem?: string;
+  /** The environment variable the hub owner sets to make a not-ready OAuth service available. */
+  setupVar?: string;
   /** Added by this workspace (remote MCP server or HTTP manifest), not built in. */
   custom: boolean;
   accounts: number;
@@ -99,13 +101,16 @@ export class WorkspaceAdmin {
       }
       const method = this.connectMethod(connector);
       const problem = method === 'oauth' ? await this.oauthProblem(workspaceId, connector) : undefined;
+      const setupVar = problem
+        ? `OAUTH_APP_${resolveProvider(connector.oauth!).id.toUpperCase()}_CLIENT_ID`
+        : undefined;
       entries.push({
         service: connector.id,
         name: connector.name,
         description: connector.description,
         connect: method,
         ready: !problem,
-        ...(problem ? { problem } : {}),
+        ...(problem ? { problem, setupVar } : {}),
         custom: customIds.has(connector.id),
         accounts: accounts.filter((a) => a.connectorId === connector.id).length,
       });

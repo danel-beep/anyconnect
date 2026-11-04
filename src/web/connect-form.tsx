@@ -151,6 +151,9 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
   const openAdvanced = advanced.some((f) => invalid.has(f.name) || isCustomValue(f, view.values?.[f.name]));
   return (
     <Layout title={t('connect.formTitle', { service: view.service })} narrow lang={lang}>
+      <p class="back-link">
+        <a href="/app/services">← {t('connect.back')}</a>
+      </p>
       <div class="card">
         <h1>{t('connect.formTitle', { service: view.service })}</h1>
         <p class="muted">{view.description}</p>

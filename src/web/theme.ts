@@ -22,6 +22,7 @@ export const THEME_TOKENS = [
   'ok-soft',
   'warn-bg',
   'warn-border',
+  'ink-surface',
 ] as const;
 
 export type ThemeToken = (typeof THEME_TOKENS)[number];
@@ -51,6 +52,8 @@ export const THEMES = {
     'ok-soft': '#e7f4ec',
     'warn-bg': '#fff4dc',
     'warn-border': '#e9b949',
+    /** Matte graphite panels with light text (hub diagram, call-to-action band). */
+    'ink-surface': '#2f2f33',
   },
   dark: {
     bg: '#232326',
@@ -71,6 +74,7 @@ export const THEMES = {
     'ok-soft': '#213429',
     'warn-bg': '#3a3122',
     'warn-border': '#8a6a2a',
+    'ink-surface': '#3a3a40',
   },
 } satisfies Record<'light' | 'dark', Palette>;
 

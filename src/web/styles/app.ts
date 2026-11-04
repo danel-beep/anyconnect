@@ -20,7 +20,7 @@ export const APP_SHELL_CSS = `
 .side-tools{display:flex;align-items:center;gap:4px;padding:0 2px}
 .side-tools .prefs{margin-right:auto}
 .side-tools form.inline{display:flex}
-.content{min-width:0;padding:28px 40px 72px;max-width:1120px;width:100%}
+.content{min-width:0;padding:28px 40px 72px;max-width:1120px;width:100%;margin-inline:auto}
 .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 24px;flex-wrap:wrap}
 .page-head h1{font-size:26px;letter-spacing:-.03em;margin:0}
 .page-head p{margin:6px 0 0;color:var(--muted)}
@@ -48,7 +48,7 @@ export const APP_SHELL_CSS = `
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 @media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:1fr}}
 .grid-2>.card,.grid-3>.card{margin:0}
-.grid-2,.grid-3{margin-bottom:16px}
+.grid-2,.grid-3{margin-bottom:16px;align-items:start}
 
 /* Onboarding */
 .onboard{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px}
@@ -113,8 +113,8 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .danger-zone{border-color:var(--danger)}
 .danger-zone h2{color:var(--danger)}
 
-.pad-x{padding:0 20px 16px;margin:0}
-ul.plain.pad-x{padding:0 20px 6px}
+.pad-x{padding:0 24px 16px;margin:0}
+ul.plain.pad-x{padding:0 24px 6px}
 .wide-2{grid-column:span 2}
 @media (max-width:640px){.wide-2{grid-column:auto}}
 .search-sm{max-width:260px;min-height:36px!important;padding:6px 12px!important}
@@ -146,4 +146,10 @@ ul.plain.pad-x{padding:0 20px 6px}
 .rule-row:first-child{border-top:0}
 .rule-row label{margin:0 0 4px;display:block}
 @media (max-width:760px){.rule-row{grid-template-columns:1fr 1fr}.rule-row .grow{grid-column:1/-1}}
+.menu>summary:has(.menu-label){width:auto;padding:0 10px;gap:6px;grid-auto-flow:column;font-size:13px}
+@media (max-width:480px){.rule-row{grid-template-columns:1fr}.rule-row button{justify-self:start}}
+@media (max-width:640px){
+  .table-wrap{background:linear-gradient(to right,var(--card) 30%,transparent) left/32px 100% no-repeat local,linear-gradient(to left,var(--card) 30%,transparent) right/32px 100% no-repeat local,radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.18),transparent) left/10px 100% no-repeat scroll,radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.18),transparent) right/10px 100% no-repeat scroll}
+  .table-wrap table{min-width:520px}
+}
 `;

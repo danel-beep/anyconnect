@@ -93,7 +93,11 @@ export class UserService {
     return this.deps.db.select().from(userIdentities).where(eq(userIdentities.userId, userId));
   }
 
-  /** Promotes configured admin emails; never demotes (admins are removed with `setRole`). */
+  /**
+   * Promotes configured admin emails; never demotes (admins are removed with `setRole`). Only called
+   * when this very sign-in proved the address (an authoritative Google sign-in): an account that
+   * once signed up with an unproven address must not become admin when the address is added later.
+   */
   async syncRole(user: User): Promise<User> {
     if (user.role === 'admin' || !this.deps.adminEmails.includes(user.email)) return user;
     const [updated] = await this.deps.db
@@ -127,7 +131,10 @@ export class UserService {
         .where(
           and(eq(userIdentities.provider, profile.provider), eq(userIdentities.subject, profile.subject)),
         );
-      return { user: await this.syncRole(user), created: false };
+      return {
+        user: profile.emailAuthoritative && profile.emailVerified ? await this.syncRole(user) : user,
+        created: false,
+      };
     }
     if (!profile.emailVerified) throw new SignInRefused('email_unverified');
 

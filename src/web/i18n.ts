@@ -140,6 +140,7 @@ const coreEn = {
   'connect.aiHint': 'AI apps connected to the hub see it on their next request.',
   'connect.testFailed': 'The connection works, but the check failed: {message}',
   'connect.formTitle': 'Connect {service}',
+  'connect.back': 'Back to services',
   'connect.formReconnect': 'Reconnecting “{label}”. Leave a secret empty to keep the stored one.',
   'connect.formLabel': 'Account name for you and the AI (e.g. “Work”)',
   'connect.formAdvanced': 'Advanced settings',
@@ -185,8 +186,8 @@ export type Key = keyof typeof en;
 
 const coreRu: Record<keyof typeof coreEn, string> = {
   'login.title': 'Вход в AnyConnect',
-  'login.subtitle': 'Ваш хаб для подключения сервисов к ИИ-ассистентам.',
-  'login.email': 'Email',
+  'login.subtitle': 'Ваш хаб для подключения сервисов к ИИ‑ассистентам.',
+  'login.email': 'Почта',
   'login.password': 'Пароль',
   'login.submit': 'Войти',
   'login.invalid': 'Неверный email или пароль.',
@@ -318,7 +319,8 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'connect.identity': 'Вход выполнен как {identity}.',
   'connect.aiHint': 'Подключённые к хабу ИИ-приложения увидят его при следующем запросе.',
   'connect.testFailed': 'Доступ получен, но проверка не прошла: {message}',
-  'connect.formTitle': 'Подключить {service}',
+  'connect.formTitle': 'Подключение: {service}',
+  'connect.back': 'К сервисам',
   'connect.formReconnect': 'Переподключение «{label}». Пустое поле ключа оставит сохранённый.',
   'connect.formLabel': 'Название аккаунта для вас и ИИ (например, «Работа»)',
   'connect.formAdvanced': 'Дополнительные настройки',
@@ -348,8 +350,8 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'home.revoke': 'Отозвать',
   'home.lastUsed': 'последнее использование',
   'home.never': 'не использовалось',
-  'home.calls': 'Последние вызовы инструментов',
-  'home.noCalls': 'Вызовов пока нет.',
+  'home.calls': 'Последние действия',
+  'home.noCalls': 'Действий пока нет.',
   'home.signOut': 'Выйти',
   'home.service': 'Сервис',
   'home.account': 'Аккаунт',
@@ -379,12 +381,37 @@ export function pickLocale(acceptLanguage: string | undefined): Locale {
   return 'en';
 }
 
+/**
+ * Plural forms in texts: `{n|день|дня|дней}` (Russian: one|few|many) or `{n|day|days}` (English:
+ * one|other) picks the word for the number in `vars.n`. The number itself is written as `{n}`.
+ */
+const PLURAL_ORDER: Record<Locale, Intl.LDMLPluralRule[]> = {
+  ru: ['one', 'few', 'many'],
+  en: ['one', 'other'],
+};
+const pluralRules: Record<Locale, Intl.PluralRules> = {
+  ru: new Intl.PluralRules('ru'),
+  en: new Intl.PluralRules('en'),
+};
+
+export function plural(locale: Locale, n: number, forms: string[]): string {
+  const category = pluralRules[locale].select(n);
+  const index = PLURAL_ORDER[locale].indexOf(category);
+  // Russian fractions ("other") read like "few": 1,5 дня.
+  return forms[index >= 0 ? index : locale === 'ru' ? 1 : forms.length - 1] ?? forms.at(-1) ?? '';
+}
+
 export function translator(locale: Locale): Translate {
   const dict = dictionaries[locale];
   return (key, vars) => {
     let text = dict[key] ?? en[key];
-    if (vars)
+    if (vars) {
+      text = text.replace(/\{(\w+)\|([^}]+)\}/g, (whole, name: string, forms: string) => {
+        const value = Number(vars[name]);
+        return Number.isFinite(value) ? plural(locale, value, forms.split('|')) : whole;
+      });
       for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
+    }
     return text;
   };
 }

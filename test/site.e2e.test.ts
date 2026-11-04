@@ -225,6 +225,21 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(signup).not.toContain('href="/auth/google');
   });
 
+  it('does not promote an account whose address was never proven when it is added to ADMIN_EMAILS later', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    // A consumer Google account for a non-Google domain: allowed to sign up, but not authoritative.
+    await oidc.signIn(browser, { sub: 'g-late', email: 'late@example.com' });
+    // Later the owner lists that address as an admin (here: the account's address becomes one).
+    await hub.services.database.pool.query(
+      `UPDATE users SET email = 'boss@example.com' WHERE email = 'late@example.com'`,
+    );
+    await oidc.signIn(browser, { sub: 'g-late', email: 'boss@example.com' });
+    expect((await userByEmail('boss@example.com')).role).toBe('user');
+    // The same address proven by its Workspace domain is promoted.
+    await oidc.signIn(browser, { sub: 'g-late', email: 'boss@example.com', hd: 'example.com' });
+    expect((await userByEmail('boss@example.com')).role).toBe('admin');
+  });
+
   it('keeps suspended users out on every path and ends their sessions', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await oidc.signIn(browser, { sub: 'g-bad', email: 'bad@example.com' });

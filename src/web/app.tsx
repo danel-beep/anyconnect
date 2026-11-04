@@ -281,7 +281,7 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
                   <CallStatus t={ctx.t} call={call} />
                 </td>
                 <td class="right small muted nowrap" title={fmtDate(ctx.lang, call.createdAt, true)}>
-                  {fmtAgo(ctx.lang, call.createdAt)} · {call.durationMs} ms
+                  {fmtAgo(ctx.lang, call.createdAt)} · {call.durationMs} {ctx.t('app.ms')}
                 </td>
               </tr>
             );
@@ -294,34 +294,46 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
 const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx, usage, extra }) => {
   const { t, lang } = ctx;
   const limitText = (v: number | null) => (v === null ? '∞' : fmtNumber(lang, v));
+  const exhausted = usage.actions.limit !== null && usage.actions.used >= usage.actions.limit;
   return (
-    <div class="stats">
-      <div class="stat">
-        <span class="label">
-          {t('app.usage.actions')}{' '}
-          <a href="/app/billing">{t(`plan.${usage.planId}.name` as 'plan.free.name')}</a>
-        </span>
-        <div class="value">
-          {fmtNumber(lang, usage.actions.used)}{' '}
-          <span class="muted small">/ {limitText(usage.actions.limit)}</span>
+    <>
+      {exhausted ? (
+        <div class="notice bad">
+          {t('app.usage.exhausted', { date: fmtDate(lang, usage.resetsAt) })}{' '}
+          <a href="/app/billing">{t('app.billing.upgrade')}</a>
         </div>
-        <Meter used={usage.actions.used} limit={usage.actions.limit} label={t('app.usage.actions')} />
-        <div class="sub">{t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}</div>
+      ) : null}
+      <div class="stats">
+        <div class="stat">
+          <span class="label">{t('app.usage.actions')}</span>
+          <div class="value">
+            {fmtNumber(lang, usage.actions.used)}{' '}
+            <span class="muted small">/ {limitText(usage.actions.limit)}</span>
+          </div>
+          <Meter used={usage.actions.used} limit={usage.actions.limit} label={t('app.usage.actions')} />
+          <div class="sub">
+            <a href="/app/billing">
+              {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
+            </a>
+            {' · '}
+            {t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}
+          </div>
+        </div>
+        <div class="stat">
+          <span class="label">{t('app.usage.accounts')}</span>
+          <div class="value">
+            {usage.accounts.used} <span class="muted small">/ {limitText(usage.accounts.limit)}</span>
+          </div>
+          <Meter used={usage.accounts.used} limit={usage.accounts.limit} label={t('app.usage.accounts')} />
+          <div class="sub">
+            {usage.introUntil
+              ? t('app.usage.intro', { date: fmtDate(lang, usage.introUntil) })
+              : t('app.usage.accountsHint')}
+          </div>
+        </div>
+        {extra}
       </div>
-      <div class="stat">
-        <span class="label">{t('app.usage.accounts')}</span>
-        <div class="value">
-          {usage.accounts.used} <span class="muted small">/ {limitText(usage.accounts.limit)}</span>
-        </div>
-        <Meter used={usage.accounts.used} limit={usage.accounts.limit} label={t('app.usage.accounts')} />
-        <div class="sub">
-          {usage.introUntil
-            ? t('app.usage.intro', { date: fmtDate(lang, usage.introUntil) })
-            : t('app.usage.accountsHint')}
-        </div>
-      </div>
-      {extra}
-    </div>
+    </>
   );
 };
 
@@ -347,14 +359,15 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
 }) => {
   const { t } = ctx;
   const allDone = view.steps.ai && view.steps.service && view.steps.call;
+  // Same order as on the website: services first, then the address for the AI, then a first request.
   const steps: { done: boolean; title: string; text: string; href: string }[] = [
-    { done: view.steps.ai, title: t('app.onb.ai'), text: t('app.onb.aiText'), href: '#connect-ai' },
     {
       done: view.steps.service,
       title: t('app.onb.service'),
       text: t('app.onb.serviceText'),
       href: '/app/services',
     },
+    { done: view.steps.ai, title: t('app.onb.ai'), text: t('app.onb.aiText'), href: '#connect-ai' },
     { done: view.steps.call, title: t('app.onb.call'), text: t('app.onb.callText'), href: '/docs#services' },
   ];
   return (
@@ -377,6 +390,8 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
           ))}
         </div>
       )}
+      {/* Until an AI app is connected, its address is the main thing on this page. */}
+      {view.steps.ai ? null : <ConnectAiCard ctx={ctx} />}
       <UsageStats
         ctx={ctx}
         usage={view.usage}
@@ -399,7 +414,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
           </>
         }
       />
-      <ConnectAiCard ctx={ctx} compact={view.steps.ai} />
+      {view.steps.ai ? <ConnectAiCard ctx={ctx} compact /> : null}
       <div class="grid-2">
         <div class="card flush">
           <div class="card-head pad">
@@ -423,7 +438,9 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
                         {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
                       </div>
                     </div>
-                    <AccountStatus t={t} a={a} />
+                    <div class="ops">
+                      <AccountStatus t={t} a={a} />
+                    </div>
                   </div>
                 );
               })}
@@ -504,6 +521,7 @@ export interface CatalogEntryView {
   description: string;
   connect: 'oauth' | 'form' | 'none';
   ready: boolean;
+  setupVar?: string | undefined;
   custom: boolean;
   accounts: number;
 }
@@ -516,6 +534,9 @@ export interface CustomServiceView {
   tools: number;
   lastError: string | null;
 }
+
+/** Mail services that can be connected over IMAP while their OAuth app is not set up. */
+const MAIL_SERVICES = new Set(['gmail', 'outlook']);
 
 export interface ServicesView {
   accounts: AccountView[];
@@ -564,6 +585,7 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
         <details class="menu" data-menu>
           <summary aria-label={t('app.acc.more')} title={t('app.acc.more')}>
             <Icon name="more" />
+            <span class="menu-label">{t('app.acc.moreShort')}</span>
           </summary>
           <div class="menu-pop">
             <form method="post" action={`${base}/rename`} class="rename">
@@ -679,8 +701,21 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                         {s.accounts > 0 ? t('app.services.addAnother') : t('app.services.connect')}
                       </a>
                     )
+                  ) : ctx.user?.isAdmin && s.setupVar ? (
+                    // The owner can fix it; everyone else just sees that it is coming.
+                    <span class="small muted">
+                      {t('app.services.setupVar')} <code>{s.setupVar}</code>
+                    </span>
                   ) : (
-                    <span class="small muted">{t('app.services.notReady')}</span>
+                    <span class="small muted">
+                      <span class="badge">{t('app.services.notReady')}</span>
+                      {MAIL_SERVICES.has(s.service) ? (
+                        <>
+                          {' '}
+                          <a href="/connect/imap?returnTo=%2Fapp%2Fservices">{t('app.services.viaImap')}</a>
+                        </>
+                      ) : null}
+                    </span>
                   )}
                 </div>
               </div>
@@ -1131,8 +1166,8 @@ export interface SettingsView {
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
 
-const agentName = (ua: string | null) => {
-  if (!ua) return '—';
+const agentName = (ua: string | null): string | null => {
+  if (!ua) return null;
   const browser = /Edg\//.test(ua)
     ? 'Edge'
     : /Chrome\//.test(ua)
@@ -1264,7 +1299,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
           {view.sessions.map((s) => (
             <li>
               <span>
-                {agentName(s.userAgent)}
+                {agentName(s.userAgent) ?? t('app.settings.unknownDevice')}
                 {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
               </span>
               <span class="small muted">

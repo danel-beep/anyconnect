@@ -272,7 +272,7 @@ export const AdminUsersPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUse
                         <span class="avatar">{initials(u.name ?? u.email)}</span>
                         <span>
                           <a href={`/admin/users/${u.id}`}>{u.email}</a>
-                          {u.role === 'admin' ? <span class="admin-tag">admin</span> : null}
+                          {u.role === 'admin' ? <span class="admin-tag">{t('app.adminTag')}</span> : null}
                           {u.status === 'suspended' ? (
                             <span class="badge bad">{t('admin.status.suspended')}</span>
                           ) : null}
@@ -385,7 +385,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
         }
         actions={
           <>
-            {u.role === 'admin' ? <span class="admin-tag">admin</span> : null}
+            {u.role === 'admin' ? <span class="admin-tag">{t('app.adminTag')}</span> : null}
             <span class={`badge ${u.status === 'active' ? 'ok' : 'bad'}`}>
               {t(`admin.status.${u.status as 'active'}`)}
             </span>

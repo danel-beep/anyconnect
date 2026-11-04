@@ -42,7 +42,9 @@ export const SITE_CSS = `
 .hero{padding:72px 0 88px;position:relative;overflow:hidden}
 .hero .wrap{position:relative;display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,1fr);gap:56px;align-items:center}
 .hero h1{font-size:clamp(40px,5.6vw,68px);line-height:1.02;letter-spacing:-.045em;font-weight:660;margin:0 0 22px}
-.hero h1 .mark{background:linear-gradient(transparent 62%,var(--accent-soft) 62%);padding:0 .06em;margin:0 -.06em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.hero h1 .mark{color:var(--accent-ink)}
+h1,h2{text-wrap:balance}
+p{text-wrap:pretty}
 .hero .lead{max-width:540px;margin:0 0 30px}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .hero-note{margin:18px 0 0;color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap}
@@ -62,7 +64,7 @@ export const SITE_CSS = `
 .demo-body{padding:20px;display:flex;flex-direction:column;gap:12px}
 .msg{max-width:88%;padding:11px 14px;border-radius:14px;line-height:1.5}
 .msg.user{align-self:flex-end;background:var(--bg-subtle);border:1px solid var(--border);border-bottom-right-radius:4px}
-.msg.ai{align-self:flex-start;padding-left:0;padding-right:0}
+.msg.ai{align-self:flex-start;padding-left:0;padding-right:0;color:var(--text)}
 .call{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font:450 12.5px/1.4 ${MONO};background:var(--code-bg)}
 .call b{font-weight:600;color:var(--text)}
 .call .args{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -99,7 +101,7 @@ export const SITE_CSS = `
 .hubmap-col.left .node::after,.hubmap-col.right .node::before{content:"";position:absolute;top:50%;width:48px;border-top:1px dashed var(--border-strong)}
 .hubmap-col.left .node::after{left:100%}
 .hubmap-col.right .node::before{right:100%}
-.hub-core{margin:0 48px;padding:22px 20px;border-radius:18px;background:#1c1c1e;color:#f5f5f4;box-shadow:0 0 0 1px var(--border-strong);text-align:center;min-width:220px;position:relative}
+.hub-core{margin:0 48px;padding:22px 20px;border-radius:18px;background:var(--ink-surface);color:#f5f5f4;box-shadow:0 0 0 1px var(--border-strong);text-align:center;min-width:220px;position:relative}
 .hub-core .brand-mark{width:36px;height:36px;margin:0 auto 10px;display:block}
 .hub-core strong{display:block;font-size:17px;letter-spacing:-.02em}
 .hub-core code{display:inline-block;margin-top:10px;background:transparent;border-color:currentColor;color:inherit;opacity:.85}
@@ -160,7 +162,7 @@ a.svc:hover{border-color:var(--border-strong);text-decoration:none;transform:tra
 .billing-switch{display:inline-flex;min-width:0;border:1px solid var(--border);border-radius:10px;padding:3px;background:var(--bg-subtle);margin:0 0 28px}
 .billing-switch button{min-height:34px;border:0;background:transparent;color:var(--muted);border-radius:8px}
 .billing-switch button[aria-pressed=true]{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.billing-switch .save{font-size:11px;color:var(--ok);margin-left:4px}
+.billing-switch .save{font-size:11px;color:var(--accent-ink);margin-left:4px}
 html:not(.js) .billing-switch{display:none}
 .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:16px;position:relative}
@@ -176,7 +178,7 @@ html:not(.js) .billing-switch{display:none}
 html:not(.js) .when-year{display:none}
 .plan ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px;font-size:14px}
 .plan li{display:flex;gap:10px;align-items:flex-start}
-.plan li svg{width:16px;height:16px;flex:none;margin-top:2px;color:var(--ok)}
+.plan li svg{width:16px;height:16px;flex:none;margin-top:2px;color:var(--accent-ink)}
 .plan li.off{color:var(--muted)}
 .plan li.off svg{color:var(--muted)}
 .plan .btn{margin-top:auto}
@@ -184,10 +186,10 @@ html:not(.js) .when-year{display:none}
 @media (max-width:600px){.plans{grid-template-columns:1fr}}
 .compare th,.compare td{text-align:center}
 .compare th:first-child,.compare td:first-child{text-align:left}
-.compare td svg{width:18px;height:18px;vertical-align:middle;color:var(--ok)}
+.compare td svg{width:18px;height:18px;vertical-align:middle;color:var(--accent-ink)}
 
 /* CTA band */
-.cta-band{border:1px solid #2c2c30;border-radius:20px;padding:56px;background:#1c1c1e;color:#f5f5f4;display:grid;grid-template-columns:1.4fr 1fr;gap:32px;align-items:center;position:relative;overflow:hidden}
+.cta-band{border:1px solid var(--border-strong);border-radius:20px;padding:56px;background:var(--ink-surface);color:#f5f5f4;display:grid;grid-template-columns:1.4fr 1fr;gap:32px;align-items:center;position:relative;overflow:hidden}
 .cta-band h2{font-size:clamp(28px,3.4vw,40px);letter-spacing:-.035em;margin:0 0 10px;line-height:1.08}
 .cta-band p{color:#b4b4b8;margin:0}
 .cta-band .btn:not(.primary){background:transparent;color:#f5f5f4;border-color:#3a3a3f}
@@ -222,7 +224,7 @@ html:not(.js) .when-year{display:none}
 .svc-hero{display:flex;gap:20px;align-items:center;margin:8px 0 28px}
 .svc-hero .lead{margin:0}
 .section-title{font-size:clamp(28px,3.6vw,40px);letter-spacing:-.03em;margin:0 0 6px;line-height:1.1}
-.card-head.pad{padding:18px 20px 4px;margin:0}
+.card-head.pad{padding:20px 24px 4px;margin:0}
 .logo-g{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#fff;flex:none}
 .logo-g svg{width:15px;height:15px}
 
@@ -235,4 +237,9 @@ html:not(.js) .when-year{display:none}
 .footer-grid a.brand{display:inline-flex}
 .footer-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:40px;padding-top:24px;border-top:1px solid var(--border)}
 @media (max-width:760px){.footer-grid{grid-template-columns:1fr 1fr}.footer-grid>div:first-child{grid-column:span 2}}
+.svc-missing{margin-top:24px}
+.plan ul{flex:1}
+.doc-layout h1{font-size:clamp(32px,4vw,44px);letter-spacing:-.035em;line-height:1.05}
+.guide li code,.guide p code{font-size:.92em}
+details.more-ways{margin-top:14px}
 `;

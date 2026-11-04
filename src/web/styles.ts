@@ -78,6 +78,7 @@ input[readonly]{font-family:${MONO};font-size:13.5px;background:var(--code-bg)}
 input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;margin:0 8px 0 0;vertical-align:-3px}
 .check{display:flex;align-items:flex-start;gap:8px;font-weight:450;margin:12px 0}
 .hint{color:var(--muted);font-size:13px;margin:6px 0 0}
+.back-link{margin:0 0 12px;font-size:14px}.back-link a{color:var(--muted);text-decoration:none}.back-link a:hover{color:var(--text)}
 .hint>svg{width:15px;height:15px;vertical-align:-3px}
 .error{color:var(--danger);margin:8px 0 0}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
@@ -119,8 +120,8 @@ ul.bullets li+li{margin-top:4px}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:10px 12px;border-top:1px solid var(--border);vertical-align:middle}
 th{color:var(--muted);font-weight:560;font-size:12.5px;border-top:0;background:var(--bg-subtle);white-space:nowrap}
-.card.flush table th:first-child,.card.flush table td:first-child{padding-left:20px}
-.card.flush table th:last-child,.card.flush table td:last-child{padding-right:20px}
+.card.flush table th:first-child,.card.flush table td:first-child{padding-left:24px}
+.card.flush table th:last-child,.card.flush table td:last-child{padding-right:24px}
 tbody tr:hover td{background:var(--bg-subtle)}
 table.kv th{background:none;width:38%;font-size:13px;vertical-align:top}
 table.kv td,table.kv th{padding:8px 0}

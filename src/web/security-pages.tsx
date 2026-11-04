@@ -242,7 +242,7 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
             maxlength={64}
             placeholder={t('security.passkeyDefaultName')}
           />
-          <div class="actions">
+          <div class="actions start">
             <button class="primary" type="submit">
               {t('security.passkeyAdd')}
             </button>

@@ -3,7 +3,7 @@ import type { AccessLevel, ConfirmLevel } from '../db/schema.js';
 import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { Hidden, Icon } from './ui.js';
+import { Hidden } from './ui.js';
 
 /**
  * "Rules" in the dashboard: when the AI must ask before acting, and per AI app / per account
@@ -20,6 +20,7 @@ export interface ScopedRuleView {
 }
 
 export interface RulesView {
+  defaultAccess: AccessLevel;
   defaultConfirm: ConfirmLevel;
   undoWindowSeconds: number;
   apps: ScopedRuleView[];
@@ -38,8 +39,14 @@ const ScopedTable: FC<{
   rows: ScopedRuleView[];
   kind: 'app' | 'account';
   empty: string;
-}> = ({ ctx, rows, kind, empty }) => {
+  defaults: { access: AccessLevel; confirm: ConfirmLevel };
+}> = ({ ctx, rows, kind, empty, defaults }) => {
   const { t } = ctx;
+  // "Default" names the value it stands for, so the user sees what they would inherit.
+  const inheritAccess = t('app.rules.inheritAs', { value: t(`app.rules.access.${defaults.access}` as Key) });
+  const inheritConfirm = t('app.rules.inheritAs', {
+    value: t(`app.rules.confirmShort.${defaults.confirm}` as Key),
+  });
   if (!rows.length) return <p class="muted">{empty}</p>;
   return (
     <div class="rule-list">
@@ -56,7 +63,7 @@ const ScopedTable: FC<{
             </label>
             <select id={`access-${r.id}`} name="access">
               <option value="" selected={r.access === null}>
-                {t('app.rules.inherit')}
+                {inheritAccess}
               </option>
               {ACCESSES.map((a) => (
                 <option value={a} selected={r.access === a}>
@@ -71,7 +78,7 @@ const ScopedTable: FC<{
             </label>
             <select id={`confirm-${r.id}`} name="confirm">
               <option value="" selected={r.confirm === null}>
-                {t('app.rules.inherit')}
+                {inheritConfirm}
               </option>
               {CONFIRMS.map((c) => (
                 <option value={c} selected={r.confirm === c}>
@@ -91,6 +98,7 @@ const ScopedTable: FC<{
 
 export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> = ({ ctx, shell, view }) => {
   const { t } = ctx;
+  const defaults = { access: view.defaultAccess, confirm: view.defaultConfirm };
   return (
     <AppShell ctx={ctx} shell={shell} section="rules" title={t('app.nav.rules')}>
       <PageHead title={t('app.nav.rules')} sub={t('app.rules.sub')} />
@@ -116,12 +124,16 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
           <select id="undo" name="undo">
             {UNDO.map((n) => (
               <option value={String(n)} selected={view.undoWindowSeconds === n}>
-                {n === 0 ? t('app.rules.undoOff') : t('app.rules.undoSeconds', { n })}
+                {n === 0
+                  ? t('app.rules.undoOff')
+                  : n % 60 === 0
+                    ? t('app.rules.undoMinutes', { n: n / 60 })
+                    : t('app.rules.undoSeconds', { n })}
               </option>
             ))}
           </select>
           <p class="hint">{t('app.rules.undoHint')}</p>
-          <div class="actions">
+          <div class="actions start">
             <button type="submit" class="primary">
               {t('app.rules.save')}
             </button>
@@ -131,15 +143,27 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
       <div class="card">
         <h2>{t('app.rules.byApp')}</h2>
         <p class="muted">{t('app.rules.byAppText')}</p>
-        <ScopedTable ctx={ctx} rows={view.apps} kind="app" empty={t('app.rules.noApps')} />
+        <ScopedTable
+          ctx={ctx}
+          rows={view.apps}
+          kind="app"
+          empty={t('app.rules.noApps')}
+          defaults={defaults}
+        />
       </div>
       <div class="card">
         <h2>{t('app.rules.byAccount')}</h2>
         <p class="muted">{t('app.rules.byAccountText')}</p>
-        <ScopedTable ctx={ctx} rows={view.accounts} kind="account" empty={t('app.rules.noAccounts')} />
+        <ScopedTable
+          ctx={ctx}
+          rows={view.accounts}
+          kind="account"
+          empty={t('app.rules.noAccounts')}
+          defaults={defaults}
+        />
       </div>
       <p class="hint">
-        <Icon name="book" /> {t('app.rules.api', { n: view.otherRules })}{' '}
+        {view.otherRules ? `${t('app.rules.api', { n: view.otherRules })} ` : `${t('app.rules.apiNone')} `}
         <a href="/docs#api">{t('app.rules.apiLink')}</a>
       </p>
     </AppShell>

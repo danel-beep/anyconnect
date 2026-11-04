@@ -167,7 +167,7 @@ export function createServices(
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
-  const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/pricing` });
+  const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/app/billing` });
   const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
   const customServices = new CustomServiceManager({
     db,
