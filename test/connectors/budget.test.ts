@@ -41,6 +41,8 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   intercom: { total: 1130, tool: 220 },
   pipedrive: { total: 1950, tool: 290 },
   gsheets: { total: 1910, tool: 300 },
+  telegram: { total: 2050, tool: 400 },
+  whatsapp: { total: 2050, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {

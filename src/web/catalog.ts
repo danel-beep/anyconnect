@@ -74,6 +74,22 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'messengers',
     blurb: { ru: 'Каналы, поиск по сообщениям, отправка.', en: 'Channels, message search, posting.' },
   },
+  telegram: {
+    icon: 'telegram',
+    category: 'messengers',
+    blurb: {
+      ru: 'Ваш бот: чаты, поиск по переписке, ответы.',
+      en: 'Your bot: chats, message search, replies.',
+    },
+  },
+  whatsapp: {
+    icon: 'whatsapp',
+    category: 'messengers',
+    blurb: {
+      ru: 'Номер WhatsApp Business через официальный API: чаты, поиск, ответы.',
+      en: 'A WhatsApp Business number through the official API: chats, search, replies.',
+    },
+  },
   gcal: {
     icon: 'googlecalendar',
     category: 'calendar',
@@ -211,8 +227,6 @@ export const PLANNED_SERVICES: {
   glyph?: IconName;
   category: ServiceCategory;
 }[] = [
-  { name: 'Telegram', icon: 'telegram', category: 'messengers' },
-  { name: 'WhatsApp', icon: 'whatsapp', category: 'messengers' },
   { name: 'Shopify', icon: 'shopify', category: 'payments' },
   { name: 'Dropbox', icon: 'dropbox', category: 'files' },
   { name: 'Discord', icon: 'discord', category: 'messengers' },

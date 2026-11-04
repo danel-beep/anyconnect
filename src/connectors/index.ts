@@ -21,13 +21,32 @@ import outlook from './builtin/outlook.js';
 import pipedrive from './builtin/pipedrive.js';
 import slack from './builtin/slack.js';
 import stripe from './builtin/stripe.js';
+import { createTelegramConnector } from './builtin/telegram.js';
 import todoist from './builtin/todoist.js';
 import trello from './builtin/trello.js';
+import { createWhatsAppConnector } from './builtin/whatsapp.js';
 import zendesk from './builtin/zendesk.js';
+import type { MessagingPort } from './messaging.js';
 import { ConnectorRegistry } from './registry.js';
+import { ConnectorError } from './sdk.js';
+
+/** What built-in connectors get from the hub (ports to its subsystems; no app imports here). */
+export interface BuiltinDeps {
+  messaging: MessagingPort;
+}
+
+/**
+ * For processes that only list or inspect connectors (catalog checks, docs, tests): messenger
+ * tools are defined but fail with a clear error if one is actually run.
+ */
+export const NO_MESSAGING: MessagingPort = {
+  forAccount: () => {
+    throw new ConnectorError('upstream', 'Messaging is not available in this process.');
+  },
+};
 
 /** All connectors shipped with the hub. New built-in connectors are added here. */
-export function createBuiltinRegistry(): ConnectorRegistry {
+export function createBuiltinRegistry(deps: BuiltinDeps = { messaging: NO_MESSAGING }): ConnectorRegistry {
   return new ConnectorRegistry()
     .register(demo)
     .register(imap)
@@ -54,7 +73,9 @@ export function createBuiltinRegistry(): ConnectorRegistry {
     .register(zendesk)
     .register(intercom)
     .register(pipedrive)
-    .register(gsheets);
+    .register(gsheets)
+    .register(createTelegramConnector(deps.messaging))
+    .register(createWhatsAppConnector(deps.messaging));
 }
 
 export type { ConnectorResolver } from './registry.js';
