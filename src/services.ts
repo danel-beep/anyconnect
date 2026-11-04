@@ -30,7 +30,7 @@ import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
-import { createHubMcpHandler } from './mcp/handler.js';
+import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { AiClientService } from './security/clients.js';
@@ -107,6 +107,8 @@ export interface Services {
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
+  /** /mcp for apps that have not signed in yet; absent when `MCP_ANONYMOUS` is off. */
+  visitorMcp?: McpHttpHandler;
   close(): Promise<void>;
 }
 
@@ -230,6 +232,7 @@ export function createServices(
   const admin = new WorkspaceAdmin({
     db,
     connectors,
+    builtin: connectors.builtin,
     accounts,
     customServices,
     apps: oauthApps,
@@ -289,6 +292,9 @@ export function createServices(
     new PasskeyService(db, { id: config.auth.rpId, name: config.auth.rpName, origin: config.auth.origin }),
   );
   const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
+  const visitorMcp = config.anonymousMcp.enabled
+    ? createVisitorMcpHandler({ admin, setup: SETUP_CONNECTOR, logger, version: VERSION })
+    : undefined;
 
   return {
     config,
@@ -328,11 +334,13 @@ export function createServices(
     rateLimiter,
     idempotency,
     mcp,
+    ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
       await pendingRunner.stop();
       rateLimiter.close();
       await jobs.stop();
       await mcp.close();
+      await visitorMcp?.close();
       await network.close();
       await database.close();
     },

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { resolveProvider } from '../connectors/oauth/providers.js';
-import type { ConnectorResolver } from '../connectors/registry.js';
+import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registry.js';
 import type { ConnectorDefinition, ConnectorLogger, TestResult } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { type WorkspaceSettings, workspaces } from '../db/schema.js';
@@ -55,6 +55,8 @@ export class WorkspaceAdmin {
     private readonly deps: {
       db: Db;
       connectors: ConnectorResolver;
+      /** Built-in services, listed to visitors who have not signed in yet. */
+      builtin: ConnectorRegistry;
       accounts: AccountService;
       customServices: CustomServiceManager;
       apps: OAuthAppService;
@@ -72,13 +74,18 @@ export class WorkspaceAdmin {
     return fields > 0 ? 'form' : 'none';
   }
 
-  /** Every service the workspace can connect, with how and whether it is ready. */
-  async services(workspaceId: string, filter?: string): Promise<ServiceEntry[]> {
-    const [connectors, accounts, custom] = await Promise.all([
-      this.deps.connectors.list(workspaceId),
-      this.deps.accounts.list(workspaceId),
-      this.deps.customServices.list(workspaceId),
-    ]);
+  /**
+   * Every service the workspace can connect, with how and whether it is ready. Without a workspace
+   * (a visitor who has not signed in) it lists the hub's built-in services.
+   */
+  async services(workspaceId: string | undefined, filter?: string): Promise<ServiceEntry[]> {
+    const [connectors, accounts, custom] = workspaceId
+      ? await Promise.all([
+          this.deps.connectors.list(workspaceId),
+          this.deps.accounts.list(workspaceId),
+          this.deps.customServices.list(workspaceId),
+        ])
+      : [this.deps.builtin.all(), [], []];
     const customIds = new Set(custom.map((c) => c.connectorId));
     const query = filter?.trim().toLowerCase();
     const entries: ServiceEntry[] = [];
@@ -107,11 +114,13 @@ export class WorkspaceAdmin {
 
   /** Why an OAuth service cannot be connected yet, if it cannot. */
   private async oauthProblem(
-    workspaceId: string,
+    workspaceId: string | undefined,
     connector: ConnectorDefinition,
   ): Promise<string | undefined> {
     const provider = resolveProvider(connector.oauth!);
-    const app = await this.deps.apps.pick(workspaceId, provider.id).catch(() => undefined);
+    const app = workspaceId
+      ? await this.deps.apps.pick(workspaceId, provider.id).catch(() => undefined)
+      : this.deps.apps.hasHubApp(provider.id);
     if (app) return undefined;
     if (connector.oauth!.optional) return undefined; // a personal token in the form works too
     return `No ${provider.name} OAuth app is configured on this hub yet (the hub owner sets OAUTH_APP_${provider.id.toUpperCase()}_CLIENT_ID).`;
