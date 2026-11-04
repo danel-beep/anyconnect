@@ -13,6 +13,7 @@ import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { savedLocale } from './routes/page-helpers.js';
+import { referralCapture } from './routes/referral.js';
 import { securityRoutes } from './routes/security.js';
 import { siteRoutes } from './routes/site.js';
 import { webRoutes } from './routes/web.js';
@@ -40,6 +41,7 @@ export function createApp(services: Services) {
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
   app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
+  app.use('*', referralCapture());
 
   app.get('/healthz', (c) => c.json({ status: 'ok', version: services.version }));
   app.get('/readyz', async (c) => {

@@ -43,6 +43,7 @@ export type AppSection =
   | 'settings'
   | 'admin'
   | 'admin-users'
+  | 'admin-revenue'
   | 'admin-audit'
   | 'admin-system';
 
@@ -73,6 +74,7 @@ const NAV: {
   { id: 'settings', href: '/app/settings', icon: 'settings', key: 'app.nav.settings', group: 'account' },
   { id: 'admin', href: '/admin', icon: 'chart', key: 'admin.nav.overview', group: 'admin' },
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
+  { id: 'admin-revenue', href: '/admin/revenue', icon: 'card', key: 'admin.nav.revenue', group: 'admin' },
   { id: 'admin-audit', href: '/admin/audit', icon: 'book', key: 'admin.nav.audit', group: 'admin' },
   { id: 'admin-system', href: '/admin/system', icon: 'layers', key: 'admin.nav.system', group: 'admin' },
 ];
@@ -1314,6 +1316,10 @@ export interface BillingView {
   /** An open "switch me to this plan" request (manual payments). */
   requested?: { planId: string; at: Date } | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
+  /** The plan is a gift (a month of Pro for an invite), not bought: it can still be bought. */
+  gift: boolean;
+  /** The user's invite link and what it brought. */
+  invite?: { link: string; invited: number; rewarded: number; days: number } | undefined;
 }
 
 const planLabel = (ctx: PageCtx, id: string) => ctx.t(`plan.${id}.name` as 'plan.free.name');
@@ -1430,6 +1436,21 @@ const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) =
   );
 };
 
+/** "Invite friends": the link, the reward and how many joined. */
+const InviteCard: FC<{ ctx: PageCtx; invite: NonNullable<BillingView['invite']> }> = ({ ctx, invite }) => {
+  const { t } = ctx;
+  return (
+    <div class="card" id="invite">
+      <h2>{t('app.invite.title')}</h2>
+      <p class="muted">{t('app.invite.text', { days: invite.days })}</p>
+      <CopyField t={t} id="invite-link" value={invite.link} label={t('app.invite.link')} />
+      <p class="small muted">
+        {t('app.invite.stats', { invited: invite.invited, rewarded: invite.rewarded })}
+      </p>
+    </div>
+  );
+};
+
 export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView }> = ({
   ctx,
   shell,
@@ -1518,6 +1539,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           </>
         ) : null}
       </div>
+      {view.invite ? <InviteCard ctx={ctx} invite={view.invite} /> : null}
       {!view.plan.public ? null : ctx.billing ? null : view.requested ? (
         <div class="notice info">
           {t('app.billing.requested', {
@@ -1553,7 +1575,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
               plan={plan}
               current={plan.id === view.plan.id}
               action={
-                plan.id === view.plan.id ? (
+                plan.id === view.plan.id && !view.gift ? (
                   <span class="btn block" aria-disabled="true">
                     {t('app.billing.yours')}
                   </span>

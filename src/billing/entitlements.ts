@@ -67,6 +67,15 @@ export class PlanLimitError extends AppError {
 
 const CACHE_MS = 10_000;
 
+/** Shares of the monthly action limit at which the AI is told, once, that the limit is getting close. */
+const NEAR_LIMIT_LEVELS = [0.8, 0.95] as const;
+
+/** Things that happen while limits are enforced (notices subscribe; see `src/notices/`). */
+export interface EntitlementListener {
+  /** A call was refused because the monthly action limit is used up. */
+  limitReached?(workspaceId: string, ent: Entitlements, limit: number): Promise<void>;
+}
+
 /**
  * Plans, limits and grants of workspaces. Implements the hub's `QuotaGate` (actions per month) and
  * the account service's `AccountLimits`. Payment providers and admins change plans through
@@ -76,6 +85,9 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   /** Short-lived snapshot of usage per workspace, bumped locally between refreshes. */
   private readonly usageCache = new Map<string, { at: number; period: string; actions: number }>();
   private readonly callerCache = new Map<string, { at: number; period: string; actions: number }>();
+  /** `workspace:countFrom:level` already hinted to the AI or notified (per process; notices dedupe in the DB). */
+  private readonly told = new Set<string>();
+  private readonly listeners: EntitlementListener[] = [];
 
   constructor(
     private readonly deps: {
@@ -89,6 +101,10 @@ export class EntitlementService implements QuotaGate, AccountLimits {
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();
+  }
+
+  listen(listener: EntitlementListener): void {
+    this.listeners.push(listener);
   }
 
   // --- Reading -----------------------------------------------------------------
@@ -186,7 +202,10 @@ export class EntitlementService implements QuotaGate, AccountLimits {
     const used = await this.cachedUsage(this.usageCache, principal.workspaceId, ent.countFrom, () =>
       this.actionsUsed(principal.workspaceId, ent.countFrom),
     );
-    if (used >= limit) return { allowed: false, message: this.actionsMessage(ent, limit) };
+    if (used >= limit) {
+      this.limitReached(principal.workspaceId, ent, limit);
+      return { allowed: false, message: this.actionsMessage(ent, limit) };
+    }
     // The free allowance belongs to the person at the AI provider, not to a sign-up: several hub
     // accounts used from one ChatGPT account share it.
     if (ent.plan.priceMonthly === 0 && principal.aiSubject) {
@@ -198,7 +217,47 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       this.bump(this.callerCache, caller);
     }
     this.bump(this.usageCache, principal.workspaceId);
-    return { allowed: true };
+    const notice = this.nearLimitNotice(principal.workspaceId, ent, limit, used + 1);
+    return notice ? { allowed: true, notice } : { allowed: true };
+  }
+
+  /**
+   * A gentle line for the AI when this call crosses 80% or 95% of the monthly actions: said once
+   * per level and month, so the assistant can mention it in passing instead of the user hitting
+   * the wall unannounced.
+   */
+  private nearLimitNotice(
+    workspaceId: string,
+    ent: Entitlements,
+    limit: number,
+    used: number,
+  ): string | undefined {
+    const level = [...NEAR_LIMIT_LEVELS].reverse().find((l) => used >= Math.ceil(limit * l));
+    if (!level || used >= limit) return undefined;
+    const key = `${workspaceId}:${ent.countFrom}:${level}`;
+    if (this.told.has(key)) return undefined;
+    this.remember(key);
+    const reset = ent.period.resetsAt.toISOString().slice(0, 10);
+    return (
+      `Manyplug note (not from the service): the user has used ${used} of ${limit} actions this month ` +
+      `on the ${ent.plan.id} plan; the count resets on ${reset}. Finish the task, then mention this ` +
+      `once, briefly and without pressure; a bigger plan is at ${this.deps.pricingUrl}.`
+    );
+  }
+
+  private limitReached(workspaceId: string, ent: Entitlements, limit: number): void {
+    const key = `${workspaceId}:${ent.countFrom}:reached`;
+    if (this.told.has(key) || !this.listeners.length) return;
+    this.remember(key);
+    for (const listener of this.listeners) {
+      // Never delays or fails the refused call; the notice service logs its own failures.
+      listener.limitReached?.(workspaceId, ent, limit).catch(() => this.told.delete(key));
+    }
+  }
+
+  private remember(key: string): void {
+    this.told.add(key);
+    if (this.told.size > 20_000) this.told.delete(this.told.values().next().value!);
   }
 
   private actionsMessage(ent: Entitlements, limit: number): string {

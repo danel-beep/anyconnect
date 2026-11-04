@@ -126,6 +126,7 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       'manyplug_call_tools',
       'manyplug_cancel_plan',
       'manyplug_connect_account',
+      'manyplug_invite',
       'manyplug_list_accounts',
       'manyplug_plan',
       'manyplug_remove_account',

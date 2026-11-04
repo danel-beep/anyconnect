@@ -48,6 +48,8 @@ export const users = pgTable('users', {
   statusReason: text(),
   /** Preferred interface language (`ru`, `en`); null = from the browser. */
   locale: text(),
+  /** The user's invite code (`/?ref=<code>`), created on first use; see `ReferralService`. */
+  referralCode: text().unique(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   lastLoginAt: timestamp({ withTimezone: true }),
@@ -1057,6 +1059,48 @@ export const billingEvents = pgTable(
     index().on(t.workspaceId),
     index().on(t.createdAt),
   ],
+);
+
+/**
+ * Emails and other one-off notices already sent to a workspace, so each goes out once per
+ * occasion (`key`: the trial end day, the counting period, the subscription and period...).
+ */
+export const sentNotices = pgTable(
+  'sent_notices',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** `trial_ending`, `limit_reached`, `payment_failed`, `referral_reward`. */
+    kind: text().notNull(),
+    key: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.kind, t.key] })],
+);
+
+export type ReferralStatus = 'signed_up' | 'rewarded' | 'no_reward';
+
+/**
+ * Who invited whom (one row per invited user). The inviter gets a month of Pro once the invited
+ * user starts paying; see `ReferralService`.
+ */
+export const referrals = pgTable(
+  'referrals',
+  {
+    referredUserId: text()
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    referrerUserId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text().$type<ReferralStatus>().notNull().default('signed_up'),
+    /** What the inviter got: `pro_plan` (a month of Pro), `pro_limits` (Pro limits on a paid plan) or why not. */
+    reward: text(),
+    rewardedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.referrerUserId)],
 );
 
 /**

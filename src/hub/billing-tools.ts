@@ -21,10 +21,12 @@ export interface WorkspaceBilling {
     workspaceId: string,
     cancel: boolean,
   ): Promise<{ planId: string; until: string | null }>;
+  /** The user's invite link and what invites have brought so far. */
+  invite(userId: string): Promise<Record<string, unknown>>;
 }
 
 /**
- * The plan tools (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`): the user sees and
+ * The plan tools (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`, `manyplug_invite`): the user sees and
  * changes their plan from the chat. Paying always happens on the provider's secure page (the AI
  * only gets a link), so the AI can never spend money on its own; cancelling needs confirmation.
  */
@@ -68,6 +70,18 @@ export function billingActions(
             ? 'Ask the user to open the link and confirm the switch; the price difference for the current period is charged or credited. Check the result with manyplug_plan.'
             : 'Ask the user to open the link and pay on the secure checkout page. The plan switches within a minute; check with manyplug_plan.',
         };
+      },
+    }),
+    define({
+      name: 'invite',
+      title: 'Invite friends',
+      description:
+        "Returns the user's invite link and how many people joined through it. When someone who joined through the link starts a paid plan, the user gets a month of Pro.",
+      input: z.object({}),
+      risk: 'read',
+      hints: { readOnly: true, idempotent: true, openWorld: false },
+      async run(_input, ctx) {
+        return billing(ctx).invite(ctx.principal.userId);
       },
     }),
     define({

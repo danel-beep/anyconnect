@@ -85,6 +85,13 @@
       "when": 1793827115052,
       "tag": "0011_messengers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793828417664,
+      "tag": "0012_monetization_notices_referrals",
+      "breakpoints": true
     }
   ]
 }

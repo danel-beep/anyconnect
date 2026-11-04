@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { RevenueReport } from '../admin/revenue.js';
 import type { AdminActor } from '../admin/service.js';
 import { missingPrices } from '../billing/config.js';
 import { monthPeriod } from '../billing/period.js';
@@ -20,6 +21,7 @@ import {
   type OAuthAppView,
   type SystemCheck,
 } from '../web/admin.js';
+import { AdminRevenuePage } from '../web/admin-revenue.js';
 import { clientIp } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
 import { type AppContext, type AppEnv, bodyParams, loginUrl } from './context.js';
@@ -363,6 +365,35 @@ export function adminRoutes() {
               actorEmail: a.actorEmail,
               details: (a.details ?? {}) as Record<string, unknown>,
               createdAt: a.createdAt,
+            })),
+          }}
+        />,
+      );
+    }),
+  );
+
+  app.get(
+    '/admin/revenue',
+    view(async (c, auth) => {
+      const s = c.get('services');
+      const [report, events, shell] = await Promise.all([
+        new RevenueReport(s.db).build(),
+        s.billing.recentEvents({ limit: 15 }),
+        shellInfo(c, auth.workspace.id),
+      ]);
+      return c.html(
+        <AdminRevenuePage
+          ctx={pageCtx(c, auth.user)}
+          shell={shell}
+          view={{
+            ...report,
+            provider: s.billing.provider?.name ?? null,
+            events: events.map((e) => ({
+              type: e.type,
+              status: e.status,
+              planId: e.planId,
+              outcome: e.outcome,
+              at: e.createdAt,
             })),
           }}
         />,

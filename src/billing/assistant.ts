@@ -1,6 +1,7 @@
 import type { WorkspaceBilling } from '../hub/billing-tools.js';
 import type { EntitlementService } from './entitlements.js';
 import { PLANS } from './plans.js';
+import type { ReferralService } from './referrals.js';
 import { BillingError, type BillingService } from './service.js';
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
@@ -11,7 +12,12 @@ const iso = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : 
  */
 export class WorkspaceBillingTools implements WorkspaceBilling {
   constructor(
-    private readonly deps: { entitlements: EntitlementService; billing: BillingService; publicUrl: string },
+    private readonly deps: {
+      entitlements: EntitlementService;
+      billing: BillingService;
+      referrals: ReferralService;
+      publicUrl: string;
+    },
   ) {}
 
   async status(workspaceId: string): Promise<Record<string, unknown>> {
@@ -103,5 +109,16 @@ export class WorkspaceBillingTools implements WorkspaceBilling {
   async setCancelAtPeriodEnd(workspaceId: string, cancel: boolean) {
     const sub = await this.deps.billing.setCancelAtPeriodEnd(workspaceId, cancel);
     return { planId: sub.planId, until: iso(sub.currentPeriodEnd) };
+  }
+
+  async invite(userId: string) {
+    const stats = await this.deps.referrals.stats(userId);
+    return {
+      link: stats.link,
+      joined: stats.invited,
+      rewarded: stats.rewarded,
+      reward: `A month of Pro (${stats.rewardDays} days) for each person who joins through the link and starts a paid plan.`,
+      manage_url: `${this.deps.publicUrl}/app/billing#invite`,
+    };
   }
 }

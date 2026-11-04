@@ -526,6 +526,9 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect((await hub.services.entitlements.summary(ws.id)).plan.id).toBe('free');
     expect(await (await admin.request('/admin/audit')).text()).toContain('Запрос тарифа отклонён');
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+    const revenue = await (await admin.request('/admin/revenue')).text();
+    expect(revenue).toContain('Выручка и конверсия');
+    expect(revenue).toContain('BILLING_PROVIDER=none');
 
     // Setting a plan closes an open request too.
     await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });

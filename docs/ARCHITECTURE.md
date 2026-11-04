@@ -442,7 +442,8 @@ Google по TLS. К существующему пользователю вход
 (402). Оплата — через `BillingService` и сменного провайдера (Paddle, Stripe, тестовый), см.
 [BILLING.md](BILLING.md): покупка и смена тарифа, портал, отмена, вебхуки
 `/billing/webhook/:provider`, итог записывается тем же `setPlan`. Тарифом можно управлять и из
-чата (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`). Пока провайдер не подключён
+чата (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`, `manyplug_invite`). Письма о
+тарифе, приглашения и выручка в админке — там же, в BILLING.md. Пока провайдер не подключён
 (`BILLING_PROVIDER=none`), на месте оплаты — запрос тарифа (`plan_requests`). Администратор видит
 его на обзоре и счётчиком в меню; на странице пользователя форма тарифа уже заполнена под запрос
 (тариф и дата окончания через месяц или год), запрос можно и отклонить (`plan.request.decline` в

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isMetric, type Metric, PLANS } from '../billing/plans.js';
+import { REFERRAL_PROVIDER } from '../billing/referrals.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
@@ -656,11 +657,12 @@ export function appRoutes() {
     page('/app/billing', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, entitlements, request, shell] = await Promise.all([
+      const [usage, entitlements, request, shell, invite] = await Promise.all([
         usageOf(c, ws),
         s.entitlements.entitlements(ws),
         s.entitlements.openRequest(ws),
         shellInfo(c, ws),
+        s.referrals.stats(auth.user.id),
       ]);
       const sub = entitlements.subscription;
       const paid = s.billing.liveSubscription(sub);
@@ -710,6 +712,15 @@ export function appRoutes() {
               })),
             requested: request ? { planId: request.planId, at: request.createdAt } : undefined,
             flash: takeFlash(c),
+            gift: sub?.provider === REFERRAL_PROVIDER && !paid,
+            invite: entitlements.plan.public
+              ? {
+                  link: invite.link,
+                  invited: invite.invited,
+                  rewarded: invite.rewarded,
+                  days: invite.rewardDays,
+                }
+              : undefined,
           }}
         />,
       );

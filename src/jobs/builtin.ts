@@ -1,11 +1,13 @@
 import type { CustomServiceManager } from '../core/custom-services.js';
 import type { AccountHealthService } from '../core/health.js';
+import type { BillingNotices } from '../notices/billing-notices.js';
 import type { JobDefinition } from './queue.js';
 
 /** Jobs every hub runs. New recurring work is added here (or registered by a feature module). */
 export function builtinJobs(deps: {
   health: AccountHealthService;
   customServices: CustomServiceManager;
+  billingNotices: BillingNotices;
 }): JobDefinition[] {
   return [
     {
@@ -30,6 +32,15 @@ export function builtinJobs(deps: {
       cron: '41 4 * * *',
       run: async () => {
         await deps.customServices.refreshAll();
+      },
+    },
+    {
+      name: 'billing.trial_reminders',
+      description: 'Email workspaces whose free Pro trial ends within three days',
+      cron: '7 10 * * *',
+      run: async (_data, ctx) => {
+        const sent = await deps.billingNotices.remindTrialEnding();
+        if (sent) ctx.logger.info({ sent }, 'trial reminders sent');
       },
     },
   ];
