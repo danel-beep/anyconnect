@@ -128,3 +128,18 @@ export const json = (data: unknown, init: ResponseInit = {}) =>
     ...init,
     headers: { 'content-type': 'application/json', ...(init.headers as Record<string, string> | undefined) },
   });
+
+type Route = (req: RecordedRequest) => Response | Promise<Response>;
+
+/**
+ * Fake service from a route table: keys are "METHOD /path" (path relative to the origin, without
+ * the query). Unknown routes answer 404 so a wrong URL fails the test loudly.
+ */
+export function fakeRoutes(routes: Record<string, Route | object | string>) {
+  return fakeHttp((req) => {
+    const route = routes[`${req.method} ${req.url.pathname}`];
+    if (route === undefined)
+      return json({ message: `No fixture for ${req.method} ${req.url.pathname}` }, { status: 404 });
+    return typeof route === 'function' ? (route as Route)(req) : json(route);
+  });
+}
