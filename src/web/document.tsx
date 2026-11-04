@@ -37,13 +37,27 @@ export const Doc: FC<{
   /** Adds /assets/webauthn.js (passkeys). */
   passkeys?: boolean;
   meta?: PageMeta;
+  /** Reloads the page every this many seconds (the status page). */
+  refreshSeconds?: number;
   children?: Child;
-}> = ({ title, lang, description, canonical, noindex, bodyClass, passkeys, meta, children }) => (
+}> = ({
+  title,
+  lang,
+  description,
+  canonical,
+  noindex,
+  bodyClass,
+  passkeys,
+  meta,
+  refreshSeconds,
+  children,
+}) => (
   <html lang={lang}>
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       <meta name="referrer" content="no-referrer" />
+      {refreshSeconds ? <meta http-equiv="refresh" content={String(refreshSeconds)} /> : null}
       <title>{title}</title>
       {description ? <meta name="description" content={description} /> : null}
       {noindex ? <meta name="robots" content="noindex, nofollow" /> : null}

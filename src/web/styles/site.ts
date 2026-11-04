@@ -301,4 +301,39 @@ details.more-ways{margin-top:14px}
 .faq-group h2{margin:0 0 8px}
 .prose .crumbs,.guide .crumbs{margin-bottom:16px}
 .wide-cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+
+/* Status page */
+.status-wrap{max-width:880px;padding-top:40px;padding-bottom:64px}
+.status-wrap h1{margin:0 0 20px}
+.status-banner{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;padding:18px 20px;border-radius:var(--radius);margin:0 0 20px;border:1px solid transparent}
+.status-banner strong{font-size:18px}
+.status-banner.s-ok{background:var(--ok-soft);color:var(--ok)}
+.status-banner.s-degraded{background:var(--warn-bg);border-color:var(--warn-border);color:var(--text)}
+.status-banner.s-down{background:var(--danger-soft);color:var(--danger)}
+.status-banner.s-none{background:var(--bg-subtle);color:var(--muted)}
+.status-banner .small{color:var(--text);opacity:.8}
+.status-component{padding:20px}
+.status-component+.status-component{border-top:1px solid var(--border)}
+.status-head{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.status-head h2{font-size:16px;margin:0}
+.status-head p{margin:4px 0 0}
+.status-state{font-weight:600;font-size:14px;text-align:right;white-space:nowrap}
+.status-state.s-ok{color:var(--ok)}
+.status-state.s-degraded{color:var(--text)}
+.status-state.s-down{color:var(--danger)}
+.status-bars{display:grid;grid-template-columns:repeat(90,1fr);gap:2px;height:32px;margin:14px 0 6px}
+.status-bar{border-radius:2px;background:var(--border)}
+.status-bar.s-ok{background:var(--ok)}
+.status-bar.s-degraded{background:var(--warn-border)}
+.status-bar.s-down{background:var(--danger)}
+.status-bar.s-missing{background:var(--muted)}
+.status-scale{display:flex;justify-content:space-between;gap:8px}
+.status-section{font-size:18px;margin:32px 0 12px}
+.status-incidents li{display:flex;gap:10px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--border)}
+.status-foot{margin-top:32px}
+@media (max-width:640px){
+  .status-bars{grid-template-columns:repeat(30,1fr)}
+  .status-bars .status-bar:nth-child(-n+60){display:none}
+  .status-scale span:first-child{visibility:hidden}
+}
 `;

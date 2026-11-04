@@ -1,18 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { gte, sql } from 'drizzle-orm';
 import type pg from 'pg';
+import type { Db } from '../db/client.js';
 import { MIGRATIONS_FOLDER } from '../db/migrate.js';
+import { toolCalls } from '../db/schema.js';
 import type { JobDefinition } from '../jobs/queue.js';
 import type { JobRun } from '../jobs/runs.js';
-import type { HealthCheck } from './checks.js';
+import type { HealthCheck, StatusComponent } from './checks.js';
 
 /** Postgres answers, and how fast. */
 export function databaseCheck(pool: pg.Pool, slowMs = 1000): HealthCheck {
   return {
     name: 'database',
     critical: true,
-    component: 'database',
+    components: ['database', 'web', 'mcp'],
     async run() {
       const started = performance.now();
       await pool.query('select 1');
@@ -67,7 +70,7 @@ export function migrationsCheck(pool: pg.Pool, folder = MIGRATIONS_FOLDER): Heal
   return {
     name: 'migrations',
     critical: true,
-    component: 'database',
+    components: ['database', 'web', 'mcp'],
     async run() {
       const m = await migrationState(pool, folder);
       if (m.state === 'pending')
@@ -93,7 +96,7 @@ export function jobsCheck(deps: {
   return {
     name: 'jobs',
     critical: false,
-    component: 'jobs',
+    components: ['jobs'],
     async run() {
       const now = deps.now?.() ?? Date.now();
       const runs = new Map((await deps.runs()).map((r) => [r.name, r]));
@@ -128,7 +131,7 @@ export function eventLoopCheck(degradedMs = 500): HealthCheck & { stop(): void }
   return {
     name: 'event_loop',
     critical: false,
-    component: 'web',
+    components: ['web', 'mcp'],
     async run() {
       const p99 = Math.round(histogram.percentile(99) / 1e6);
       histogram.reset();
@@ -137,5 +140,88 @@ export function eventLoopCheck(degradedMs = 500): HealthCheck & { stop(): void }
         : { status: 'ok', detail: `p99 ${p99} ms` };
     },
     stop: () => histogram.disable(),
+  };
+}
+
+/**
+ * Asks the hub through its public address, the way users and AI apps reach it (DNS, TLS, the
+ * platform's balancer and proxy). The other checks run inside the process and cannot see those.
+ */
+export function publicProbeCheck(options: {
+  name: string;
+  components: readonly StatusComponent[];
+  url: string;
+  init?: RequestInit;
+  /** Statuses that mean "working" (e.g. 401 for /mcp without a token). */
+  expect: readonly number[];
+  fetch?: typeof fetch;
+  slowMs?: number;
+}): HealthCheck {
+  return {
+    name: options.name,
+    critical: false,
+    components: options.components,
+    async run(signal) {
+      const started = performance.now();
+      const response = await (options.fetch ?? fetch)(options.url, {
+        ...options.init,
+        redirect: 'manual',
+        signal,
+      });
+      await response.body?.cancel().catch(() => {});
+      const ms = Math.round(performance.now() - started);
+      if (!options.expect.includes(response.status))
+        return { status: 'down', detail: `HTTP ${response.status}` };
+      return ms > (options.slowMs ?? 3000)
+        ? { status: 'degraded', detail: `slow: ${ms} ms` }
+        : { status: 'ok', detail: `${ms} ms` };
+    },
+  };
+}
+
+/**
+ * Connected services that keep failing on their side right now, across all users: at least
+ * `minCalls` calls in the window and at least `ratio` of them failed upstream or timed out. A
+ * service being down is not the hub being down, so this only ever degrades.
+ */
+export function connectionsCheck(deps: {
+  db: Db;
+  /** Built-in services by id (user-defined services are private and not reported). */
+  services: () => ReadonlyMap<string, string>;
+  windowMs?: number;
+  minCalls?: number;
+  ratio?: number;
+}): HealthCheck {
+  return {
+    name: 'connections',
+    critical: false,
+    components: ['connections'],
+    async run() {
+      const since = new Date(Date.now() - (deps.windowMs ?? 10 * 60_000));
+      const rows = await deps.db
+        .select({
+          connectorId: toolCalls.connectorId,
+          total: sql<number>`count(*)`.mapWith(Number),
+          failed:
+            sql<number>`count(*) filter (where ${toolCalls.status} = 'error' and ${toolCalls.outcome} in ('upstream', 'timeout'))`.mapWith(
+              Number,
+            ),
+        })
+        .from(toolCalls)
+        .where(gte(toolCalls.createdAt, since))
+        .groupBy(toolCalls.connectorId);
+      const names = deps.services();
+      const failing = rows
+        .filter(
+          (r) =>
+            r.connectorId &&
+            names.has(r.connectorId) &&
+            r.total >= (deps.minCalls ?? 5) &&
+            r.failed / r.total >= (deps.ratio ?? 0.5),
+        )
+        .map((r) => names.get(r.connectorId!)!)
+        .sort();
+      return failing.length ? { status: 'degraded', detail: failing.join(', ') } : { status: 'ok' };
+    },
   };
 }
