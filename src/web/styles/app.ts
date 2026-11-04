@@ -121,6 +121,11 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .paid-sub .actions{margin-top:8px;flex-wrap:wrap}
 .billing-events{margin:12px 0}
 .billing-events li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.start-schedule{margin:12px 0}
+.start-schedule li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.start-schedule li.past{opacity:.55}
+.start-schedule li.current{font-weight:600}
+.start-schedule .badge{margin-left:8px}
 .plan-mini .plan{padding:18px;gap:10px}
 .plan-mini .price .amount{font-size:28px}
 .plan.current{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}

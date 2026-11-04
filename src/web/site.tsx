@@ -292,6 +292,17 @@ const limitText = (t: Translate, lang: string, metric: Metric, value: number | n
   return t(`plan.metric.${metric}`, { n: fmtNumber(lang, value) });
 };
 
+/** A plan's start in short: trial length and plan, and the steps down ("500 → 300"). */
+function startText(lang: string, plan: Plan): { days: number; plan: string; steps: string } {
+  const start = plan.start!;
+  const steps = start.steps
+    .map((s) => s.limits.actions)
+    .filter((n): n is number => typeof n === 'number')
+    .map((n) => fmtNumber(lang, n))
+    .join(' → ');
+  return { days: start.trial.days, plan: start.trial.plan, steps };
+}
+
 export const PlanCard: FC<{
   ctx: PageCtx;
   plan: Plan;
@@ -299,7 +310,7 @@ export const PlanCard: FC<{
   action?: Child;
 }> = ({ ctx, plan, current, action }) => {
   const { t, lang } = ctx;
-  const intro = plan.intro?.limits.actions;
+  const start = plan.start ? startText(lang, plan) : undefined;
   // What every plan gives today; features still being built are listed apart in the compare table.
   const features: [Metric, boolean][] = [
     ['actions', true],
@@ -332,15 +343,25 @@ export const PlanCard: FC<{
         </div>
       </div>
       <ul>
+        {start ? (
+          <li>
+            <Check />
+            <span>
+              {t('plan.metric.trial', {
+                days: start.days,
+                plan: t(`plan.${start.plan}.name` as 'plan.free.name'),
+              })}
+            </span>
+          </li>
+        ) : null}
         {features.map(([metric, on]) => (
           <li class={on ? undefined : 'off'}>
             {on ? <Check /> : <Icon name="minus" />}
             <span>
-              {metric === 'actions' && intro
-                ? t('plan.metric.actionsIntro', {
+              {metric === 'actions' && start
+                ? t('plan.metric.actionsSteps', {
                     n: fmtNumber(lang, plan.limits.actions ?? 0),
-                    intro: fmtNumber(lang, intro),
-                    days: plan.intro!.days,
+                    steps: start.steps,
                   })
                 : limitText(t, lang, metric, plan.limits[metric])}
             </span>
@@ -911,11 +932,12 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                     {plans.map((p) => (
                       <td class="num">
                         {cell(t, lang, metric, p.limits)}
-                        {metric === 'actions' && p.intro?.limits.actions ? (
+                        {metric === 'actions' && p.start ? (
                           <div class="tiny muted">
-                            {t('pricing.introCell', {
-                              n: fmtNumber(lang, p.intro.limits.actions),
-                              days: p.intro.days,
+                            {t('pricing.startCell', {
+                              days: p.start.trial.days,
+                              plan: t(`plan.${p.start.trial.plan}.name` as 'plan.free.name'),
+                              steps: startText(lang, p).steps,
                             })}
                           </div>
                         ) : null}

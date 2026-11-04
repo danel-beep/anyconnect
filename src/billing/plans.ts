@@ -1,5 +1,5 @@
 /**
- * The plan catalog: what each plan costs and allows. Plain data, so the website (pricing, billing
+ * The plan catalog: what each plan costs and allows. Yearly = two months free. Plain data, so the website (pricing, billing
  * page), the admin panel and the limit checks all read the same source. Prices are hypotheses from
  * the business model; changing a number here changes it everywhere.
  *
@@ -40,14 +40,22 @@ export interface Plan {
   priceYearly: number;
   limits: Limits;
   /**
-   * A more generous start: for `days` after the workspace was created these limits replace the
-   * plan's (e.g. 500 actions a month instead of 150 while the user gets used to the hub).
+   * How a new workspace starts on this plan, counted from the day it was created: a trial with
+   * another plan's limits, then published steps down to the plan's own limits. Everything here is
+   * shown on the pricing page and to the AI, so nobody's limits change by surprise.
    */
-  intro?: { days: number; limits: Partial<Limits> };
+  start?: PlanStart;
   /** Shown on the pricing page. Hidden plans (internal, partners) are assigned by admins only. */
   public: boolean;
   /** Highlighted on the pricing page. */
   featured?: boolean;
+}
+
+export interface PlanStart {
+  /** Days 1…`days`: the limits of plan `plan`, with `except` on top (e.g. no cloud messengers). */
+  trial: { days: number; plan: string; except?: Partial<Limits> };
+  /** Then, until each `untilDay` (counted from creation), these limits over the plan's own. */
+  steps: { untilDay: number; limits: Partial<Limits> }[];
 }
 
 export const PLANS: readonly Plan[] = [
@@ -56,13 +64,20 @@ export const PLANS: readonly Plan[] = [
     priceMonthly: 0,
     priceYearly: 0,
     limits: { actions: 150, accounts: 3, messengers: 0, backgroundJobs: 1, historyDays: 7, seats: 1 },
-    intro: { days: 30, limits: { actions: 500 } },
+    // 14 days of Pro without a card, then 500 → 300 → 150 actions a month (business model, Nov 2026).
+    start: {
+      trial: { days: 14, plan: 'pro', except: { messengers: 0 } },
+      steps: [
+        { untilDay: 30, limits: { actions: 500 } },
+        { untilDay: 60, limits: { actions: 300 } },
+      ],
+    },
     public: true,
   },
   {
     id: 'personal',
     priceMonthly: 5,
-    priceYearly: 48,
+    priceYearly: 50,
     limits: { actions: 10_000, accounts: 15, messengers: 1, backgroundJobs: 5, historyDays: 90, seats: 1 },
     public: true,
     featured: true,
@@ -70,7 +85,7 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'pro',
     priceMonthly: 12,
-    priceYearly: 115,
+    priceYearly: 120,
     limits: {
       actions: 50_000,
       accounts: null,
@@ -84,7 +99,7 @@ export const PLANS: readonly Plan[] = [
   {
     id: 'business',
     priceMonthly: 29,
-    priceYearly: 279,
+    priceYearly: 290,
     limits: {
       actions: 200_000,
       accounts: null,

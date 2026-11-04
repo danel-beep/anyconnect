@@ -121,7 +121,17 @@ export function appRoutes() {
       actions: { used: summary.used.actions, limit: summary.limits.actions },
       accounts: { used: summary.used.accounts, limit: summary.limits.accounts },
       resetsAt: summary.period.resetsAt,
-      introUntil: summary.intro?.until,
+      phase: summary.phase
+        ? { kind: summary.phase.kind, asPlan: summary.phase.asPlan, until: summary.phase.until }
+        : undefined,
+      schedule: summary.schedule.map((p) => ({
+        kind: p.kind,
+        from: p.from,
+        until: p.until,
+        actions: p.limits.actions,
+        asPlan: p.asPlan,
+      })),
+      planLimitActions: summary.plan.limits.actions,
     };
   };
 
