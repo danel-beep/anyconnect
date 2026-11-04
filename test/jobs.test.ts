@@ -39,7 +39,9 @@ describe('background job queue (pg-boss)', () => {
     await finished;
     expect(received).toEqual([{ n: 42 }]);
     await expect(queue.send('test.unknown')).rejects.toThrow(/Unknown job/);
-    expect(() => queue.register({ name: 'late', description: 'x', run: async () => {} })).toThrow(/before starting/);
+    expect(() => queue.register({ name: 'late', description: 'x', run: async () => {} })).toThrow(
+      /before starting/,
+    );
   });
 
   it('every built-in job has a unique name and a valid cron', async () => {
