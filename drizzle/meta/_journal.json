@@ -43,6 +43,13 @@
       "when": 1793755446845,
       "tag": "0005_setup_and_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793757645437,
+      "tag": "0006_site_accounts_billing",
+      "breakpoints": true
     }
   ]
 }

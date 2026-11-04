@@ -3,6 +3,7 @@ import type { Db } from '../db/client.js';
 import {
   oauthAuthorizationCodes,
   oauthClients,
+  loginStates,
   oauthConnectStates,
   oauthGrants,
   oauthTokens,
@@ -25,6 +26,8 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
   await db.delete(webauthnChallenges).where(lt(webauthnChallenges.expiresAt, new Date(now)));
   // Abandoned "connect an account" OAuth flows.
   await db.delete(oauthConnectStates).where(lt(oauthConnectStates.expiresAt, new Date(now)));
+  // Abandoned "Sign in with Google" flows.
+  await db.delete(loginStates).where(lt(loginStates.expiresAt, new Date(now)));
   // Dynamically registered clients that never completed an authorization within 30 days.
   await db
     .delete(oauthClients)

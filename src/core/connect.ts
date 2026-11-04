@@ -106,6 +106,7 @@ export class ConnectService {
       if (input.name && (await this.deps.accounts.findByName(who.workspaceId, connector.id, input.name))) {
         throw badRequest(`An account named "${input.name}" already exists for ${connector.name}`);
       }
+      await this.deps.accounts.assertCanCreate(who.workspaceId);
     }
 
     const app = await this.deps.apps.pick(who.workspaceId, provider.id, input.appId);

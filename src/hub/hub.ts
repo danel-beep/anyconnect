@@ -55,6 +55,7 @@ import {
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
+import type { QuotaGate } from './quota.js';
 import type { UsageMeter } from './usage.js';
 
 export type { ToolCallResult } from './result.js';
@@ -81,6 +82,8 @@ export interface HubDeps {
   toolListTokenBudget?: number;
   /** Counts executed calls (stage `meter`); without it nothing is counted. */
   meter?: UsageMeter;
+  /** Plan limits (stage `quota`); without it nothing is limited. */
+  quota?: QuotaGate;
   /** Replaces built-in stages or fills the policy / confirm / untrusted slots. */
   stages?: StageMap;
   /**
@@ -141,6 +144,7 @@ export class Hub {
           idempotencyWindowMs: deps.idempotencyWindowMs,
           maxResultTokens: deps.maxResultTokens,
           ...(deps.meter ? { meter: deps.meter } : {}),
+          ...(deps.quota ? { quota: deps.quota } : {}),
         }),
         ...deps.stages,
       },

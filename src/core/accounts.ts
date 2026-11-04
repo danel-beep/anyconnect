@@ -112,6 +112,11 @@ function isUniqueViolation(error: unknown): boolean {
  * Manages connected accounts: validation against the connector's schemas, credential
  * encryption, and building the per-account context handed to connectors.
  */
+/** How many accounts a workspace may have (implemented by the billing layer). */
+export interface AccountLimits {
+  assertCanAddAccount(workspaceId: string): Promise<void>;
+}
+
 export class AccountService {
   constructor(
     private readonly db: Db,
@@ -120,7 +125,14 @@ export class AccountService {
     private readonly network: NetworkPolicy,
     /** OAuth tokens of OAuth-connected services (`ctx.oauth`). */
     private readonly tokens?: TokenManager,
+    /** Plan limits on the number of accounts (billing layer); without it any number is allowed. */
+    private readonly limits?: AccountLimits,
   ) {}
+
+  /** Throws when the workspace's plan does not allow one more account. */
+  async assertCanCreate(workspaceId: string): Promise<void> {
+    await this.limits?.assertCanAddAccount(workspaceId);
+  }
 
   async list(workspaceId: string): Promise<AccountRow[]> {
     return this.db
@@ -173,6 +185,7 @@ export class AccountService {
   async create(workspaceId: string, rawInput: CreateAccountInput): Promise<AccountRow> {
     const input = parseWith(CreateAccountInput, rawInput, 'account');
     const connector = await this.connector(workspaceId, input.connectorId);
+    await this.assertCanCreate(workspaceId);
     const name =
       input.name ?? (await this.uniqueName(workspaceId, connector.id, slugify(input.label) || connector.id));
     const config = parseWith(connector.config, input.config, 'config');

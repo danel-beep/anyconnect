@@ -1,11 +1,15 @@
 import type { McpHttpHandler } from '@modelcontextprotocol/server';
 import type { AppConfig } from './config.js';
+import { EntitlementService } from './billing/entitlements.js';
+import type { BillingProvider } from './billing/provider.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
+import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
+import { UserService } from './core/users.js';
 import { ConnectService } from './core/connect.js';
 import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-connectors.js';
 import { CustomServiceManager } from './core/custom-services.js';
@@ -71,6 +75,10 @@ export interface Services {
   admin: WorkspaceAdmin;
   /** Usage counters per workspace, AI account and action. */
   usage: UsageMeter;
+  /** Plans, limits and grants (billing layer). */
+  entitlements: EntitlementService;
+  /** Payment provider; undefined until payments are connected (see `src/billing/provider.ts`). */
+  billing: BillingProvider | undefined;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -100,6 +108,10 @@ export interface Services {
   /** Secret Telegram must send with webhook updates (derived from the master key). */
   telegramWebhookSecret: string;
   sessions: SessionService;
+  /** Sign-up through external providers, roles, suspension, deletion. */
+  users: UserService;
+  /** "Sign in with Google" and other OpenID Connect providers. */
+  externalLogin: ExternalLoginService;
   /** Sign-ins waiting for a second factor. */
   pendingLogins: PendingLoginService;
   /** TOTP, recovery codes and passkeys. */
@@ -125,6 +137,10 @@ export function createServices(
     catalogFilter?: HubDeps['catalogFilter'];
     /** Tests: talk to a fake Telegram Bot API. */
     telegramFetch?: typeof fetch;
+    /** A payment provider (none is built in yet). */
+    billing?: BillingProvider;
+    /** Tests: external sign-in providers with fake endpoints. */
+    loginProviders?: OidcLoginProvider[];
   } = {},
 ): Services {
   const logger =
@@ -144,7 +160,9 @@ export function createServices(
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
-  const accounts = new AccountService(db, connectors, keyring, network, tokens);
+  const usage = new PgUsageMeter(db);
+  const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/pricing` });
+  const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
   const customServices = new CustomServiceManager({
     db,
     store: customStore,
@@ -241,10 +259,10 @@ export function createServices(
     publicUrl: config.publicUrl,
     logger,
   });
-  const usage = new PgUsageMeter(db);
   const hub = new Hub({
     db,
     meter: usage,
+    quota: entitlements,
     connectors,
     accounts,
     logger,
@@ -287,6 +305,19 @@ export function createServices(
     return persona && personas.urlFor(persona.slug);
   });
   const sessions = new SessionService(db, config.sessionTtlSeconds);
+  const users = new UserService({
+    db,
+    accounts,
+    oauth,
+    apiTokens,
+    adminEmails: config.site.adminEmails,
+    signups: config.site.signups,
+  });
+  const externalLogin = new ExternalLoginService(
+    { db, secrets, publicUrl: config.publicUrl, logger },
+    overrides.loginProviders ??
+      (config.site.google ? [new OidcLoginProvider(googleLoginSpec(config.site.google), network.fetch)] : []),
+  );
   const pendingLogins = new PendingLoginService(db);
   const secondFactors = new SecondFactorService(
     new TotpService(db, secrets, config.auth.rpName),
@@ -310,6 +341,8 @@ export function createServices(
     customServices,
     admin,
     usage,
+    entitlements,
+    billing: overrides.billing,
     accounts,
     oauthApps,
     tokens,
@@ -331,6 +364,8 @@ export function createServices(
     telegramBot,
     telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
+    users,
+    externalLogin,
     pendingLogins,
     secondFactors,
     rateLimiter,

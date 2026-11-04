@@ -40,10 +40,57 @@ export const users = pgTable('users', {
   email: text().notNull().unique(),
   name: text(),
   passwordHash: text(),
+  /** Hub-wide role: `admin` opens the admin panel (always behind a second factor). */
+  role: text().$type<UserRole>().notNull().default('user'),
+  /** `suspended` users cannot sign in; their AI apps and tokens are revoked when suspended. */
+  status: text().$type<UserStatus>().notNull().default('active'),
+  /** Why the account is suspended (shown to admins only). */
+  statusReason: text(),
+  /** Preferred interface language (`ru`, `en`); null = from the browser. */
+  locale: text(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   lastLoginAt: timestamp({ withTimezone: true }),
 });
+
+export type UserRole = 'user' | 'admin';
+export type UserStatus = 'active' | 'suspended';
+
+/** Sign-in identities at external providers ("Sign in with Google"), linked to a hub user. */
+export const userIdentities = pgTable(
+  'user_identities',
+  {
+    /** Login provider id, e.g. `google`. */
+    provider: text().notNull(),
+    /** The provider's stable user id (`sub`). */
+    subject: text().notNull(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Email the provider reported at the last sign-in. */
+    email: text(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.subject] }), index().on(t.userId)],
+);
+
+/** Sign-ins in progress at an external provider (single use, 10 minutes, bound to the browser). */
+export const loginStates = pgTable(
+  'login_states',
+  {
+    /** SHA-256 of the `state` parameter; the browser holds the same value in a cookie. */
+    stateHash: text().primaryKey(),
+    provider: text().notNull(),
+    /** Encrypted PKCE verifier and OpenID nonce (AAD = state hash). */
+    secretsEncrypted: text().notNull(),
+    /** Hub-relative path to return to afterwards. */
+    next: text().notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
+);
 
 export interface WorkspaceSettings {
   /**
@@ -369,6 +416,8 @@ export const usageCounters = pgTable(
   (t) => [
     primaryKey({ columns: [t.workspaceId, t.day, t.caller, t.connectorId, t.action] }),
     index().on(t.caller, t.day),
+    // Hub-wide totals per day (admin panel).
+    index().on(t.day),
   ],
 );
 
@@ -750,4 +799,75 @@ export const customConnectors = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex().on(t.workspaceId, t.connectorId)],
+);
+
+// ---------------------------------------------------------------------------
+// Plans, limits and the admin panel
+// ---------------------------------------------------------------------------
+
+/**
+ * The plan a workspace is on. No row = the free plan. Payment providers (later) write here through
+ * the `BillingProvider` seam; admins can set a plan by hand (`provider = 'manual'`).
+ */
+export const subscriptions = pgTable('subscriptions', {
+  workspaceId: text()
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  /** Plan id from `src/billing/plans.ts`. */
+  planId: text().notNull(),
+  status: text().$type<SubscriptionStatus>().notNull().default('active'),
+  /** Who manages the subscription: `manual` (admin), later `stripe`, `yookassa`... */
+  provider: text().notNull().default('manual'),
+  /** The subscription id at the payment provider. */
+  externalId: text(),
+  /** When a paid period (or a manually granted plan) ends; null = open-ended. */
+  currentPeriodEnd: timestamp({ withTimezone: true }),
+  cancelAtPeriodEnd: boolean().notNull().default(false),
+  note: text(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+
+/**
+ * Extra limits granted to a workspace on top of its plan (by an admin, a promo, support).
+ * While active, `amount` is added to the plan's limit of `metric`; null `amount` lifts the limit.
+ */
+export const limitGrants = pgTable(
+  'limit_grants',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** A metric from `src/billing/plans.ts` (`actions`, `accounts`...). */
+    metric: text().notNull(),
+    amount: integer(),
+    reason: text(),
+    grantedBy: text().references(() => users.id, { onDelete: 'set null' }),
+    expiresAt: timestamp({ withTimezone: true }),
+    revokedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.workspaceId)],
+);
+
+/** What admins did in the admin panel. Kept when the admin or the target user is deleted. */
+export const adminAuditLog = pgTable(
+  'admin_audit_log',
+  {
+    id: text().primaryKey(),
+    actorUserId: text().references(() => users.id, { onDelete: 'set null' }),
+    actorEmail: text().notNull(),
+    /** `user.suspend`, `plan.set`, `limit.grant`... */
+    action: text().notNull(),
+    targetUserId: text(),
+    targetWorkspaceId: text(),
+    /** Argument-free summary of the change (plan ids, amounts, reasons). */
+    details: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    ip: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.createdAt), index().on(t.targetUserId)],
 );
