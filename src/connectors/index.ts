@@ -1,16 +1,22 @@
+import airtable from './builtin/airtable.js';
+import asana from './builtin/asana.js';
 import demo from './builtin/demo.js';
 import github from './builtin/github.js';
 import gmail from './builtin/gmail.js';
 import gcal from './builtin/google-calendar.js';
 import gdrive from './builtin/google-drive.js';
 import http from './builtin/http.js';
+import hubspot from './builtin/hubspot.js';
 import imap from './builtin/imap/index.js';
+import jira from './builtin/jira.js';
+import linear from './builtin/linear.js';
 import notion from './builtin/notion/index.js';
 import outlook from './builtin/outlook.js';
 import slack from './builtin/slack.js';
 import stripe from './builtin/stripe.js';
 import { createTelegramConnector } from './builtin/telegram.js';
 import todoist from './builtin/todoist.js';
+import trello from './builtin/trello.js';
 import { createWhatsAppConnector } from './builtin/whatsapp.js';
 import type { MessagingPort } from './messaging.js';
 import { ConnectorRegistry } from './registry.js';
@@ -46,6 +52,12 @@ export function createBuiltinRegistry(deps: BuiltinDeps = { messaging: NO_MESSAG
     .register(gcal)
     .register(gdrive)
     .register(outlook)
+    .register(jira)
+    .register(linear)
+    .register(asana)
+    .register(trello)
+    .register(airtable)
+    .register(hubspot)
     .register(createTelegramConnector(deps.messaging))
     .register(createWhatsAppConnector(deps.messaging));
 }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { SITE_JS, THEME_JS } from './client-scripts.js';
+import { PADDLE_CHECKOUT_JS, SITE_JS, THEME_JS } from './client-scripts.js';
 import { APP_CSS } from './styles.js';
 import { WEBAUTHN_JS } from './webauthn-client.js';
 
@@ -16,4 +16,5 @@ export const ASSET_URLS = {
   theme: versioned('/assets/theme.js', THEME_JS),
   site: versioned('/assets/site.js', SITE_JS),
   webauthn: versioned('/assets/webauthn.js', WEBAUTHN_JS),
+  paddleCheckout: versioned('/assets/paddle-checkout.js', PADDLE_CHECKOUT_JS),
 } as const;

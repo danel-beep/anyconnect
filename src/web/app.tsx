@@ -1276,11 +1276,96 @@ export interface BillingView {
   usage: UsageView;
   plan: Plan;
   subscription?: { provider: string; periodEnd: Date | null; status: string } | undefined;
+  /** A subscription the payment provider charges for (managed in its portal). */
+  paid?:
+    | {
+        provider: string;
+        status: string;
+        interval: 'month' | 'year' | null;
+        periodEnd: Date | null;
+        cancelAtPeriodEnd: boolean;
+      }
+    | undefined;
+  /** `plan:interval` pairs that can be bought right now. */
+  buyable: string[];
+  /** The provider runs in sandbox / test mode: no real charges. */
+  testMode: boolean;
+  /** Back from the provider's checkout. */
+  justPaid: boolean;
+  /** A plan the AI assistant sent the user here to buy (`?plan=pro&interval=year`). */
+  focus?: { planId: string; interval: 'month' | 'year' } | undefined;
   grants: { metric: Metric; amount: number | null; expiresAt: Date | null; reason: string | null }[];
   /** An open "switch me to this plan" request (manual payments). */
   requested?: { planId: string; at: Date } | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
+
+const planLabel = (ctx: PageCtx, id: string) => ctx.t(`plan.${id}.name` as 'plan.free.name');
+
+/** The buy (or switch) button of a plan, posting the interval the page switch shows. */
+const BuyForm: FC<{
+  ctx: PageCtx;
+  plan: Plan;
+  interval: 'month' | 'year' | 'switch';
+  switching: boolean;
+  primary?: boolean;
+}> = ({ ctx, plan, interval, switching, primary }) => (
+  <form method="post" action="/app/billing/checkout">
+    <Hidden values={{ csrf: ctx.csrf, plan: plan.id }} />
+    {interval === 'switch' ? (
+      <input type="hidden" name="interval" value="month" data-interval-input />
+    ) : (
+      <input type="hidden" name="interval" value={interval} />
+    )}
+    <button
+      type="submit"
+      class={`block ${primary ? 'primary' : ''}`}
+      {...(switching
+        ? { 'data-confirm': ctx.t('app.billing.switchConfirm', { plan: planLabel(ctx, plan.id) }) }
+        : {})}
+    >
+      {ctx.t(switching ? 'app.billing.switch' : 'pricing.choose', { plan: planLabel(ctx, plan.id) })}
+    </button>
+  </form>
+);
+
+/** Status, renewal and the buttons of a subscription paid through the provider. */
+const PaidSubscription: FC<{ ctx: PageCtx; paid: NonNullable<BillingView['paid']> }> = ({ ctx, paid }) => {
+  const { t, lang } = ctx;
+  const date = paid.periodEnd ? fmtDate(lang, paid.periodEnd) : '';
+  return (
+    <div class="paid-sub">
+      {paid.status === 'past_due' ? <div class="notice bad">{t('app.billing.pastDue')}</div> : null}
+      <p>
+        {t(paid.interval === 'year' ? 'app.billing.paidYearly' : 'app.billing.paidMonthly', {
+          provider: paid.provider,
+        })}{' '}
+        {date
+          ? paid.cancelAtPeriodEnd
+            ? t('app.billing.endsOn', { date })
+            : t('app.billing.renewsOn', { date })
+          : null}
+      </p>
+      <div class="actions start">
+        <form method="post" action="/app/billing/portal">
+          <Hidden values={{ csrf: ctx.csrf }} />
+          <button type="submit">{t('app.billing.manage')}</button>
+        </form>
+        <form
+          method="post"
+          action="/app/billing/cancel"
+          {...(paid.cancelAtPeriodEnd ? {} : { 'data-confirm': t('app.billing.cancelConfirm', { date }) })}
+        >
+          <Hidden values={{ csrf: ctx.csrf, ...(paid.cancelAtPeriodEnd ? { undo: '1' } : {}) }} />
+          <button type="submit" class={paid.cancelAtPeriodEnd ? 'primary' : 'ghost'}>
+            {t(paid.cancelAtPeriodEnd ? 'app.billing.resume' : 'app.billing.cancel')}
+          </button>
+        </form>
+      </div>
+      <p class="hint">{t('app.billing.manageHint')}</p>
+    </div>
+  );
+};
 
 export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView }> = ({
   ctx,
@@ -1288,15 +1373,47 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
   view,
 }) => {
   const { t, lang } = ctx;
+  const canBuy = (id: string, interval: 'month' | 'year') => view.buyable.includes(`${id}:${interval}`);
+  const focusPlan = view.focus ? PLANS.find((p) => p.id === view.focus!.planId) : undefined;
   return (
     <AppShell ctx={ctx} shell={shell} section="billing" title={t('app.nav.billing')}>
       <PageHead title={t('app.nav.billing')} sub={t('app.billing.sub')} />
       <Flash flash={view.flash} />
+      {view.justPaid && !view.flash ? (
+        <div class="notice ok">
+          {view.paid
+            ? t('app.billing.thanks', { plan: planLabel(ctx, view.plan.id) })
+            : t('app.billing.processing')}
+        </div>
+      ) : null}
+      {ctx.billing && view.testMode ? <div class="notice info">{t('app.billing.testMode')}</div> : null}
+      {focusPlan && view.focus && view.plan.public && canBuy(focusPlan.id, view.focus.interval) ? (
+        <div class="card focus-plan">
+          <h2>
+            {t(view.paid ? 'app.billing.focusSwitch' : 'app.billing.focusBuy', {
+              plan: planLabel(ctx, focusPlan.id),
+            })}
+          </h2>
+          <p class="muted">
+            {view.focus.interval === 'year'
+              ? t('app.billing.focusYear', { price: `$${focusPlan.priceYearly}` })
+              : t('app.billing.focusMonth', { price: `$${focusPlan.priceMonthly}` })}
+            {view.paid ? ` ${t('app.billing.prorated')}` : ''}
+          </p>
+          <BuyForm
+            ctx={ctx}
+            plan={focusPlan}
+            interval={view.focus.interval}
+            switching={Boolean(view.paid)}
+            primary
+          />
+        </div>
+      ) : null}
       <UsageStats ctx={ctx} usage={view.usage} />
       <div class="card">
         <div class="card-head">
-          <h2>{t('app.billing.current', { plan: t(`plan.${view.plan.id}.name` as 'plan.free.name') })}</h2>
-          {view.subscription?.periodEnd ? (
+          <h2>{t('app.billing.current', { plan: planLabel(ctx, view.plan.id) })}</h2>
+          {view.subscription?.periodEnd && !view.paid ? (
             <span class="badge">
               {t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}
             </span>
@@ -1307,6 +1424,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             ? t('app.billing.ownerPlan')
             : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
         </p>
+        {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
         <p class="hint">{t('app.usage.actionsHint')}</p>
         {view.grants.length ? (
           <>
@@ -1339,7 +1457,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
       {!view.plan.public ? null : ctx.billing ? null : view.requested ? (
         <div class="notice info">
           {t('app.billing.requested', {
-            plan: t(`plan.${view.requested.planId}.name` as 'plan.free.name'),
+            plan: planLabel(ctx, view.requested.planId),
             date: fmtDate(lang, view.requested.at),
           })}
         </div>
@@ -1375,14 +1493,24 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                   <span class="btn block" aria-disabled="true">
                     {t('app.billing.yours')}
                   </span>
-                ) : plan.priceMonthly === 0 ? null : ctx.billing ? (
-                  <form method="post" action="/app/billing/checkout">
-                    <Hidden values={{ csrf: ctx.csrf, plan: plan.id }} />
-                    <input type="hidden" name="interval" value="month" data-interval-input />
-                    <button type="submit" class={`block ${plan.featured ? 'primary' : ''}`}>
-                      {t('pricing.choose', { plan: t(`plan.${plan.id}.name` as 'plan.free.name') })}
-                    </button>
-                  </form>
+                ) : plan.priceMonthly === 0 ? (
+                  view.paid ? (
+                    <span class="small muted">{t('app.billing.freeByCancel')}</span>
+                  ) : null
+                ) : ctx.billing && (canBuy(plan.id, 'month') || canBuy(plan.id, 'year')) ? (
+                  <BuyForm
+                    ctx={ctx}
+                    plan={plan}
+                    interval={
+                      canBuy(plan.id, 'month') && canBuy(plan.id, 'year')
+                        ? 'switch'
+                        : canBuy(plan.id, 'month')
+                          ? 'month'
+                          : 'year'
+                    }
+                    switching={Boolean(view.paid)}
+                    primary={plan.featured === true}
+                  />
                 ) : view.requested?.planId === plan.id ? (
                   <span class="btn block" aria-disabled="true">
                     {t('app.billing.requestSent')}
@@ -1392,7 +1520,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                     <Hidden values={{ csrf: ctx.csrf, plan: plan.id }} />
                     <input type="hidden" name="interval" value="month" data-interval-input />
                     <button type="submit" class={`block ${plan.featured ? 'primary' : ''}`}>
-                      {t('app.billing.request', { plan: t(`plan.${plan.id}.name` as 'plan.free.name') })}
+                      {t('app.billing.request', { plan: planLabel(ctx, plan.id) })}
                     </button>
                   </form>
                 )
@@ -1400,6 +1528,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             />
           ))}
         </div>
+        {ctx.billing ? <p class="hint">{t('app.billing.taxHint')}</p> : null}
       </div>
     </AppShell>
   );

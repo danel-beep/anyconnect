@@ -993,29 +993,71 @@ export const messengerOutbox = pgTable(
 // ---------------------------------------------------------------------------
 
 /**
- * The plan a workspace is on. No row = the free plan. Payment providers (later) write here through
- * the `BillingProvider` seam; admins can set a plan by hand (`provider = 'manual'`).
+ * The plan a workspace is on. No row = the free plan. Payment providers write here through
+ * `BillingService` (`src/billing/service.ts`); admins can set a plan by hand (`provider = 'manual'`).
  */
-export const subscriptions = pgTable('subscriptions', {
-  workspaceId: text()
-    .primaryKey()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  /** Plan id from `src/billing/plans.ts`. */
-  planId: text().notNull(),
-  status: text().$type<SubscriptionStatus>().notNull().default('active'),
-  /** Who manages the subscription: `manual` (admin), later `stripe`, `yookassa`... */
-  provider: text().notNull().default('manual'),
-  /** The subscription id at the payment provider. */
-  externalId: text(),
-  /** When a paid period (or a manually granted plan) ends; null = open-ended. */
-  currentPeriodEnd: timestamp({ withTimezone: true }),
-  cancelAtPeriodEnd: boolean().notNull().default(false),
-  note: text(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    workspaceId: text()
+      .primaryKey()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Plan id from `src/billing/plans.ts`. */
+    planId: text().notNull(),
+    status: text().$type<SubscriptionStatus>().notNull().default('active'),
+    /** Who manages the subscription: `manual` (admin), later `stripe`, `yookassa`... */
+    provider: text().notNull().default('manual'),
+    /** The subscription id at the payment provider. */
+    externalId: text(),
+    /** When a paid period (or a manually granted plan) ends; null = open-ended. */
+    currentPeriodEnd: timestamp({ withTimezone: true }),
+    cancelAtPeriodEnd: boolean().notNull().default(false),
+    /** The customer at the payment provider (opens its billing portal, links later checkouts). */
+    customerId: text(),
+    /** Billing interval of a paid subscription. */
+    interval: text().$type<'month' | 'year'>(),
+    /**
+     * When the provider last changed the subscription (its event time). Webhooks can arrive out of
+     * order; an older event never overwrites a newer state.
+     */
+    providerUpdatedAt: timestamp({ withTimezone: true }),
+    note: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.provider, t.externalId)],
+);
 
-export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'paused' | 'canceled';
+
+/**
+ * Webhook events from payment providers, kept for duplicate protection (providers retry) and for
+ * the admin panel. Only the normalized outcome is stored, never card or personal data.
+ */
+export const billingEvents = pgTable(
+  'billing_events',
+  {
+    provider: text().notNull(),
+    /** The provider's event id. */
+    eventId: text().notNull(),
+    type: text().notNull(),
+    workspaceId: text().references(() => workspaces.id, { onDelete: 'set null' }),
+    /** The subscription id at the provider. */
+    externalId: text(),
+    planId: text(),
+    status: text(),
+    /** `applied`, `ignored` (stale, unknown workspace or price) or `failed`. */
+    outcome: text().notNull(),
+    detail: text(),
+    occurredAt: timestamp({ withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.provider, t.eventId] }),
+    index().on(t.workspaceId),
+    index().on(t.createdAt),
+  ],
+);
 
 /**
  * Extra limits granted to a workspace on top of its plan (by an admin, a promo, support).

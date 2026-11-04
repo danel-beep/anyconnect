@@ -63,6 +63,11 @@ export interface RiskAssessment {
   risk: RiskLevel;
   /** Shown to the user when asking for confirmation, e.g. "First message to a new contact". */
   reason: string;
+  /**
+   * Ask the user before this call whatever the access rules say, as `requiresConfirmation` does
+   * for a whole action: for a call that would weaken the user's protection.
+   */
+  confirm?: boolean;
 }
 
 /** Fixed-window request limit, e.g. `{ requests: 20, perSeconds: 60 }`. */

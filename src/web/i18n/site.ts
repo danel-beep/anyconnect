@@ -99,7 +99,8 @@ export const siteEn = {
   'landing.f.api.text':
     'Add a private MCP server by its address, or any REST API by its address and key. Both get the same rules as built-in services.',
   'landing.f.chat.title': 'Manage it from the chat',
-  'landing.f.chat.text': 'Ask the AI to connect a new account, rename it or show today’s usage.',
+  'landing.f.chat.text':
+    'Ask the AI to connect a new account, rename it or change when it asks you first. Anything that lowers your protection still waits for your OK.',
   'landing.f.chat.prompt': '“Connect my second Gmail and call it Clients”',
   'landing.f.personas.title': 'Different access for different AIs',
   'landing.f.personas.text':
@@ -325,7 +326,7 @@ export const siteEn = {
   'docs.custom.http':
     'any REST/JSON API through the HTTP API service: its address and key. The AI can also describe an API as a manifest (operations, parameters, sign-in) and add it from the chat.',
   'docs.safety.text':
-    'Risky actions such as sending or deleting wait for your OK in the dashboard. Each AI app can be limited to certain accounts or to reading only. Turn on two-step verification for your Manyplug account.',
+    'Risky actions such as sending or deleting wait for your OK in the dashboard. Each AI app can be limited to certain accounts or to reading only, on the Rules page or by asking the AI; a change that loosens a rule waits for your OK too. Turn on two-step verification for your Manyplug account.',
   'docs.safety.telegram': 'Approvals can also come to Telegram: link the bot on the Confirmations page.',
   'docs.safety.link': 'Set up two-step verification',
   'docs.safety.rules': 'Rules for apps and accounts',
@@ -440,7 +441,7 @@ export const siteRu: Record<SiteKey, string> = {
     'Добавьте закрытый MCP-сервер по адресу или любой REST API по адресу и ключу. Правила для них те же, что у встроенных сервисов.',
   'landing.f.chat.title': 'Управление прямо из чата',
   'landing.f.chat.text':
-    'Попросите ИИ подключить новый аккаунт, переименовать его или показать расход за сегодня.',
+    'Попросите ИИ подключить новый аккаунт, переименовать его или изменить, когда он спрашивает вас заранее. Всё, что ослабляет защиту, всё равно ждёт вашего согласия.',
   'landing.f.chat.prompt': '«Подключи мой второй Gmail и назови его Клиенты»',
   'landing.f.personas.title': 'Разный доступ для разных ИИ',
   'landing.f.personas.text': 'Рабочему ассистенту дайте почту и календарь, а личному только чтение.',
@@ -673,7 +674,7 @@ export const siteRu: Record<SiteKey, string> = {
   'docs.custom.http':
     'любой REST/JSON API через сервис HTTP API: его адрес и ключ. ИИ также может описать API манифестом (операции, параметры, вход) и добавить его из чата.',
   'docs.safety.text':
-    'Рискованные действия, например отправка или удаление, ждут вашего согласия в кабинете. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение. Включите двухэтапную проверку для своего аккаунта Manyplug.',
+    'Рискованные действия, например отправка или удаление, ждут вашего согласия в кабинете. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение: на странице «Правила» или просьбой к ИИ, причём ослабление правила тоже ждёт вашего согласия. Включите двухэтапную проверку для своего аккаунта Manyplug.',
   'docs.safety.telegram':
     'Подтверждения могут приходить и в Telegram: подключите бота на странице «Подтверждения».',
   'docs.safety.link': 'Включить двухэтапную проверку',

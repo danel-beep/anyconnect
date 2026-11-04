@@ -91,6 +91,8 @@ export interface CallContext {
   options: { fields?: string[] };
   /** Declared risk, possibly raised by the `risk` stage; `confirm` and `audit` use the final value. */
   risk: RiskLevel;
+  /** Set by the `risk` stage: this call needs the user's confirmation whatever the rules say. */
+  mustConfirm?: boolean;
   meta: CallMeta;
   /**
    * The context the action runs with: for an account, the connector context (credentials decrypted

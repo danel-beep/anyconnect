@@ -111,7 +111,41 @@ describe('web pages: login, consent and home', () => {
     expect(html).toContain('claude.ai');
     expect(html).toContain('Известное ИИ-приложение');
     expect(html).toContain('оставаться подключённым');
+    // The rarely changed "remember as" choice is folded and names the current pick.
+    expect(html).toMatch(/<summary>Запомнить как <strong>Claude \(новое\)<\/strong><\/summary>/);
+    expect(html).toContain('<p class="small muted">Название указано самим приложением.</p>');
+    expect(html).not.toContain('class="warning');
     expect(page.headers.get('x-frame-options')).toBe('DENY');
+  });
+
+  it('puts the self-declared name and the trust warning in one note for an unknown site', async () => {
+    const redirect = 'https://agent.example.dev/callback';
+    const registration = await json(
+      fetch(`${hub.baseUrl}/oauth/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          client_name: 'Agent',
+          redirect_uris: [redirect],
+          token_endpoint_auth_method: 'none',
+        }),
+      }),
+    );
+    const browser = new TestBrowser(hub.baseUrl);
+    await browser.login();
+    const url = new URL('/oauth/authorize', hub.baseUrl);
+    url.search = new URLSearchParams({
+      response_type: 'code',
+      client_id: registration.client_id,
+      redirect_uri: redirect,
+      code_challenge: 'a'.repeat(43),
+      code_challenge_method: 'S256',
+    }).toString();
+    const html = await (await browser.request(url.toString())).text();
+    expect(html).toContain(
+      '<div class="warning small">Название указано самим приложением. Разрешайте, только если доверяете этому сайту.</div>',
+    );
+    expect(html).not.toContain('Известное ИИ-приложение');
   });
 
   it('never redirects to an unregistered redirect_uri', async () => {

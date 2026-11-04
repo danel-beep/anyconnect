@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type BillingConfig, BillingConfigError, readBillingConfig } from './billing/config.js';
 import { BRAND } from './brand.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
 
@@ -186,6 +187,8 @@ export interface AppConfig {
   jobs: { enabled: boolean };
   /** The messenger gateway, when deployed. */
   gateway: { url: string; token: string } | undefined;
+  /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
+  billing: BillingConfig;
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -377,7 +380,17 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     oauthApps: hubOAuthApps(env, source),
     jobs: { enabled: env.JOBS_ENABLED },
     gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
+    billing: billingConfig(source, isProduction),
   };
+}
+
+function billingConfig(source: NodeJS.ProcessEnv, isProduction: boolean): BillingConfig {
+  try {
+    return readBillingConfig(source, { isProduction });
+  } catch (error) {
+    if (error instanceof BillingConfigError) throw new ConfigError(error.message);
+    throw error;
+  }
 }
 
 /** ADMIN_ALLOWED_IPS as a list, checked up front (a typo must not silently open or close the panel). */

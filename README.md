@@ -126,6 +126,12 @@ Claude Code откроет браузер для входа и согласия,
    `OAUTH_APP_GOOGLE_CLIENT_ID` / `_SECRET`.
 4. `SUPPORT_EMAIL` — адрес для вопросов и запросов тарифа, его видно на сайте.
 
+### Оплата
+
+Paddle или Stripe подключаются переменными `BILLING_PROVIDER`, ключами провайдера и ценами
+`<PROVIDER>_PRICE_<PLAN>_<MONTH|YEAR>`; без ключей всё можно проверить с
+`BILLING_PROVIDER=test`. Пошагово: [docs/BILLING.md](docs/BILLING.md).
+
 ### Gmail, Календарь и Диск
 
 1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API** и **Google Drive

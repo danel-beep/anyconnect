@@ -377,7 +377,31 @@ export interface AdminUserView extends Flashing {
   sessions: number;
   apps: number;
   workspaceId: string | null;
-  plan: { id: string; until: Date | null; provider: string | null; note: string | null };
+  plan: {
+    id: string;
+    until: Date | null;
+    provider: string | null;
+    note: string | null;
+    /** Paid through a payment provider: the plan is changed there, not here. */
+    paid?:
+      | {
+          provider: string;
+          status: string;
+          externalId: string;
+          interval: 'month' | 'year' | null;
+          cancelAtPeriodEnd: boolean;
+        }
+      | undefined;
+  };
+  /** The workspace's latest payment provider events. */
+  billingEvents: {
+    type: string;
+    outcome: string;
+    detail: string | null;
+    planId: string | null;
+    status: string | null;
+    at: Date;
+  }[];
   /** The user's open "switch me to this plan" request: the plan form is filled in for it. */
   request?: { planId: string; interval: string; at: Date } | undefined;
   usage: {
@@ -521,7 +545,45 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
               </form>
             </div>
           ) : null}
-          <form method="post" action={`${base}/plan`}>
+          {view.plan.paid ? (
+            <div class="notice info">
+              <p>
+                <strong>
+                  {t('admin.user.paidVia', {
+                    provider: view.plan.paid.provider,
+                    status: view.plan.paid.status,
+                    interval: t(
+                      view.plan.paid.interval === 'year' ? 'admin.requests.year' : 'admin.requests.month',
+                    ),
+                  })}
+                </strong>
+                {view.plan.paid.cancelAtPeriodEnd ? ` ${t('admin.user.paidCancels')}` : ''}
+              </p>
+              <p class="small muted">
+                <code>{view.plan.paid.externalId}</code> · {t('admin.user.paidHint')}
+              </p>
+            </div>
+          ) : null}
+          {view.billingEvents.length ? (
+            <details class="billing-events">
+              <summary>{t('admin.user.billingEvents', { n: view.billingEvents.length })}</summary>
+              <ul class="plain small">
+                {view.billingEvents.map((e) => (
+                  <li>
+                    <span>
+                      <code>{e.type}</code> · {e.status ?? '—'}
+                      {e.planId ? ` · ${planName(ctx, e.planId)}` : ''}
+                    </span>
+                    <span class="muted">
+                      {e.outcome}
+                      {e.detail ? ` (${e.detail})` : ''} · {fmtAgo(lang, e.at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+          <form method="post" action={`${base}/plan`} hidden={Boolean(view.plan.paid)}>
             <Hidden values={csrf} />
             <div class="field-row">
               <div>

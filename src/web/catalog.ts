@@ -126,6 +126,45 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'payments',
     blurb: { ru: 'Платежи, клиенты, счета и возвраты.', en: 'Payments, customers, invoices and refunds.' },
   },
+  jira: {
+    icon: 'jira',
+    category: 'tasks',
+    blurb: {
+      ru: 'Задачи по JQL, создание, статусы и комментарии.',
+      en: 'Issues by JQL, create, change status, comment.',
+    },
+  },
+  linear: {
+    icon: 'linear',
+    category: 'tasks',
+    blurb: {
+      ru: 'Задачи команд: поиск, создание, статусы.',
+      en: 'Team issues: find, create, change status.',
+    },
+  },
+  asana: {
+    icon: 'asana',
+    category: 'tasks',
+    blurb: {
+      ru: 'Задачи и проекты: списки, создание, выполнение.',
+      en: 'Tasks and projects: list, add, complete.',
+    },
+  },
+  trello: {
+    icon: 'trello',
+    category: 'tasks',
+    blurb: { ru: 'Доски, списки и карточки.', en: 'Boards, lists and cards.' },
+  },
+  airtable: {
+    icon: 'airtable',
+    category: 'docs',
+    blurb: { ru: 'Базы и таблицы: поиск и запись данных.', en: 'Bases and tables: find and write records.' },
+  },
+  hubspot: {
+    icon: 'hubspot',
+    category: 'crm',
+    blurb: { ru: 'Контакты, компании и сделки.', en: 'Contacts, companies and deals.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',
@@ -148,11 +187,6 @@ export const PLANNED_SERVICES: {
   glyph?: IconName;
   category: ServiceCategory;
 }[] = [
-  { name: 'Jira', icon: 'jira', category: 'tasks' },
-  { name: 'Linear', icon: 'linear', category: 'tasks' },
-  { name: 'Trello', icon: 'trello', category: 'tasks' },
-  { name: 'Airtable', icon: 'airtable', category: 'docs' },
-  { name: 'HubSpot', icon: 'hubspot', category: 'crm' },
   { name: 'Zendesk', icon: 'zendesk', category: 'crm' },
   { name: 'Intercom', icon: 'intercom', category: 'crm' },
   { name: 'Shopify', icon: 'shopify', category: 'payments' },
