@@ -49,7 +49,8 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   mailchimp: { total: 1710, tool: 280 },
   typeform: { total: 950, tool: 320 },
   telegram: { total: 2050, tool: 400 },
-  whatsapp: { total: 2050, tool: 400 },
+  // Two more tools than Telegram: message templates (list_templates, send_template).
+  whatsapp: { total: 2400, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {

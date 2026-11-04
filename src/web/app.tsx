@@ -44,6 +44,7 @@ export type AppSection =
   | 'admin'
   | 'admin-users'
   | 'admin-audit'
+  | 'admin-errors'
   | 'admin-system';
 
 export interface ShellInfo {
@@ -74,6 +75,7 @@ const NAV: {
   { id: 'admin', href: '/admin', icon: 'chart', key: 'admin.nav.overview', group: 'admin' },
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
   { id: 'admin-audit', href: '/admin/audit', icon: 'book', key: 'admin.nav.audit', group: 'admin' },
+  { id: 'admin-errors', href: '/admin/errors', icon: 'alert', key: 'admin.nav.errors', group: 'admin' },
   { id: 'admin-system', href: '/admin/system', icon: 'layers', key: 'admin.nav.system', group: 'admin' },
 ];
 
@@ -642,18 +644,27 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
 };
 
 /** The MCP URL with per-client instructions; compact once an app is connected. */
-export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, compact }) => {
+/**
+ * The MCP address with steps for each AI app. `profile` shows a profile's own address instead of
+ * the main one (the steps are the same).
+ */
+export const ConnectAiCard: FC<{
+  ctx: PageCtx;
+  compact?: boolean;
+  profile?: { url: string; title: string; hint: string };
+}> = ({ ctx, compact, profile }) => {
   const { t, lang } = ctx;
+  const url = profile?.url ?? ctx.mcpUrl;
   return (
     <div class="card" id="connect-ai">
       <div class="card-head">
-        <h2>{compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
+        <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
         <a class="btn sm" href="/docs">
           <Icon name="book" /> {t('app.ai.docs')}
         </a>
       </div>
-      <CopyField t={t} id="mcp-url" value={ctx.mcpUrl} label={t('home.mcpUrl')} />
-      <p class="hint">{t('app.ai.hint')}</p>
+      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} />
+      <p class="hint">{profile ? profile.hint : t('app.ai.hint')}</p>
       {compact ? null : (
         <div class="stack">
           <Tabs
@@ -671,12 +682,12 @@ export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, co
                   </ol>
                   {g.install ? (
                     <p>
-                      <a class="btn sm primary" href={g.install(ctx.mcpUrl).href}>
-                        {lang === 'ru' ? g.install(ctx.mcpUrl).label.ru : g.install(ctx.mcpUrl).label.en}
+                      <a class="btn sm primary" href={g.install(url).href}>
+                        {lang === 'ru' ? g.install(url).label.ru : g.install(url).label.en}
                       </a>
                     </p>
                   ) : null}
-                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(ctx.mcpUrl)} /> : null}
+                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
                 </div>
               ),
             }))}
@@ -988,9 +999,25 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
 // ---------------------------------------------------------------------------
 
 export interface AppsView {
-  grants: { id: string; name: string; client: string | null; createdAt: Date; lastUsedAt: Date | null }[];
-  tokens: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null; expiresAt: Date | null }[];
-  personas: { name: string; url: string }[];
+  grants: {
+    id: string;
+    name: string;
+    client: string | null;
+    /** The access profile it connected through, if any. */
+    profile: string | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+  }[];
+  tokens: {
+    id: string;
+    name: string;
+    profile: string | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+    expiresAt: Date | null;
+  }[];
+  /** Access profiles (personas): own MCP addresses with some accounts (`/app/profiles`). */
+  profiles: { id: string; name: string; slug: string; accounts: number; apps: number }[];
   /** A token just created: shown once. */
   newToken?: string | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
@@ -1016,6 +1043,9 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
                 <span class="grow">
                   <strong>{g.name}</strong>
                   {g.client && g.client !== g.name ? <span class="badge">{g.client}</span> : null}
+                  {g.profile ? (
+                    <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span>
+                  ) : null}
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })} ·{' '}
                     {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('home.never')}
@@ -1036,20 +1066,33 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
           </ul>
         )}
       </div>
-      {view.personas.length ? (
-        <div class="card">
-          <h2>{t('app.apps.personas')}</h2>
-          <p class="muted">{t('app.apps.personasText')}</p>
+      <div class="card" id="profiles">
+        <div class="card-head">
+          <h2>{t('profiles.title')}</h2>
+          <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
+            {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
+          </a>
+        </div>
+        <p class="muted">{t('profiles.appsText')}</p>
+        {view.profiles.length ? (
           <ul class="plain">
-            {view.personas.map((p) => (
+            {view.profiles.map((p) => (
               <li>
-                <strong>{p.name}</strong>
-                <code>{p.url}</code>
+                <span class="grow">
+                  <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
+                    <strong>{p.name}</strong>
+                  </a>{' '}
+                  <code class="small">/mcp/{p.slug}</code>
+                </span>
+                <span class="small muted">
+                  {t('profiles.accountsN', { n: p.accounts })} ·{' '}
+                  {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
+                </span>
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       <div class="card" id="tokens">
         <h2>{t('app.tokens.title')}</h2>
         <p class="muted">{t('app.tokens.text')}</p>
@@ -1067,6 +1110,9 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <li>
                 <span class="grow">
                   <strong>{tok.name}</strong>
+                  {tok.profile ? (
+                    <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
+                  ) : null}
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
                     {tok.lastUsedAt
@@ -1104,6 +1150,17 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               placeholder={t('app.tokens.placeholder')}
             />
           </div>
+          {view.profiles.length ? (
+            <div>
+              <label for="tok-profile">{t('profiles.tokenFor')}</label>
+              <select id="tok-profile" name="profile">
+                <option value="">{t('profiles.tokenMain')}</option>
+                {view.profiles.map((p) => (
+                  <option value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label for="tok-exp">{t('app.tokens.expiry')}</label>
             <select id="tok-exp" name="days">
@@ -1121,6 +1178,7 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
             </button>
           </div>
         </form>
+        {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
       </div>
     </AppShell>
   );

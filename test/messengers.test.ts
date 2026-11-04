@@ -11,6 +11,37 @@ import { resetDatabase, startTestHub, type TestHub, unwrapUntrusted } from './he
 const BOT_TOKEN = '123456789:AAEhBP0av18aaaaaaaaaaaaaaaaaaaaaaaa';
 const APP_SECRET = '0123456789abcdef0123456789abcdef';
 
+const TEMPLATES = [
+  {
+    name: 'order_ready',
+    language: 'en_US',
+    status: 'APPROVED',
+    category: 'UTILITY',
+    components: [
+      { type: 'HEADER', format: 'TEXT', text: 'Your order' },
+      { type: 'BODY', text: 'Hi {{1}}, order {{2}} is ready. Thank you, {{1}}!' },
+    ],
+  },
+  {
+    name: 'order_ready',
+    language: 'ru',
+    status: 'APPROVED',
+    category: 'UTILITY',
+    parameter_format: 'NAMED',
+    components: [{ type: 'BODY', text: 'Здравствуйте, {{name}}! Заказ {{order}} готов.' }],
+  },
+  {
+    name: 'promo_photo',
+    language: 'en_US',
+    status: 'APPROVED',
+    components: [
+      { type: 'HEADER', format: 'IMAGE' },
+      { type: 'BODY', text: 'New arrivals' },
+    ],
+  },
+  { name: 'draft_one', language: 'en_US', status: 'PENDING', components: [{ type: 'BODY', text: 'x' }] },
+];
+
 /** A fake Telegram Bot API and Meta Graph API on one local port. */
 async function startFakeApis() {
   const calls: { path: string; body: any; auth?: string | undefined }[] = [];
@@ -52,6 +83,10 @@ async function startFakeApis() {
     if (c.req.path === '/v23.0/1111111111')
       return c.json({ display_phone_number: '+1 555 0100', id: '1111111111' });
     if (c.req.path === '/v23.0/2222222222/subscribed_apps') return c.json({ success: true });
+    if (c.req.path === '/v23.0/2222222222/message_templates') {
+      const name = c.req.query('name');
+      return c.json({ data: TEMPLATES.filter((t) => !name || t.name === name) });
+    }
     return c.json({ error: { message: 'unknown path', code: 100 } }, 400);
   });
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
@@ -206,6 +241,44 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       ...(await hub.services.db.select().from(messengerChats)),
     ]);
     for (const secret of ['счёт', 'Анна', 'Петрова', 'доставку', '"42"']) expect(raw).not.toContain(secret);
+  });
+
+  it("encrypts stored messages with the account's own data key", async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(3, 'Секретный номер заказа 7781'));
+    const [row] = await hub.services.db
+      .select()
+      .from(messengerMessages)
+      .where(eq(messengerMessages.accountId, account.id));
+    const [chat] = await hub.services.db
+      .select()
+      .from(messengerChats)
+      .where(eq(messengerChats.accountId, account.id));
+    const context = `messenger:message:${row!.id}`;
+    // A data-key envelope, which the master key alone cannot open.
+    expect(row!.bodyEncrypted).toMatch(/^d1\./);
+    expect(chat!.infoEncrypted).toMatch(/^d1\./);
+    expect(() => hub.services.secrets.decryptJson(row!.bodyEncrypted, context)).toThrow();
+
+    // Another account's key cannot open it either, even with the right context.
+    const other = await hub.services.accounts.create(principal.workspaceId, {
+      connectorId: 'telegram',
+      name: 'other',
+      label: 'Другой',
+      config: { mode: 'bot', botApiUrl: apis.url },
+      credentials: { botToken: BOT_TOKEN },
+    });
+    const foreign = await hub.services.messaging.ciphers.forAccount(other.id);
+    expect(() => foreign.decryptJson(row!.bodyEncrypted, context)).toThrow();
+
+    // Rows written with the master key before per-account keys stay readable.
+    const body = { externalId: '3', text: 'Старая запись', attachments: [] };
+    await hub.services.db
+      .update(messengerMessages)
+      .set({ bodyEncrypted: hub.services.secrets.encryptJson(body, context) })
+      .where(eq(messengerMessages.id, row!.id));
+    const read = json(await call('telegram_read_chat', { account: 'shop', chat: chat!.id }));
+    expect(read.messages.map((m: { text: string }) => m.text)).toEqual(['Старая запись']);
   });
 
   it('asks the user before sending, by default', async () => {
@@ -411,6 +484,97 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       expect(sent.status).toBe('sent');
       const [job] = await hub.services.db.select().from(messengerOutbox);
       expect(job?.newContact).toBe(true);
+    });
+
+    it('lists approved templates and sends one to a new number through the outbox', async () => {
+      await addNumber();
+      const listed = json(await call('whatsapp_list_templates', {}));
+      expect(listed.templates).toEqual([
+        {
+          name: 'order_ready',
+          language: 'en_US',
+          category: 'utility',
+          text: 'Your order\n\nHi , order  is ready. Thank you, !',
+          variables: ['1', '2'],
+        },
+        expect.objectContaining({ name: 'order_ready', language: 'ru', variables: ['name', 'order'] }),
+        expect.objectContaining({ name: 'promo_photo', note: expect.stringContaining('image header') }),
+      ]);
+
+      // Ambiguous language, wrong variable count and unsupported templates are explained.
+      await expect(
+        call('whatsapp_send_template', {
+          to: '+15550199',
+          template: 'order_ready',
+          variables: ['Ann', '42'],
+        }),
+      ).resolves.toMatchObject({ isError: true });
+      const wrongCount = await call('whatsapp_send_template', {
+        to: '+15550199',
+        template: 'order_ready',
+        language: 'en_US',
+        variables: ['Ann'],
+      });
+      expect((wrongCount.content[0] as { text: string }).text).toContain('takes 2 variable(s)');
+      const photo = await call('whatsapp_send_template', { to: '+15550199', template: 'promo_photo' });
+      expect((photo.content[0] as { text: string }).text).toContain('image header');
+
+      const sent = json(
+        await call('whatsapp_send_template', {
+          to: '+1 555 0199',
+          template: 'order_ready',
+          language: 'en_US',
+          variables: ['Ann', 'A-42'],
+        }),
+      );
+      expect(sent.status).toBe('sent');
+      const request = apis.calls.find((c) => c.body?.type === 'template');
+      expect(request?.body).toMatchObject({
+        to: '15550199',
+        template: {
+          name: 'order_ready',
+          language: { code: 'en_US' },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: 'Ann' },
+                { type: 'text', text: 'A-42' },
+              ],
+            },
+          ],
+        },
+      });
+      // The hub's copy holds the rendered text, so the chat reads naturally.
+      const [chat] = json(await call('whatsapp_list_chats', {})).chats;
+      const read = json(await call('whatsapp_read_chat', { chat: chat.id }));
+      expect(read.messages.at(-1).text).toBe('Your order\n\nHi Ann, order A-42 is ready. Thank you, Ann!');
+
+      // Named variables carry their names.
+      json(
+        await call('whatsapp_send_template', {
+          chat: chat.id,
+          template: 'order_ready',
+          language: 'ru',
+          variables: ['Анна', 'A-42'],
+        }),
+      );
+      const named = apis.calls.filter((c) => c.body?.type === 'template').at(-1);
+      expect(named?.body.template.components[0].parameters[0]).toEqual({
+        type: 'text',
+        text: 'Анна',
+        parameter_name: 'name',
+      });
+
+      // Telegram has no templates: the shared send path refuses them.
+      const bot = await addBot();
+      await postTelegram(bot.id, botUpdate(5, 'hi'));
+      const [tgChat] = json(await call('telegram_list_chats', {})).chats;
+      await expect(
+        hub.services.messaging.service
+          .forAccount(bot.id)
+          .send({ chatId: tgChat.id, text: 'x', template: { name: 'a', language: 'en' } }),
+      ).rejects.toThrow(/cannot send message templates/);
     });
 
     it('serves the shared messages_* tools across Telegram and WhatsApp', async () => {
