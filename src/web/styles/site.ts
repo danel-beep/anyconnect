@@ -129,12 +129,12 @@ p{text-wrap:pretty}
 .bars .bar{display:grid;grid-template-columns:120px 1fr auto;gap:10px;align-items:center}
 .bars .meter{height:10px}
 .bars .meter.dim>span{background:var(--border-strong)}
-.tg{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--bg-subtle);font-size:13.5px}
-.tg .who{font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
-.tg .who svg{width:14px;height:14px;fill:currentColor}
-.tg .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
-.tg .btns span{text-align:center;border-radius:8px;padding:7px;background:var(--card);border:1px solid var(--border);font-weight:560}
-.tg .btns span.yes{border-color:var(--accent);color:var(--accent-ink)}
+.ask{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--bg-subtle);font-size:13.5px}
+.ask .who{font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.ask .who svg{width:14px;height:14px;color:var(--accent-ink)}
+.ask .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.ask .btns span{text-align:center;border-radius:8px;padding:7px;background:var(--card);border:1px solid var(--border);font-weight:560}
+.ask .btns span.yes{border-color:var(--accent);color:var(--accent-ink)}
 .codebox{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font:450 12.5px/1.6 ${MONO};white-space:pre;overflow:hidden;color:var(--muted)}
 .codebox b{color:var(--text);font-weight:600}
 .codebox i{font-style:normal;color:var(--accent-ink)}
@@ -145,7 +145,16 @@ p{text-wrap:pretty}
 a.svc:hover{border-color:var(--border-strong);text-decoration:none;transform:translateY(-1px)}
 .svc .name{font-weight:580;display:block}
 .svc .meta{font-size:12.5px;color:var(--muted);display:block}
-.svc.soon{border-style:dashed;background:transparent}
+/* Services page: categories side by side, each a column of its cards */
+.svc-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0 12px;align-items:start}
+.svc-cats .svc-grid{grid-template-columns:1fr}
+.svc-cats .svc{min-height:92px}
+/* Not connectable yet: one quiet row of chips under the grid */
+.roadmap-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.road{display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border:1px dashed var(--border-strong);border-radius:999px;color:var(--muted);font-size:13.5px;line-height:1.2;text-decoration:none}
+a.road:hover{color:var(--text);border-style:solid;text-decoration:none}
+.road .logo-tile.sm{width:26px;height:26px;border-radius:999px}
+.road .logo-tile.sm svg{width:14px;height:14px}
 .svc-filter{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 20px}
 .svc-filter input{max-width:340px}
 .cat-title{font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:32px 0 12px}
@@ -202,6 +211,9 @@ html:not(.js) .when-year{display:none}
 .doc-nav a{color:var(--muted);text-decoration:none;padding:7px 10px;border-radius:8px;font-size:14px;display:flex;align-items:center;gap:10px}
 .doc-nav a svg{width:15px;height:15px;fill:currentColor}
 .doc-nav a:hover{color:var(--text);background:var(--bg-subtle)}
+.doc-nav a[aria-current]{color:var(--text);background:var(--bg-subtle);font-weight:560}
+.guide-do{margin:12px 0 6px}
+.guide-do p{margin:0 0 10px}
 .doc-nav .group{font:500 11px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:16px 10px 8px}
 .guide{scroll-margin-top:88px;padding:0 0 40px;margin:0 0 40px;border-bottom:1px solid var(--border)}
 .guide:last-child{border-bottom:0}
@@ -270,4 +282,14 @@ details.more-ways{margin-top:14px}
 @media (max-width:640px){.svc-filter input{max-width:none}.svc-missing .row{flex-direction:column;align-items:stretch}.svc-missing .btn{width:100%}}
 .compare th:not(:first-child){font-size:14px;font-weight:600;color:var(--text)}
 .compare th:first-child,.compare td:first-child{width:30%}
+.plans-hint{margin-top:16px;max-width:720px}
+.compare tr.group th{text-align:left;font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:18px;border-top:1px solid var(--border)}
+/* Phones: the row names stay put while the plans scroll sideways */
+@media (max-width:640px){
+  .compare{min-width:560px}
+  .compare td{background:var(--card)}
+  .compare th:first-child,.compare td:first-child{position:sticky;left:0;z-index:1;width:132px;min-width:132px;background:var(--card);box-shadow:1px 0 0 var(--border)}
+  .compare thead th:first-child{background:var(--bg-subtle)}
+  .compare tr.group th{position:static;box-shadow:none}
+}
 `;

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import demo from '../src/connectors/builtin/demo.js';
 import gmail from '../src/connectors/builtin/gmail.js';
+import http from '../src/connectors/builtin/http.js';
 import imap from '../src/connectors/builtin/imap/index.js';
 import { ConnectorRegistry } from '../src/connectors/registry.js';
 import { defineConnector } from '../src/connectors/sdk.js';
@@ -82,6 +83,24 @@ describe('connect form for services without OAuth', () => {
       config: {},
       credentials: { token: ' t ' },
       problems: { 'config.retries': 'not a number' },
+    });
+  });
+
+  it('shows sign-in names as typed and completes bare addresses', () => {
+    const fields = connectFormFields(http);
+    const kinds = Object.fromEntries(fields.map((f) => [f.name, f.kind]));
+    expect(kinds).toMatchObject({
+      'credentials.username': 'text',
+      'credentials.password': 'secret',
+      'credentials.token': 'secret',
+    });
+    // A setting with a default has no blank choice.
+    expect(fields.find((f) => f.name === 'config.auth')?.defaultValue).toBe('bearer');
+    expect(readConnectForm(fields, { 'config.baseUrl': 'api.example.com/v1' }).config).toMatchObject({
+      baseUrl: 'https://api.example.com/v1',
+    });
+    expect(readConnectForm(fields, { 'config.baseUrl': 'http://localhost:8080' }).config).toMatchObject({
+      baseUrl: 'http://localhost:8080',
     });
   });
 

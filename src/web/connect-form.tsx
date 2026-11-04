@@ -65,7 +65,8 @@ const Field: FC<{
     case 'select':
       input = (
         <select {...common} required={required}>
-          {field.required ? null : (
+          {/* A setting with a default always has a value: no blank choice next to "None". */}
+          {field.required || field.defaultValue !== undefined ? null : (
             <option value="">
               {field.placeholder ?? (field.valueType === 'boolean' ? t('connect.formAuto') : '—')}
             </option>
@@ -116,15 +117,29 @@ const Field: FC<{
       );
       break;
     default:
-      input = (
-        <input
-          {...common}
-          type={field.inputType ?? 'text'}
-          value={shown}
-          required={required}
-          placeholder={field.placeholder}
-        />
-      );
+      // Addresses are typed as text: "api.example.com" is accepted and gets https:// on the server,
+      // where the browser's own URL check would refuse it.
+      input =
+        field.inputType === 'url' ? (
+          <input
+            {...common}
+            type="text"
+            inputmode="url"
+            autocapitalize="off"
+            spellcheck={false}
+            value={shown}
+            required={required}
+            placeholder={field.placeholder}
+          />
+        ) : (
+          <input
+            {...common}
+            type={field.inputType ?? 'text'}
+            value={shown}
+            required={required}
+            placeholder={field.placeholder}
+          />
+        );
   }
   return (
     <div class={field.kind === 'boolean' ? 'field field-check' : 'field'}>
@@ -230,6 +245,10 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
           {view.guide?.summary ? (
             <p class="guide-summary">
               <Icon name="clock" /> {view.guide.summary}
+              {/* On narrow screens the form comes first and the guide below it: a way down to the steps. */}
+              <a class="to-guide" href="#connect-guide">
+                {t('connect.seeSteps')}
+              </a>
             </p>
           ) : null}
           {view.error ? (
@@ -290,7 +309,7 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
         </div>
         <aside class="connect-aside">
           {view.guide ? (
-            <div class="card guide-card">
+            <div class="card guide-card" id="connect-guide">
               <h2 class="h3">{t('connect.howTo')}</h2>
               <SetupGuideView t={t} guide={view.guide} picker={view.picker} bare />
             </div>

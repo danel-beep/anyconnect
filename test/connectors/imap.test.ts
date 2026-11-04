@@ -176,6 +176,9 @@ describe('imap connector: unit', () => {
   it('fills servers from provider presets and guesses the provider from the address', () => {
     expect(guessProvider('a@yandex.ru')).toBe('yandex');
     expect(guessProvider('a@bk.ru')).toBe('mailru');
+    expect(guessProvider('a@yahoo.co.uk')).toBe('yahoo');
+    // Yahoo Japan runs its own servers: it is not the Yahoo Mail preset.
+    expect(guessProvider('a@yahoo.co.jp')).toBe('custom');
     expect(guessProvider('a@company.com')).toBe('custom');
     const gmail = resolveSettings(imap.config.parse({ email: 'x@gmail.com' }) as never);
     expect(gmail.imap).toEqual({ host: 'imap.gmail.com', port: 993, security: 'tls' });

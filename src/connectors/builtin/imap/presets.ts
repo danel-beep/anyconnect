@@ -58,6 +58,29 @@ export const PROVIDERS = {
     appPasswordHelp: 'https://app.fastmail.com/settings/security/apps',
     domains: ['fastmail.com', 'fastmail.fm'],
   },
+  yahoo: {
+    label: 'Yahoo Mail',
+    imap: { host: 'imap.mail.yahoo.com', port: 993, security: 'tls' },
+    smtp: { host: 'smtp.mail.yahoo.com', port: 465, security: 'tls' },
+    // Yahoo files mail sent over SMTP in Sent by itself; a copy over IMAP would show up twice.
+    savesSentCopy: true,
+    appPasswordHelp: 'https://login.yahoo.com/account/security',
+    // Yahoo Japan (yahoo.co.jp) is a separate service with other servers, so it is not listed.
+    domains: [
+      'yahoo.com',
+      'ymail.com',
+      'rocketmail.com',
+      'myyahoo.com',
+      'yahoo.co.uk',
+      'yahoo.ca',
+      'yahoo.com.au',
+      'yahoo.fr',
+      'yahoo.de',
+      'yahoo.es',
+      'yahoo.it',
+      'yahoo.in',
+    ],
+  },
   yandex: {
     label: 'Yandex Mail',
     imap: { host: 'imap.yandex.ru', port: 993, security: 'tls' },

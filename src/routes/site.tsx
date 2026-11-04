@@ -169,7 +169,15 @@ export function siteRoutes() {
     );
   });
 
-  app.get('/docs', async (c) => c.html(<DocsPage ctx={pageCtx(c, await currentUser(c))} />));
+  app.get('/docs', async (c) =>
+    c.html(
+      <DocsPage
+        ctx={pageCtx(c, await currentUser(c))}
+        services={await publicServices(c)}
+        telegram={Boolean(c.get('services').telegramBot)}
+      />,
+    ),
+  );
 
   for (const kind of ['privacy', 'terms'] as const) {
     app.get(`/${kind}`, async (c) => {

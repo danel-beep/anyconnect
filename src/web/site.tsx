@@ -224,22 +224,66 @@ const ServiceCard: FC<{ ctx: PageCtx; service: PublicService }> = ({ ctx, servic
   );
 };
 
-const PlannedCard: FC<{
-  ctx: PageCtx;
-  name: string;
-  icon?: string | undefined;
-  glyph?: string | undefined;
-}> = ({ ctx, name, icon }) => (
-  <div class="svc soon" data-search={name}>
-    <ServiceLogo icon={icon} name={name} />
+/**
+ * What is not connectable here yet, in one quiet row: services waiting for their sign-in app on
+ * this server (linking to their page, which explains) and services we plan to build.
+ */
+const Roadmap: FC<{ ctx: PageCtx; services: PublicService[]; limit?: number }> = ({
+  ctx,
+  services,
+  limit,
+}) => {
+  const items = [
+    ...services
+      .filter((x) => !x.ready)
+      .map((x) => ({
+        name: x.name,
+        icon: serviceMeta(x.id)?.icon,
+        glyph: serviceMeta(x.id)?.glyph,
+        href: `/services/${x.id}`,
+      })),
+    ...PLANNED_SERVICES.map((p) => ({ name: p.name, icon: p.icon, glyph: undefined, href: undefined })),
+  ].slice(0, limit ?? Number.POSITIVE_INFINITY);
+  if (!items.length) return null;
+  return (
+    <div class="roadmap" data-filter-group>
+      <h3 class="cat-title">{ctx.t('services.roadmap')}</h3>
+      <ul class="roadmap-list">
+        {items.map((x) => (
+          <li data-search={x.name}>
+            {x.href ? (
+              <a class="road" href={x.href}>
+                <ServiceLogo icon={x.icon} glyph={x.glyph} name={x.name} size="sm" />
+                <span>{x.name}</span>
+              </a>
+            ) : (
+              <span class="road">
+                <ServiceLogo icon={x.icon} name={x.name} size="sm" />
+                <span>{x.name}</span>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+/** Any remote MCP server connects by its address (dashboard → Services → Your own MCP servers). */
+const McpCard: FC<{ ctx: PageCtx }> = ({ ctx }) => (
+  <a class="svc" href="/docs#custom" data-search={`mcp ${ctx.t('services.mcp.name')}`}>
+    <ServiceLogo glyph="plug" name="MCP" />
     <span class="grow">
-      <span class="name">{name}</span>
-      <span class="meta">{ctx.t('site.services.soon')}</span>
+      <span class="name">{ctx.t('services.mcp.name')}</span>
+      <span class="meta">{ctx.t('services.mcp.text')}</span>
     </span>
-  </div>
+  </a>
 );
 
 const Check: FC = () => <Icon name="check" />;
+
+/** A dollar price: whole dollars as they are, anything else to the cent ($9.58, not $9.6). */
+const usd = (n: number) => `$${Number.isInteger(n) ? n : (Math.round(n * 100) / 100).toFixed(2)}`;
 
 const limitText = (t: Translate, lang: string, metric: Metric, value: number | null): string => {
   if (value === null) return t(`plan.metric.${metric}.unlimited`);
@@ -256,11 +300,10 @@ export const PlanCard: FC<{
 }> = ({ ctx, plan, current, action }) => {
   const { t, lang } = ctx;
   const intro = plan.intro?.limits.actions;
+  // What every plan gives today; features still being built are listed apart in the compare table.
   const features: [Metric, boolean][] = [
     ['actions', true],
     ['accounts', true],
-    ['messengers', (plan.limits.messengers ?? 1) > 0],
-    ['backgroundJobs', true],
     ['historyDays', true],
     ['seats', (plan.limits.seats ?? 2) > 1],
   ];
@@ -274,9 +317,7 @@ export const PlanCard: FC<{
       <div>
         <div class="price">
           <span class="amount when-month">${plan.priceMonthly}</span>
-          <span class="amount when-year">
-            ${plan.priceYearly === 0 ? 0 : Math.round((plan.priceYearly / 12) * 10) / 10}
-          </span>
+          <span class="amount when-year">{usd(plan.priceYearly / 12)}</span>
           <span class="per">{t('pricing.perMonth')}</span>
         </div>
         <div class="price-year">
@@ -610,9 +651,10 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
             <div class="tile c2">
               <h3>{t('landing.f.confirm.title')}</h3>
               <p>{t('landing.f.confirm.text')}</p>
-              <div class="visual tg">
+              {/* An approval as the dashboard shows it (Telegram is optional, so it is not the picture). */}
+              <div class="visual ask">
                 <div class="who">
-                  <BrandIcon slug="telegram" /> Manyplug
+                  <Icon name="bell" /> {BRAND.name}
                 </div>
                 {t('landing.f.confirm.message')}
                 <div class="btns">
@@ -691,13 +733,13 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
             </div>
           </div>
           <div class="svc-grid">
-            {services.map((s) => (
-              <ServiceCard ctx={ctx} service={s} />
-            ))}
-            {PLANNED_SERVICES.slice(0, 4).map((p) => (
-              <PlannedCard ctx={ctx} name={p.name} icon={p.icon} />
-            ))}
+            {services
+              .filter((s) => s.ready)
+              .map((s) => (
+                <ServiceCard ctx={ctx} service={s} />
+              ))}
           </div>
+          <Roadmap ctx={ctx} services={services} limit={8} />
           <p class="actions start">
             <a class="btn" href="/services">
               {t('landing.services.all')} <Icon name="arrow" />
@@ -798,7 +840,9 @@ const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
 // Pricing
 // ---------------------------------------------------------------------------
 
-const COMPARE: Metric[] = ['actions', 'accounts', 'messengers', 'backgroundJobs', 'historyDays', 'seats'];
+const COMPARE: Metric[] = ['actions', 'accounts', 'historyDays', 'seats'];
+/** Limits for features still being built: shown once, under their own heading. */
+const COMPARE_SOON: Metric[] = ['messengers', 'backgroundJobs'];
 
 const cell = (t: Translate, lang: string, metric: Metric, limits: Limits) => {
   const v = limits[metric];
@@ -825,8 +869,18 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <h1>{t('pricing.h1')}</h1>
             <p>{t('pricing.lead')}</p>
           </div>
-          {ctx.billing ? null : <div class="notice info">{t('pricing.paymentsSoon')}</div>}
+          {ctx.billing ? null : (
+            <div class="notice info">
+              {t('pricing.paymentsSoon')}{' '}
+              {ctx.supportEmail ? (
+                <a href={`mailto:${ctx.supportEmail}`}>
+                  {t('pricing.paymentsAsk', { email: ctx.supportEmail })}
+                </a>
+              ) : null}
+            </div>
+          )}
           <PlansGrid ctx={ctx} />
+          <p class="hint plans-hint">{t('pricing.actionHint')}</p>
         </div>
       </section>
       <section class="section border">
@@ -876,6 +930,19 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                       <td>
                         <Icon name="check" label={t('pricing.included')} />
                       </td>
+                    ))}
+                  </tr>
+                ))}
+                <tr class="group">
+                  <th scope="colgroup" colspan={plans.length + 1}>
+                    {t('pricing.soon')}
+                  </th>
+                </tr>
+                {COMPARE_SOON.map((metric) => (
+                  <tr>
+                    <td>{t(`pricing.row.${metric}`)}</td>
+                    {plans.map((p) => (
+                      <td class="num">{cell(t, lang, metric, p.limits)}</td>
                     ))}
                   </tr>
                 ))}
@@ -935,24 +1002,25 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
             {t('services.none')}
           </p>
           <div id="svc-all">
-            {CATEGORY_ORDER.map((cat) => {
-              const inCat = services.filter((s) => categoryOf(s.id) === cat);
-              const planned = PLANNED_SERVICES.filter((p) => p.category === cat);
-              if (!inCat.length && !planned.length) return null;
-              return (
-                <div data-filter-group>
-                  <h3 class="cat-title">{t(`category.${cat}`)}</h3>
-                  <div class="svc-grid">
-                    {inCat.map((s) => (
-                      <ServiceCard ctx={ctx} service={s} />
-                    ))}
-                    {planned.map((p) => (
-                      <PlannedCard ctx={ctx} name={p.name} icon={p.icon} />
-                    ))}
+            {/* What connects here today, categories side by side; everything else waits in the roadmap row. */}
+            <div class="svc-cats">
+              {CATEGORY_ORDER.map((cat) => {
+                const inCat = services.filter((s) => s.ready && categoryOf(s.id) === cat);
+                if (!inCat.length && cat !== 'custom') return null;
+                return (
+                  <div data-filter-group>
+                    <h3 class="cat-title">{t(`category.${cat}`)}</h3>
+                    <div class="svc-grid">
+                      {inCat.map((s) => (
+                        <ServiceCard ctx={ctx} service={s} />
+                      ))}
+                      {cat === 'custom' ? <McpCard ctx={ctx} /> : null}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+            <Roadmap ctx={ctx} services={services} />
           </div>
           <div class="card svc-missing">
             <div class="row between">
@@ -1130,18 +1198,25 @@ export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; 
             </h2>
             <p class="muted small">{lang === 'ru' ? g.note.ru : g.note.en}</p>
             <ol>
-              {(lang === 'ru' ? g.steps.ru : g.steps.en).map((step) => (
-                <li>{step}</li>
+              {(lang === 'ru' ? g.steps.ru : g.steps.en).map((step, i) => (
+                <li>
+                  {step}
+                  {/* The first step puts the button, command or config in place: it sits right under it. */}
+                  {i === 0 && (install || g.code) ? (
+                    <div class="guide-do">
+                      {install ? (
+                        <p>
+                          <a class="btn primary" href={install.href}>
+                            {lang === 'ru' ? install.label.ru : install.label.en}
+                          </a>
+                        </p>
+                      ) : null}
+                      {g.code ? <CodeBlock t={t} id={`${idPrefix}-${g.id}`} code={g.code(mcpUrl)} /> : null}
+                    </div>
+                  ) : null}
+                </li>
               ))}
             </ol>
-            {install ? (
-              <p>
-                <a class="btn primary" href={install.href}>
-                  {lang === 'ru' ? install.label.ru : install.label.en}
-                </a>
-              </p>
-            ) : null}
-            {g.code ? <CodeBlock t={t} id={`${idPrefix}-${g.id}`} code={g.code(mcpUrl)} /> : null}
           </section>
         );
       })}
@@ -1149,8 +1224,24 @@ export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; 
   );
 };
 
-export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
+/** Names of the services that connect here today in one way, as the reader's language lists them. */
+const namesBy = (ctx: PageCtx, services: PublicService[], connect: PublicService['connect']) =>
+  new Intl.ListFormat(ctx.lang, { type: 'conjunction' }).format(
+    services
+      .filter((s) => s.ready && s.connect === connect && serviceMeta(s.id)?.category !== 'custom')
+      .map((s) => s.name),
+  );
+
+export const DocsPage: FC<{
+  ctx: PageCtx;
+  services: PublicService[];
+  /** The Telegram bot is set up on this server, so approvals can go there too. */
+  telegram: boolean;
+}> = ({ ctx, services, telegram }) => {
   const { t, lang } = ctx;
+  // The lists name what this server can connect now, so the page never promises a missing app.
+  const oauth = namesBy(ctx, services, 'oauth');
+  const form = namesBy(ctx, services, 'form');
   return (
     <SiteLayout
       ctx={ctx}
@@ -1169,6 +1260,7 @@ export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
               <a href={`#${g.id}`}>{clientName(g, lang)}</a>
             ))}
             <span class="group">{t('docs.more')}</span>
+            <a href="#check">{t('docs.check')}</a>
             <a href="#services">{t('docs.services')}</a>
             <a href="#custom">{t('docs.custom')}</a>
             <a href="#safety">{t('docs.safety')}</a>
@@ -1183,12 +1275,24 @@ export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
               <p class="hint">{t('docs.urlHint')}</p>
             </section>
             <ClientGuides ctx={ctx} mcpUrl={ctx.mcpUrl} idPrefix="docs" />
+            <section class="guide" id="check">
+              <h2>{t('docs.check')}</h2>
+              <p>{t('docs.check.text')}</p>
+              <ul class="bullets">
+                <li>{t('docs.check.signin')}</li>
+                <li>{t('docs.check.tools')}</li>
+                <li>{t('docs.check.accounts')}</li>
+                <li>
+                  {t('docs.check.blocked')} <a href="/app/rules">{t('docs.safety.rules')}</a>
+                </li>
+              </ul>
+            </section>
             <section class="guide" id="services">
               <h2>{t('docs.services')}</h2>
               <p>{t('docs.services.text')}</p>
               <ul class="bullets">
-                <li>{t('docs.services.oauth')}</li>
-                <li>{t('docs.services.form')}</li>
+                {oauth ? <li>{t('docs.services.oauth', { services: oauth })}</li> : null}
+                {form ? <li>{t('docs.services.form', { services: form })}</li> : null}
                 <li>{t('docs.services.chat')}</li>
               </ul>
             </section>
@@ -1202,7 +1306,9 @@ export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             </section>
             <section class="guide" id="safety">
               <h2>{t('docs.safety')}</h2>
-              <p>{t('docs.safety.text')}</p>
+              <p>
+                {t('docs.safety.text')} {telegram ? t('docs.safety.telegram') : null}
+              </p>
               <p>
                 <a href="/app/rules">{t('docs.safety.rules')}</a> ·{' '}
                 <a href="/security">{t('docs.safety.link')}</a>
