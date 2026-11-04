@@ -463,10 +463,14 @@ export const FixButton: FC<{ ctx: PageCtx; a: AccountView; returnTo: string; pri
 };
 
 /**
- * Where account forms may send the browser back to (`back`): the overview or an account's own page.
- * Anything else falls back to the services list, so a form can never redirect elsewhere.
+ * Where account and rule forms may send the browser back to (`back`): the overview, an account's
+ * or an AI app's own page. Anything else falls back to the form's usual page, so a form can never
+ * redirect elsewhere.
  */
-export const ACCOUNT_BACK = /^\/app(?:\/accounts\/[\w-]{1,64})?$/;
+export const ACCOUNT_BACK = /^\/app(?:\/(?:accounts|apps)\/[\w-]{1,64})?$/;
+
+/** Where revoking a sign-in or a token may go back to: an access profile's or AI app's own page. */
+export const CONNECTION_BACK = /^\/app\/(?:profiles|apps)\/[\w-]{1,64}$/;
 
 /** A banner over the page when connected accounts stopped working, with a fix for each. */
 export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ ctx, accounts }) => {
@@ -1003,6 +1007,8 @@ export interface AppsView {
     id: string;
     name: string;
     client: string | null;
+    /** The AI app it belongs to (its page is `/app/apps/:id`). */
+    appId: string | null;
     /** The access profile it connected through, if any. */
     profile: string | null;
     createdAt: Date;
@@ -1011,6 +1017,7 @@ export interface AppsView {
   tokens: {
     id: string;
     name: string;
+    appId: string | null;
     profile: string | null;
     createdAt: Date;
     lastUsedAt: Date | null;
@@ -1022,6 +1029,16 @@ export interface AppsView {
   newToken?: string | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
+
+/** An app's or token's name, linking to the AI app's own page when it has one. */
+const AppName: FC<{ id: string | null; name: string }> = ({ id, name }) =>
+  id ? (
+    <a class="acc-link" href={`/app/apps/${encodeURIComponent(id)}`}>
+      <strong>{name}</strong>
+    </a>
+  ) : (
+    <strong>{name}</strong>
+  );
 
 export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = ({ ctx, shell, view }) => {
   const { t, lang } = ctx;
@@ -1035,13 +1052,13 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
           <h2>{t('app.apps.connected')}</h2>
         </div>
         {view.grants.length === 0 ? (
-          <p class="muted pad-x">{t('home.noApps')}</p>
+          <p class="muted pad-x">{t(view.tokens.length ? 'aiapp.noSignIns' : 'home.noApps')}</p>
         ) : (
           <ul class="plain pad-x">
             {view.grants.map((g) => (
               <li>
                 <span class="grow">
-                  <strong>{g.name}</strong>
+                  <AppName id={g.appId} name={g.name} />
                   {g.client && g.client !== g.name ? <span class="badge">{g.client}</span> : null}
                   {g.profile ? (
                     <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span>
@@ -1109,7 +1126,7 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
             {view.tokens.map((tok) => (
               <li>
                 <span class="grow">
-                  <strong>{tok.name}</strong>
+                  <AppName id={tok.appId} name={tok.name} />
                   {tok.profile ? (
                     <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
                   ) : null}

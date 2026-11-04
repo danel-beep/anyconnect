@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
 import { adminRoutes } from './routes/admin.js';
+import { aiAppRoutes } from './routes/ai-apps.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
 import { billingRoutes } from './routes/billing.js';
@@ -81,6 +82,7 @@ export function createApp(services: Services) {
   app.route('/', connectRoutes());
   app.route('/', appRoutes());
   app.route('/', profileRoutes());
+  app.route('/', aiAppRoutes());
   app.route('/', adminRoutes());
   app.route('/', billingRoutes());
   app.route('/', webRoutes());

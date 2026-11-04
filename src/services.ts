@@ -46,7 +46,8 @@ import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { createOps, type Ops, watchJobs } from './ops/index.js';
-import { WorkspaceProfileTools } from './security/assistant.js';
+import { AiAppService } from './security/apps.js';
+import { WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
@@ -107,6 +108,8 @@ export interface Services {
   oauth: OAuthServer;
   verifier: HubTokenVerifier;
   aiClients: AiClientService;
+  /** AI apps with their sign-ins and tokens (rename, disconnect). */
+  aiApps: AiAppService;
   personas: PersonaService;
   policies: PolicyService;
   /** Calls held back for the user's confirmation or an undo window. */
@@ -267,6 +270,13 @@ export function createServices(
   // Security layer: who may do what, confirmations, undo windows.
   const personas = new PersonaService(db, config.mcpUrl);
   const aiClients = new AiClientService(db);
+  const aiApps = new AiAppService({
+    db,
+    clients: aiClients,
+    // The OAuth server is built further down; grants are revoked only after start-up.
+    revokeGrant: (workspaceId, grantId) => oauth.revokeGrant(workspaceId, grantId),
+    tokens: apiTokens,
+  });
   const policies = new PolicyService(db);
   const pendingCalls = new PendingCallService(db, secrets, { confirmationTtlMs: config.confirmations.ttlMs });
   const notificationChannels = new NotificationChannels(db);
@@ -342,6 +352,7 @@ export function createServices(
       admin,
       billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
       profiles: new WorkspaceProfileTools(personas),
+      apps: new WorkspaceAppTools(aiApps, personas),
     },
     rateLimiter,
     idempotency,
@@ -441,6 +452,7 @@ export function createServices(
     oauth,
     verifier,
     aiClients,
+    aiApps,
     personas,
     policies,
     pendingCalls,
