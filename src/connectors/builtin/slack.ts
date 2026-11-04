@@ -242,6 +242,7 @@ export default defineConnector({
   credentials: Credentials,
   oauth: {
     provider: 'slack',
+    optional: true,
     scopes: [
       'search:read',
       'channels:read',

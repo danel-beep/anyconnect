@@ -35,17 +35,22 @@ export default defineManifestConnector({
   instructions:
     'todoist_find_tasks takes a Todoist filter: "today", "overdue", "7 days", "#Work & p1", "@label", "search: text".',
   baseUrl: 'https://api.todoist.com/api/v1',
-  auth: { type: 'bearer' },
+  // OAuth through the hub's Todoist app, or the personal API token without one.
+  auth: {
+    type: 'oauth2',
+    provider: 'todoist',
+    scopes: ['data:read_write', 'data:delete'],
+    token: '{{credentials.token}}',
+  },
   credentials: {
     type: 'object',
     properties: {
       token: {
         type: 'string',
         minLength: 1,
-        description: 'API token: Todoist → Settings → Integrations → Developer',
+        description: 'API token (only without OAuth): Todoist → Settings → Integrations → Developer',
       },
     },
-    required: ['token'],
   },
   rateLimit: { requests: 300, perSeconds: 60 },
   errorMessagePaths: ['error'],
