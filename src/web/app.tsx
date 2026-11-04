@@ -5,6 +5,7 @@ import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
+import { callReason, classifyProblem, needsReconnect, ProblemText, problemText } from './problems.js';
 import { PlanCard } from './site.js';
 import {
   Brand,
@@ -222,6 +223,7 @@ export interface AccountView {
   identity: string | null;
   oauth: boolean;
   createdAt: Date;
+  lastUsedAt: Date | null;
 }
 
 export interface CallView {
@@ -236,6 +238,8 @@ export interface CallView {
   title: string;
   /** Label of the account the call used, when it used one. */
   account: string | null;
+  /** What the AI was told when the call failed (user-safe text from the connector or the hub). */
+  error: string | null;
 }
 
 export interface UsageView {
@@ -246,7 +250,10 @@ export interface UsageView {
   introUntil?: Date | undefined;
 }
 
-export const AccountStatus: FC<{ t: Translate; a: AccountView }> = ({ t, a }) =>
+export const AccountStatus: FC<{
+  t: Translate;
+  a: Pick<AccountView, 'enabled' | 'status'> & { statusMessage?: string | null | undefined };
+}> = ({ t, a }) =>
   !a.enabled ? (
     <span class="badge">{t('app.acc.off')}</span>
   ) : a.status === 'active' ? (
@@ -254,7 +261,10 @@ export const AccountStatus: FC<{ t: Translate; a: AccountView }> = ({ t, a }) =>
       <span class="dot ok" /> {t('app.acc.active')}
     </span>
   ) : (
-    <span class="badge bad" title={a.statusMessage ?? undefined}>
+    <span
+      class="badge bad"
+      title={problemText(t, classifyProblem(a.statusMessage, a.status), a.statusMessage)}
+    >
       <span class="dot bad" /> {t(a.status === 'needs_reauth' ? 'app.acc.reauth' : 'app.acc.error')}
     </span>
   );
@@ -302,6 +312,11 @@ export const CallsTable: FC<{
                     <span class="call-what">
                       <span title={call.toolName}>{call.title}</span>
                       {call.account && !oneAccount ? <span class="small muted">{call.account}</span> : null}
+                      {call.status === 'error' ? (
+                        <span class="small call-why" title={call.error ?? undefined}>
+                          {callReason(ctx.t, call.outcome, call.error)}
+                        </span>
+                      ) : null}
                     </span>
                   </span>
                 </td>
@@ -312,7 +327,10 @@ export const CallsTable: FC<{
                   <CallStatus t={ctx.t} call={call} />
                 </td>
                 <td class="right small muted nowrap when" title={fmtDate(ctx.lang, call.createdAt, true)}>
-                  {fmtAgo(ctx.lang, call.createdAt)} · {call.durationMs} {ctx.t('app.ms')}
+                  {fmtAgo(ctx.lang, call.createdAt)}
+                  <span class="took">
+                    {ctx.t('app.call.took', { ms: fmtNumber(ctx.lang, call.durationMs) })}
+                  </span>
                 </td>
               </tr>
             );
@@ -348,7 +366,9 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
               {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
             </a>
             {' · '}
-            {t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}
+            {usage.actions.limit === null
+              ? t('app.usage.noLimit')
+              : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}
           </div>
         </div>
         <div class="stat">
@@ -391,6 +411,43 @@ export const groupByService = (accounts: AccountView[]): [string, AccountView[]]
   );
 };
 
+/**
+ * The one button that fixes a failing account: signing in again when the service stopped accepting
+ * the saved sign-in, otherwise checking again (a server that was down, a hiccup on its side).
+ */
+export const FixButton: FC<{ ctx: PageCtx; a: AccountView; returnTo: string; primary?: boolean }> = ({
+  ctx,
+  a,
+  returnTo,
+  primary,
+}) => {
+  const { t } = ctx;
+  const cls = `btn sm${primary ? ' primary' : ''}`;
+  if (needsReconnect(classifyProblem(a.statusMessage, a.status)))
+    return (
+      <a
+        class={cls}
+        href={`/connect/${encodeURIComponent(a.connectorId)}?account=${encodeURIComponent(a.id)}&returnTo=${encodeURIComponent(returnTo)}`}
+      >
+        <Icon name="refresh" /> {t('app.acc.reconnect')}
+      </a>
+    );
+  return (
+    <form method="post" action={`/app/accounts/${encodeURIComponent(a.id)}/test`} class="inline">
+      <Hidden values={{ csrf: ctx.csrf, ...(ACCOUNT_BACK.test(returnTo) ? { back: returnTo } : {}) }} />
+      <button type="submit" class={primary ? 'sm primary' : 'sm'}>
+        <Icon name="refresh" /> {t('problem.checkAgain')}
+      </button>
+    </form>
+  );
+};
+
+/**
+ * Where account forms may send the browser back to (`back`): the overview or an account's own page.
+ * Anything else falls back to the services list, so a form can never redirect elsewhere.
+ */
+export const ACCOUNT_BACK = /^\/app(?:\/accounts\/[\w-]{1,64})?$/;
+
 /** A banner over the page when connected accounts stopped working, with a fix for each. */
 export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ ctx, accounts }) => {
   const { t } = ctx;
@@ -402,15 +459,16 @@ export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ 
       <ul>
         {broken.slice(0, 5).map((a) => (
           <li>
-            <a href={`/app/accounts/${encodeURIComponent(a.id)}`}>{a.label}</a>
-            <span class="muted"> · {a.service}</span>
-            {a.statusMessage ? <span class="muted"> · {a.statusMessage}</span> : null}{' '}
-            <a
-              class="btn sm"
-              href={`/connect/${encodeURIComponent(a.connectorId)}?account=${encodeURIComponent(a.id)}&returnTo=${encodeURIComponent('/app')}`}
-            >
-              <Icon name="refresh" /> {t('app.acc.reconnect')}
-            </a>
+            <span class="grow">
+              <span>
+                <a href={`/app/accounts/${encodeURIComponent(a.id)}`}>{a.label}</a>
+                <span class="muted"> · {a.service}</span>
+              </span>
+              <span class="small">
+                <ProblemText t={t} message={a.statusMessage} status={a.status} />
+              </span>
+            </span>
+            <FixButton ctx={ctx} a={a} returnTo="/app" />
           </li>
         ))}
       </ul>
@@ -425,6 +483,8 @@ export interface OverviewView {
   usage: UsageView;
   apps: number;
   calls7d: number;
+  /** Actions waiting for the user's OK, and when the first of them expires. */
+  waiting: { count: number; soonest: Date | null };
   accounts: AccountView[];
   recent: CallView[];
 }
@@ -454,6 +514,19 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
         sub={allDone ? t('app.overview.sub') : t('app.overview.subNew')}
       />
       {view.welcome ? <div class="notice ok">{t('app.welcome')}</div> : null}
+      {view.waiting.count ? (
+        <div class="notice info waiting" role="status">
+          <span class="grow">
+            <strong>{t('app.waiting.title', { n: view.waiting.count })}</strong>{' '}
+            {view.waiting.soonest
+              ? t('app.waiting.expires', { when: fmtAgo(ctx.lang, view.waiting.soonest) })
+              : null}
+          </span>
+          <a class="btn sm primary" href="/confirm">
+            {t('app.waiting.review')}
+          </a>
+        </div>
+      ) : null}
       <BrokenAccounts ctx={ctx} accounts={view.accounts} />
       {allDone ? null : (
         <div class="onboard">
@@ -519,7 +592,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
                           </a>
                         </div>
                         <div class="sub">
-                          {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
+                          {a.service} · {a.identity ?? a.name}
                         </div>
                       </div>
                       <div class="ops inline">
@@ -635,6 +708,7 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
   const { t } = ctx;
   const meta = serviceMeta(a.connectorId);
   const base = `/app/accounts/${a.id}`;
+  const broken = needsFix(a);
   return (
     <div class="acc" id={`acc-${a.id}`}>
       <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={a.service} />
@@ -645,35 +719,41 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
           </a>{' '}
           <AccountStatus t={t} a={a} />
         </div>
-        <div class="sub">
-          {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
-          {a.identity && a.identity !== `${a.connectorId}:${a.name}` ? ` · ${a.identity}` : ''}
-        </div>
-        {a.enabled && a.status !== 'active' && a.statusMessage ? (
-          <div class="sub error">{a.statusMessage}</div>
+        <div class="sub">{a.identity ?? a.name}</div>
+        {broken ? (
+          <div class="sub error">
+            <ProblemText t={t} message={a.statusMessage} status={a.status} />
+          </div>
         ) : null}
       </div>
       <div class="ops">
-        {a.enabled && a.status !== 'active' ? (
-          <a
-            class="btn sm primary"
-            href={`/connect/${a.connectorId}?account=${a.id}&returnTo=%2Fapp%2Fservices`}
-          >
-            <Icon name="refresh" /> {t('app.acc.reconnect')}
-          </a>
-        ) : null}
-        <form method="post" action={`${base}/test`} class="inline">
-          <input type="hidden" name="csrf" value={ctx.csrf} />
-          <button type="submit" class="sm">
-            {t('app.acc.test')}
-          </button>
-        </form>
+        {broken ? (
+          <FixButton ctx={ctx} a={a} returnTo="/app/services" primary />
+        ) : (
+          <form method="post" action={`${base}/test`} class="inline">
+            <input type="hidden" name="csrf" value={ctx.csrf} />
+            <button type="submit" class="sm">
+              {t('app.acc.test')}
+            </button>
+          </form>
+        )}
         <details class="menu" data-menu>
           <summary aria-label={t('app.acc.more')} title={t('app.acc.more')}>
             <Icon name="more" />
             <span class="menu-label">{t('app.acc.moreShort')}</span>
           </summary>
           <div class="menu-pop">
+            <a href={base}>
+              <Icon name="settings" /> {t('app.acc.open')}
+            </a>
+            {broken ? (
+              <form method="post" action={`${base}/test`}>
+                <input type="hidden" name="csrf" value={ctx.csrf} />
+                <button type="submit">
+                  <Icon name="refresh" /> {t('app.acc.test')}
+                </button>
+              </form>
+            ) : null}
             <form method="post" action={`${base}/rename`} class="rename">
               <input type="hidden" name="csrf" value={ctx.csrf} />
               <label class="sr-only" for={`label-${a.id}`}>
@@ -1048,7 +1128,7 @@ export interface ActivityView {
   paged?: boolean;
   /** What the log can be narrowed to, and what it is narrowed to now. */
   filters: {
-    accounts: { id: string; label: string; service: string }[];
+    accounts: { id: string; label: string; service: string; detail?: string | undefined }[];
     services: { id: string; name: string }[];
     account?: string | undefined;
     service?: string | undefined;
@@ -1127,7 +1207,8 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
             <option value="">{t('app.activity.allAccounts')}</option>
             {view.filters.accounts.map((a) => (
               <option value={a.id} selected={view.filters.account === a.id}>
-                {a.label} · {a.service}
+                {a.label === a.service ? a.service : `${a.label} · ${a.service}`}
+                {a.detail ? ` · ${a.detail}` : ''}
               </option>
             ))}
           </select>
@@ -1219,7 +1300,12 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             </span>
           ) : null}
         </div>
-        <p class="muted">{t(`plan.${view.plan.id}.for` as 'plan.free.for')}</p>
+        <p class="muted">
+          {view.plan.id === 'unlimited' && ctx.user?.isAdmin
+            ? t('app.billing.ownerPlan')
+            : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
+        </p>
+        <p class="hint">{t('app.usage.actionsHint')}</p>
         {view.grants.length ? (
           <>
             <h3>{t('app.billing.bonuses')}</h3>
@@ -1384,7 +1470,10 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
               autocomplete="name"
             />
             <label for="email">{t('login.email')}</label>
-            <input id="email" type="email" value={view.email} readonly />
+            <input id="email" type="email" value={view.email} readonly aria-describedby="email-hint" />
+            <p class="hint" id="email-hint">
+              {t('app.settings.emailHint')}
+            </p>
             <label for="locale">{t('app.settings.language')}</label>
             <select id="locale" name="locale">
               <option value="" selected={!view.locale}>
@@ -1415,7 +1504,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
             {view.hasPassword ? (
               <li>
                 <span>{t('app.settings.password')}</span>
-                <span class="small muted">{t('security.on')}</span>
+                <span class="small muted">{t('app.settings.passwordHint')}</span>
               </li>
             ) : null}
           </ul>
@@ -1484,6 +1573,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
       <div class="card danger-zone">
         <h2>{t('app.settings.delete')}</h2>
         <p class="muted">{t('app.settings.deleteText')}</p>
+        {ctx.user?.isAdmin ? <p class="small muted">{t('app.settings.adminNote')}</p> : null}
         {view.recentAuth ? (
           <form method="post" action="/app/settings/delete" data-confirm={t('app.settings.deleteConfirm')}>
             <input type="hidden" name="csrf" value={ctx.csrf} />
@@ -1496,12 +1586,12 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
             </div>
           </form>
         ) : (
-          <p>
+          <div class="reauth-row">
             <a class="btn" href={`/login?reauth=1&next=${encodeURIComponent('/app/settings')}`}>
               {t('security.reauth')}
-            </a>{' '}
+            </a>
             <span class="small muted">{t('app.settings.deleteReauth')}</span>
-          </p>
+          </div>
         )}
       </div>
     </AppShell>

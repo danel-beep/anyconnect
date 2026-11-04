@@ -69,7 +69,15 @@ export class AdminService {
           active7: sql<number>`count(*) filter (where ${users.lastLoginAt} >= ${since7})`.mapWith(Number),
         })
         .from(users),
-      db.select({ n: count() }).from(accounts),
+      db
+        .select({
+          n: count(),
+          failing:
+            sql<number>`count(*) filter (where ${accounts.enabled} and ${accounts.status} <> 'active')`.mapWith(
+              Number,
+            ),
+        })
+        .from(accounts),
       db.select({ n: count() }).from(oauthGrants).where(isNull(oauthGrants.revokedAt)),
       db
         .select({ planId: subscriptions.planId, n: count() })
@@ -121,6 +129,7 @@ export class AdminService {
         admins: userTotals?.admins ?? 0,
       },
       accounts: accountTotal?.n ?? 0,
+      failingAccounts: accountTotal?.failing ?? 0,
       apps: appTotal?.n ?? 0,
       plans: [
         { planId: DEFAULT_PLAN_ID, n: Math.max(0, total - paid) },

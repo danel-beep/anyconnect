@@ -1,6 +1,6 @@
 import type { FC } from 'hono/jsx';
 import { METRICS, type Metric, PLANS } from '../billing/plans.js';
-import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
+import { AccountStatus, AppShell, Flash, PageHead, type ShellInfo } from './app.js';
 import { serviceMeta } from './catalog.js';
 import type { Key, Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
@@ -39,6 +39,9 @@ export interface AdminOverviewView {
   recentUsers: { id: string; email: string; name: string | null; createdAt: Date; planId: string }[];
   /** Open "switch me to this plan" requests (manual payments). */
   planRequests: { userId: string | null; email: string; planId: string; interval: string; at: Date }[];
+  /** Connected accounts across the hub that stopped working, and setup gaps on the System page. */
+  failingAccounts: number;
+  warnings: number;
 }
 
 export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminOverviewView }> = ({
@@ -54,6 +57,26 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
   return (
     <AppShell ctx={ctx} shell={shell} section="admin" title={t('admin.nav.overview')}>
       <PageHead title={t('admin.overview.title')} sub={t('admin.overview.sub')} />
+      {view.warnings || view.failingAccounts ? (
+        <div class="notice warn attention" role="status">
+          <strong>{t('admin.attention.title')}</strong>
+          <ul>
+            {view.warnings ? (
+              <li>
+                <span class="grow">{t('admin.attention.warnings', { n: view.warnings })}</span>
+                <a class="btn sm" href="/admin/system">
+                  {t('admin.attention.open')}
+                </a>
+              </li>
+            ) : null}
+            {view.failingAccounts ? (
+              <li>
+                <span class="grow">{t('admin.attention.failing', { n: view.failingAccounts })}</span>
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
       {view.planRequests.length ? (
         <div class="card">
           <h2>
@@ -112,6 +135,7 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
             <span class="small muted">30 {t('admin.days')}</span>
           </div>
           <div class="chart" role="img" aria-label={t('admin.chart.calls')}>
+            {view.calls30d === 0 ? <span class="chart-empty">{t('admin.chart.none')}</span> : null}
             {view.days.map((d) => (
               <div class={`col${d.calls === 0 ? ' zero' : ''}`} title={`${d.day}: ${d.calls} / ${d.errors}`}>
                 <span class={pctClass('h', d.calls, maxCalls)} />
@@ -670,9 +694,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
                         <code>{`${a.connectorId}:${a.name}`}</code>
                       </div>
                     </div>
-                    <span class={`badge ${a.enabled && a.status === 'active' ? 'ok' : ''}`}>
-                      {a.enabled ? a.status : t('app.acc.off')}
-                    </span>
+                    <AccountStatus t={t} a={a} />
                   </div>
                 );
               })}
@@ -947,7 +969,7 @@ export interface AdminSystemView {
   apps: OAuthAppView[];
 }
 
-const LEVEL_DOT = { ok: 'ok', warn: 'bad', off: 'off' } as const;
+const LEVEL_DOT = { ok: 'ok', warn: 'warn', off: 'off' } as const;
 
 export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSystemView }> = ({
   ctx,
@@ -1002,7 +1024,8 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
           {view.apps.map((a) => (
             <li>
               <span class="check-label">
-                <span class={`dot ${a.configured ? 'ok' : a.formFallback ? 'off' : 'bad'}`} />
+                {/* Not set up is a choice (those services just stay unavailable), not an error. */}
+                <span class={`dot ${a.configured ? 'ok' : 'off'}`} />
                 <span>
                   <strong>{a.name}</strong>
                   {a.services.join() !== a.name ? (

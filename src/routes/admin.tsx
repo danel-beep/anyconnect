@@ -165,6 +165,7 @@ export function adminRoutes() {
     '/admin',
     view(async (c, auth) => {
       const s = c.get('services');
+      const warnings = systemChecks(c, auth.actor.ip).filter((x) => x.level === 'warn').length;
       const [overview, recent, requests, shell] = await Promise.all([
         s.adminPanel.overview(),
         s.adminPanel.listUsers({ perPage: 6 }),
@@ -187,6 +188,7 @@ export function adminRoutes() {
           view={{
             ...overview,
             planRequests,
+            warnings,
             byConnector: overview.byConnector.map((x) => ({
               ...x,
               name: s.connectors.builtin.all().find((d) => d.id === x.connectorId)?.name ?? x.connectorId,
@@ -387,65 +389,7 @@ export function adminRoutes() {
         .then(() => true)
         .catch(() => false);
       const shell = await shellInfo(c, auth.workspace.id);
-      const t = c.get('t');
-      const yes = t('admin.sys.on');
-      const no = t('admin.sys.off');
-      // "Not set" names the variable that turns it on, so the owner knows what to change.
-      const off = (envVar: string) => `${no} · ${t('admin.sys.setVar', { name: envVar })}`;
-      const hours = Math.round(cfg.site.adminSessionMaxAgeMs / 3_600_000);
-      const forwarded = c.req.header('x-forwarded-for');
-      const checks: SystemCheck[] = [
-        {
-          label: t('admin.sys.google'),
-          level: cfg.site.google ? 'ok' : 'warn',
-          detail: cfg.site.google ? yes : off('LOGIN_GOOGLE_CLIENT_ID'),
-        },
-        {
-          label: t('admin.sys.signups'),
-          level: cfg.site.signups === 'open' ? 'ok' : 'off',
-          detail: t(cfg.site.signups === 'open' ? 'admin.sys.open' : 'admin.sys.closed'),
-        },
-        {
-          label: t('admin.sys.require2fa'),
-          level: cfg.auth.requireSecondFactor ? 'ok' : 'off',
-          detail: cfg.auth.requireSecondFactor ? t('admin.sys.yes') : t('admin.sys.no'),
-        },
-        {
-          label: t('admin.sys.allowlist'),
-          level: cfg.site.adminAllowedIps.length > 0 ? 'ok' : 'off',
-          detail: cfg.site.adminAllowedIps.length
-            ? cfg.site.adminAllowedIps.join(', ')
-            : off('ADMIN_ALLOWED_IPS'),
-        },
-        {
-          // Lets the owner check the proxy settings (TRUST_PROXY) before relying on the IP allowlist.
-          label: t('admin.sys.yourIp'),
-          level: 'ok',
-          detail: `${auth.actor.ip ?? '—'}${forwarded ? ` (X-Forwarded-For: ${forwarded.slice(0, 200)})` : ''}`,
-        },
-        { label: t('admin.sys.adminSession'), level: 'ok', detail: t('admin.sys.hours', { n: hours }) },
-        {
-          label: t('admin.sys.payments'),
-          level: s.billing ? 'ok' : 'off',
-          detail: s.billing ? s.billing.name : t('admin.sys.paymentsOff'),
-        },
-        {
-          label: t('admin.sys.telegram'),
-          level: s.telegramBot ? 'ok' : 'off',
-          detail: s.telegramBot ? yes : off('TELEGRAM_BOT_TOKEN'),
-        },
-        {
-          label: t('admin.sys.support'),
-          level: cfg.site.supportEmail ? 'ok' : 'warn',
-          detail: cfg.site.supportEmail ?? off('SUPPORT_EMAIL'),
-        },
-        {
-          label: t('admin.sys.https'),
-          // Plain http is expected on a laptop, not on the live site.
-          level: cfg.secureCookies ? 'ok' : cfg.env === 'production' ? 'warn' : 'off',
-          detail: cfg.secureCookies ? t('admin.sys.yes') : t('admin.sys.httpsOff'),
-        },
-      ];
+      const checks = systemChecks(c, auth.actor.ip);
       return c.html(
         <AdminSystemPage
           ctx={pageCtx(c, auth.user)}
@@ -579,4 +523,73 @@ export function adminRoutes() {
   );
 
   return app;
+}
+
+/**
+ * How the hub is set up, line by line, with a level each: `ok`, `warn` (a gap worth fixing on a
+ * live site, counted on the overview) or `off` (optional and not used).
+ */
+function systemChecks(c: AppContext, actorIp: string | null | undefined): SystemCheck[] {
+  const s = c.get('services');
+  const cfg = s.config;
+  const t = c.get('t');
+  const yes = t('admin.sys.on');
+  const no = t('admin.sys.off');
+  // "Not set" names the variable that turns it on, so the owner knows what to change.
+  const off = (envVar: string) => `${no} · ${t('admin.sys.setVar', { name: envVar })}`;
+  const hours = Math.round(cfg.site.adminSessionMaxAgeMs / 3_600_000);
+  const forwarded = c.req.header('x-forwarded-for');
+  return [
+    {
+      label: t('admin.sys.google'),
+      level: cfg.site.google ? 'ok' : 'warn',
+      detail: cfg.site.google ? yes : off('LOGIN_GOOGLE_CLIENT_ID'),
+    },
+    {
+      label: t('admin.sys.signups'),
+      level: cfg.site.signups === 'open' ? 'ok' : 'off',
+      detail: t(cfg.site.signups === 'open' ? 'admin.sys.open' : 'admin.sys.closed'),
+    },
+    {
+      label: t('admin.sys.require2fa'),
+      // Optional on a laptop, a real gap on a live site with other users.
+      level: cfg.auth.requireSecondFactor ? 'ok' : cfg.env === 'production' ? 'warn' : 'off',
+      detail: cfg.auth.requireSecondFactor ? t('admin.sys.yes') : t('admin.sys.no'),
+    },
+    {
+      label: t('admin.sys.allowlist'),
+      level: cfg.site.adminAllowedIps.length > 0 ? 'ok' : 'off',
+      detail: cfg.site.adminAllowedIps.length
+        ? cfg.site.adminAllowedIps.join(', ')
+        : off('ADMIN_ALLOWED_IPS'),
+    },
+    {
+      // Lets the owner check the proxy settings (TRUST_PROXY) before relying on the IP allowlist.
+      label: t('admin.sys.yourIp'),
+      level: 'ok',
+      detail: `${actorIp ?? '—'}${forwarded ? ` (X-Forwarded-For: ${forwarded.slice(0, 200)})` : ''}`,
+    },
+    { label: t('admin.sys.adminSession'), level: 'ok', detail: t('admin.sys.hours', { n: hours }) },
+    {
+      label: t('admin.sys.payments'),
+      level: s.billing ? 'ok' : 'off',
+      detail: s.billing ? s.billing.name : t('admin.sys.paymentsOff'),
+    },
+    {
+      label: t('admin.sys.telegram'),
+      level: s.telegramBot ? 'ok' : 'off',
+      detail: s.telegramBot ? yes : off('TELEGRAM_BOT_TOKEN'),
+    },
+    {
+      label: t('admin.sys.support'),
+      level: cfg.site.supportEmail ? 'ok' : 'warn',
+      detail: cfg.site.supportEmail ?? off('SUPPORT_EMAIL'),
+    },
+    {
+      label: t('admin.sys.https'),
+      // Plain http is expected on a laptop, not on the live site.
+      level: cfg.secureCookies ? 'ok' : cfg.env === 'production' ? 'warn' : 'off',
+      detail: cfg.secureCookies ? t('admin.sys.yes') : t('admin.sys.httpsOff'),
+    },
+  ];
 }

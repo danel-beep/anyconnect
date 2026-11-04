@@ -3,8 +3,15 @@
  * `ru` must have exactly the keys of `en` (the type enforces it).
  */
 export const accountEn = {
-  'app.account.reauthTitle': 'The service asks you to sign in again.',
-  'app.account.errorTitle': 'The last check failed.',
+  'app.account.reauthTitle': 'This account needs a new sign-in.',
+  'app.account.errorTitle': 'This account is not working.',
+  'app.account.lastUsed': 'last used {ago}',
+  'app.account.neverUsed': 'not used yet',
+  'app.account.calls30': '{n} {n|action|actions} in 30 days, {errors} failed',
+  'app.account.asks': 'Asks first',
+  'app.account.asksHint': 'Under the rule for this account, it waits for your OK before it runs.',
+  'app.account.blocked': 'Not allowed',
+  'app.account.blockedHint': 'The access rule for this account does not allow it, even when it is on.',
   'app.account.pausedNote': 'This account is paused: the AI does not see it until you resume it.',
   'app.account.tools': 'What the AI can do',
   'app.account.toolsSub': '{on} of {n} actions are on. Turn off what this account should never do.',
@@ -24,8 +31,15 @@ export const accountEn = {
 } as const;
 
 export const accountRu: Record<keyof typeof accountEn, string> = {
-  'app.account.reauthTitle': 'Сервис просит войти заново.',
-  'app.account.errorTitle': 'Последняя проверка не прошла.',
+  'app.account.reauthTitle': 'Аккаунту нужен новый вход.',
+  'app.account.errorTitle': 'Аккаунт не работает.',
+  'app.account.lastUsed': 'последнее обращение {ago}',
+  'app.account.neverUsed': 'ещё не использовался',
+  'app.account.calls30': '{n} {n|действие|действия|действий} за 30 дней, с ошибкой: {errors}',
+  'app.account.asks': 'Спросит сначала',
+  'app.account.asksHint': 'По правилу этого аккаунта ждёт вашего «да», прежде чем выполнить.',
+  'app.account.blocked': 'Запрещено',
+  'app.account.blockedHint': 'Правило доступа этого аккаунта это не разрешает, даже если действие включено.',
   'app.account.pausedNote': 'Аккаунт на паузе: ИИ не видит его, пока вы его не включите.',
   'app.account.tools': 'Что может ИИ',
   'app.account.toolsSub': 'Включено {on} из {n}. Отключите то, что этот аккаунт делать не должен.',

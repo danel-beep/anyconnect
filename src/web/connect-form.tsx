@@ -4,6 +4,7 @@ import type { FormField } from '../core/connect-form.js';
 import { serviceMeta } from './catalog.js';
 import type { Translate } from './i18n.js';
 import { Layout } from './pages.js';
+import { ProblemText } from './problems.js';
 import { type GuideVariantPicker, PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
 import { Icon, ServiceLogo } from './ui.js';
 
@@ -340,7 +341,9 @@ export const ConnectedPage: FC<{ t: Translate; lang: string; view: ConnectedView
             {view.identity ? t('connect.identity', { identity: view.identity }) : null}
           </p>
           {view.problem ? (
-            <div class="notice">{t('connect.testFailed', { message: view.problem })}</div>
+            <div class="notice">
+              <ProblemText t={t} message={view.problem} details /> {t('connect.testFailed')}
+            </div>
           ) : null}
           {view.prompts.length && !view.problem ? (
             <div class="try-it">

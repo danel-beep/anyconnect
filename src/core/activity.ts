@@ -103,6 +103,28 @@ export class ActivityService {
       .limit(opts.limit);
   }
 
+  /** Calls of one account since a moment, and how many failed (the account page's header). */
+  async accountTotals(
+    workspaceId: string,
+    accountId: string,
+    since: Date,
+  ): Promise<{ calls: number; errors: number }> {
+    const [row] = await this.db
+      .select({
+        calls: count(),
+        errors: sql<number>`count(*) filter (where ${toolCalls.status} = 'error')`.mapWith(Number),
+      })
+      .from(toolCalls)
+      .where(
+        and(
+          eq(toolCalls.accountId, accountId),
+          eq(toolCalls.workspaceId, workspaceId),
+          gte(toolCalls.createdAt, since),
+        ),
+      );
+    return { calls: row?.calls ?? 0, errors: row?.errors ?? 0 };
+  }
+
   async countSince(workspaceId: string, since: Date): Promise<number> {
     const [row] = await this.db
       .select({ n: count() })

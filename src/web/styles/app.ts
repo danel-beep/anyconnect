@@ -1,16 +1,16 @@
-import { MONO } from '../assets.js';
+import { SANS } from '../assets.js';
 
 /** The signed-in area (dashboard and admin panel): sidebar, page header, stats, lists. */
 export const APP_SHELL_CSS = `
 .shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;background:linear-gradient(to right,var(--bg-subtle) 247px,var(--border) 247px,var(--border) 248px,transparent 248px)}
 .sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px;padding:18px 14px;border-right:1px solid var(--border);background:var(--bg-subtle);overflow-y:auto}
 .sidebar .brand{padding:6px 8px 18px}
-.side-group{font:500 11px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:18px 10px 8px}
+.side-group{font:600 11.5px/1 ${SANS};letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:18px 10px 8px}
 .side-link{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;color:var(--muted);text-decoration:none;font-weight:540;font-size:14px}
 .side-link svg{width:17px;height:17px;flex:none}
 .side-link:hover{color:var(--text);background:var(--card);text-decoration:none}
 .side-link[aria-current=page]{color:var(--text);background:var(--card);box-shadow:inset 0 0 0 1px var(--border)}
-.side-link .count{margin-left:auto;font:600 11px/1 ${MONO};background:var(--accent);color:var(--accent-text);border-radius:99px;padding:4px 7px}
+.side-link .count{margin-left:auto;font:650 11px/1 ${SANS};font-variant-numeric:tabular-nums;background:var(--accent);color:var(--accent-text);border-radius:99px;padding:4px 7px}
 .side-link .count.bad{background:var(--danger);color:#fff}
 .side-foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
 .who{display:flex;align-items:center;gap:10px;padding:4px 6px;min-width:0}
@@ -55,7 +55,7 @@ export const APP_SHELL_CSS = `
 .onboard{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px}
 .onboard-step{border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;background:var(--card);display:flex;gap:12px;align-items:flex-start;color:var(--text);text-decoration:none}
 a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
-.onboard-step .tick{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border-strong);display:grid;place-items:center;flex:none;font:600 12px/1 ${MONO};color:var(--muted)}
+.onboard-step .tick{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border-strong);display:grid;place-items:center;flex:none;font:650 12px/1 ${SANS};color:var(--muted)}
 .onboard-step.done .tick{background:var(--ok);border-color:var(--ok);color:var(--card)}
 .onboard-step.done .tick svg{width:14px;height:14px}
 .onboard-step strong{display:block;font-size:14.5px}
@@ -108,7 +108,7 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .log-filters select{width:auto;min-width:180px;max-width:100%;min-height:36px;padding:6px 10px;font-size:14px}
 .log-filters .check{margin:0;font-size:14px}
 @media (max-width:640px){.log-filters select{flex:1 1 100%}}
-.chart-axis{display:flex;justify-content:space-between;font:500 11px/1 ${MONO};color:var(--muted);padding-top:8px}
+.chart-axis{display:flex;justify-content:space-between;font:500 11.5px/1 ${SANS};font-variant-numeric:tabular-nums;color:var(--muted);padding-top:8px}
 .top-list{display:flex;flex-direction:column;gap:10px}
 .top-list .bar{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:12px;align-items:center;font-size:13.5px}
 .top-list .bar .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -135,7 +135,7 @@ ul.plain.pad-x{padding:0 24px 6px}
 .guide-compact ol{margin-top:0}
 
 /* Admin */
-.admin-tag{font:600 10.5px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;background:var(--text);color:var(--bg);border-radius:5px;padding:4px 6px;margin-left:6px}
+.admin-tag{font:650 10.5px/1 ${SANS};letter-spacing:.05em;text-transform:uppercase;background:var(--accent-soft);color:var(--accent-ink);border-radius:5px;padding:4px 6px;margin-left:6px}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
 .filters input[type=search]{max-width:320px}
 .filters select{width:auto;min-width:150px}
@@ -207,8 +207,8 @@ ul.plain.pad-x{padding:0 24px 6px}
 .stack-cards{display:flex;flex-direction:column;gap:16px}.stack-cards>.card{margin:0}
 
 /* One account */
-.acc-link{color:var(--text);text-decoration:none}
-.acc-link:hover{text-decoration:underline}
+.acc-link{color:var(--text);text-decoration:underline;text-decoration-color:var(--border-strong);text-underline-offset:3px;text-decoration-thickness:1px}
+.acc-link:hover{color:var(--accent-ink);text-decoration-color:currentColor}
 .acc-head-sub{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 .account-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start;margin:0 0 16px}
 .account-grid>.card,.account-side>.card{margin:0}
@@ -231,14 +231,18 @@ input[type=checkbox].switch:checked::after{transform:translateX(14px)}
 input[type=checkbox].switch:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
 .call-what{display:flex;flex-direction:column;min-width:0}
 .call-what>span:first-child{font-weight:540}
-.acc-group{padding:14px 20px 6px;font:600 12px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--border);background:var(--bg-subtle)}
+.acc-group{padding:14px 20px 6px;font:600 13px/1 ${SANS};color:var(--muted);border-top:1px solid var(--border);background:var(--bg-subtle)}
 .acc-group:first-child{border-top:0}
 .acc-group+.acc{border-top:0}
 a.acc-more{display:block;text-align:center;color:var(--muted);font-size:13.5px;padding:12px 20px;text-decoration:none}
 a.acc-more:hover{color:var(--text);background:var(--bg-subtle)}
 .attention ul{list-style:none;margin:8px 0 0;padding:0}
-.attention li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:6px 0;border-top:1px solid var(--danger-soft)}
-.attention li .btn{margin-left:auto}
+.attention li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:8px 0;border-top:1px solid var(--border)}
+.attention li>.grow{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 240px}
+.attention li .btn,.attention li form{margin-left:auto}
+.notice.attention{background:var(--card);border-color:var(--border);border-left:3px solid var(--warn-border)}
+.notice.bad.attention{border-left-color:var(--danger)}
+.notice.waiting{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
 .plan-request{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between;border-color:var(--accent);background:var(--accent-soft)}
 .plan-request p{margin:0;flex:1 1 280px}
 .d-block{display:block}
@@ -247,4 +251,28 @@ a.acc-more:hover{color:var(--text);background:var(--bg-subtle)}
 #apps li>.right{max-width:55%}
 @media (max-width:640px){#apps li{flex-direction:column;gap:4px}#apps li>.right{max-width:none;text-align:left}}
 .page-head .row>form.inline{display:flex}
+.dot.warn{background:var(--warn-border)}
+/* Failure reasons: plain words first, the service's own message one click away */
+.problem-raw{display:inline;margin-left:6px}
+.problem-raw summary{display:inline;cursor:pointer;color:var(--muted);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+.problem-raw[open]{display:block;margin:6px 0 0}
+.problem-raw code{display:block;margin-top:4px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted)}
+.call-why{color:var(--danger);overflow-wrap:anywhere}
+.calls .when .took{display:block;font-size:12px;opacity:.8}
+/* Account page: risk, then what the rule makes of it */
+.tool-flags{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.tool-flags .badge svg{width:12px;height:12px}
+@media (max-width:640px){.tool-toggle .badge{margin-left:0}.tool-flags{flex-direction:row;flex-wrap:wrap;margin-left:50px;width:100%;align-items:center}}
+/* Rules: one header row on wide screens; rows save on change */
+.rule-head{display:none}
+@media (min-width:761px){.rule-head{display:grid;padding:0 0 4px;border-top:0;font-size:12.5px;font-weight:600;color:var(--muted)}.rule-list .rule-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.rule-row{align-items:center}.rule-head+.rule-row,.rule-head+.acc-group{border-top:1px solid var(--border)}}
+.rule-save-slot{display:flex;align-items:center;gap:8px;min-width:70px;justify-content:flex-end}
+.js .rule-save{display:none}
+select.narrow{max-width:320px}
+.reauth-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.reauth-row .small{flex:1 1 220px}
+.lock-group{border:0;margin:0;padding:0;min-width:0}
+.lock-group:disabled .card{opacity:.6}
+.chart{position:relative}
+.chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13.5px}
 `;

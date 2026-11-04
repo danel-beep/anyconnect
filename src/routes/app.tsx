@@ -7,9 +7,10 @@ import { isRecentAuth } from '../core/auth-methods.js';
 import type { toolCalls } from '../db/schema.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
-import { ACCESS_LEVELS, CONFIRM_LEVELS } from '../security/policy.js';
+import { ACCESS_LEVELS, accessAllows, CONFIRM_LEVELS, confirmationRequired } from '../security/policy.js';
 import { AccountPage } from '../web/account-page.js';
 import {
+  ACCOUNT_BACK,
   type AccountView,
   ActivityPage,
   AppsPage,
@@ -42,8 +43,8 @@ import {
 } from './page-helpers.js';
 
 const DAY = 86_400_000;
-/** An account's own page in the dashboard: the only "back" address account forms may name. */
-const ACCOUNT_PAGE = /^\/app\/accounts\/[\w-]{1,64}$/;
+/** Ids of AI apps and accounts, as rule rows name them (and the rules page links to them). */
+const RULE_ID = /^[\w-]{1,64}$/;
 
 type ToolCallRow = typeof toolCalls.$inferSelect;
 
@@ -60,6 +61,7 @@ function accountView(a: AccountRow, serviceName: string, oauth: boolean): Accoun
     identity: typeof a.metadata.identity === 'string' ? a.metadata.identity : null,
     oauth,
     createdAt: a.createdAt,
+    lastUsedAt: a.lastUsedAt,
   };
 }
 
@@ -177,6 +179,7 @@ export function appRoutes() {
       client: clientOf(r),
       title: titleOf(r),
       account: r.accountId ? (labels.get(r.accountId) ?? null) : null,
+      error: r.status === 'error' ? r.errorMessage : null,
     }));
   };
 
@@ -186,15 +189,17 @@ export function appRoutes() {
     page('/app', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, accounts, grants, tokens, recentRows, calls7d, shell] = await Promise.all([
+      const [usage, accounts, grants, tokens, recentRows, calls7d, open, shell] = await Promise.all([
         usageOf(c, ws),
         accountsOf(c, ws),
         s.oauth.listGrants(ws),
         s.apiTokens.list(ws),
         s.activity.recent(ws, { limit: 6 }),
         s.activity.countSince(ws, new Date(Date.now() - 7 * DAY)),
+        s.pendingCalls.listOpen(ws),
         shellInfo(c, ws),
       ]);
+      const asking = open.filter((row) => row.status === 'awaiting_confirmation');
       const name = auth.user.name?.trim();
       return c.html(
         <OverviewPage
@@ -212,6 +217,13 @@ export function appRoutes() {
             usage,
             apps: grants.length,
             calls7d,
+            waiting: {
+              count: asking.length,
+              soonest: asking.reduce<Date | null>(
+                (min, row) => (row.expiresAt && (!min || row.expiresAt < min) ? row.expiresAt : min),
+                null,
+              ),
+            },
             accounts,
             recent: await callViews(c, ws, recentRows),
           }}
@@ -297,16 +309,22 @@ export function appRoutes() {
         s.entitlements.entitlements(ws),
         shellInfo(c, ws),
       ]);
-      const calls = await s.activity.recent(ws, {
-        limit: 10,
-        sinceDays: entitlements.limits.historyDays,
-        filter: { accountId: row.id },
-      });
+      const [calls, usage] = await Promise.all([
+        s.activity.recent(ws, {
+          limit: 10,
+          sinceDays: entitlements.limits.historyDays,
+          filter: { accountId: row.id },
+        }),
+        s.activity.accountTotals(ws, row.id, new Date(Date.now() - 30 * DAY)),
+      ]);
       const rule = rules.find(
         (r) =>
           r.accountId === row.id && r.aiClientId === null && r.personaId === null && r.connectorId === null,
       );
       const disabled = new Set(row.settings.disabledActions ?? []);
+      // The rule in force here: this account's own, else the workspace default.
+      const access = rule?.access ?? security.defaultAccess;
+      const confirm = rule?.confirm ?? security.defaultConfirm;
       return c.html(
         <AccountPage
           ctx={pageCtx(c, auth.user)}
@@ -323,7 +341,10 @@ export function appRoutes() {
               ...actionText(connector!, a, locale),
               risk: actionRisk(a),
               enabled: !disabled.has(a.name),
+              blocked: !accessAllows(access, actionRisk(a)),
+              asks: confirmationRequired(confirm, actionRisk(a)),
             })),
+            usage,
             rule: { access: rule?.access ?? null, confirm: rule?.confirm ?? null },
             defaults: { access: security.defaultAccess, confirm: security.defaultConfirm },
             prompts: connector
@@ -339,7 +360,7 @@ export function appRoutes() {
 
   /** Where an account form goes back to: the account's own page when it came from there. */
   const accountBack = (form: Record<string, string>, fallback = '/app/services') =>
-    ACCOUNT_PAGE.test(form.back ?? '') ? form.back! : fallback;
+    ACCOUNT_BACK.test(form.back ?? '') ? form.back! : fallback;
 
   const accountAction = (
     name: string,
@@ -590,7 +611,17 @@ export function appRoutes() {
             newest: logUrl(),
             paged: Boolean(before),
             filters: {
-              accounts: accounts.map((a) => ({ id: a.id, label: a.label, service: a.service })),
+              // Two accounts with one name ("Todoist" and "Todoist") differ by their address or key.
+              accounts: accounts.map((a) => ({
+                id: a.id,
+                label: a.label,
+                service: a.service,
+                detail:
+                  a.label === a.service ||
+                  accounts.some((b) => b !== a && b.label === a.label && b.service === a.service)
+                    ? (a.identity ?? a.name)
+                    : undefined,
+              })),
               services: [...new Set(accounts.map((a) => a.connectorId))].map((id) => ({
                 id,
                 name: names.get(id) ?? id,
@@ -744,6 +775,7 @@ export function appRoutes() {
               })),
             ),
             otherRules: rules.filter((r) => !edited.has(r.id)).length,
+            saved: RULE_ID.test(c.req.query('saved') ?? '') ? c.req.query('saved') : undefined,
             flash: takeFlash(c),
           }}
         />,
@@ -768,9 +800,14 @@ export function appRoutes() {
 
   app.post(
     '/app/rules/scoped',
-    // An account's own page sets its rule too, and gets the user back there.
+    // An account's own page sets its rule too, and gets the user back there. On the rules page a
+    // row saves as soon as a choice changes, so the page comes back at that row, marked "Saved".
     action(
-      (form) => accountBack(form, '/app/rules'),
+      (form) =>
+        accountBack(
+          form,
+          RULE_ID.test(form.id ?? '') ? `/app/rules?saved=${form.id}#rule-${form.id}` : '/app/rules',
+        ),
       async (c, auth, form) => {
         const s = c.get('services');
         const input = z
@@ -788,7 +825,7 @@ export function appRoutes() {
           input.kind === 'app' ? { aiClientId: input.id } : { accountId: input.id },
           value,
         );
-        setFlash(c, 'ok', 'app.flash.rulesSaved');
+        if (ACCOUNT_BACK.test(form.back ?? '')) setFlash(c, 'ok', 'app.flash.rulesSaved');
         return undefined;
       },
     ),

@@ -13,8 +13,9 @@ import {
 } from './app.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
+import { classifyProblem, needsReconnect, ProblemText } from './problems.js';
 import { PromptList, RiskBadge } from './setup-guide.js';
-import { Icon } from './ui.js';
+import { fmtAgo, fmtDate, Icon } from './ui.js';
 
 /**
  * One connected account: its state, what the AI may do with it (each action on or off), its
@@ -23,7 +24,18 @@ import { Icon } from './ui.js';
 export interface AccountPageView {
   account: AccountView;
   createdAt: Date;
-  tools: { name: string; title: string; description: string; risk: RiskLevel; enabled: boolean }[];
+  tools: {
+    name: string;
+    title: string;
+    description: string;
+    risk: RiskLevel;
+    enabled: boolean;
+    /** Under the rule in force for this account: not allowed at all, or waits for the user's OK. */
+    blocked: boolean;
+    asks: boolean;
+  }[];
+  /** Calls of this account in the last 30 days, and how many of them failed. */
+  usage: { calls: number; errors: number };
   rule: { access: AccessLevel | null; confirm: ConfirmLevel | null };
   defaults: { access: AccessLevel; confirm: ConfirmLevel };
   prompts: string[];
@@ -54,6 +66,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
   const reconnect = `/connect/${encodeURIComponent(a.connectorId)}?account=${encodeURIComponent(a.id)}&returnTo=${encodeURIComponent(base)}`;
   const on = view.tools.filter((x) => x.enabled).length;
   const broken = a.enabled && a.status !== 'active';
+  const reconnectFirst = broken && needsReconnect(classifyProblem(a.statusMessage, a.status));
   return (
     <AppShell ctx={ctx} shell={shell} section="services" title={a.label}>
       <PageHead
@@ -67,15 +80,24 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
           <span class="acc-head-sub">
             <AccountStatus t={t} a={a} /> {a.service}
             {a.identity ? ` · ${a.identity}` : ''}
+            {' · '}
+            {a.lastUsedAt
+              ? t('app.account.lastUsed', { ago: fmtAgo(lang, a.lastUsedAt) })
+              : t('app.account.neverUsed')}
+            {view.usage.calls
+              ? ` · ${t('app.account.calls30', { n: view.usage.calls, errors: view.usage.errors })}`
+              : ''}
           </span>
         }
         actions={
           <div class="row">
             <form method="post" action={`${base}/test`} class="inline">
               <Hidden values={back} />
-              <button type="submit">{t('app.acc.test')}</button>
+              <button type="submit" class={broken && !reconnectFirst ? 'primary' : undefined}>
+                {broken ? t('problem.checkAgain') : t('app.acc.test')}
+              </button>
             </form>
-            <a class={broken ? 'btn primary' : 'btn'} href={reconnect}>
+            <a class={reconnectFirst ? 'btn primary' : 'btn'} href={reconnect}>
               <Icon name="refresh" /> {t('app.acc.reconnect')}
             </a>
           </div>
@@ -87,7 +109,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
           <strong>
             {t(a.status === 'needs_reauth' ? 'app.account.reauthTitle' : 'app.account.errorTitle')}
           </strong>{' '}
-          {a.statusMessage ?? ''} <a href={reconnect}>{t('app.acc.reconnect')}</a>
+          <ProblemText t={t} message={a.statusMessage} status={a.status} details />
         </div>
       ) : null}
       {!a.enabled ? <div class="notice">{t('app.account.pausedNote')}</div> : null}
@@ -116,7 +138,18 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
                       <span class="tool-title">{tool.title}</span>
                       <span class="small muted">{tool.description}</span>
                     </span>
-                    <RiskBadge t={t} risk={tool.risk} />
+                    <span class="tool-flags">
+                      <RiskBadge t={t} risk={tool.risk} />
+                      {tool.blocked ? (
+                        <span class="badge" title={t('app.account.blockedHint')}>
+                          {t('app.account.blocked')}
+                        </span>
+                      ) : tool.asks ? (
+                        <span class="badge accent" title={t('app.account.asksHint')}>
+                          <Icon name="lock" /> {t('app.account.asks')}
+                        </span>
+                      ) : null}
+                    </span>
                   </label>
                 </li>
               ))}
@@ -194,7 +227,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
                 </tr>
                 <tr>
                   <th>{t('app.account.added')}</th>
-                  <td>{view.createdAt.toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US')}</td>
+                  <td>{fmtDate(lang, view.createdAt)}</td>
                 </tr>
               </tbody>
             </table>

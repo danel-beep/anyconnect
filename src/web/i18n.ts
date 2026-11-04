@@ -3,6 +3,7 @@ import { appEn, appRu } from './i18n/app.js';
 import { authEn, authRu } from './i18n/auth.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
+import { problemsEn, problemsRu } from './i18n/problems.js';
 import { siteEn, siteRu } from './i18n/site.js';
 
 export type Locale = 'ru' | 'en';
@@ -32,8 +33,9 @@ const coreEn = {
   'home.security': 'Security',
   'security.title': 'Security',
   'security.home': 'Home',
+  'security.sub': 'Two-step sign-in and passkeys for {email}.',
   'security.reauthNeeded':
-    'To change these settings, confirm your sign-in first (required every 10 minutes).',
+    'To change these settings, confirm your sign-in first. It stays confirmed for 10 minutes.',
   'security.reauth': 'Confirm sign-in',
   'security.required':
     'This hub requires a second factor. Set up an authenticator app or a passkey to continue.',
@@ -127,7 +129,7 @@ const coreEn = {
   'confirm.status.expired': '⌛ Expired without an answer',
   'risk.read': 'Reads',
   'risk.write': 'Makes changes',
-  'risk.dangerous': 'Sensitive',
+  'risk.dangerous': 'Risky',
   'home.telegram': 'Telegram for confirmations',
   'home.telegramLinked': 'Linked: {label}',
   'home.telegramNotLinked': 'Not linked: confirmations only via the web page.',
@@ -141,7 +143,7 @@ const coreEn = {
   'connect.reconnected': '{service} account “{label}” is reconnected.',
   'connect.identity': 'Signed in as {identity}.',
   'connect.aiHint': 'Your connected AI apps see it on their next request.',
-  'connect.testFailed': 'Reason: {message}. Open the account settings to fix it.',
+  'connect.testFailed': 'Open the account settings to fix it.',
   'connect.formTitle': 'Connect {service}',
   'connect.back': 'Back to services',
   'connect.formLabelPlaceholder': 'For example, Work',
@@ -184,7 +186,16 @@ const coreEn = {
   'home.manageHint': 'Accounts are managed through the REST API or CLI for now; the web panel comes next.',
 } as const;
 
-const en = { ...coreEn, ...siteEn, ...appEn, ...authEn, ...connectEn, ...accountEn, ...confirmEn } as const;
+const en = {
+  ...coreEn,
+  ...siteEn,
+  ...appEn,
+  ...authEn,
+  ...connectEn,
+  ...accountEn,
+  ...confirmEn,
+  ...problemsEn,
+} as const;
 
 export type Key = keyof typeof en;
 
@@ -213,7 +224,9 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'home.security': 'Безопасность',
   'security.title': 'Безопасность',
   'security.home': 'На главную',
-  'security.reauthNeeded': 'Чтобы изменить эти настройки, сначала подтвердите вход (нужно раз в 10 минут).',
+  'security.sub': 'Двухэтапный вход и ключи доступа для {email}.',
+  'security.reauthNeeded':
+    'Чтобы изменить эти настройки, сначала подтвердите вход. Подтверждение действует 10 минут.',
   'security.reauth': 'Подтвердить вход',
   'security.required':
     'Здесь обязателен второй фактор. Настройте приложение-аутентификатор или ключ доступа, чтобы продолжить.',
@@ -309,7 +322,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'confirm.status.expired': '⌛ Истекло без ответа',
   'risk.read': 'Читает',
   'risk.write': 'Вносит изменения',
-  'risk.dangerous': 'Чувствительное',
+  'risk.dangerous': 'Рискованное',
   'home.telegram': 'Telegram для подтверждений',
   'home.telegramLinked': 'Подключён: {label}',
   'home.telegramNotLinked': 'Не подключён: подтверждения только через веб-страницу.',
@@ -323,7 +336,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'connect.reconnected': 'Аккаунт {service} «{label}» переподключён.',
   'connect.identity': 'Вход выполнен как {identity}.',
   'connect.aiHint': 'Ваши ИИ-приложения увидят его при следующем запросе.',
-  'connect.testFailed': 'Причина: {message}. Исправить можно в настройках аккаунта.',
+  'connect.testFailed': 'Исправить можно в настройках аккаунта.',
   'connect.formTitle': 'Подключение: {service}',
   'connect.back': 'К сервисам',
   'connect.formLabelPlaceholder': 'Например, Работа',
@@ -374,6 +387,7 @@ const ru: Record<Key, string> = {
   ...connectRu,
   ...accountRu,
   ...confirmRu,
+  ...problemsRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
