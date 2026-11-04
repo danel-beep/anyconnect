@@ -90,3 +90,21 @@ if(pick)pick.addEventListener('change',update);if(mail)mail.addEventListener('in
    does not post the form again. */
 var clean=d.querySelector('[data-replace-url]');if(clean&&history.replaceState)history.replaceState(null,'',clean.getAttribute('data-replace-url'));
 })();`;
+
+/**
+ * The Paddle checkout page (`/billing/paddle/checkout`): opens Paddle's overlay for the transaction
+ * the hub created. Paddle.js itself comes from Paddle's CDN; this file only passes it our settings
+ * from data attributes (the page CSP allows no inline scripts).
+ */
+export const PADDLE_CHECKOUT_JS = `(function(){
+'use strict';
+var el=document.getElementById('paddle-checkout');if(!el)return;
+var P=window.Paddle;if(!P){el.setAttribute('data-failed','');return}
+var data=el.dataset,done=false;
+if(data.sandbox==='1')P.Environment.set('sandbox');
+P.Initialize({token:data.token,checkout:{settings:{displayMode:'overlay',successUrl:data.success,locale:data.lang,allowLogout:false}},
+eventCallback:function(e){if(!e||!e.name)return;if(e.name==='checkout.completed')done=true;if(e.name==='checkout.closed')location.href=done?data.success:data.back}});
+var q=new URLSearchParams(location.search);
+/* Links Paddle sends itself (default payment link with _ptxn) are opened by Paddle.js. */
+if(data.txn&&!q.get('_ptxn')){var opts={transactionId:data.txn};if(data.email)opts.customer={email:data.email};P.Checkout.open(opts)}
+})();`;
