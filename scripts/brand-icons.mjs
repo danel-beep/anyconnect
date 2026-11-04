@@ -48,6 +48,10 @@ const SLUGS = [
   'calendly',
   'intercom',
   'zendesk',
+  'sentry',
+  'typeform',
+  'wordpress',
+  'mailchimp',
 ];
 
 const out = {};

@@ -7,10 +7,12 @@ import {
   type InboundAttachment,
   type InboundMessage,
   type MessagingPort,
+  type OutboundJob,
+  type TemplateMessage,
 } from '../messaging.js';
 import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
 import { deliveryFetch, readJson, secretsEqual } from '../messaging-http.js';
-import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js';
+import { type AccountContext, type ActionFactory, ConnectorError, defineConnector } from '../sdk.js';
 
 const config = z.object({
   mode: z
@@ -238,10 +240,251 @@ function verifySignature(body: string, header: string | undefined, appSecret: st
   return secretsEqual(header?.toLowerCase(), expected);
 }
 
+function messageContent(job: OutboundJob) {
+  if (!job.template) return { type: 'text', text: { body: job.text, preview_url: false } };
+  const parameters = job.template.parameters ?? [];
+  return {
+    type: 'template',
+    template: {
+      name: job.template.name,
+      language: { code: job.template.language },
+      ...(parameters.length
+        ? {
+            components: [
+              {
+                type: 'body',
+                parameters: parameters.map((p) => ({
+                  type: 'text',
+                  text: p.value,
+                  ...(p.name ? { parameter_name: p.name } : {}),
+                })),
+              },
+            ],
+          }
+        : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Message templates
+// ---------------------------------------------------------------------------
+
+interface WaTemplateComponent {
+  type: string;
+  format?: string;
+  text?: string;
+  buttons?: { type?: string; text?: string; url?: string }[];
+}
+interface WaTemplate {
+  name: string;
+  language: string;
+  status?: string;
+  category?: string;
+  parameter_format?: string;
+  components?: WaTemplateComponent[];
+}
+
+const PLACEHOLDER = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
+
+/** Variable names of a template text in order of first appearance ("1", "2" or named). */
+export function templateVariables(text: string | undefined): string[] {
+  return [...new Set([...(text ?? '').matchAll(PLACEHOLDER)].map((m) => m[1]!))];
+}
+
+/** What a template needs that the hub cannot fill yet (media headers, header or button variables). */
+function unsupportedParts(template: WaTemplate): string | undefined {
+  for (const c of template.components ?? []) {
+    const type = c.type.toUpperCase();
+    if (type === 'HEADER' && c.format && c.format.toUpperCase() !== 'TEXT')
+      return `a ${c.format.toLowerCase()} header`;
+    if (type === 'HEADER' && templateVariables(c.text).length) return 'header variables';
+    if (type === 'BUTTONS' && c.buttons?.some((b) => templateVariables(b.url).length))
+      return 'button variables';
+  }
+  return undefined;
+}
+
+function templateBody(template: WaTemplate): string {
+  return template.components?.find((c) => c.type.toUpperCase() === 'BODY')?.text ?? '';
+}
+
+/** The text a template sends, for the hub's copy of the chat. */
+export function renderTemplate(template: WaTemplate, values: string[]): string {
+  const names = templateVariables(templateBody(template));
+  const header = template.components?.find((c) => c.type.toUpperCase() === 'HEADER')?.text;
+  const body = templateBody(template).replace(
+    PLACEHOLDER,
+    (_, name: string) => values[names.indexOf(name)] ?? '',
+  );
+  return [header, body].filter(Boolean).join('\n\n');
+}
+
+function wabaId(ctx: Ctx): string {
+  if (!ctx.config.wabaId) {
+    throw new ConnectorError(
+      'invalid_input',
+      'Templates need the WhatsApp Business Account ID: add it in the account settings.',
+    );
+  }
+  return ctx.config.wabaId;
+}
+
+const TEMPLATE_FIELDS = 'name,language,status,category,parameter_format,components';
+
+async function fetchTemplates(ctx: Ctx, name?: string): Promise<WaTemplate[]> {
+  const query = new URLSearchParams({ fields: TEMPLATE_FIELDS, limit: '100', ...(name ? { name } : {}) });
+  const page = await callGraphForAction<{ data?: WaTemplate[] }>(
+    ctx,
+    'GET',
+    `${wabaId(ctx)}/message_templates?${query}`,
+  );
+  return (page.data ?? []).filter((t) => !name || t.name === name);
+}
+
+function templateActions(action: ActionFactory<Config, Credentials>, port: MessagingPort) {
+  return [
+    action({
+      name: 'list_templates',
+      title: 'List message templates',
+      description:
+        'Lists the approved message templates of this WhatsApp Business number with their variables. A template is the only way to write first or more than 24 hours after the person last wrote; send one with send_template.',
+      input: z.object({
+        query: z.string().trim().max(100).optional().describe('Part of the template name'),
+      }),
+      hints: { readOnly: true, openWorld: true },
+      run: async (input, ctx) => {
+        const query = input.query?.toLowerCase();
+        const templates = (await fetchTemplates(ctx)).filter(
+          (t) => (t.status ?? 'APPROVED').toUpperCase() === 'APPROVED' && (!query || t.name.includes(query)),
+        );
+        return {
+          templates: templates.map((t) => {
+            const unsupported = unsupportedParts(t);
+            return {
+              name: t.name,
+              language: t.language,
+              ...(t.category ? { category: t.category.toLowerCase() } : {}),
+              text: renderTemplate(t, []),
+              variables: templateVariables(templateBody(t)),
+              ...(unsupported ? { note: `Cannot be sent from here yet: needs ${unsupported}.` } : {}),
+            };
+          }),
+        };
+      },
+    }),
+    action({
+      name: 'send_template',
+      title: 'Send message template',
+      description:
+        "Sends an approved WhatsApp template (see list_templates) to a chat or a phone number, through the same paced queue as send. Use it to write first or after the 24-hour reply window closed. Writing to someone who never wrote to this number needs the user's explicit approval.",
+      input: z.object({
+        chat: z.string().max(64).optional().describe('Chat id from list_chats'),
+        to: z
+          .string()
+          .max(64)
+          .optional()
+          .describe('Phone number in international format, for a new conversation'),
+        template: z.string().trim().min(1).max(512).describe('Template name from list_templates'),
+        language: z
+          .string()
+          .trim()
+          .max(15)
+          .optional()
+          .describe('Template language, e.g. en_US (when it has several)'),
+        variables: z
+          .array(z.string().trim().min(1).max(1024))
+          .max(30)
+          .optional()
+          .describe('Values for the template variables, in the order list_templates gives'),
+      }),
+      hints: { readOnly: false, destructive: false, openWorld: true },
+      risk: 'dangerous',
+      assessRisk: async (input, ctx) => {
+        const known = input.chat
+          ? await port
+              .forAccount(ctx.account.id)
+              .isKnownContact(input.chat)
+              .catch(() => true)
+          : false;
+        return known
+          ? undefined
+          : { risk: 'dangerous', reason: 'First message to someone who never wrote to this WhatsApp number' };
+      },
+      run: async (input, ctx) => {
+        if (!input.chat && !input.to) throw new ConnectorError('invalid_input', 'Pass chat or to.');
+        const candidates = (await fetchTemplates(ctx, input.template)).filter(
+          (t) => (t.status ?? 'APPROVED').toUpperCase() === 'APPROVED',
+        );
+        const matching = input.language
+          ? candidates.filter((t) => t.language === input.language)
+          : candidates;
+        if (matching.length === 0) {
+          throw new ConnectorError(
+            'not_found',
+            candidates.length
+              ? `Template "${input.template}" has no approved ${input.language} version; languages: ${candidates.map((t) => t.language).join(', ')}.`
+              : `No approved template "${input.template}". Check list_templates.`,
+          );
+        }
+        if (matching.length > 1) {
+          throw new ConnectorError(
+            'invalid_input',
+            `Template "${input.template}" exists in several languages (${matching.map((t) => t.language).join(', ')}): pass language.`,
+          );
+        }
+        const template = matching[0]!;
+        const unsupported = unsupportedParts(template);
+        if (unsupported) {
+          throw new ConnectorError(
+            'invalid_input',
+            `Template "${template.name}" needs ${unsupported}, which cannot be sent from here yet.`,
+          );
+        }
+        const names = templateVariables(templateBody(template));
+        const values = input.variables ?? [];
+        if (values.length !== names.length) {
+          throw new ConnectorError(
+            'invalid_input',
+            `Template "${template.name}" takes ${names.length} variable(s) (${names.join(', ') || 'none'}), got ${values.length}.`,
+          );
+        }
+        const named = (template.parameter_format ?? '').toUpperCase() === 'NAMED';
+        const message: TemplateMessage = {
+          name: template.name,
+          language: template.language,
+          ...(names.length
+            ? { parameters: names.map((name, i) => ({ value: values[i]!, ...(named ? { name } : {}) })) }
+            : {}),
+        };
+        const result = await port.forAccount(ctx.account.id).send({
+          ...(input.chat ? { chatId: input.chat } : { to: input.to! }),
+          text: renderTemplate(template, values),
+          template: message,
+        });
+        if (result.status === 'failed')
+          throw new ConnectorError('upstream', `Not sent: ${result.error ?? 'unknown error'}`);
+        return {
+          id: result.messageId ?? result.jobId,
+          status: result.status,
+          ...(result.sentAt ? { date: result.sentAt } : {}),
+          ...(result.eta ? { eta: result.eta } : {}),
+          ...(result.error ? { note: result.error } : {}),
+          ...(result.status === 'uncertain'
+            ? { note: 'Delivery could not be confirmed. Check the chat with read_chat before sending again.' }
+            : {}),
+          ...(result.deduplicated ? { deduplicated: true } : {}),
+        };
+      },
+    }),
+  ];
+}
+
 const cloudTransport: DirectTransport<Config, Credentials> = {
   kind: 'direct',
   // No idempotency key in the Cloud API: an interrupted send is reported, never repeated.
   idempotentSend: false,
+  templates: true,
 
   async send(job, ctx) {
     if (job.kind === 'mark_read') {
@@ -261,8 +504,7 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: job.chat.externalId,
-        type: 'text',
-        text: { body: job.text, preview_url: false },
+        ...messageContent(job),
         ...(job.replyToExternalId ? { context: { message_id: job.replyToExternalId } } : {}),
       },
     );
@@ -427,7 +669,18 @@ export function createWhatsAppConnector(port: MessagingPort) {
             appSecret: { label: 'App Secret', hint: 'Нужен, чтобы проверять, что сообщения пришли от Meta.' },
             pacing: texts.ru.pacing,
           },
-          actions: texts.ru.actions,
+          actions: {
+            ...texts.ru.actions,
+            list_templates: {
+              title: 'Шаблоны сообщений',
+              description: 'Одобренные шаблоны номера и их переменные.',
+            },
+            send_template: {
+              title: 'Отправка шаблона',
+              description:
+                'Пишет шаблоном, когда прошло больше 24 часов или человек ещё не писал. Через ту же очередь; новому человеку — только с вашего согласия.',
+            },
+          },
         },
         en: {
           description:
@@ -473,11 +726,25 @@ export function createWhatsAppConnector(port: MessagingPort) {
             appSecret: { label: 'App Secret', hint: 'Used to check that messages really come from Meta.' },
             pacing: texts.en.pacing,
           },
-          actions: texts.en.actions,
+          actions: {
+            ...texts.en.actions,
+            list_templates: {
+              title: 'Message templates',
+              description: 'Approved templates of the number and their variables.',
+            },
+            send_template: {
+              title: 'Send a template',
+              description:
+                'Writes with a template when 24 hours have passed or the person has not written yet. Same queue; to someone new only with your approval.',
+            },
+          },
         },
       },
     },
-    actions: (action) => messengerActions(action, port, { serviceName: 'WhatsApp' }),
+    actions: (action) => [
+      ...messengerActions(action, port, { serviceName: 'WhatsApp' }),
+      ...templateActions(action, port),
+    ],
   });
 }
 
