@@ -1,9 +1,10 @@
 import type { FC } from 'hono/jsx';
 import type { AccessLevel, ConfirmLevel } from '../db/schema.js';
 import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
+import { serviceMeta } from './catalog.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { Hidden } from './ui.js';
+import { Hidden, ServiceLogo } from './ui.js';
 
 /**
  * "Rules" in the dashboard: when the AI must ask before acting, and per AI app / per account
@@ -15,6 +16,10 @@ export interface ScopedRuleView {
   id: string;
   name: string;
   detail?: string | undefined;
+  /** Accounts: their service (logo and grouping) and their own page. */
+  connectorId?: string | undefined;
+  group?: string | undefined;
+  href?: string | undefined;
   access: AccessLevel | null;
   confirm: ConfirmLevel | null;
 }
@@ -27,6 +32,8 @@ export interface RulesView {
   accounts: ScopedRuleView[];
   /** Rules this page does not edit (persona or service scoped), managed in the API. */
   otherRules: number;
+  /** The row just saved (rows save as soon as a choice changes). */
+  saved?: string | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
 
@@ -40,7 +47,8 @@ const ScopedTable: FC<{
   kind: 'app' | 'account';
   empty: string;
   defaults: { access: AccessLevel; confirm: ConfirmLevel };
-}> = ({ ctx, rows, kind, empty, defaults }) => {
+  saved?: string | undefined;
+}> = ({ ctx, rows, kind, empty, defaults, saved }) => {
   const { t } = ctx;
   // "Default" names the value it stands for, so the user sees what they would inherit.
   const inheritAccess = t('app.rules.inheritAs', { value: t(`app.rules.access.${defaults.access}` as Key) });
@@ -50,47 +58,80 @@ const ScopedTable: FC<{
   if (!rows.length) return <p class="muted">{empty}</p>;
   return (
     <div class="rule-list">
-      {rows.map((r) => (
-        <form method="post" action="/app/rules/scoped" class="rule-row">
-          <Hidden values={{ csrf: ctx.csrf, kind, id: r.id }} />
-          <div class="grow">
-            <strong>{r.name}</strong>
-            {r.detail ? <div class="small muted">{r.detail}</div> : null}
-          </div>
-          <div>
-            <label class="small muted" for={`access-${r.id}`}>
-              {t('app.rules.access')}
-            </label>
-            <select id={`access-${r.id}`} name="access">
-              <option value="" selected={r.access === null}>
-                {inheritAccess}
-              </option>
-              {ACCESSES.map((a) => (
-                <option value={a} selected={r.access === a}>
-                  {t(`app.rules.access.${a}` as Key)}
+      <div class="rule-row rule-head" aria-hidden="true">
+        <span class="grow" />
+        <span>{t('app.rules.access')}</span>
+        <span>{t('app.rules.confirm')}</span>
+        <span class="rule-save-slot" />
+      </div>
+      {rows.map((r, i) => (
+        <>
+          {r.group && r.group !== rows[i - 1]?.group ? <div class="acc-group">{r.group}</div> : null}
+          <form method="post" action="/app/rules/scoped" class="rule-row" id={`rule-${r.id}`} data-autosubmit>
+            <Hidden values={{ csrf: ctx.csrf, kind, id: r.id }} />
+            <div class="grow rule-who">
+              {r.connectorId ? (
+                <ServiceLogo
+                  icon={serviceMeta(r.connectorId)?.icon}
+                  glyph={serviceMeta(r.connectorId)?.glyph}
+                  name={r.name}
+                  size="sm"
+                />
+              ) : null}
+              <span>
+                {r.href ? (
+                  <a class="acc-link" href={r.href}>
+                    <strong>{r.name}</strong>
+                  </a>
+                ) : (
+                  <strong>{r.name}</strong>
+                )}
+                {r.detail ? <span class="small muted">{r.detail}</span> : null}
+              </span>
+            </div>
+            <div>
+              <label class="small muted rule-label" for={`access-${r.id}`}>
+                {t('app.rules.access')}
+              </label>
+              <select id={`access-${r.id}`} name="access">
+                <option value="" selected={r.access === null}>
+                  {inheritAccess}
                 </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label class="small muted" for={`confirm-${r.id}`}>
-              {t('app.rules.confirm')}
-            </label>
-            <select id={`confirm-${r.id}`} name="confirm">
-              <option value="" selected={r.confirm === null}>
-                {inheritConfirm}
-              </option>
-              {CONFIRMS.map((c) => (
-                <option value={c} selected={r.confirm === c}>
-                  {t(`app.rules.confirmShort.${c}` as Key)}
+                {ACCESSES.map((a) => (
+                  <option value={a} selected={r.access === a}>
+                    {t(`app.rules.access.${a}` as Key)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="small muted rule-label" for={`confirm-${r.id}`}>
+                {t('app.rules.confirm')}
+              </label>
+              <select id={`confirm-${r.id}`} name="confirm">
+                <option value="" selected={r.confirm === null}>
+                  {inheritConfirm}
                 </option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" class="sm">
-            {t('app.rules.save')}
-          </button>
-        </form>
+                {CONFIRMS.map((c) => (
+                  <option value={c} selected={r.confirm === c}>
+                    {t(`app.rules.confirmShort.${c}` as Key)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span class="rule-save-slot">
+              {saved === r.id ? (
+                <span class="badge ok" role="status">
+                  {t('app.rules.saved')}
+                </span>
+              ) : null}
+              {/* Choices save on change; the button is for keyboards without scripts. */}
+              <button type="submit" class="sm rule-save">
+                {t('app.rules.save')}
+              </button>
+            </span>
+          </form>
+        </>
       ))}
     </div>
   );
@@ -121,7 +162,7 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
             ))}
           </fieldset>
           <label for="undo">{t('app.rules.undo')}</label>
-          <select id="undo" name="undo">
+          <select id="undo" name="undo" class="narrow">
             {UNDO.map((n) => (
               <option value={String(n)} selected={view.undoWindowSeconds === n}>
                 {n === 0
@@ -149,23 +190,28 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
           kind="app"
           empty={t('app.rules.noApps')}
           defaults={defaults}
+          saved={view.saved}
         />
       </div>
       <div class="card">
         <h2>{t('app.rules.byAccount')}</h2>
         <p class="muted">{t('app.rules.byAccountText')}</p>
+        <p class="hint">{t('app.rules.autosave')}</p>
         <ScopedTable
           ctx={ctx}
           rows={view.accounts}
           kind="account"
           empty={t('app.rules.noAccounts')}
           defaults={defaults}
+          saved={view.saved}
         />
       </div>
-      <p class="hint">
-        {view.otherRules ? `${t('app.rules.api', { n: view.otherRules })} ` : `${t('app.rules.apiNone')} `}
-        <a href="/docs#api">{t('app.rules.apiLink')}</a>
-      </p>
+      {/* Rules made in the API (per persona or service) are not edited here: say they exist. */}
+      {view.otherRules ? (
+        <p class="hint">
+          {t('app.rules.api', { n: view.otherRules })} <a href="/docs#api">{t('app.rules.apiLink')}</a>
+        </p>
+      ) : null}
     </AppShell>
   );
 };

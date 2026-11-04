@@ -607,7 +607,8 @@ export default defineConnector({
         thread_ts: z.string().max(30).optional().describe('ts of the message to reply to in its thread'),
       }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       capability: {
         id: 'messages.send',
         mapInput: ({ chat, text, reply_to }) => ({

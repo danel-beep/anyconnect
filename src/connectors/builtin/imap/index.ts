@@ -829,7 +829,8 @@ export default defineConnector({
         replyToId: MessageId.optional().describe('Send as a reply in the thread of this message'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       capability: mailSend,
       run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
         let threading: Mail.Options = {};
@@ -853,7 +854,8 @@ export default defineConnector({
         cc: Addresses.optional().describe('Extra recipients in copy'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       run: async ({ id, body, replyAll, cc }, ctx) => {
         const { folder, uid } = decodeId(id);
         const original = await withImap(ctx, (client) => fetchMessage(client, folder, uid));
@@ -881,7 +883,8 @@ export default defineConnector({
         body: z.string().max(200_000).default('').describe('Note above the forwarded message'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       run: async ({ id, to, body }, ctx) => {
         const { folder, uid } = decodeId(id);
         const raw = await withImap(ctx, (client) => fetchRaw(client, folder, uid));

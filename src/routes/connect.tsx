@@ -21,6 +21,7 @@ import {
 import { csrfToken, safeNextPath, verifyCsrf } from '../web/http.js';
 import type { Translate } from '../web/i18n.js';
 import { ErrorPage } from '../web/pages.js';
+import { classifyProblem } from '../web/problems.js';
 import type { SessionUser } from '../web/sessions.js';
 import { type AppContext, type AppEnv, bodyParams, currentUser } from './context.js';
 import { renderInApp } from './page-helpers.js';
@@ -214,19 +215,18 @@ export function connectRoutes() {
       // A new account that cannot sign in is not kept: the form comes back with the reason, so a
       // typo does not leave a broken account behind (the user can still keep it on purpose).
       await s.accounts.delete(workspace.id, account.id);
+      const rejected = testProblem(t, fields, connectorText(connector, c.get('locale')).name, test.message);
       return renderForm(
         c,
         connector,
         {
           oauth: oauthReady,
           hidden: hiddenFrom((key) => form[key] || undefined),
-          error: t('connect.testRejected', {
-            service: connectorText(connector, c.get('locale')).name,
-            message: (test.message ?? t('error.internal')).slice(0, 300),
-          }),
-          invalid: fields.filter((f) => f.group === 'credentials' && f.required).map((f) => f.name),
+          error: rejected.message,
+          invalid: rejected.invalid,
           values: visibleValues(fields, form),
-          offerKeep: true,
+          // Keeping an account helps when the service is away for a while, not with wrong details.
+          offerKeep: rejected.keepable,
           ...(form.label ? { label: form.label } : {}),
         },
         400,
@@ -303,6 +303,48 @@ function fieldProblems(
     message: t('connect.formInvalid', { details }),
     invalid: problems.flatMap(({ field }) => (field ? [field.name] : [])),
   };
+}
+
+/**
+ * Why a new account's check failed, said by its cause: a server that cannot be reached points at
+ * the address fields (not the password), rejected details at the secrets. The service's own words
+ * stay in brackets; system error codes do not.
+ */
+function testProblem(
+  t: Translate,
+  fields: FormField[],
+  service: string,
+  raw: string | undefined,
+): FormProblem & { keepable: boolean } {
+  const problem = classifyProblem(raw);
+  const message = (raw ?? t('error.internal')).replace(/\.+$/, '').slice(0, 300);
+  const secrets = fields.filter((f) => f.group === 'credentials' && f.required).map((f) => f.name);
+  switch (problem.kind) {
+    case 'unreachable':
+      return {
+        message: t('problem.form.unreachable', { host: problem.host ?? service }),
+        invalid: fields
+          .filter((f) => f.group === 'config' && /host|server|url|port/i.test(f.name))
+          .map((f) => f.name),
+        keepable: true,
+      };
+    case 'signin':
+    case 'denied':
+      return {
+        message: t(`problem.form.${problem.kind}`, { service, message }),
+        invalid: secrets,
+        keepable: false,
+      };
+    case 'busy':
+    case 'service':
+      return {
+        message: t(`problem.form.${problem.kind}`, { service, message }),
+        invalid: [],
+        keepable: true,
+      };
+    default:
+      return { message: t('connect.testRejected', { service, message }), invalid: secrets, keepable: true };
+  }
 }
 
 function formError(t: Translate, fields: FormField[], error: AppError): FormProblem {

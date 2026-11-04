@@ -457,7 +457,11 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
 
     const scoped = (id: string, access: string, confirm: string) =>
       browser.request('/app/rules/scoped', { form: { csrf: csrf!, kind: 'account', id, access, confirm } });
-    expect((await scoped(account.id, 'read', '')).status).toBe(303);
+    const saved = await scoped(account.id, 'read', '');
+    expect(saved.status).toBe(303);
+    // Rows save on change: the page comes back at the row, marked as saved.
+    expect(saved.headers.get('location')).toBe(`/app/rules?saved=${account.id}#rule-${account.id}`);
+    expect(await (await browser.request(`/app/rules?saved=${account.id}`)).text()).toContain('Сохранено');
     const rules = await hub.services.policies.listRules(ws.id);
     expect(rules).toEqual([
       expect.objectContaining({ accountId: account.id, access: 'read', confirm: null }),
@@ -502,8 +506,24 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const overview = await (await admin.request('/admin')).text();
     expect(overview).toContain('Запросы тарифа');
     expect(overview).toContain('payer@example.com');
+    // The admin sidebar counts the request; the user's page has the plan form filled in for it.
+    expect(overview).toMatch(/href="\/admin"[\s\S]*?<span class="count"[^>]*><span aria-hidden="true">1</);
     const userPage = `/admin/users/${user.id}`;
-    const { csrf: adminCsrf } = await hiddenOf(admin, userPage);
+    const detail = await (await admin.request(userPage)).text();
+    expect(detail).toContain('<option value="pro" selected="">');
+    expect(detail).toMatch(/name="until" value="\d{4}-\d\d-\d\d"/);
+    const { csrf: adminCsrf } = TestBrowser.hiddenInputs(detail);
+
+    // Declining closes it without touching the plan, and the admin log says so.
+    const declined = await admin.request(`${userPage}/request/decline`, { form: { csrf: adminCsrf! } });
+    expect(declined.status).toBe(303);
+    expect(await hub.services.entitlements.openRequest(ws.id)).toBeUndefined();
+    expect((await hub.services.entitlements.summary(ws.id)).plan.id).toBe('free');
+    expect(await (await admin.request('/admin/audit')).text()).toContain('Запрос тарифа отклонён');
+    expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+
+    // Setting a plan closes an open request too.
+    await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });
     await admin.request(`${userPage}/plan`, { form: { csrf: adminCsrf!, plan: 'pro', until: '', note: '' } });
     expect(await hub.services.entitlements.openRequest(ws.id)).toBeUndefined();
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
@@ -520,13 +540,15 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
       [ws.id],
     );
     const first = await (await browser.request('/app/activity')).text();
-    expect(first).toContain('demo_call_1<');
-    expect(first).not.toContain('demo_call_31<');
+    // A tool the service does not list is shown by its name in words; the exact name is the tooltip.
+    expect(first).toContain('>Call 1<');
+    expect(first).toContain('title=\"demo_call_1\"');
+    expect(first).not.toContain('title=\"demo_call_31\"');
     const more = first.match(/href="(\/app\/activity\?before=[^"#]+)#log"/)![1]!.replaceAll('&amp;', '&');
     const second = await (await browser.request(more)).text();
-    expect(second).toContain('demo_call_31<');
-    expect(second).toContain('demo_call_35<');
-    expect(second).not.toContain('demo_call_30<');
+    expect(second).toContain('title=\"demo_call_31\"');
+    expect(second).toContain('title=\"demo_call_35\"');
+    expect(second).not.toContain('title=\"demo_call_30\"');
     expect(second).not.toContain('?before=');
   });
 

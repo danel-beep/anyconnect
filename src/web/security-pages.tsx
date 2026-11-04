@@ -114,7 +114,7 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
       <div class="page-head">
         <div>
           <h1>{t('security.title')}</h1>
-          <p>{view.email}</p>
+          <p>{t('security.sub', { email: view.email })}</p>
         </div>
       </div>
       {view.required ? <div class="warning">{t('security.required')}</div> : null}
@@ -124,151 +124,157 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
         </p>
       ) : null}
       {view.recent ? null : (
-        <div class="warning small">
-          {t('security.reauthNeeded')} <a href={view.reauthUrl}>{t('security.reauth')}</a>
+        <div class="notice reauth-row">
+          <span class="grow">{t('security.reauthNeeded')}</span>
+          <a class="btn primary" href={view.reauthUrl}>
+            {t('security.reauth')}
+          </a>
         </div>
       )}
 
-      <div class="card" id="totp">
-        <h2>
-          {t('security.totp')}{' '}
-          <span class={view.totp.enabled ? 'badge ok' : 'badge'}>
-            {view.totp.enabled ? t('security.on') : t('security.off')}
-          </span>
-        </h2>
-        <p class="small muted">{t('security.totpHint')}</p>
-        {view.totp.enabled ? (
-          <form method="post" action="/security/totp/disable">
-            <Hidden />
-            <button class="danger" type="submit">
-              {t('security.totpDisable')}
-            </button>
-          </form>
-        ) : view.totp.enrollment ? (
-          <>
-            <p>{t('security.totpScan')}</p>
-            <QrCode text={view.totp.enrollment.uri} label={t('security.totpLink')} />
-            <label for="totp-secret">{t('security.totpSecret')}</label>
-            <input id="totp-secret" type="text" readonly value={view.totp.enrollment.secret} />
-            <p class="small">
-              <a href={view.totp.enrollment.uri}>{t('security.totpLink')}</a>
-            </p>
-            <form method="post" action="/security/totp/confirm">
+      {/* Until the sign-in is confirmed, every control here is visibly off rather than failing on click. */}
+      <fieldset class="lock-group" disabled={!view.recent}>
+        <div class="card" id="totp">
+          <h2>
+            {t('security.totp')}{' '}
+            <span class={view.totp.enabled ? 'badge ok' : 'badge'}>
+              {view.totp.enabled ? t('security.on') : t('security.off')}
+            </span>
+          </h2>
+          <p class="small muted">{t('security.totpHint')}</p>
+          {view.totp.enabled ? (
+            <form method="post" action="/security/totp/disable">
               <Hidden />
-              <label for="totp-code">{t('security.totpCode')}</label>
-              <input
-                id="totp-code"
-                type="text"
-                name="code"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                required
-              />
-              {view.totp.error ? <p class="error">{view.totp.error}</p> : null}
-              <div class="actions">
-                <button class="primary" type="submit">
-                  {t('security.totpConfirm')}
-                </button>
-              </div>
+              <button class="danger" type="submit">
+                {t('security.totpDisable')}
+              </button>
             </form>
-          </>
-        ) : (
-          <form method="post" action="/security/totp/setup">
-            <Hidden />
-            <button class="primary" type="submit">
-              {t('security.totpSetup')}
-            </button>
-          </form>
-        )}
-      </div>
+          ) : view.totp.enrollment ? (
+            <>
+              <p>{t('security.totpScan')}</p>
+              <QrCode text={view.totp.enrollment.uri} label={t('security.totpLink')} />
+              <label for="totp-secret">{t('security.totpSecret')}</label>
+              <input id="totp-secret" type="text" readonly value={view.totp.enrollment.secret} />
+              <p class="small">
+                <a href={view.totp.enrollment.uri}>{t('security.totpLink')}</a>
+              </p>
+              <form method="post" action="/security/totp/confirm">
+                <Hidden />
+                <label for="totp-code">{t('security.totpCode')}</label>
+                <input
+                  id="totp-code"
+                  type="text"
+                  name="code"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  required
+                />
+                {view.totp.error ? <p class="error">{view.totp.error}</p> : null}
+                <div class="actions">
+                  <button class="primary" type="submit">
+                    {t('security.totpConfirm')}
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <form method="post" action="/security/totp/setup">
+              <Hidden />
+              <button class="primary" type="submit">
+                {t('security.totpSetup')}
+              </button>
+            </form>
+          )}
+        </div>
 
-      <div class="card" id="passkeys">
-        <h2>{t('security.passkeys')}</h2>
-        <p class="small muted">{t('security.passkeysHint')}</p>
-        {view.passkeys.length === 0 ? (
-          <p class="muted">{t('security.passkeysNone')}</p>
-        ) : (
-          <ul class="plain">
-            {view.passkeys.map((p) => (
-              <li>
-                <span>
-                  <strong>{p.name}</strong>
-                  <span class="small muted">
-                    {' '}
-                    · {t('security.passkeyAdded')} {fmt(p.createdAt)} · {t('home.lastUsed')}:{' '}
-                    {p.lastUsedAt ? fmt(p.lastUsedAt) : t('home.never')}
-                    {p.backedUp ? ` · ${t('security.passkeySynced')}` : ''}
+        <div class="card" id="passkeys">
+          <h2>{t('security.passkeys')}</h2>
+          <p class="small muted">{t('security.passkeysHint')}</p>
+          {view.passkeys.length === 0 ? (
+            <p class="muted">{t('security.passkeysNone')}</p>
+          ) : (
+            <ul class="plain">
+              {view.passkeys.map((p) => (
+                <li>
+                  <span>
+                    <strong>{p.name}</strong>
+                    <span class="small muted">
+                      {' '}
+                      · {t('security.passkeyAdded')} {fmt(p.createdAt)} · {t('home.lastUsed')}:{' '}
+                      {p.lastUsedAt ? fmt(p.lastUsedAt) : t('home.never')}
+                      {p.backedUp ? ` · ${t('security.passkeySynced')}` : ''}
+                    </span>
                   </span>
-                </span>
-                <span class="row">
-                  <form class="row" method="post" action={`/security/passkeys/${p.id}/rename`}>
-                    <Hidden />
-                    <input
-                      type="text"
-                      name="name"
-                      required
-                      maxlength={64}
-                      value={p.name}
-                      aria-label={t('security.passkeyName')}
-                    />
-                    <button type="submit">{t('security.passkeyRename')}</button>
-                  </form>
-                  <form class="inline" method="post" action={`/security/passkeys/${p.id}/delete`}>
-                    <Hidden />
-                    <button class="danger" type="submit">
-                      {t('security.passkeyDelete')}
-                    </button>
-                  </form>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p class="small muted" data-role="passkey-unsupported">
-          {t('security.passkeyUnsupported')}
-        </p>
-        <PasskeyForm
-          mode="register"
-          options="/security/passkeys/options"
-          action="/security/passkeys"
-          error={t('passkey.failed')}
-          hidden={hidden}
-        >
-          <label for="passkey-name">{t('security.passkeyName')}</label>
-          <input
-            id="passkey-name"
-            type="text"
-            name="name"
-            maxlength={64}
-            placeholder={t('security.passkeyDefaultName')}
-          />
-          <div class="actions start">
-            <button class="primary" type="submit">
-              {t('security.passkeyAdd')}
-            </button>
-          </div>
-        </PasskeyForm>
-      </div>
+                  <span class="row">
+                    <form class="row" method="post" action={`/security/passkeys/${p.id}/rename`}>
+                      <Hidden />
+                      <input
+                        type="text"
+                        name="name"
+                        required
+                        maxlength={64}
+                        value={p.name}
+                        aria-label={t('security.passkeyName')}
+                      />
+                      <button type="submit">{t('security.passkeyRename')}</button>
+                    </form>
+                    <form class="inline" method="post" action={`/security/passkeys/${p.id}/delete`}>
+                      <Hidden />
+                      <button class="danger" type="submit">
+                        {t('security.passkeyDelete')}
+                      </button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p class="small muted" data-role="passkey-unsupported">
+            {t('security.passkeyUnsupported')}
+          </p>
+          <PasskeyForm
+            mode="register"
+            options="/security/passkeys/options"
+            action="/security/passkeys"
+            error={t('passkey.failed')}
+            hidden={hidden}
+          >
+            <label for="passkey-name">{t('security.passkeyName')}</label>
+            <input
+              id="passkey-name"
+              type="text"
+              name="name"
+              maxlength={64}
+              placeholder={t('security.passkeyDefaultName')}
+            />
+            <div class="actions start">
+              <button class="primary" type="submit">
+                {t('security.passkeyAdd')}
+              </button>
+            </div>
+          </PasskeyForm>
+        </div>
 
-      <div class="card" id="recovery">
-        <h2>{t('security.recovery')}</h2>
-        <p class="small muted">{t('security.recoveryHint')}</p>
-        {view.hasFactor ? (
-          <>
-            <p>
-              {view.recoveryCodes > 0
-                ? t('security.recoveryLeft', { count: view.recoveryCodes })
-                : t('security.recoveryNone')}
-            </p>
-            <form method="post" action="/security/recovery-codes">
-              <Hidden />
-              <button type="submit">{t('security.recoveryRegenerate')}</button>
-            </form>
-          </>
-        ) : (
-          <p class="muted">{t('security.recoveryNeedsFactor')}</p>
-        )}
-      </div>
+        <div class="card" id="recovery">
+          <h2>{t('security.recovery')}</h2>
+          <p class="small muted">{t('security.recoveryHint')}</p>
+          {view.hasFactor ? (
+            <>
+              <p>
+                {view.recoveryCodes > 0
+                  ? t('security.recoveryLeft', { count: view.recoveryCodes })
+                  : t('security.recoveryNone')}
+              </p>
+              <form method="post" action="/security/recovery-codes">
+                <Hidden />
+                <button type="submit">{t('security.recoveryRegenerate')}</button>
+              </form>
+            </>
+          ) : (
+            <p class="muted">{t('security.recoveryNeedsFactor')}</p>
+          )}
+        </div>
+      </fieldset>
     </Layout>
   );
 };

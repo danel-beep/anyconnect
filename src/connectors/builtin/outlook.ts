@@ -664,7 +664,8 @@ export default defineConnector({
         replyToId: MessageId.optional().describe('Send as a reply in the conversation of this message'),
       }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       capability: mailSend,
       run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
         const fields = {
@@ -701,7 +702,8 @@ export default defineConnector({
         cc: Addresses.optional(),
       }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       run: async ({ id, body, replyAll, cc }, ctx) => {
         await api(ctx).post(`me/messages/${encodeURIComponent(id)}/${replyAll ? 'replyAll' : 'reply'}`, {
           comment: body,
@@ -716,7 +718,8 @@ export default defineConnector({
       description: 'Forwards a message with its attachments and an optional note.',
       input: z.object({ id: MessageId, to: Addresses.min(1), body: z.string().max(200_000).default('') }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       run: async ({ id, to, body }, ctx) => {
         const toRecipients = recipients(to);
         await api(ctx).post(`me/messages/${encodeURIComponent(id)}/forward`, { comment: body, toRecipients });

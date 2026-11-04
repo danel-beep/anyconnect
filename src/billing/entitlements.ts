@@ -377,6 +377,15 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       .limit(limit);
   }
 
+  /** How many requests wait for an admin (the admin sidebar badge). */
+  async countOpenRequests(): Promise<number> {
+    const [row] = await this.deps.db
+      .select({ n: count() })
+      .from(planRequests)
+      .where(isNull(planRequests.closedAt));
+    return row?.n ?? 0;
+  }
+
   async closeRequests(workspaceId: string): Promise<void> {
     await this.deps.db
       .update(planRequests)

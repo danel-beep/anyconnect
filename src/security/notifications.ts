@@ -1,11 +1,18 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, gt, isNotNull } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { notificationChannels } from '../db/schema.js';
+import { notificationChannels, users } from '../db/schema.js';
 import { hashToken } from '../lib/crypto.js';
 import { newId } from '../lib/ids.js';
 
 const LINK_TTL_MS = 15 * 60_000;
+
+/** A linked Telegram chat and the language to write to it in. */
+export interface TelegramTarget {
+  chat: string;
+  /** The user's saved language, else the one of the page the chat was linked from (may be null). */
+  locale: string | null;
+}
 
 export interface ChannelStatus {
   telegram: { linked: boolean; label: string | null; linkedAt: string | null };
@@ -18,12 +25,17 @@ export interface ChannelStatus {
 export class NotificationChannels {
   constructor(private readonly db: Db) {}
 
-  /** Starts (or restarts) linking Telegram; returns the one-time code for the deep link. */
-  async startTelegramLink(userId: string): Promise<string> {
+  /**
+   * Starts (or restarts) linking Telegram; returns the one-time code for the deep link. `locale` is
+   * the language of the page the link was made on, used for the bot's messages unless the user saved
+   * a language in their settings.
+   */
+  async startTelegramLink(userId: string, locale?: string | null): Promise<string> {
     const code = randomBytes(18).toString('base64url');
     const values = {
       linkCodeHash: hashToken(code),
       linkExpiresAt: new Date(Date.now() + LINK_TTL_MS),
+      locale: locale ?? null,
     };
     await this.db
       .insert(notificationChannels)
@@ -52,10 +64,16 @@ export class NotificationChannels {
     return row?.userId;
   }
 
-  async telegramChat(userId: string): Promise<string | undefined> {
+  /** The user's linked Telegram chat with the language for it, if linked. */
+  async telegram(userId: string): Promise<TelegramTarget | undefined> {
     const [row] = await this.db
-      .select({ address: notificationChannels.address })
+      .select({
+        address: notificationChannels.address,
+        channelLocale: notificationChannels.locale,
+        userLocale: users.locale,
+      })
       .from(notificationChannels)
+      .innerJoin(users, eq(users.id, notificationChannels.userId))
       .where(
         and(
           eq(notificationChannels.userId, userId),
@@ -64,7 +82,11 @@ export class NotificationChannels {
         ),
       )
       .limit(1);
-    return row?.address ?? undefined;
+    return row?.address ? { chat: row.address, locale: row.userLocale ?? row.channelLocale } : undefined;
+  }
+
+  async telegramChat(userId: string): Promise<string | undefined> {
+    return (await this.telegram(userId))?.chat;
   }
 
   async status(userId: string): Promise<ChannelStatus> {

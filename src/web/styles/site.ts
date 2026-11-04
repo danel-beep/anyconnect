@@ -58,7 +58,7 @@ p{text-wrap:pretty}
 .demo-avatar{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#d97757;color:#fff;flex:none}
 .demo-avatar svg{width:15px;height:15px;fill:currentColor}
 .demo-status{display:inline-flex;align-items:center;gap:6px;font-weight:500;font-size:12px;color:var(--muted);padding:5px 9px;border-radius:999px;background:var(--bg-subtle)}
-.demo-input{display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;color:var(--faint,var(--muted));font-size:14px}
+.demo-input{display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;color:var(--muted);font-size:14px}
 .demo-input svg{width:16px;height:16px;flex:none}
 .demo-bar .grow{text-align:left}
 .demo-body{padding:20px;display:flex;flex-direction:column;gap:12px}

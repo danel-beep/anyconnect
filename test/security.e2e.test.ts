@@ -272,8 +272,11 @@ describe('data protection in the running hub', () => {
     expect(pendingId(resultText(await call('inbox_purge', { account: 'work' })))).toBe(id);
 
     const browser = await signIn();
-    const list = await browser.request('/confirm');
-    expect(await list.text()).toContain(`/confirm/${id}`);
+    const list = await (await browser.request('/confirm')).text();
+    expect(list).toContain(`/confirm/${id}`);
+    // The decision is right on the list, next to what the AI asked for.
+    expect(list).toContain('value="approve"');
+    expect(list).toContain('Разрешить');
     await decideOnWeb(browser, id, 'approve');
     await hub.services.pendingRunner.tick();
     expect(purged).toBe(1);
@@ -327,11 +330,15 @@ describe('data protection in the running hub', () => {
     expect((await webhook(start, 'wrong-secret')).status).toBe(401);
     expect((await webhook(start)).status).toBe(200);
     expect(await s.notificationChannels.telegramChat(userId)).toBe('555');
+    const sentToChat = () =>
+      telegram.calls.filter((c) => c.method === 'sendMessage' && c.body.chat_id === '555');
+    // The bot writes in the language of the page the chat was linked from (Russian here)...
+    expect(String(sentToChat().at(-1)!.body.text)).toContain('Готово');
 
     const id = pendingId(resultText(await call('inbox_purge', { account: 'work' })))!;
-    const sentToChat = telegram.calls.filter((c) => c.method === 'sendMessage' && c.body.chat_id === '555');
-    const ask = sentToChat.at(-1)!;
+    const ask = sentToChat().at(-1)!;
     expect(String(ask.body.text)).toContain('Inbox');
+    expect(String(ask.body.text)).toContain('Подтвердите действие');
     expect(JSON.stringify(ask.body.reply_markup)).toContain(`pc:${id}:a`);
     expect(JSON.stringify(ask.body)).not.toContain('123:test');
 
@@ -353,6 +360,14 @@ describe('data protection in the running hub', () => {
     expect(purged).toBe(1);
     expect(telegram.calls.some((c) => c.method === 'editMessageText')).toBe(true);
     expect(resultText(await call('inbox_purge', { account: 'work' }))).toContain('purged');
+
+    // ...unless the user saved a language in their settings.
+    await s.users.setProfile(userId, { locale: 'en' });
+    const again = pendingId(resultText(await call('inbox_purge', { account: 'work' })));
+    expect(again).toBeDefined();
+    expect(again).not.toBe(id);
+    expect(String(sentToChat().at(-1)!.body.text)).toContain('Confirm the action');
+    await s.users.setProfile(userId, { locale: null });
   });
 
   it('runs actions after an undo window unless the user cancels them', async () => {

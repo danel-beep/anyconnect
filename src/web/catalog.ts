@@ -65,11 +65,12 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     glyph: 'mail',
     category: 'mail',
     blurb: {
-      ru: 'Любой ящик по IMAP/SMTP: Яндекс, Mail.ru, iCloud, корпоративная почта.',
+      ru: 'Любой ящик по IMAP/SMTP: iCloud, Fastmail, Яндекс или корпоративная почта.',
       en: 'Any IMAP/SMTP mailbox: iCloud, Fastmail or your company mail.',
     },
   },
   slack: {
+    glyph: 'hash',
     category: 'messengers',
     blurb: { ru: 'Каналы, поиск по сообщениям, отправка.', en: 'Channels, message search, posting.' },
   },

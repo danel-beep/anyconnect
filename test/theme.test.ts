@@ -25,7 +25,9 @@ describe('web panel theme', () => {
   });
 
   it('uses only tokens the theme defines', () => {
-    const used = new Set([...APP_CSS.matchAll(/var\(--([\w-]+)\)/g)].map((m) => m[1]));
-    for (const token of used) expect([...THEME_TOKENS, 'radius']).toContain(token);
+    const used = new Set([...APP_CSS.matchAll(/var\(--([\w-]+)[,)]/g)].map((m) => m[1]));
+    // Besides the theme, a component may set its own properties (e.g. a brand colour per logo tile).
+    const local = new Set([...APP_CSS.matchAll(/[{;]--([\w-]+):/g)].map((m) => m[1]));
+    for (const token of used) expect([...THEME_TOKENS, 'radius', ...local]).toContain(token);
   });
 });

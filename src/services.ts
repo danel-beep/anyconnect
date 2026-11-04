@@ -5,6 +5,7 @@ import type { BillingProvider } from './billing/provider.js';
 import type { AppConfig } from './config.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
+import { actionText, connectorText } from './connectors/sdk.js';
 import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
 import { ActivityService } from './core/activity.js';
@@ -40,7 +41,7 @@ import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { AiClientService } from './security/clients.js';
-import { type CallDescription, ConfirmationCenter } from './security/confirmations.js';
+import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
 import { PendingCallService, principalOf } from './security/pending-calls.js';
 import { PERSONA_SLUG, PersonaService } from './security/personas.js';
@@ -212,9 +213,7 @@ export function createServices(
         ...(overrides.telegramFetch ? { fetch: overrides.telegramFetch } : {}),
       })
     : undefined;
-  const describeCall = async (
-    row: Parameters<ConfirmationCenter['describe']>[0],
-  ): Promise<CallDescription> => {
+  const describeCall: DescribeCall = async (row, locale) => {
     const [connector, account, client] = await Promise.all([
       row.connectorId === SETUP_CONNECTOR.id
         ? SETUP_CONNECTOR
@@ -226,8 +225,8 @@ export function createServices(
     ]);
     const action = connector?.actions.find((a) => a.name === row.action);
     return {
-      service: connector?.name ?? row.connectorId,
-      action: action?.title ?? row.action,
+      service: connector ? connectorText(connector, locale).name : row.connectorId,
+      action: connector && action ? actionText(connector, action, locale).title : row.action,
       account: account ? `${account.label} (${account.name})` : (row.accountId ?? 'settings'),
       client: client?.name ?? (row.principal.kind === 'api_token' ? 'API token' : 'AI app'),
       risk: row.risk,
@@ -240,7 +239,7 @@ export function createServices(
     bot: telegramBot,
     publicUrl: config.publicUrl,
     describe: describeCall,
-    t: translator('ru'),
+    t: translator,
     logger,
   });
   const securityStages: StageMap = {

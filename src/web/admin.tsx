@@ -1,10 +1,11 @@
 import type { FC } from 'hono/jsx';
 import { METRICS, type Metric, PLANS } from '../billing/plans.js';
-import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
+import { AccountStatus, AppShell, Flash, PageHead, type ShellInfo } from './app.js';
 import { serviceMeta } from './catalog.js';
 import type { Key, Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import {
+  CopyField,
   fmtAgo,
   fmtDate,
   fmtDay,
@@ -38,6 +39,9 @@ export interface AdminOverviewView {
   recentUsers: { id: string; email: string; name: string | null; createdAt: Date; planId: string }[];
   /** Open "switch me to this plan" requests (manual payments). */
   planRequests: { userId: string | null; email: string; planId: string; interval: string; at: Date }[];
+  /** Connected accounts across the hub that stopped working, and setup gaps on the System page. */
+  failingAccounts: number;
+  warnings: number;
 }
 
 export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminOverviewView }> = ({
@@ -53,6 +57,26 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
   return (
     <AppShell ctx={ctx} shell={shell} section="admin" title={t('admin.nav.overview')}>
       <PageHead title={t('admin.overview.title')} sub={t('admin.overview.sub')} />
+      {view.warnings || view.failingAccounts ? (
+        <div class="notice warn attention" role="status">
+          <strong>{t('admin.attention.title')}</strong>
+          <ul>
+            {view.warnings ? (
+              <li>
+                <span class="grow">{t('admin.attention.warnings', { n: view.warnings })}</span>
+                <a class="btn sm" href="/admin/system">
+                  {t('admin.attention.open')}
+                </a>
+              </li>
+            ) : null}
+            {view.failingAccounts ? (
+              <li>
+                <span class="grow">{t('admin.attention.failing', { n: view.failingAccounts })}</span>
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
       {view.planRequests.length ? (
         <div class="card">
           <h2>
@@ -70,6 +94,11 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
                     {fmtAgo(lang, r.at)}
                   </span>
                 </span>
+                {r.userId ? (
+                  <a class="btn sm primary" href={`/admin/users/${r.userId}#plan-card`}>
+                    {t('admin.requests.review')}
+                  </a>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -106,6 +135,7 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
             <span class="small muted">30 {t('admin.days')}</span>
           </div>
           <div class="chart" role="img" aria-label={t('admin.chart.calls')}>
+            {view.calls30d === 0 ? <span class="chart-empty">{t('admin.chart.none')}</span> : null}
             {view.days.map((d) => (
               <div class={`col${d.calls === 0 ? ' zero' : ''}`} title={`${d.day}: ${d.calls} / ${d.errors}`}>
                 <span class={pctClass('h', d.calls, maxCalls)} />
@@ -348,6 +378,8 @@ export interface AdminUserView extends Flashing {
   apps: number;
   workspaceId: string | null;
   plan: { id: string; until: Date | null; provider: string | null; note: string | null };
+  /** The user's open "switch me to this plan" request: the plan form is filled in for it. */
+  request?: { planId: string; interval: string; at: Date } | undefined;
   usage: {
     actions: number;
     actionsLimit: number | null;
@@ -369,6 +401,14 @@ export interface AdminUserView extends Flashing {
   accounts: { connectorId: string; label: string; name: string; status: string; enabled: boolean }[];
   audit: { action: string; actorEmail: string; details: Record<string, unknown>; createdAt: Date }[];
 }
+
+/** End of a paid period that starts today: one month or one year from now (YYYY-MM-DD, UTC). */
+const requestEnd = (interval: string, now = new Date()) => {
+  const end = new Date(now);
+  if (interval === 'year') end.setUTCFullYear(end.getUTCFullYear() + 1);
+  else end.setUTCMonth(end.getUTCMonth() + 1);
+  return end.toISOString().slice(0, 10);
+};
 
 const metricLabel = (ctx: PageCtx, m: string) =>
   (METRICS as readonly string[]).includes(m) ? ctx.t(`pricing.row.${m as Metric}`) : m;
@@ -459,6 +499,28 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
       <div class="grid-2">
         <div class="card" id="plan-card">
           <h2>{t('admin.user.plan')}</h2>
+          {view.request ? (
+            <div class="notice plan-request">
+              <p>
+                <strong>
+                  {t('admin.requests.asked', {
+                    plan: planName(ctx, view.request.planId),
+                    interval: t(
+                      view.request.interval === 'year' ? 'admin.requests.year' : 'admin.requests.month',
+                    ),
+                    when: fmtAgo(lang, view.request.at),
+                  })}
+                </strong>{' '}
+                {t('admin.requests.prefilled')}
+              </p>
+              <form method="post" action={`${base}/request/decline`} class="inline">
+                <Hidden values={csrf} />
+                <button type="submit" class="sm">
+                  {t('admin.requests.decline')}
+                </button>
+              </form>
+            </div>
+          ) : null}
           <form method="post" action={`${base}/plan`}>
             <Hidden values={csrf} />
             <div class="field-row">
@@ -466,7 +528,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
                 <label for="plan">{t('admin.users.plan')}</label>
                 <select id="plan" name="plan">
                   {PLANS.map((p) => (
-                    <option value={p.id} selected={p.id === view.plan.id}>
+                    <option value={p.id} selected={p.id === (view.request?.planId ?? view.plan.id)}>
                       {planName(ctx, p.id)}
                       {p.priceMonthly ? ` · $${p.priceMonthly}` : ''}
                     </option>
@@ -475,7 +537,16 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
               </div>
               <div>
                 <label for="until">{t('admin.user.until')}</label>
-                <input id="until" type="date" name="until" />
+                <input
+                  id="until"
+                  type="date"
+                  name="until"
+                  value={view.request ? requestEnd(view.request.interval) : ''}
+                  aria-describedby="until-hint"
+                />
+                <p class="hint" id="until-hint">
+                  {t('admin.user.untilHint')}
+                </p>
               </div>
             </div>
             <label for="note">{t('admin.user.note')}</label>
@@ -623,9 +694,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
                         <code>{`${a.connectorId}:${a.name}`}</code>
                       </div>
                     </div>
-                    <span class={`badge ${a.enabled && a.status === 'active' ? 'ok' : ''}`}>
-                      {a.enabled ? a.status : t('app.acc.off')}
-                    </span>
+                    <AccountStatus t={t} a={a} />
                   </div>
                 );
               })}
@@ -743,6 +812,7 @@ export interface AdminAuditView {
 
 const AUDIT_ACTIONS: Record<string, Key> = {
   'plan.set': 'admin.action.plan.set',
+  'plan.request.decline': 'admin.action.plan.request.decline',
   'limit.grant': 'admin.action.limit.grant',
   'limit.revoke': 'admin.action.limit.revoke',
   'user.suspend': 'admin.action.user.suspend',
@@ -777,6 +847,9 @@ function auditDetails(t: Translate, lang: Locale, action: string, d: Record<stri
       break;
     case 'limit.revoke':
       parts.push(metric(d.metric));
+      break;
+    case 'plan.request.decline':
+      parts.push(plan(d.plan));
       break;
     case 'user.sign_out':
       parts.push(
@@ -866,13 +939,37 @@ export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAud
   );
 };
 
+/** `warn`: should be fixed; `off`: an optional feature that is not turned on. */
+export interface SystemCheck {
+  label: string;
+  level: 'ok' | 'warn' | 'off';
+  detail: string;
+}
+
+/** One provider's OAuth app (Google, Microsoft, Slack…) and the services it opens. */
+export interface OAuthAppView {
+  provider: string;
+  name: string;
+  services: string[];
+  configured: boolean;
+  /** Variable prefix: `<envVar>_CLIENT_ID` and `<envVar>_CLIENT_SECRET`. */
+  envVar: string;
+  /** Every service of this provider also connects with an API key while the app is missing. */
+  formFallback: boolean;
+}
+
 export interface AdminSystemView {
   version: string;
   env: string;
   publicUrl: string;
   database: boolean;
-  checks: { label: string; ok: boolean; detail: string }[];
+  checks: SystemCheck[];
+  /** The address to register in every provider's OAuth app. */
+  redirectUri: string;
+  apps: OAuthAppView[];
 }
+
+const LEVEL_DOT = { ok: 'ok', warn: 'warn', off: 'off' } as const;
 
 export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSystemView }> = ({
   ctx,
@@ -903,7 +1000,7 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
           {view.checks.map((c) => (
             <li>
               <span class="check-label">
-                <span class={`dot ${c.ok ? 'ok' : 'bad'}`} />
+                <span class={`dot ${LEVEL_DOT[c.level]}`} />
                 <strong>{c.label}</strong>
               </span>
               <span class="small muted">{c.detail}</span>
@@ -911,6 +1008,45 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
           ))}
         </ul>
         <p class="hint pad-x">{t('admin.system.hint')}</p>
+      </div>
+      <div class="card flush" id="apps">
+        <div class="card-head pad">
+          <div>
+            <h2>{t('admin.apps.title')}</h2>
+            <p class="small muted">{t('admin.apps.sub')}</p>
+          </div>
+        </div>
+        <div class="pad-x">
+          <CopyField t={t} id="redirect-uri" value={view.redirectUri} label={t('admin.apps.redirect')} />
+          <p class="hint">{t('admin.apps.redirectHint')}</p>
+        </div>
+        <ul class="plain pad-x">
+          {view.apps.map((a) => (
+            <li>
+              <span class="check-label">
+                {/* Not set up is a choice (those services just stay unavailable), not an error. */}
+                <span class={`dot ${a.configured ? 'ok' : 'off'}`} />
+                <span>
+                  <strong>{a.name}</strong>
+                  {a.services.join() !== a.name ? (
+                    <span class="small muted d-block">{a.services.join(', ')}</span>
+                  ) : null}
+                </span>
+              </span>
+              <span class="small muted right">
+                {a.configured ? (
+                  t('admin.sys.on')
+                ) : (
+                  <>
+                    {t('admin.apps.set')} <code>{`${a.envVar}_CLIENT_ID`}</code>,{' '}
+                    <code>{`${a.envVar}_CLIENT_SECRET`}</code>
+                    {a.formFallback ? <span class="d-block">{t('admin.apps.fallback')}</span> : null}
+                  </>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
     </AppShell>
   );

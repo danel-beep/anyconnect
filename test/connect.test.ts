@@ -376,7 +376,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     expect(missing.status).toBe(400);
     const page = await missing.text();
     expect(page).toContain('Fake здесь пока не подключить');
-    expect(page).toContain('href="/admin/system"');
+    expect(page).toContain('href="/admin/system#apps"');
   });
 
   it('requires sign-in for the callback and rejects flows of other users', async () => {

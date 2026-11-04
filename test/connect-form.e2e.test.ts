@@ -24,7 +24,7 @@ const tokenOrOAuth = defineConnector({
   actions: () => [],
 });
 
-/** A service that accepts only one key: its check fails for anything else. */
+/** A service that accepts only one key: its check fails for anything else ("down": server away). */
 const picky = defineConnector({
   id: 'picky',
   name: 'Picky',
@@ -33,6 +33,7 @@ const picky = defineConnector({
   config: z.object({}),
   credentials: z.object({ key: z.string().min(1).describe('API key') }),
   async test(ctx) {
+    if (ctx.credentials.key === 'down') return { ok: false, message: 'getaddrinfo ENOTFOUND api.picky.test' };
     return ctx.credentials.key === 'right' ? { ok: true } : { ok: false, message: 'Key not valid' };
   },
   actions: () => [],
@@ -132,7 +133,7 @@ describe('connect form for services without OAuth', () => {
     expect(account).toMatchObject({ label: 'Work', config: { greeting: 'Hi' }, status: 'active' });
   });
 
-  it('does not keep a new account whose check fails, unless asked to', async () => {
+  it('does not keep a new account whose check fails, and says why in plain words', async () => {
     const { hidden } = await openForm('/connect/picky');
     const send = (key: string, extra: Record<string, string> = {}) =>
       browser.request('/connect/picky', {
@@ -142,9 +143,10 @@ describe('connect form for services without OAuth', () => {
     const rejected = await send('wrong');
     expect(rejected.status).toBe(400);
     const html = await rejected.text();
-    expect(html).toContain('Picky не принял эти данные: Key not valid.');
+    expect(html).toContain('Picky не принял эти данные (Key not valid).');
     expect(html).toContain('Ничего не сохранено.');
-    expect(html).toContain('name="keep" value="1"');
+    // Wrong details are fixed in the form, not kept as a broken account.
+    expect(html).not.toContain('name="keep" value="1"');
     expect(html).toContain('aria-invalid="true"');
     // The key is never sent back, and nothing is saved.
     expect(html).not.toContain('wrong');
@@ -152,8 +154,15 @@ describe('connect form for services without OAuth', () => {
       [],
     );
 
+    // A server that cannot be reached is named without the system code, and the key is not blamed.
+    const away = await (await send('down')).text();
+    expect(away).toContain('Не удалось связаться с api.picky.test');
+    expect(away).not.toContain('ENOTFOUND');
+    expect(away).not.toContain('aria-invalid="true"');
+    expect(away).toContain('name="keep" value="1"');
+
     // Kept on purpose: saved, marked as failing.
-    const kept = await send('wrong', { keep: '1' });
+    const kept = await send('down', { keep: '1' });
     expect(kept.status).toBe(200);
     expect(await kept.text()).toContain('Подключено, но проверка не прошла');
     const [account] = (await hub.services.accounts.list(workspaceId)).filter(

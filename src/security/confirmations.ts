@@ -1,6 +1,6 @@
 import type { RiskLevel } from '../db/schema.js';
 import type { Logger } from '../logger.js';
-import type { Translate } from '../web/i18n.js';
+import { DEFAULT_LOCALE, type Locale, type Translate } from '../web/i18n.js';
 import type { NotificationChannels } from './notifications.js';
 import type { PendingCallRow, PendingCallService } from './pending-calls.js';
 import { escapeHtml, type InlineButton, type TelegramBot, TelegramUpdate } from './telegram.js';
@@ -16,7 +16,17 @@ export interface CallDescription {
   reason?: string | undefined;
 }
 
-export type DescribeCall = (row: PendingCallRow) => Promise<CallDescription>;
+/** Describes a call with service and action names in `locale` where the connector has them. */
+export type DescribeCall = (row: PendingCallRow, locale: Locale) => Promise<CallDescription>;
+
+/** The first of the candidates that is a supported language ("ru-RU" counts as "ru"), else the default. */
+export function pickLocale(...candidates: (string | null | undefined)[]): Locale {
+  for (const candidate of candidates) {
+    const tag = candidate?.slice(0, 2).toLowerCase();
+    if (tag === 'ru' || tag === 'en') return tag;
+  }
+  return DEFAULT_LOCALE;
+}
 
 const PREVIEW_VALUE = 300;
 const PREVIEW_TOTAL = 1500;
@@ -33,6 +43,34 @@ export function previewArguments(args: Record<string, unknown>): string {
   };
   const text = JSON.stringify(shorten(args), null, 2);
   return text.length > PREVIEW_TOTAL ? `${text.slice(0, PREVIEW_TOTAL)}…` : text;
+}
+
+const FIELD_VALUE = 4000;
+const FIELDS = 30;
+
+/**
+ * The arguments as name and value pairs for the confirmation page, so a person reads the email
+ * they approve rather than JSON: text keeps its line breaks, a list of plain values becomes one
+ * line, anything else is pretty JSON. Long values are cut; the page is a preview, not the call.
+ */
+export function argumentFields(args: Record<string, unknown>): { name: string; value: string }[] {
+  const cut = (text: string) => (text.length > FIELD_VALUE ? `${text.slice(0, FIELD_VALUE)}…` : text);
+  const plain = (v: unknown) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+  return Object.entries(args)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .slice(0, FIELDS)
+    .map(([name, value]) => ({
+      name,
+      value: cut(
+        typeof value === 'string'
+          ? value
+          : plain(value)
+            ? String(value)
+            : Array.isArray(value) && value.every(plain)
+              ? value.join(', ')
+              : JSON.stringify(value, null, 2),
+      ),
+    }));
 }
 
 const CALLBACK = /^pc:(pcl_[0-9a-z]{26}):([adc])$/;
@@ -52,7 +90,8 @@ export class ConfirmationCenter {
       bot: TelegramBot | undefined;
       publicUrl: string;
       describe: DescribeCall;
-      t: Translate;
+      /** Texts in a language: bot messages go out in the owner's language. */
+      t: (locale: Locale) => Translate;
       logger: Logger;
     },
   ) {}
@@ -61,9 +100,9 @@ export class ConfirmationCenter {
     return this.deps.bot !== undefined;
   }
 
-  /** Human description of a call (service, action, account, AI client). */
-  describe(row: PendingCallRow): Promise<CallDescription> {
-    return this.deps.describe(row);
+  /** Human description of a call (service, action, account, AI client), by default in English. */
+  describe(row: PendingCallRow, locale: Locale = DEFAULT_LOCALE): Promise<CallDescription> {
+    return this.deps.describe(row, locale);
   }
 
   confirmUrl(id: string): string {
@@ -76,9 +115,9 @@ export class ConfirmationCenter {
     return chat ? ['telegram', 'web'] : ['web'];
   }
 
-  private async render(row: PendingCallRow): Promise<string> {
-    const { t } = this.deps;
-    const d = await this.deps.describe(row);
+  private async render(row: PendingCallRow, locale: Locale): Promise<string> {
+    const t = this.deps.t(locale);
+    const d = await this.deps.describe(row, locale);
     const heading =
       row.status === 'awaiting_confirmation'
         ? t('confirm.tg.ask')
@@ -106,8 +145,8 @@ export class ConfirmationCenter {
     return lines.join('\n');
   }
 
-  private buttons(row: PendingCallRow): InlineButton[][] {
-    const { t } = this.deps;
+  private buttons(row: PendingCallRow, locale: Locale): InlineButton[][] {
+    const t = this.deps.t(locale);
     if (row.status === 'awaiting_confirmation') {
       return [
         [
@@ -125,9 +164,14 @@ export class ConfirmationCenter {
     const { bot, channels, pending, logger } = this.deps;
     if (!bot) return;
     try {
-      const chat = await channels.telegramChat(row.principal.userId);
-      if (!chat) return;
-      const message = await bot.sendMessage(chat, await this.render(row), this.buttons(row));
+      const target = await channels.telegram(row.principal.userId);
+      if (!target) return;
+      const locale = pickLocale(target.locale);
+      const message = await bot.sendMessage(
+        target.chat,
+        await this.render(row, locale),
+        this.buttons(row, locale),
+      );
       await pending.setTelegramMessage(row.id, message);
     } catch (error) {
       logger.warn({ err: error, pendingCall: row.id }, 'telegram confirmation not delivered');
@@ -136,12 +180,13 @@ export class ConfirmationCenter {
 
   /** Updates the Telegram message after the call changed state (decided, ran, cancelled). */
   async refresh(id: string): Promise<void> {
-    const { bot, pending, logger } = this.deps;
+    const { bot, channels, pending, logger } = this.deps;
     if (!bot) return;
     const row = await pending.get(id);
     if (!row?.telegramMessage) return;
     try {
-      await bot.editMessage(row.telegramMessage, await this.render(row), this.buttons(row));
+      const locale = pickLocale((await channels.telegram(row.principal.userId))?.locale);
+      await bot.editMessage(row.telegramMessage, await this.render(row, locale), this.buttons(row, locale));
     } catch (error) {
       logger.debug({ err: error, pendingCall: id }, 'telegram message not updated');
     }
@@ -160,7 +205,7 @@ export class ConfirmationCenter {
 
   /** Handles an update delivered to the webhook (already authenticated by its secret token). */
   async handleTelegramUpdate(raw: unknown): Promise<void> {
-    const { bot, channels, pending, t, logger } = this.deps;
+    const { bot, channels, pending, logger } = this.deps;
     if (!bot) return;
     const parsed = TelegramUpdate.safeParse(raw);
     if (!parsed.success) return;
@@ -173,6 +218,9 @@ export class ConfirmationCenter {
       const code = text.slice('/start'.length).trim();
       const label = update.message.from?.username ? `@${update.message.from.username}` : null;
       const userId = code ? await channels.completeTelegramLink(code, chatId, label) : undefined;
+      // The user's language when linked; otherwise the one their Telegram app is set to.
+      const target = userId ? await channels.telegram(userId) : undefined;
+      const t = this.deps.t(pickLocale(target?.locale, update.message.from?.language_code));
       await bot
         .sendMessage(chatId, escapeHtml(userId ? t('confirm.tg.linked') : t('confirm.tg.linkFailed')))
         .catch((error) => logger.warn({ err: error }, 'telegram reply failed'));
@@ -182,6 +230,7 @@ export class ConfirmationCenter {
     const callback = update.callback_query;
     if (!callback?.data) return;
     const match = CALLBACK.exec(callback.data);
+    let t = this.deps.t(pickLocale(callback.from.language_code));
     const answer = (message: string) =>
       bot
         .answerCallback(callback.id, message)
@@ -190,9 +239,10 @@ export class ConfirmationCenter {
     const [, id, op] = match as unknown as [string, string, 'a' | 'd' | 'c'];
     const row = await pending.get(id);
     // Only the chat linked to the owner of this call may decide it.
-    const chat = row ? await channels.telegramChat(row.principal.userId) : undefined;
+    const target = row ? await channels.telegram(row.principal.userId) : undefined;
     const from = String(callback.message?.chat.id ?? callback.from.id);
-    if (!row || !chat || chat !== from) return void (await answer(t('confirm.tg.unknown')));
+    if (!row || !target || target.chat !== from) return void (await answer(t('confirm.tg.unknown')));
+    t = this.deps.t(pickLocale(target.locale));
     const decided = await this.decide(
       id,
       op === 'a' ? 'approve' : op === 'd' ? 'deny' : 'cancel',

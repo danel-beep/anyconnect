@@ -42,6 +42,7 @@ const ICONS = {
   terminal: 'M4 17l6-5-6-5M12 19h8',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18',
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7',
+  hash: 'M4 9h16M4 15h16M10 3 8 21M16 3l-2 18',
   braces:
     'M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1',
   zap: 'M13 2 3 14h9l-1 8 10-12h-9l1-8Z',
@@ -132,7 +133,10 @@ export const ServiceLogo: FC<{
   name: string;
   size?: 'sm' | 'lg';
 }> = ({ icon, glyph, name, size }) => (
-  <span class={`logo-tile${size ? ` ${size}` : ''}`} aria-hidden="true">
+  <span
+    class={`logo-tile${size ? ` ${size}` : ''}${icon && BRAND_ICONS[icon] ? ` branded bi-${icon}` : ''}`}
+    aria-hidden="true"
+  >
     {icon && BRAND_ICONS[icon] ? (
       <BrandIcon slug={icon} />
     ) : glyph ? (

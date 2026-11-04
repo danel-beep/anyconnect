@@ -360,7 +360,8 @@ export default defineConnector({
         replyToId: MessageId.optional().describe('Send as a reply in the thread of this message'),
       }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       capability: mailSend,
       run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
         if (!replyToId) return sendMessage(ctx, { to, cc, bcc, subject, text: body });
@@ -381,7 +382,8 @@ export default defineConnector({
         cc: Addresses.optional(),
       }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       run: async ({ id, body, replyAll, cc }, ctx) => {
         const [{ message, raw }, me] = await Promise.all([getRaw(ctx, id), profileEmail(ctx)]);
         const reply = buildReply(await parseRaw(raw), { me, body, replyAll, cc });
@@ -395,7 +397,8 @@ export default defineConnector({
       description: 'Forwards a message with all attachments (as the original email) and an optional note.',
       input: z.object({ id: MessageId, to: Addresses.min(1), body: z.string().max(200_000).default('') }),
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // Reaches other people and cannot be taken back: asks first under the default rules.
+      risk: 'dangerous',
       run: async ({ id, to, body }, ctx) => {
         const { raw } = await getRaw(ctx, id);
         const parsed = await parseRaw(raw);
