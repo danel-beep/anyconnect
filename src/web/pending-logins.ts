@@ -20,7 +20,7 @@ export class PendingLoginService {
   constructor(private readonly db: Db) {}
 
   async create(userId: string, amr: AuthMethod[]): Promise<string> {
-    const token = generateToken('ac_mfa');
+    const token = generateToken('ac_pl');
     await this.db.insert(pendingLogins).values({
       tokenHash: hashToken(token),
       userId,
@@ -31,7 +31,7 @@ export class PendingLoginService {
   }
 
   async get(token: string | undefined): Promise<PendingLogin | undefined> {
-    if (!token?.startsWith('ac_mfa_')) return undefined;
+    if (!token?.startsWith('ac_pl_')) return undefined;
     const [row] = await this.db
       .select()
       .from(pendingLogins)
@@ -42,7 +42,7 @@ export class PendingLoginService {
 
   /** Deletes and returns the pending login, so it can complete only once. */
   async consume(token: string | undefined): Promise<PendingLogin | undefined> {
-    if (!token?.startsWith('ac_mfa_')) return undefined;
+    if (!token?.startsWith('ac_pl_')) return undefined;
     const [row] = await this.db
       .delete(pendingLogins)
       .where(and(eq(pendingLogins.tokenHash, hashToken(token)), gt(pendingLogins.expiresAt, new Date())))
