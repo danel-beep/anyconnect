@@ -418,4 +418,101 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
       expect(open.filter((r) => r.action === 'update_access_profile')).toEqual([]);
     });
   });
+
+  describe('AI apps from the chat', () => {
+    let cursor: { id: string };
+    let tokenId: string;
+    const as = (app: { id: string }, credentialId?: string): Principal => ({
+      ...principal,
+      aiClientId: app.id,
+      ...(credentialId ? { credentialId } : {}),
+    });
+    const callAs = async (who: Principal, tool: string, args: Record<string, unknown> = {}) => {
+      const catalog = await hub.services.hub.getCatalog(who);
+      return hub.services.hub.callTool(who, catalog, tool, args);
+    };
+    const today = new Date().toISOString().slice(0, 10);
+
+    beforeAll(async () => {
+      cursor = await hub.services.aiClients.createUnique(workspaceId, 'Cursor', 'api_token');
+      tokenId = (
+        await hub.services.apiTokens.create({
+          workspaceId,
+          userId: principal.userId,
+          name: 'Cursor',
+          aiClientId: cursor.id,
+        })
+      ).row.id;
+      const scripts = await hub.services.personas.create(workspaceId, {
+        slug: 'scripts',
+        name: 'Scripts',
+        accountIds: [],
+      });
+      const report = await hub.services.aiClients.createUnique(workspaceId, 'Report script', 'api_token');
+      await hub.services.apiTokens.create({
+        workspaceId,
+        userId: principal.userId,
+        name: 'Report script',
+        aiClientId: report.id,
+        personaId: scripts.id,
+      });
+    });
+
+    it('lists the apps with how they connect and through which profile', async () => {
+      const data = json(await callAs(as(cursor, tokenId), 'manyplug_apps'));
+      expect(data.apps).toContainEqual({
+        app: 'Cursor',
+        id: cursor.id,
+        this_app: true,
+        kind: 'personal token',
+        connected: true,
+        connections: [{ via: 'token', since: today }],
+      });
+      expect(data.apps).toContainEqual(
+        expect.objectContaining({
+          app: 'Report script',
+          connections: [{ via: 'token', profile: 'Scripts', since: today }],
+        }),
+      );
+      expect(data.apps.find((a: { app: string }) => a.app === 'Report script')).not.toHaveProperty(
+        'this_app',
+      );
+    });
+
+    it('renames an app by name (any case) or as "this"', async () => {
+      const renamed = json(await call('manyplug_rename_app', { app: 'cursor', name: 'Cursor at work' }));
+      expect(renamed.renamed).toMatchObject({ app: 'Cursor at work', id: cursor.id });
+      const self = json(await callAs(as(cursor), 'manyplug_rename_app', { app: 'this', name: 'Cursor' }));
+      expect(self.renamed).toMatchObject({ app: 'Cursor', this_app: true });
+      // A connection with no app behind it has to name one.
+      const unlinked = await call('manyplug_rename_app', { app: 'this', name: 'X' });
+      expect(unlinked.isError).toBe(true);
+      expect(text(unlinked)).toContain('name the app');
+      const unknown = await call('manyplug_rename_app', { app: 'nope', name: 'X' });
+      expect(unknown.isError).toBe(true);
+      expect(text(unknown)).toContain('AI app "nope" not found');
+    });
+
+    it('disconnects an app only after the user confirms, keeping its rules', async () => {
+      await hub.services.policies.setScopedRule(
+        workspaceId,
+        { aiClientId: cursor.id },
+        { access: 'read', confirm: null },
+      );
+      const held = await call('manyplug_disconnect_app', { app: 'Cursor' });
+      expect(text(held)).toContain('/confirm/');
+      expect((await hub.services.apiTokens.list(workspaceId)).map((t) => t.id)).toContain(tokenId);
+      const row = (await hub.services.pendingCalls.listOpen(workspaceId)).find(
+        (r) => r.action === 'disconnect_app',
+      );
+      expect(row).toBeDefined();
+      await hub.services.pendingCalls.decide(row!.id, true, 'web');
+      await hub.services.pendingRunner.tick();
+      expect((await hub.services.apiTokens.list(workspaceId)).map((t) => t.id)).not.toContain(tokenId);
+      const after = json(await call('manyplug_apps'));
+      expect(after.apps).toContainEqual(expect.objectContaining({ app: 'Cursor', connected: false }));
+      const rules = await hub.services.policies.listRules(workspaceId);
+      expect(rules).toContainEqual(expect.objectContaining({ aiClientId: cursor.id, access: 'read' }));
+    });
+  });
 });
