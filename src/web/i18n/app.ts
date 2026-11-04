@@ -469,6 +469,9 @@ export const appEn = {
   'admin.sys.errors': 'Error tracking',
   'admin.sys.errorsBuiltin': 'built in (Errors page)',
   'admin.sys.errorsSentry': 'built in + Sentry',
+  'admin.sys.backups': 'Database backups',
+  'admin.sys.backupsOn': 'daily to {bucket}, kept {days} days (job backup.database)',
+  'admin.sys.backupsOff': "only the hosting provider's",
   'admin.apps.title': 'Sign-in apps for services',
   'admin.apps.sub':
     'Services that connect by signing in with their provider need the provider’s OAuth app. Without it the service shows as not available yet.',
@@ -1031,6 +1034,9 @@ export const appRu: Record<AppKey, string> = {
   'admin.sys.errors': 'Отслеживание ошибок',
   'admin.sys.errorsBuiltin': 'встроенное (страница «Ошибки»)',
   'admin.sys.errorsSentry': 'встроенное + Sentry',
+  'admin.sys.backups': 'Резервные копии базы',
+  'admin.sys.backupsOn': 'каждый день в {bucket}, хранятся {days} дн. (задача backup.database)',
+  'admin.sys.backupsOff': 'только у хостинга',
   'admin.apps.title': 'Приложения для входа в сервисы',
   'admin.apps.sub':
     'Сервисам, которые подключаются через вход у провайдера, нужно OAuth-приложение этого провайдера. Без него сервис показывается как «пока недоступен».',

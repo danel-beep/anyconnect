@@ -711,6 +711,16 @@ function systemChecks(c: AppContext, actorIp: string | null | undefined): System
         : `${t('admin.sys.errorsBuiltin')} · ${off('SENTRY_DSN')}`,
     },
     {
+      label: t('admin.sys.backups'),
+      level: cfg.backups ? 'ok' : 'warn',
+      detail: cfg.backups
+        ? t('admin.sys.backupsOn', {
+            bucket: `${cfg.backups.storage.bucket}/${cfg.backups.prefix}`,
+            days: cfg.backups.retentionDays,
+          })
+        : `${t('admin.sys.backupsOff')} · ${off('BACKUP_S3_ENDPOINT')}`,
+    },
+    {
       label: t('admin.sys.telegram'),
       level: s.telegramBot ? 'ok' : 'off',
       detail: s.telegramBot ? yes : off('TELEGRAM_BOT_TOKEN'),

@@ -24,6 +24,11 @@ Usage: npm run cli -- <command> [options]
   jobs:list                              Background jobs and their latest runs
   jobs:run --name JOB                    Run a background job now, in this process
   errors:list [--q resolved]             Recent errors from the built-in error tracker
+  backup:run                             Back up the database to the bucket now
+  backup:list                            Backups in the bucket, newest first
+  backup:restore --key KEY --target-url URL --yes
+                                         Restore a backup into the database at URL (replaces its
+                                         tables; prefer a new, empty database)
   users:create --email E --password P    Create a user with a personal workspace
   users:password --email E --password P  Set a user's password
   users:2fa:reset --email E              Remove a user's second factors (lost authenticator):
@@ -70,6 +75,13 @@ async function workspaceFor(services: Services, email: string | undefined) {
   return { user, workspace };
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   if (!command || command === 'help' || command === '--help') {
@@ -103,6 +115,9 @@ async function main() {
       unlimited: { type: 'boolean' },
       api: { type: 'boolean' },
       q: { type: 'string' },
+      key: { type: 'string' },
+      'target-url': { type: 'string' },
+      yes: { type: 'boolean' },
     },
   });
 
@@ -156,6 +171,38 @@ async function main() {
           );
         }
         if (groups.length === 0) console.log('No errors.');
+        break;
+      }
+      case 'backup:run':
+      case 'backup:list':
+      case 'backup:restore': {
+        const backups = services.backups;
+        if (!backups) throw new Error('Backups are not configured: set BACKUP_S3_* (see docs/OPERATIONS.md)');
+        if (command === 'backup:run') {
+          const result = await backups.run();
+          console.log(
+            `Uploaded ${result.key} (${formatBytes(result.size)}); old backups deleted: ${result.pruned}.`,
+          );
+        } else if (command === 'backup:list') {
+          const list = await backups.list();
+          for (const b of list)
+            console.log(`${b.createdAt.toISOString()}  ${formatBytes(b.size).padStart(9)}  ${b.key}`);
+          if (list.length === 0) console.log('No backups yet.');
+        } else {
+          const key = values.key;
+          const target = values['target-url'];
+          if (!key || !target) throw new Error('Pass --key (from backup:list) and --target-url');
+          const where = new URL(target);
+          if (!values.yes) {
+            throw new Error(
+              `This replaces the tables of database "${where.pathname.slice(1)}" on ${where.host}. Run again with --yes to go ahead.`,
+            );
+          }
+          await backups.restore(key, target);
+          console.log(
+            `Restored ${key} into ${where.host}${where.pathname}. Run db:migrate if this build is newer.`,
+          );
+        }
         break;
       }
       case 'keys:rotate': {
