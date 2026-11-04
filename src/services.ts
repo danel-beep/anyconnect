@@ -6,6 +6,8 @@ import { AccountService } from './core/accounts.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
 import { ConnectService } from './core/connect.js';
+import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-connectors.js';
+import { CustomServiceManager } from './core/custom-services.js';
 import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
@@ -34,7 +36,10 @@ export interface Services {
   secrets: SecretBox;
   /** Outbound network for connectors (`ctx.fetch`, `ctx.network`). */
   network: NetworkPolicy;
-  connectors: ConnectorRegistry;
+  /** Built-in connectors plus the services users defined in their workspaces. */
+  connectors: WorkspaceConnectorResolver;
+  /** Remote MCP servers and HTTP manifests added without code. */
+  customServices: CustomServiceManager;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -72,13 +77,28 @@ export function createServices(
   const database = createDatabase(config.database.url, { poolMax: config.database.poolMax });
   const db = database.db;
   const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
-  const connectors = overrides.connectors ?? createBuiltinRegistry();
+  const customStore = new CustomConnectorStore(db, logger);
+  const connectors = new WorkspaceConnectorResolver(
+    overrides.connectors ?? createBuiltinRegistry(),
+    customStore,
+  );
   const network = createNetworkPolicy({
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
   const tokens = new TokenManager({ db, secrets, apps: oauthApps, fetch: network.fetch, logger });
   const accounts = new AccountService(db, connectors, secrets, network, tokens);
+  const customServices = new CustomServiceManager({
+    db,
+    store: customStore,
+    builtin: connectors.builtin,
+    accounts,
+    apps: oauthApps,
+    fetch: network.fetch,
+    publicUrl: config.publicUrl,
+    redirectUri: `${config.publicUrl}/connect/callback`,
+    logger,
+  });
   const connect = new ConnectService({
     db,
     secrets,
@@ -88,11 +108,12 @@ export function createServices(
     tokens,
     fetch: network.fetch,
     redirectUri: `${config.publicUrl}/connect/callback`,
+    onConnected: (account) => customServices.afterAccountConnected(account),
     logger,
   });
   const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
   const jobs = new JobQueue({ connectionString: config.database.url, logger });
-  for (const job of builtinJobs({ health })) jobs.register(job);
+  for (const job of builtinJobs({ health, customServices })) jobs.register(job);
   const apiTokens = new ApiTokenService(db);
   const hub = new Hub({ db, connectors, accounts, logger, toolTimeoutMs: config.toolTimeoutMs });
   const clients = new ClientRegistry(db, {
@@ -125,6 +146,7 @@ export function createServices(
     secrets,
     network,
     connectors,
+    customServices,
     accounts,
     oauthApps,
     tokens,

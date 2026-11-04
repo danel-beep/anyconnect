@@ -111,6 +111,8 @@ REST API (`Authorization: Bearer ac_pat_...`):
 | POST | `/api/v1/connect` | начать подключение аккаунта через OAuth, ответ — `authorizationUrl` |
 | GET | `/api/v1/oauth/providers` | OAuth-провайдеры, redirect URI для их консолей, настроенные приложения |
 | GET/POST/DELETE | `/api/v1/oauth/apps[/:id]` | свои OAuth-приложения (client id + secret) |
+| GET/POST/DELETE | `/api/v1/services[/:id]` | свои сервисы без кода: внешние MCP-серверы и HTTP-манифесты |
+| POST | `/api/v1/services/:id/refresh` | обновить список инструментов внешнего MCP-сервера |
 | GET | `/api/v1/tools` | инструменты так, как их видит ИИ |
 | POST | `/api/v1/tools/:name/call` | вызвать инструмент (для отладки) |
 | GET/DELETE | `/api/v1/grants[/:id]` | подключённые ИИ-приложения |
@@ -134,6 +136,21 @@ REST API (`Authorization: Bearer ac_pat_...`):
 (GitHub, Todoist, Notion, Slack), принимают его в `credentials.token` без OAuth-приложения.
 
 ## Как добавить сервис
+
+### Внешний MCP-сервер без кода
+
+```bash
+curl -X POST https://<хаб>/api/v1/services -H "authorization: Bearer ac_pat_..." \
+  -H "content-type: application/json" \
+  -d '{"kind":"mcp","url":"https://mcp.linear.app/mcp","name":"Linear","id":"linear"}'
+```
+
+Хаб сам найдёт OAuth сервера и зарегистрируется у него как клиент; затем откройте
+`https://<хаб>/connect/linear` и войдите. Инструменты сервера появятся у ИИ как `linear_…` с
+выбором аккаунта. Сервер со статическим ключом: `"auth":"bearer"` и аккаунт с
+`credentials.token`.
+
+### Свой коннектор
 
 Подробное руководство — [docs/CONNECTORS.md](docs/CONNECTORS.md). REST-сервисы проще всего
 описывать HTTP-манифестом, без кода. Кодовый коннектор описывает сервис и его действия; про MCP,

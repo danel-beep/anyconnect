@@ -232,6 +232,8 @@ export interface OAuthProviderSpec {
   baseScopes?: string[];
   /** Extra query parameters for every authorization request, e.g. Google `access_type=offline`. */
   authorizeParams?: Record<string, string>;
+  /** Extra parameters for every token request, e.g. the RFC 8707 `resource` of an MCP server. */
+  tokenParams?: Record<string, string>;
   /** Dot path to the object holding `access_token` etc. when it is nested (Slack: `authed_user`). */
   tokenPath?: string;
   /** Where the user creates an OAuth app for this provider (shown in the panel). */

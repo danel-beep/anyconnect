@@ -1,8 +1,12 @@
+import type { CustomServiceManager } from '../core/custom-services.js';
 import type { AccountHealthService } from '../core/health.js';
 import type { JobDefinition } from './queue.js';
 
 /** Jobs every hub runs. New recurring work is added here (or registered by a feature module). */
-export function builtinJobs(deps: { health: AccountHealthService }): JobDefinition[] {
+export function builtinJobs(deps: {
+  health: AccountHealthService;
+  customServices: CustomServiceManager;
+}): JobDefinition[] {
   return [
     {
       name: 'accounts.refresh_tokens',
@@ -18,6 +22,14 @@ export function builtinJobs(deps: { health: AccountHealthService }): JobDefiniti
       cron: '17 * * * *',
       run: async () => {
         await deps.health.checkStaleAccounts();
+      },
+    },
+    {
+      name: 'services.refresh_tools',
+      description: 'Re-read the tool lists of remote MCP servers',
+      cron: '41 4 * * *',
+      run: async () => {
+        await deps.customServices.refreshAll();
       },
     },
   ];

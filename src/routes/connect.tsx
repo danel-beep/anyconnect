@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { hubClientMetadata } from '../core/custom-services.js';
 import { getDefaultWorkspace } from '../core/identity.js';
 import { badRequest } from '../lib/errors.js';
 import { safeNextPath } from '../web/http.js';
@@ -17,6 +18,14 @@ export function connectRoutes() {
   const app = new Hono<AppEnv>();
 
   const loginRedirect = (path: string) => `/login?next=${encodeURIComponent(path)}`;
+
+  /** Client ID Metadata Document: the hub's OAuth client identity for MCP servers that accept CIMD. */
+  app.get('/connect/client-metadata.json', (c) => {
+    const s = c.get('services');
+    c.header('Cache-Control', 'public, max-age=3600');
+    c.header('Access-Control-Allow-Origin', '*');
+    return c.json(hubClientMetadata(s.config.publicUrl, s.connect.redirectUri));
+  });
 
   app.get('/connect/callback', async (c) => {
     const s = c.get('services');
