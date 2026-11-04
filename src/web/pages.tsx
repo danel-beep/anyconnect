@@ -132,8 +132,9 @@ export const LoginPage: FC<{
         <h1>{title}</h1>
         {signupClosed ? null : <p class="muted">{subtitle}</p>}
         {fromApp && mode !== 'reauth' ? (
-          <div class="notice info small">
-            <Icon name="zap" /> {t('login.fromApp')}
+          <div class="notice info small with-icon">
+            <Icon name="zap" />
+            <span>{t('login.fromApp')}</span>
           </div>
         ) : null}
         {error ? (
@@ -241,68 +242,80 @@ export interface ConsentView {
   hidden: Record<string, string>;
 }
 
-export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> = ({ t, lang, view }) => (
-  <Layout title={t('consent.title', { client: view.clientName })} narrow lang={lang}>
-    <div class="card">
-      <h1>{t('consent.title', { client: view.clientName })}</h1>
-      <p>{t('consent.wants', { client: view.clientName })}</p>
-      <p class="small muted">
-        {view.verifiedDomain ? (
-          <>
-            {t('consent.verifiedDomain')}: <strong>{view.verifiedDomain}</strong>
-          </>
-        ) : (
-          t('consent.selfDeclared')
-        )}
-      </p>
-      <p class="small">
-        {t('consent.redirect')} <strong>{view.redirectHost}</strong>{' '}
-        {view.knownApp ? <span class="badge ok">{t('consent.known')}</span> : null}
-      </p>
-      {view.loopback ? <div class="warning small">{t('consent.loopback')}</div> : null}
-      {!view.loopback && !view.knownApp ? <div class="warning small">{t('consent.unknown')}</div> : null}
-      <p>
-        <strong>{t('consent.access')}</strong>
-      </p>
-      <ul class="bullets">
-        <li>{t('consent.access.mcp', { count: view.activeAccounts })}</li>
-        <li>{t('consent.access.offline')}</li>
-      </ul>
-      {view.persona ? (
-        <p class="small">
-          {t('consent.persona')}: <strong>{view.persona.name}</strong> ({view.persona.slug}) ·{' '}
-          {t('consent.personaHint')}
+/**
+ * The approval window an AI app opens. It fits one screen (no scrolling): who asks and where it
+ * returns, what it may do, warnings when they apply, and the buttons. The rarely changed "remember
+ * as" choice folds away, showing the current pick.
+ */
+export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> = ({ t, lang, view }) => {
+  const picked = view.clientChoice.options.find((o) => o.value === view.clientChoice.selected);
+  const warning = view.loopback ? t('consent.loopback') : view.knownApp ? undefined : t('consent.unknown');
+  const selfDeclared = view.verifiedDomain ? undefined : t('consent.selfDeclared');
+  return (
+    <Layout title={t('consent.title', { client: view.clientName })} narrow lang={lang}>
+      <div class="card consent">
+        <h1>{t('consent.title', { client: view.clientName })}</h1>
+        <p class="consent-who">
+          {t('consent.redirect')} <strong>{view.redirectHost}</strong>{' '}
+          {view.knownApp ? <span class="badge ok">{t('consent.known')}</span> : null}
         </p>
-      ) : null}
-      <p class="small muted">
-        {t('consent.workspace')}: {view.workspaceName} · {t('consent.signedInAs', { email: view.email })}
-      </p>
-      <form method="post" action="/oauth/authorize">
-        <input type="hidden" name="csrf" value={view.csrf} />
-        {Object.entries(view.hidden).map(([name, value]) => (
-          <input type="hidden" name={name} value={value} />
-        ))}
-        <label for="ai_client">{t('consent.clientAs')}</label>
-        <select id="ai_client" name="ai_client">
-          {view.clientChoice.options.map((option) => (
-            <option value={option.value} selected={option.value === view.clientChoice.selected}>
-              {option.label}
-            </option>
+        {view.verifiedDomain ? (
+          <p class="small muted">
+            {t('consent.verifiedDomain')}: <strong>{view.verifiedDomain}</strong>
+          </p>
+        ) : null}
+        {warning ? (
+          <div class="warning small">{selfDeclared ? `${selfDeclared} ${warning}` : warning}</div>
+        ) : selfDeclared ? (
+          <p class="small muted">{selfDeclared}</p>
+        ) : null}
+        <p class="consent-can">{t('consent.access')}</p>
+        <ul class="bullets consent-list">
+          <li>{t('consent.access.mcp', { count: view.activeAccounts })}</li>
+          <li>{t('consent.access.offline')}</li>
+        </ul>
+        {view.persona ? (
+          <p class="small">
+            {t('consent.persona')}: <strong>{view.persona.name}</strong> ({view.persona.slug}) ·{' '}
+            {t('consent.personaHint')}
+          </p>
+        ) : null}
+        <form method="post" action="/oauth/authorize">
+          <input type="hidden" name="csrf" value={view.csrf} />
+          {Object.entries(view.hidden).map(([name, value]) => (
+            <input type="hidden" name={name} value={value} />
           ))}
-        </select>
-        <p class="small muted">{t('consent.clientHint')}</p>
-        <div class="actions">
-          <button type="submit" name="decision" value="deny">
-            {t('consent.deny')}
-          </button>
-          <button class="primary" type="submit" name="decision" value="approve">
-            {t('consent.approve')}
-          </button>
-        </div>
-      </form>
-      <p class="small muted">{t('consent.revokeHint')}</p>
-    </div>
-  </Layout>
-);
+          <details class="consent-as">
+            <summary>
+              {t('consent.clientAs')} <strong>{picked?.label}</strong>
+            </summary>
+            <label class="sr-only" for="ai_client">
+              {t('consent.clientAs')}
+            </label>
+            <select id="ai_client" name="ai_client">
+              {view.clientChoice.options.map((option) => (
+                <option value={option.value} selected={option.value === view.clientChoice.selected}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p class="small muted">{t('consent.clientHint')}</p>
+          </details>
+          <div class="actions">
+            <button type="submit" name="decision" value="deny">
+              {t('consent.deny')}
+            </button>
+            <button class="primary" type="submit" name="decision" value="approve">
+              {t('consent.approve')}
+            </button>
+          </div>
+        </form>
+        <p class="small muted consent-foot">
+          {t('consent.signedInAs', { email: view.email })} ({view.workspaceName}). {t('consent.revokeHint')}
+        </p>
+      </div>
+    </Layout>
+  );
+};
 
 export const fmt = (date: Date) => date.toISOString().replace('T', ' ').slice(0, 16);

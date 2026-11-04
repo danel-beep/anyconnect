@@ -25,6 +25,8 @@ p{margin:0 0 12px}
 a{color:var(--accent-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
 a:hover{text-decoration-thickness:2px}
 img,svg{max-width:100%}
+/* An icon is text-sized unless a rule sizes it: without this an unstyled icon fills its container. */
+:where(svg.i){width:1.15em;height:1.15em}
 code,kbd,pre,.mono{font-family:${MONO};font-size:.88em;font-variant-ligatures:none}
 code{background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:.08em .38em;white-space:nowrap}
 pre code{border:0;padding:0;background:none;white-space:pre}
@@ -98,6 +100,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 .notice.info{background:var(--accent-soft);border-color:var(--accent)}
 .notice.ok{background:var(--ok-soft);border-color:var(--ok)}
 .notice.bad{background:var(--danger-soft);border-color:var(--danger)}
+.notice.with-icon{display:flex;gap:10px;align-items:flex-start}
+.notice.with-icon>svg{width:17px;height:17px;flex:none;margin-top:2px;color:var(--accent-ink)}
 .item{border-top:1px solid var(--border);padding-top:16px;margin-top:16px}
 .item:first-of-type{border-top:0;padding-top:0;margin-top:0}
 
@@ -190,13 +194,29 @@ ul.codes{list-style:none;padding:0;margin:12px 0 16px;display:grid;grid-template
 ul.codes code{font-size:15px}
 
 /* Auth pages: centered card */
-.auth{min-height:100vh;display:flex;flex-direction:column}
-.auth-top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px}
-.auth main{flex:1;width:100%;max-width:440px;margin:0 auto;padding:24px 16px 64px;display:flex;flex-direction:column;justify-content:center}
+/* Sign-in style windows: one screen, the card centred between a slim top bar and footer */
+.auth{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+.auth-top{display:flex;justify-content:space-between;align-items:center;padding:14px 24px}
+.auth main{flex:1;width:100%;max-width:440px;margin:0 auto;padding:8px 16px 16px;display:flex;flex-direction:column;justify-content:center}
 .auth main.wide{max-width:760px}
-.auth .card{padding:28px}
+.auth .card{padding:26px 28px}
 .auth h1{font-size:24px}
-.auth-foot{text-align:center;padding:24px 16px;color:var(--muted);font-size:13px}
+.auth-foot{text-align:center;padding:12px 16px 16px;color:var(--muted);font-size:13px}
+.consent h1{margin-bottom:10px}
+.consent-who{margin:0 0 4px}
+.consent-can{font-weight:600;margin:14px 0 6px}
+.consent-list{margin:0 0 14px}
+.consent-list li{margin:2px 0}
+details.consent-as{border:1px solid var(--border);border-radius:10px;padding:0 12px;margin:0 0 4px;font-size:13.5px}
+details.consent-as>summary{padding:9px 24px 9px 0;font-size:inherit;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details.consent-as>summary strong{color:var(--text);font-weight:560}
+details.consent-as[open]{padding-bottom:10px}
+details.consent-as select{margin-top:2px}
+details.consent-as p{margin:6px 0 0}
+.consent .warning{padding:8px 12px;margin:8px 0 0}
+.consent-foot{margin:10px 0 0}
+@media (max-width:480px){.auth-top{padding:12px 16px}.auth main{padding:4px 12px 12px}.auth .card{padding:22px 20px}.auth h1{font-size:22px}}
+@media (max-height:740px){.auth-top{padding-top:10px;padding-bottom:10px}.auth .card{padding-top:18px;padding-bottom:18px}.auth-foot{padding:6px 16px 10px}.consent-can{margin-top:10px}.consent-list{margin-bottom:10px}}
 .auth-foot a{color:var(--muted)}
 .btn-google{background:var(--card);border-color:var(--border-strong);color:var(--text);min-height:46px;font-size:15px}
 .btn-google svg{width:18px;height:18px}
