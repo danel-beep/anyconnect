@@ -65,6 +65,20 @@ export const AddManifestServiceInput = z.object({
   manifest: z.record(z.string(), z.unknown()),
 });
 
+/** Editable fields of a remote MCP server; `toolRisk: { action: null }` removes an override. */
+export const UpdateMcpServerInput = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    description: z.string().trim().max(500),
+    instructions: z.string().trim().max(2000),
+    toolRisk: z.record(z.string(), z.enum(['read', 'write', 'dangerous']).nullable()),
+  })
+  .partial()
+  .strict();
+
+/** A manifest service is edited by replacing its manifest (the id stays the same). */
+export const UpdateManifestServiceInput = z.object({ manifest: z.record(z.string(), z.unknown()) }).strict();
+
 export const AddServiceInput = z.discriminatedUnion('kind', [AddMcpServerInput, AddManifestServiceInput]);
 export type AddServiceInput = z.input<typeof AddServiceInput>;
 
@@ -79,6 +93,8 @@ export interface ServiceView {
   toolsRefreshedAt: string | null;
   lastError: string | null;
   valid: boolean;
+  /** Remote MCP servers: risk the workspace set per action, overriding the server's annotations. */
+  toolRisk?: Record<string, string>;
   createdAt: string;
 }
 
@@ -138,6 +154,7 @@ export class CustomServiceManager {
       toolsRefreshedAt: row.toolsRefreshedAt?.toISOString() ?? null,
       lastError: row.lastError,
       valid: Boolean(connector),
+      ...(row.kind === 'mcp' ? { toolRisk: (definition.toolRisk ?? {}) as Record<string, string> } : {}),
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -437,6 +454,51 @@ export class CustomServiceManager {
     for (const row of rows) {
       await this.refreshTools(row.workspaceId, row.connectorId).catch(() => {});
     }
+  }
+
+  /** Edits a service; the change is validated by compiling it, exactly like on add. */
+  async update(workspaceId: string, connectorId: string, raw: unknown): Promise<ServiceView> {
+    const row = await this.deps.store.row(workspaceId, connectorId);
+    if (!row) throw notFound('Service');
+    const schema = row.kind === 'mcp' ? UpdateMcpServerInput : UpdateManifestServiceInput;
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+      throw badRequest(
+        'Invalid service update',
+        parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      );
+    }
+    let definition: Record<string, unknown>;
+    if (row.kind === 'mcp') {
+      const { toolRisk: changes, ...rest } = parsed.data as z.output<typeof UpdateMcpServerInput>;
+      const current = row.definition as unknown as RemoteMcpDefinition;
+      const toolRisk = { ...current.toolRisk };
+      if (changes) {
+        const known = new Set(this.deps.store.compiled(row)?.actions.map((a) => a.name));
+        for (const [action, risk] of Object.entries(changes)) {
+          if (!known.has(action)) throw badRequest(`The service has no tool "${connectorId}_${action}"`);
+          if (risk === null) delete toolRisk[action];
+          else toolRisk[action] = risk;
+        }
+      }
+      definition = { ...current, ...rest, toolRisk } as unknown as Record<string, unknown>;
+    } else {
+      const { manifest } = parsed.data as z.output<typeof UpdateManifestServiceInput>;
+      if (manifest.id !== undefined && manifest.id !== connectorId) {
+        throw badRequest('The id of a service cannot be changed; add a new service instead');
+      }
+      definition = { ...manifest, id: connectorId };
+    }
+    try {
+      compileCustomConnector({ ...row, definition });
+    } catch (error) {
+      throw badRequest((error as Error).message);
+    }
+    await this.deps.db
+      .update(customConnectors)
+      .set({ definition, lastError: null })
+      .where(eq(customConnectors.id, row.id));
+    return this.view((await this.deps.store.row(workspaceId, connectorId))!);
   }
 
   async remove(workspaceId: string, connectorId: string): Promise<void> {

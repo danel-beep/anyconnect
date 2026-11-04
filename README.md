@@ -26,7 +26,12 @@ ChatGPT / Claude / Claude Code / Cursor
   (`iss`), ротация refresh-токенов с обнаружением повторного использования, отзыв доступа.
 - **Мультиаккаунтность в основе модели данных**: сервис → много именованных аккаунтов. ИИ видит
   инструмент `gmail_search` с аргументом `account: "work" | "personal"` (или, по настройке,
-  отдельные инструменты на каждый аккаунт).
+  отдельные инструменты на каждый аккаунт). Читающие инструменты по умолчанию работают сразу по
+  всем аккаунтам (`account: "all"`), а единые инструменты (`mail_search`, `messages_send`…)
+  охватывают все почтовые ящики или мессенджеры одним вызовом.
+- **Экономия контекста ИИ**: пока инструменты помещаются в ~3000 токенов, они показываются все;
+  дальше хаб сам переходит в режим поиска (`anyconnect_search_tools` / `call_tool`) и показывает
+  только самые нужные. `anyconnect_call_tools` выполняет до 10 вызовов за один шаг.
 - **Подключаемые коннекторы**: новый сервис = один файл с zod-схемами. Хаб сам делает
   маршрутизацию по аккаунтам, шифрование, таймауты, ошибки и аудит.
 - **Шифрование ключей** сервисов: у каждого аккаунта свой ключ (AES-256-GCM), он зашифрован
@@ -128,7 +133,7 @@ REST API (`Authorization: Bearer ac_pat_...`):
 | POST | `/api/v1/connect` | начать подключение аккаунта через OAuth, ответ — `authorizationUrl` |
 | GET | `/api/v1/oauth/providers` | OAuth-провайдеры, redirect URI для их консолей, настроенные приложения |
 | GET/POST/DELETE | `/api/v1/oauth/apps[/:id]` | свои OAuth-приложения (client id + secret) |
-| GET/POST/DELETE | `/api/v1/services[/:id]` | свои сервисы без кода: внешние MCP-серверы и HTTP-манифесты |
+| GET/POST/PATCH/DELETE | `/api/v1/services[/:id]` | свои сервисы без кода: внешние MCP-серверы и HTTP-манифесты |
 | POST | `/api/v1/services/:id/refresh` | обновить список инструментов внешнего MCP-сервера |
 | GET | `/api/v1/tools` | инструменты так, как их видит ИИ |
 | POST | `/api/v1/tools/:name/call` | вызвать инструмент (для отладки) |
@@ -214,6 +219,7 @@ export default defineConnector({
 npm run check        # lint + типы + тесты
 npm test             # нужен Postgres: TEST_DATABASE_URL (по умолчанию postgres://postgres@localhost:5432/anyconnect_test)
 npm run db:generate  # после изменения src/db/schema.ts — создать миграцию
+npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 
 Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

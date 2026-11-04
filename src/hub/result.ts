@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { type ContentBlock, type ErrorKind, isRawResult } from '../connectors/sdk.js';
 
 /**
@@ -82,4 +83,44 @@ export function resultText(result: ToolCallResult): string {
 export function toTransport(result: ExecResult): ToolCallResult {
   const { data: _data, error: _error, ...rest } = result;
   return rest;
+}
+
+/** `_meta` key set on results that carry third-party content. */
+export const UNTRUSTED_META = 'anyconnect/untrusted';
+
+export function isUntrusted(result: ToolCallResult): boolean {
+  return (result._meta as Record<string, unknown> | undefined)?.[UNTRUSTED_META] === true;
+}
+
+/**
+ * Wraps text that came from third parties (anything an open-world action returns: emails,
+ * messages, web pages) in markers with a random id, so a prompt injection inside the content cannot
+ * fake the end of the block. The hub's instructions tell the model to treat marked text as data.
+ * `data` stays untouched: it is the value other hub steps (merging, shaping) work on.
+ */
+export function markUntrusted<T extends ToolCallResult>(result: T, source: string): T {
+  if (result.isError || result.content.length === 0) return result;
+  const id = randomBytes(4).toString('hex');
+  const label = source.replace(/[⟦⟧\n]/g, ' ');
+  return {
+    ...result,
+    content: result.content.map((block) =>
+      block.type === 'text'
+        ? {
+            type: 'text' as const,
+            text: `⟦untrusted ${id} source="${label}"⟧\n${block.text}\n⟦/untrusted ${id}⟧`,
+          }
+        : block,
+    ),
+    _meta: { ...((result._meta as Record<string, unknown> | undefined) ?? {}), [UNTRUSTED_META]: true },
+  };
+}
+
+/** A result built from several unit results stays marked when any of them carried third-party content. */
+export function carryUntrusted<T extends ToolCallResult>(
+  result: T,
+  parts: ToolCallResult[],
+  source: string,
+): T {
+  return parts.some(isUntrusted) ? markUntrusted(result, source) : result;
 }

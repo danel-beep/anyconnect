@@ -11,6 +11,7 @@ import {
   type FetchLike,
   type JsonSchema,
   type OAuthProviderSpec,
+  type RiskLevel,
   rawResult,
 } from '../sdk.js';
 
@@ -58,6 +59,8 @@ export interface RemoteMcpSpec {
   url: string;
   auth: RemoteMcpAuth;
   tools: RemoteMcpTool[];
+  /** Risk set by the workspace per action name; wins over what the server's annotations say. */
+  toolRisk?: Record<string, RiskLevel>;
 }
 
 /** The hub's own name when it talks to remote servers. */
@@ -101,6 +104,17 @@ function hintsFor(tool: RemoteMcpTool): ActionHints {
     ...(a.idempotentHint !== undefined ? { idempotent: a.idempotentHint } : {}),
     ...(a.openWorldHint !== undefined ? { openWorld: a.openWorldHint } : {}),
   };
+}
+
+/**
+ * Risk from the server's annotations with the MCP defaults: a tool that is not read-only is assumed
+ * destructive unless it says `destructiveHint: false`. A remote server is not ours, so an
+ * unannotated tool needs confirmation until the workspace lowers its risk (`toolRisk`).
+ */
+export function riskFromAnnotations(tool: RemoteMcpTool): RiskLevel {
+  const a = tool.annotations ?? {};
+  if (a.readOnlyHint === true) return 'read';
+  return a.destructiveHint === false ? 'write' : 'dangerous';
 }
 
 /** Renames properties the hub reserves (`account`, `fields`) so remote schemas never clash. */
@@ -223,14 +237,16 @@ export function defineRemoteMcpConnector(spec: RemoteMcpSpec): ConnectorDefiniti
   const names = actionNamesFor(spec.tools);
   const actions: ActionDefinition[] = spec.tools.map((tool) => {
     const { schema, renames } = adaptSchema(tool.inputSchema ?? { type: 'object' });
+    const name = names.get(tool.name)!;
     return {
-      name: names.get(tool.name)!,
+      name,
       ...(tool.title || tool.annotations?.title ? { title: tool.title ?? tool.annotations?.title } : {}),
       description: tool.description?.trim() || `Runs "${tool.name}" on ${spec.name}.`,
       // The remote server validates arguments; the hub only shows its schema to the AI.
       input: z.object({}).loose(),
       inputSchema: schema,
       hints: hintsFor(tool),
+      risk: spec.toolRisk?.[name] ?? riskFromAnnotations(tool),
       async run(input, rawCtx) {
         const ctx = rawCtx as unknown as Ctx;
         const args: Record<string, unknown> = {};

@@ -31,9 +31,10 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
 }
 
 describe('tool catalog', () => {
-  it('always exposes the hub tool, even with no accounts', () => {
+  it('always exposes the hub tools, even with no accounts', () => {
     const catalog = buildCatalog({ connectors: [demo], accounts: [] });
-    expect(catalog.tools.map((t) => t.name)).toEqual(['anyconnect_list_accounts']);
+    expect(catalog.listed.map((t) => t.name)).toEqual(['anyconnect_list_accounts', 'anyconnect_call_tools']);
+    expect(catalog.listing).toBe('direct');
     expect(catalog.instructions).toContain('No services are connected');
   });
 
@@ -45,9 +46,11 @@ describe('tool catalog', () => {
     const echo = catalog.tools.find((t) => t.name === 'demo_echo')!;
     const props = echo.inputSchema.properties as Record<string, { enum?: string[]; description?: string }>;
     expect(Object.keys(props)[0]).toBe('account');
-    expect(props.account!.enum).toEqual(['work', 'home']);
+    // Read tools default to every account at once.
+    expect(props.account!.enum).toEqual(['work', 'home', 'all']);
     expect(props.account!.description).toContain('me@work');
-    expect(echo.inputSchema.required).toEqual(['account', 'message']);
+    expect(echo.inputSchema.required).toEqual(['message']);
+    expect(echo.target).toMatchObject({ kind: 'action', fanOut: true });
     expect(catalog.instructions).toContain('Demo (demo)');
   });
 

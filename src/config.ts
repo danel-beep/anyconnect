@@ -70,6 +70,8 @@ const EnvSchema = z.object({
   REQUIRE_2FA: bool(false),
   /** Background jobs: account health checks, token refresh, later schedules and triggers. */
   JOBS_ENABLED: bool(true),
+  /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
+  TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -102,7 +104,7 @@ export interface AppConfig {
   toolTimeoutMs: number;
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
-  tools: { maxResultTokens: number; idempotencyWindowMs: number };
+  tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
   confirmations: {
     waitMs: number;
     ttlMs: number;
@@ -234,6 +236,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     tools: {
       maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
+      listTokenBudget: env.TOOL_LIST_TOKEN_BUDGET,
     },
     confirmations: {
       waitMs: env.CONFIRMATION_WAIT_SECONDS * 1000,

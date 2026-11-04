@@ -4,7 +4,7 @@ import { actionRisk } from '../connectors/sdk.js';
 import type { Principal } from '../core/principal.js';
 import type { CatalogAllow } from '../hub/catalog.js';
 import type { CallContext, Middleware } from '../hub/executor.js';
-import { type ExecResult, errorResult, type HubQuestion } from '../hub/result.js';
+import { type ExecResult, errorResult, type HubQuestion, markUntrusted } from '../hub/result.js';
 import { hmac, safeEqual } from '../lib/crypto.js';
 import type { ConfirmationCenter } from './confirmations.js';
 import type { PendingCallInput, PendingCallRow, PendingCallService, StoredResult } from './pending-calls.js';
@@ -289,29 +289,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
 // Untrusted content
 // ---------------------------------------------------------------------------
 
-/**
- * Wraps text that came from third parties (anything an open-world action returns: emails,
- * messages, web pages) in markers with a random id, so a prompt injection inside the content cannot
- * fake the end of the block. The hub's instructions tell the model to treat marked text as data.
- */
-export function markUntrusted(result: ExecResult, source: string): ExecResult {
-  if (result.isError || result.content.length === 0) return result;
-  const id = randomBytes(4).toString('hex');
-  const label = source.replace(/[⟦⟧\n]/g, ' ');
-  return {
-    ...result,
-    content: result.content.map((block) =>
-      block.type === 'text'
-        ? {
-            type: 'text' as const,
-            text: `⟦untrusted ${id} source="${label}"⟧\n${block.text}\n⟦/untrusted ${id}⟧`,
-          }
-        : block,
-    ),
-    _meta: { ...((result._meta as Record<string, unknown> | undefined) ?? {}), 'anyconnect/untrusted': true },
-  };
-}
-
+/** Marks every open-world action result as third-party content (see `markUntrusted`). */
 export const untrustedStage: Middleware = async (call, next) => {
   const result = await next();
   if (call.action.hints?.openWorld === false) return result;

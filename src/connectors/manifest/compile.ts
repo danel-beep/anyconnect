@@ -1,12 +1,15 @@
 import { z } from 'zod';
+import { getCapability } from '../capabilities.js';
 import { HttpClient, type QueryValue } from '../http/client.js';
 import { getPath, pickFields } from '../http/json-path.js';
 import { TokenBucketLimiter } from '../http/rate-limit.js';
-import { render, renderString, type TemplateScope } from '../http/template.js';
+import { placeholders, render, renderString, type TemplateScope } from '../http/template.js';
 import {
   type AccountContext,
   type ActionDefinition,
   type AnyObjectSchema,
+  type CapabilityBinding,
+  type CapabilityId,
   type ConnectorDefinition,
   ConnectorError,
   type JsonSchema,
@@ -16,6 +19,7 @@ import {
   HttpManifest,
   type HttpManifestInput,
   type ManifestAction,
+  type ManifestCapability,
   type ManifestPagination,
   type ManifestRequest,
 } from './schema.js';
@@ -261,6 +265,40 @@ class ManifestRuntime {
   }
 }
 
+function assertScopes(template: unknown, allowed: string[], where: string): void {
+  for (const path of placeholders(template)) {
+    if (!allowed.some((scope) => path === scope || path.startsWith(`${scope}.`))) {
+      throw new ManifestError(`${where}: placeholder {{${path}}} must start with ${allowed.join(' or ')}`);
+    }
+  }
+}
+
+/** Declarative capability mapping: templates instead of `mapInput` / `mapOutput` functions. */
+function capabilityBinding(ref: ManifestCapability, where: string): CapabilityBinding {
+  if (typeof ref === 'string') return { id: ref as CapabilityId };
+  const binding: CapabilityBinding = { id: ref.id as CapabilityId };
+  const { input: inputTemplate, output: outputTemplate } = ref;
+  if (inputTemplate) {
+    assertScopes(inputTemplate, ['input'], `${where} capability "${ref.id}" input`);
+    binding.mapInput = (input) => (render(inputTemplate, { input }) ?? {}) as Record<string, unknown>;
+  }
+  if (outputTemplate) {
+    assertScopes(outputTemplate, ['item', 'input'], `${where} capability "${ref.id}" output`);
+    const one = (item: unknown, input: Record<string, unknown>) => render(outputTemplate, { item, input });
+    const list = getCapability(ref.id)?.kind === 'list';
+    binding.mapOutput = (result, input) => {
+      if (!list) return one(result, input);
+      if (Array.isArray(result)) return result.map((item) => one(item, input));
+      const page = result as { items?: unknown };
+      if (page && Array.isArray(page.items)) {
+        return { ...page, items: page.items.map((item) => one(item, input)) };
+      }
+      return result;
+    };
+  }
+  return binding;
+}
+
 function compileAction(
   runtime: ManifestRuntime,
   action: ManifestAction,
@@ -305,6 +343,15 @@ function compileAction(
     input,
     inputSchema,
     ...(action.hints ? { hints: action.hints } : {}),
+    ...(action.risk ? { risk: action.risk } : {}),
+    ...(action.undo ? { undo: action.undo } : {}),
+    ...(action.capability
+      ? {
+          capability: (Array.isArray(action.capability) ? action.capability : [action.capability]).map(
+            (ref) => capabilityBinding(ref, `Action "${connectorId}.${action.name}"`),
+          ),
+        }
+      : {}),
     async run(rawInput, rawCtx) {
       const ctx = rawCtx as Ctx;
       const args = rawInput as Record<string, unknown>;

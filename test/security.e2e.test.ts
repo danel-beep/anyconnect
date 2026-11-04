@@ -220,7 +220,7 @@ describe('data protection in the running hub', () => {
 
     // Deleting the persona leaves its tokens with nothing.
     await hub.services.personas.delete(workspaceId, persona.id);
-    expect(await toolNames(scoped)).toEqual(['anyconnect_list_accounts']);
+    expect((await toolNames(scoped)).filter((name) => !name.startsWith('anyconnect_'))).toEqual([]);
   });
 
   it('binds persona tokens to the persona’s own MCP URL', async () => {

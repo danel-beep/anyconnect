@@ -30,6 +30,7 @@ Usage: npm run cli -- <command> [options]
                                          Create a personal access token (shown once)
   tools:list [--email E]                 Show the MCP tools the AI sees
   exposure:set --mode grouped|per_account [--email E]
+  listing:set --mode auto|direct|discovery [--email E]
 
 --email selects the user (defaults to ADMIN_EMAIL).`;
 
@@ -188,7 +189,10 @@ async function main() {
           workspaceId: workspace.id,
           scopes: ['mcp', 'api'],
         });
-        console.log(`Exposure: ${catalog.mode}\n`);
+        const { stats } = catalog;
+        console.log(
+          `Exposure: ${catalog.mode}, listing: ${catalog.listing} (${catalog.listed.length} of ${stats.totalTools} tools listed, ~${stats.listedTokens} tokens; all tools ~${stats.directTokens}, budget ${stats.budget})\n`,
+        );
         for (const tool of catalog.tools) console.log(`${tool.name}\n  ${tool.description}\n`);
         break;
       }
@@ -201,6 +205,18 @@ async function main() {
           .set({ settings: { ...workspace.settings, toolExposure: values.mode } })
           .where(eq(workspaces.id, workspace.id));
         console.log(`Tool exposure set to ${values.mode}.`);
+        break;
+      }
+      case 'listing:set': {
+        const mode = values.mode;
+        if (mode !== 'auto' && mode !== 'direct' && mode !== 'discovery')
+          throw new Error('--mode auto|direct|discovery');
+        const { workspace } = await workspaceFor(services, values.email);
+        await services.db
+          .update(workspaces)
+          .set({ settings: { ...workspace.settings, toolListing: mode } })
+          .where(eq(workspaces.id, workspace.id));
+        console.log(`Tool listing set to ${mode}.`);
         break;
       }
       default:

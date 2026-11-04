@@ -230,6 +230,7 @@ export function createServices(
     toolTimeoutMs: config.toolTimeoutMs,
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
+    toolListTokenBudget: config.tools.listTokenBudget,
     stages: { ...securityStages, ...overrides.stages },
     catalogFilter: overrides.catalogFilter ?? createCatalogFilter(policies),
   });
