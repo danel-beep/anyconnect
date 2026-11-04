@@ -78,6 +78,7 @@ input[readonly]{font-family:${MONO};font-size:13.5px;background:var(--code-bg)}
 input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;margin:0 8px 0 0;vertical-align:-3px}
 .check{display:flex;align-items:flex-start;gap:8px;font-weight:450;margin:12px 0}
 .hint{color:var(--muted);font-size:13px;margin:6px 0 0}
+.hint>svg{width:15px;height:15px;vertical-align:-3px}
 .error{color:var(--danger);margin:8px 0 0}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
 @media (max-width:640px){.field-row{grid-template-columns:1fr}}

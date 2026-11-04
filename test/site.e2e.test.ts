@@ -414,6 +414,101 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const page = await (await browser.request('/app/services')).text();
     expect(page).toContain('class="notice bad"');
   });
+  it('edits confirmation defaults and per-account rules on the Rules page', async () => {
+    const foreign = (await hub.services.db.query.accounts.findFirst())!;
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-r', email: 'rules@example.com' });
+    const user = await userByEmail('rules@example.com');
+    const ws = await workspaceOf(user.id);
+    const account = await hub.services.accounts.create(ws.id, {
+      connectorId: 'demo',
+      name: 'home',
+      label: 'Дом',
+      credentials: { secret: 's' },
+    });
+
+    const page = await (await browser.request('/app/rules')).text();
+    expect(page).toContain('Дом');
+    const { csrf } = TestBrowser.hiddenInputs(page);
+
+    const defaults = await browser.request('/app/rules/defaults', {
+      form: { csrf: csrf!, confirm: 'write', undo: '30' },
+    });
+    expect(defaults.status).toBe(303);
+    expect(await hub.services.admin.security(ws.id)).toMatchObject({
+      defaultConfirm: 'write',
+      undoWindowSeconds: 30,
+    });
+
+    const scoped = (id: string, access: string, confirm: string) =>
+      browser.request('/app/rules/scoped', { form: { csrf: csrf!, kind: 'account', id, access, confirm } });
+    expect((await scoped(account.id, 'read', '')).status).toBe(303);
+    const rules = await hub.services.policies.listRules(ws.id);
+    expect(rules).toEqual([
+      expect.objectContaining({ accountId: account.id, access: 'read', confirm: null }),
+    ]);
+    const shown = await (await browser.request('/app/rules')).text();
+    expect(shown).toContain('<option value="read" selected="">');
+
+    // Saving it again updates the same rule; "as by default" for both removes it.
+    expect((await scoped(account.id, 'read', 'always')).status).toBe(303);
+    expect(await hub.services.policies.listRules(ws.id)).toHaveLength(1);
+    expect((await scoped(account.id, '', '')).status).toBe(303);
+    expect(await hub.services.policies.listRules(ws.id)).toHaveLength(0);
+
+    // Another workspace's account is refused.
+    expect(foreign.workspaceId).not.toBe(ws.id);
+    await scoped(foreign.id, 'none', '');
+    expect(await hub.services.policies.listRules(ws.id)).toHaveLength(0);
+    expect(await (await browser.request('/app/rules')).text()).toContain('class="notice bad"');
+  });
+
+  it('records a paid plan request, shows it to the admin and closes it when the plan is set', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-p', email: 'payer@example.com' });
+    const user = await userByEmail('payer@example.com');
+    const ws = await workspaceOf(user.id);
+    const { csrf } = await hiddenOf(browser, '/app/billing');
+    const sent = await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'personal' } });
+    expect(sent.status).toBe(303);
+    expect(await hub.services.entitlements.openRequest(ws.id)).toMatchObject({ planId: 'personal' });
+    // Asking twice keeps one open request.
+    await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });
+    expect(
+      (await hub.services.entitlements.openRequests(10)).filter((r) => r.workspaceId === ws.id),
+    ).toHaveLength(1);
+    // Only public paid plans can be asked for.
+    await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'unlimited' } });
+    expect(await hub.services.entitlements.openRequest(ws.id)).toMatchObject({ planId: 'pro' });
+
+    const admin = new TestBrowser(hub.baseUrl);
+    await admin.login();
+    await enableTotp(admin);
+    const overview = await (await admin.request('/admin')).text();
+    expect(overview).toContain('Запросы тарифа');
+    expect(overview).toContain('payer@example.com');
+    const userPage = `/admin/users/${user.id}`;
+    const { csrf: adminCsrf } = await hiddenOf(admin, userPage);
+    await admin.request(`${userPage}/plan`, { form: { csrf: adminCsrf!, plan: 'pro', until: '', note: '' } });
+    expect(await hub.services.entitlements.openRequest(ws.id)).toBeUndefined();
+    expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+  });
+
+  it('gives the custom MCP form back as filled when the address is wrong', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-c', email: 'custom@example.com' });
+    const { csrf } = await hiddenOf(browser, '/app/services');
+    const sent = await browser.request('/app/custom', {
+      form: { csrf: csrf!, name: 'Мой сервер', url: 'ftp://nope', token: 'secret-token' },
+    });
+    expect(sent.status).toBe(303);
+    const location = sent.headers.get('location')!;
+    expect(location).toMatch(/^\/app\/services\?draft=1&/);
+    expect(location).not.toContain('secret-token');
+    const html = await (await browser.request(location)).text();
+    expect(html).toContain('value="ftp://nope"');
+    expect(html).toContain('class="notice bad"');
+  });
 });
 
 describe('website: public pages', () => {

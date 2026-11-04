@@ -96,9 +96,15 @@ export function siteRoutes() {
   });
 
   // --- Language switch --------------------------------------------------------
-  app.get('/prefs/lang', (c) => {
+  app.get('/prefs/lang', async (c) => {
     const to = c.req.query('to');
-    if (to === 'ru' || to === 'en') saveLocale(c, to);
+    if (to === 'ru' || to === 'en') {
+      saveLocale(c, to);
+      // A language the user chose in Settings follows the quick switch, so the two never disagree.
+      const user = await currentUser(c);
+      if (user?.locale && user.locale !== to)
+        await c.get('services').users.setProfile(user.id, { locale: to });
+    }
     let next = c.req.query('next');
     if (!next) {
       // Without `next`, go back to the page the switch was on (same origin only).

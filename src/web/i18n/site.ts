@@ -300,6 +300,14 @@ export const siteEn = {
   'docs.safety.text':
     'Write actions such as sending or deleting can require your confirmation in the dashboard or in Telegram. Each AI app can be limited to certain accounts or to reading only. Turn on two-step verification for your AnyConnect account.',
   'docs.safety.link': 'Set up two-step verification',
+  'docs.safety.rules': 'Rules for apps and accounts',
+  'docs.api': 'API',
+  'docs.api.text':
+    'Everything in the dashboard is also available over the REST API at /api/v1, for scripts and fine-grained setup.',
+  'docs.api.token':
+    'Create a personal token under AI apps → Personal tokens and send it as “Authorization: Bearer …”.',
+  'docs.api.rules':
+    'Fine-grained rules (one app on one account, per service, per MCP address) live at /api/v1/rules and /api/v1/personas.',
 } as const;
 
 export type SiteKey = keyof typeof siteEn;
@@ -609,4 +617,12 @@ export const siteRu: Record<SiteKey, string> = {
   'docs.safety.text':
     'Действия с записью, например отправка или удаление, могут требовать вашего подтверждения в кабинете или в Telegram. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение. Включите двухэтапную проверку для своего аккаунта AnyConnect.',
   'docs.safety.link': 'Включить двухэтапную проверку',
+  'docs.safety.rules': 'Правила для приложений и аккаунтов',
+  'docs.api': 'API',
+  'docs.api.text':
+    'Всё, что есть в кабинете, доступно и через REST API по адресу /api/v1 — для скриптов и тонкой настройки.',
+  'docs.api.token':
+    'Создайте личный токен в разделе «ИИ-приложения → Личные токены» и передавайте его в заголовке «Authorization: Bearer …».',
+  'docs.api.rules':
+    'Точные правила (одно приложение на одном аккаунте, по сервису, по MCP-адресу) — в /api/v1/rules и /api/v1/personas.',
 };

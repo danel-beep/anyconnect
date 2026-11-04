@@ -33,7 +33,7 @@ export const SITE_CSS = `
 .section.tight{padding:64px 0}
 .section.border{border-top:1px solid var(--border)}
 .section-head{max-width:720px;margin:0 0 48px}
-.section-head h2{font-size:clamp(28px,3.6vw,44px);letter-spacing:-.04em;line-height:1.04;margin:0 0 14px;font-weight:700}
+.section-head h1,.section-head h2{font-size:clamp(28px,3.6vw,44px);letter-spacing:-.04em;line-height:1.04;margin:0 0 14px;font-weight:700}
 .section-head p:not(.eyebrow){font-size:17px;color:var(--muted);margin:0}
 .lead{font-size:clamp(17px,1.6vw,19px);color:var(--muted);line-height:1.55}
 @media (max-width:640px){.section{padding:64px 0}.section.tight{padding:48px 0}.section-head{margin-bottom:32px}}

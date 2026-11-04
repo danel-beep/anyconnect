@@ -810,7 +810,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
       <section class="section">
         <div class="wrap">
           <div class="section-head">
-            <h2>{t('pricing.h1')}</h2>
+            <h1>{t('pricing.h1')}</h1>
             <p>{t('pricing.lead')}</p>
           </div>
           {ctx.billing ? null : <div class="notice info">{t('pricing.paymentsSoon')}</div>}
@@ -903,7 +903,7 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
       <section class="section">
         <div class="wrap">
           <div class="section-head">
-            <h2>{t('services.h1')}</h2>
+            <h1>{t('services.h1')}</h1>
             <p>{t('services.lead')}</p>
           </div>
           <div class="svc-filter">
@@ -1129,6 +1129,7 @@ export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href="#services">{t('docs.services')}</a>
             <a href="#custom">{t('docs.custom')}</a>
             <a href="#safety">{t('docs.safety')}</a>
+            <a href="#api">{t('docs.api')}</a>
           </nav>
           <div>
             <section class="guide" id="url">
@@ -1160,8 +1161,20 @@ export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
               <h2>{t('docs.safety')}</h2>
               <p>{t('docs.safety.text')}</p>
               <p>
+                <a href="/app/rules">{t('docs.safety.rules')}</a> ·{' '}
                 <a href="/security">{t('docs.safety.link')}</a>
               </p>
+            </section>
+            <section class="guide" id="api">
+              <h2>{t('docs.api')}</h2>
+              <p>{t('docs.api.text')}</p>
+              <ul class="bullets">
+                <li>{t('docs.api.token')}</li>
+                <li>{t('docs.api.rules')}</li>
+              </ul>
+              <div class="codebox">
+                curl -H "Authorization: Bearer <i>ac_pat_…</i>" {ctx.publicUrl}/api/v1/rules
+              </div>
             </section>
           </div>
         </div>

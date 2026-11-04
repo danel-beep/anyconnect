@@ -21,6 +21,7 @@ import {
 } from '../web/app.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
+import { fmtAgo } from '../web/ui.js';
 import { type AppContext, type AppEnv, bodyParams, SESSION_COOKIE } from './context.js';
 import {
   type AppAuth,
@@ -309,7 +310,7 @@ export function appRoutes() {
       } catch (error) {
         if (!(error instanceof AppError)) throw error;
         if (error.status === 409) return retry('app.flash.customExists');
-        if (error.message.startsWith('Invalid service')) return retry('app.flash.customInvalid');
+        if (error.status === 400) return retry('app.flash.customInvalid');
         return retry('app.flash.customFailed');
       }
       if (token) {
@@ -552,6 +553,8 @@ export function appRoutes() {
             apps: clients.map((x) => ({
               id: x.id,
               name: x.name,
+              // Two apps can share a name (e.g. two tokens called "Script"): tell them apart.
+              detail: `${c.get('t')(x.kind === 'api_token' ? 'app.rules.viaToken' : 'app.rules.viaOauth')} · ${c.get('t')('home.lastUsed')}: ${x.lastUsedAt ? fmtAgo(c.get('locale'), x.lastUsedAt) : c.get('t')('home.never')}`,
               access: appRule(x.id)?.access ?? null,
               confirm: appRule(x.id)?.confirm ?? null,
             })),

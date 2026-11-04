@@ -2,7 +2,7 @@ import { MONO } from '../assets.js';
 
 /** The signed-in area (dashboard and admin panel): sidebar, page header, stats, lists. */
 export const APP_SHELL_CSS = `
-.shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
+.shell{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh;background:linear-gradient(to right,var(--bg-subtle) 247px,var(--border) 247px,var(--border) 248px,transparent 248px)}
 .sidebar{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:4px;padding:18px 14px;border-right:1px solid var(--border);background:var(--bg-subtle);overflow-y:auto}
 .sidebar .brand{padding:6px 8px 18px}
 .side-group{font:500 11px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:18px 10px 8px}
@@ -28,7 +28,7 @@ export const APP_SHELL_CSS = `
 .crumbs a{color:var(--muted)}
 .mobile-bar{display:none}
 @media (max-width:900px){
-  .shell{grid-template-columns:1fr}
+  .shell{grid-template-columns:1fr;background:none}
   .sidebar{position:fixed;inset:0 30% 0 0;max-width:300px;z-index:40;transform:translateX(-102%);transition:transform .2s;height:100%;box-shadow:0 0 0 100vmax rgba(0,0,0,0)}
   .nav-open .sidebar{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.35)}
   .mobile-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:30}
