@@ -17,7 +17,6 @@ describe('safeNextPath', () => {
     '/\t/evil.example',
     '/\n/evil.example',
     '\t//evil.example',
-    '/%09/evil.example'.replace('%09', '\t'),
     'javascript:alert(1)',
     '',
     undefined,
