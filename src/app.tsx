@@ -13,6 +13,7 @@ import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { savedLocale } from './routes/page-helpers.js';
+import { profileRoutes } from './routes/profiles.js';
 import { securityRoutes } from './routes/security.js';
 import { siteRoutes } from './routes/site.js';
 import { webRoutes } from './routes/web.js';
@@ -61,6 +62,7 @@ export function createApp(services: Services) {
   app.route('/', confirmRoutes());
   app.route('/', connectRoutes());
   app.route('/', appRoutes());
+  app.route('/', profileRoutes());
   app.route('/', adminRoutes());
   app.route('/', billingRoutes());
   app.route('/', webRoutes());
