@@ -56,6 +56,15 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'Данные из сервисов Google',
+        paragraphs: [
+          'Если вы подключаете Gmail, Google Календарь или Google Диск, AnyConnect получает доступ только к тем данным, которые нужны для запроса вашего ИИ-ассистента: найти и прочитать письма, отправить ответ, посмотреть или создать событие, найти и прочитать файл. Данные передаются только выбранному вами ИИ-приложению и не сохраняются. Исключение: результат действия, например отправки письма, несколько минут хранится в памяти, чтобы повторный запрос не отправил письмо дважды.',
+          'Мы не продаём данные из сервисов Google, не используем их для рекламы, не передаём их брокерам данных и не используем их для обучения моделей ИИ. Сотрудники не читают эти данные, кроме случаев, когда вы сами об этом попросили, когда это нужно для безопасности или этого требует закон.',
+          'Использование и передача AnyConnect любым другим приложениям информации, полученной через API Google, соответствуют правилам Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), включая требования Limited Use.',
+          'Отозвать доступ можно в любой момент: отключите аккаунт в кабинете AnyConnect или в настройках аккаунта Google (myaccount.google.com/permissions).',
+        ],
+      },
+      {
         title: 'Защита',
         paragraphs: [
           'Данные для входа в сервисы (пароли, API-ключи, токены) шифруются (AES-256-GCM) отдельным ключом для каждого аккаунта. Токены входа хранятся только в виде хешей. Доступна двухэтапная проверка и вход по ключу доступа (passkey).',
@@ -108,6 +117,15 @@ const privacy: Record<Locale, Builder> = {
           'AI apps you connected (Claude, ChatGPT, Cursor and others) receive tool results they asked for. Their own policies govern how they treat that data.',
           'Connected services receive your requests made on your behalf.',
           'The hosting provider running the service stores the database. We do not sell data or share it with ad networks.',
+        ],
+      },
+      {
+        title: 'Data from Google services',
+        paragraphs: [
+          'If you connect Gmail, Google Calendar or Google Drive, AnyConnect accesses only the data your AI assistant needs for a request: finding and reading emails, sending a reply, viewing or creating an event, finding and reading a file. The data goes only to the AI app you chose and is not stored, except that the result of a write action (for example, a sent email) is kept in memory for a few minutes so that a repeated request does not send it twice.',
+          'We do not sell data from Google services, use it for advertising, transfer it to data brokers or use it to train AI models. No person reads this data unless you ask us to, it is needed for security, or the law requires it.',
+          'AnyConnect’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy (https://developers.google.com/terms/api-services-user-data-policy), including the Limited Use requirements.',
+          'You can revoke access at any time: disconnect the account in the AnyConnect dashboard or in your Google Account settings (myaccount.google.com/permissions).',
         ],
       },
       {
