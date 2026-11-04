@@ -1,6 +1,6 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { z } from 'zod';
-import { ACCOUNT_ARGUMENT } from '../registry.js';
+import { RESERVED_INPUTS } from '../registry.js';
 import {
   type AccountContext,
   type ActionDefinition,
@@ -103,25 +103,17 @@ function hintsFor(tool: RemoteMcpTool): ActionHints {
   };
 }
 
-/** Renames properties the hub reserves (the `account` selector) so remote schemas never clash. */
+/** Renames properties the hub reserves (`account`, `fields`) so remote schemas never clash. */
 function adaptSchema(schema: JsonSchema): { schema: JsonSchema; renames: Map<string, string> } {
   const renames = new Map<string, string>();
+  const local = (key: string) => (RESERVED_INPUTS.includes(key) ? `${key}${RENAMED_SUFFIX}` : key);
   const properties: Record<string, unknown> = {};
   // Rebuilt key by key so the renamed property keeps its place in the schema.
   for (const [key, value] of Object.entries((schema.properties ?? {}) as Record<string, unknown>)) {
-    if (key === ACCOUNT_ARGUMENT) {
-      const local = `${ACCOUNT_ARGUMENT}${RENAMED_SUFFIX}`;
-      properties[local] = value;
-      renames.set(local, ACCOUNT_ARGUMENT);
-    } else {
-      properties[key] = value;
-    }
+    properties[local(key)] = value;
+    if (local(key) !== key) renames.set(local(key), key);
   }
-  const required = Array.isArray(schema.required)
-    ? (schema.required as string[]).map((r) =>
-        r === ACCOUNT_ARGUMENT ? `${ACCOUNT_ARGUMENT}${RENAMED_SUFFIX}` : r,
-      )
-    : undefined;
+  const required = Array.isArray(schema.required) ? (schema.required as string[]).map(local) : undefined;
   return { schema: { ...schema, type: 'object', properties, ...(required ? { required } : {}) }, renames };
 }
 

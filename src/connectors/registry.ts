@@ -10,7 +10,8 @@ const RESERVED_CONNECTOR_IDS = new Set(['anyconnect', 'hub', 'mcp', ...CAPABILIT
 export const ACCOUNT_ARGUMENT = 'account';
 /** Injected by the hub for actions that declare `response.fields`: selects result fields. */
 export const FIELDS_ARGUMENT = 'fields';
-const RESERVED_INPUTS = [ACCOUNT_ARGUMENT, FIELDS_ARGUMENT];
+/** Input names the hub adds itself; connectors (and remote schemas, after renaming) must not use them. */
+export const RESERVED_INPUTS: readonly string[] = [ACCOUNT_ARGUMENT, FIELDS_ARGUMENT];
 
 /**
  * Resolves which connectors (services) exist for a workspace.

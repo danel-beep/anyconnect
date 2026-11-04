@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { actionNamesFor } from '../src/connectors/mcp-remote/connector.js';
+import { actionNamesFor, defineRemoteMcpConnector } from '../src/connectors/mcp-remote/connector.js';
+import { validateConnector } from '../src/connectors/registry.js';
 import type { Principal } from '../src/core/principal.js';
 import { ensureTestDatabase, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
@@ -199,5 +200,29 @@ describe('remote MCP servers as services', () => {
       { name: 'x'.repeat(80), inputSchema: {} },
     ]);
     expect([...names.values()]).toEqual(['search_pages', 'search_pages_2', 't_42_things', 'x'.repeat(40)]);
+  });
+
+  it('renames every input the hub reserves', () => {
+    const connector = defineRemoteMcpConnector({
+      id: 'remote',
+      name: 'Remote',
+      description: 'A remote server.',
+      url: 'https://example.com/mcp',
+      auth: { type: 'none' },
+      tools: [
+        {
+          name: 'query',
+          inputSchema: {
+            type: 'object',
+            properties: { account: { type: 'string' }, fields: { type: 'array' }, q: { type: 'string' } },
+            required: ['fields'],
+          },
+        },
+      ],
+    });
+    expect(() => validateConnector(connector)).not.toThrow();
+    const schema = connector.actions[0]!.inputSchema!;
+    expect(Object.keys(schema.properties as object)).toEqual(['account_arg', 'fields_arg', 'q']);
+    expect(schema.required).toEqual(['fields_arg']);
   });
 });
