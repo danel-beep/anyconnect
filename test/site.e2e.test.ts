@@ -670,8 +670,12 @@ describe('website: public pages', () => {
     const todoist = await page('/services/todoist');
     expect(todoist).toContain('API key or app password');
     expect(todoist).not.toContain('Sign in with Todoist');
+    // Token-only services carry their own step-by-step guide.
+    const jira = await page('/services/jira');
+    expect(jira).toContain('Create API token');
+    expect(jira).toContain('https://id.atlassian.com/manage-profile/security/api-tokens');
     // The docs name what connects through the form here, not a fixed list.
-    expect(await page('/docs')).toMatch(/<li>[^<]*Todoist: paste an app password or API key/);
+    expect(await page('/docs')).toMatch(/<li>[^<]*Todoist[^<]*: paste an app password or API key/);
     // The grid holds what connects today; planned services wait in one row, and any MCP server has a card.
     const services = await page('/services');
     expect(services).toMatch(/<li data-search="Telegram"><span class="road">/);

@@ -42,6 +42,11 @@ describe('built-in connectors and the core rules', () => {
       gdrive: ['files.read', 'files.search'],
       notion: ['files.read', 'files.search'],
       todoist: ['tasks.create', 'tasks.list'],
+      jira: ['tasks.create', 'tasks.list'],
+      linear: ['tasks.create', 'tasks.list'],
+      asana: ['tasks.create', 'tasks.list'],
+      trello: ['tasks.list'],
+      hubspot: ['contacts.search'],
       slack: ['messages.list_chats', 'messages.read_chat', 'messages.search', 'messages.send'],
     });
   });
