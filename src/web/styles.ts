@@ -1,7 +1,8 @@
-/** Served at /assets/app.css (no inline styles, so the CSP can forbid them). */
+import { themeCss } from './theme.js';
+
+/** Served at /assets/app.css (no inline styles, so the CSP can forbid them). Colors come from `theme.ts`. */
 export const APP_CSS = `
-:root{--bg:#f6f7f9;--card:#fff;--text:#16181d;--muted:#5d6472;--border:#e2e5ea;--accent:#3b5bfd;--accent-text:#fff;--danger:#c4372d;--ok:#1f8a4c;--warn-bg:#fff6e0;--warn-border:#f0c36a;--radius:12px}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a21;--text:#e8eaef;--muted:#9aa2b1;--border:#2a2f3a;--accent:#6c84ff;--accent-text:#0b0d12;--danger:#ff6b5e;--ok:#4cc27e;--warn-bg:#2b2416;--warn-border:#6b5520}}
+${themeCss()}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:760px;margin:0 auto;padding:32px 16px 64px}
@@ -18,7 +19,9 @@ input[readonly]{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-siz
 button{font:inherit;font-weight:600;border-radius:8px;padding:10px 16px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
 button.danger{color:var(--danger)}
-button.link{border:0;background:none;padding:0;color:var(--accent);font-weight:500}
+button.link{border:0;background:none;padding:0;color:var(--accent-ink);font-weight:500}
+a{color:var(--accent-ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .actions{display:flex;gap:12px;margin-top:20px}
 .actions button{flex:1}
 .error{color:var(--danger);margin:8px 0 0}
