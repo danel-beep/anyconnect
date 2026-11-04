@@ -151,7 +151,7 @@ a.svc:hover{border-color:var(--border-strong);text-decoration:none;transform:tra
 @media (max-width:860px){.sec-grid{grid-template-columns:1fr}}
 
 /* Pricing */
-.billing-switch{display:inline-flex;border:1px solid var(--border);border-radius:10px;padding:3px;background:var(--bg-subtle);margin:0 0 28px}
+.billing-switch{display:inline-flex;min-width:0;border:1px solid var(--border);border-radius:10px;padding:3px;background:var(--bg-subtle);margin:0 0 28px}
 .billing-switch button{min-height:34px;border:0;background:transparent;color:var(--muted);border-radius:8px}
 .billing-switch button[aria-pressed=true]{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .billing-switch .save{font-size:11px;color:var(--ok);margin-left:4px}

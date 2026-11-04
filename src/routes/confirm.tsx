@@ -15,6 +15,7 @@ import {
   loginUrl,
   secondFactorRedirect,
 } from './context.js';
+import { renderInApp } from './page-helpers.js';
 
 export const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
@@ -69,7 +70,10 @@ export function confirmRoutes() {
       s.notificationChannels.status(auth.user.id),
     ]);
     const calls = await Promise.all(rows.map((row) => pendingCallView(c, row)));
-    return c.html(
+    return renderInApp(
+      c,
+      auth.user,
+      'confirm',
       <ConfirmListPage
         t={c.get('t')}
         lang={c.get('locale')}
@@ -93,7 +97,10 @@ export function confirmRoutes() {
     const auth = await session(c, `/confirm/${id}`);
     if ('redirect' in auth) return c.redirect(auth.redirect, 302);
     const row = await s.pendingCalls.getInWorkspace(auth.workspace.id, id);
-    return c.html(
+    return renderInApp(
+      c,
+      auth.user,
+      'confirm',
       <ConfirmPage
         t={c.get('t')}
         lang={c.get('locale')}

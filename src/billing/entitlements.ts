@@ -288,8 +288,12 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       grantedBy?: string | null;
     },
   ): Promise<LimitGrantRow> {
-    if (!isMetric(input.metric)) throw badRequest(`Unknown limit "${input.metric}" (one of ${METRICS.join(', ')})`);
-    if (input.amount !== null && (!Number.isInteger(input.amount) || input.amount <= 0 || input.amount > 1e9)) {
+    if (!isMetric(input.metric))
+      throw badRequest(`Unknown limit "${input.metric}" (one of ${METRICS.join(', ')})`);
+    if (
+      input.amount !== null &&
+      (!Number.isInteger(input.amount) || input.amount <= 0 || input.amount > 1e9)
+    ) {
       throw badRequest('The amount must be a positive whole number');
     }
     if (input.expiresAt && input.expiresAt.getTime() <= this.now().getTime()) {
@@ -315,7 +319,11 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       .update(limitGrants)
       .set({ revokedAt: this.now() })
       .where(
-        and(eq(limitGrants.workspaceId, workspaceId), eq(limitGrants.id, grantId), isNull(limitGrants.revokedAt)),
+        and(
+          eq(limitGrants.workspaceId, workspaceId),
+          eq(limitGrants.id, grantId),
+          isNull(limitGrants.revokedAt),
+        ),
       )
       .returning();
     if (!row) throw notFound('Limit grant');

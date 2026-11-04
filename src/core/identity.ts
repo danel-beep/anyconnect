@@ -123,7 +123,8 @@ export async function ensureAdmin(
     });
     return { user, workspace, created: true, passwordUpdated: false };
   }
-  if (existing.role !== 'admin') await db.update(users).set({ role: 'admin' }).where(eq(users.id, existing.id));
+  if (existing.role !== 'admin')
+    await db.update(users).set({ role: 'admin' }).where(eq(users.id, existing.id));
   let passwordUpdated = false;
   if (!existing.passwordHash || !(await verifyPassword(admin.password, existing.passwordHash))) {
     await setPassword(db, existing.id, admin.password);

@@ -5,7 +5,17 @@ import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { Brand, BrandIcon, CodeBlock, CopyField, GoogleG, Icon, Prefs, ServiceLogo, fmtNumber } from './ui.js';
+import {
+  Brand,
+  BrandIcon,
+  CodeBlock,
+  CopyField,
+  fmtNumber,
+  GoogleG,
+  Icon,
+  Prefs,
+  ServiceLogo,
+} from './ui.js';
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -72,9 +82,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
         <div class="footer-grid">
           <div>
             <Brand />
-            <p class="muted small">
-              {t('site.footer.tagline')}
-            </p>
+            <p class="muted small">{t('site.footer.tagline')}</p>
           </div>
           <div>
             <h4>{t('site.footer.product')}</h4>
@@ -169,7 +177,11 @@ const blurb = (lang: string, service: PublicService) => {
 const ServiceCard: FC<{ ctx: PageCtx; service: PublicService }> = ({ ctx, service }) => {
   const meta = serviceMeta(service.id);
   return (
-    <a class="svc" href={`/services/${service.id}`} data-search={`${service.name} ${service.id} ${blurb(ctx.lang, service)}`}>
+    <a
+      class="svc"
+      href={`/services/${service.id}`}
+      data-search={`${service.name} ${service.id} ${blurb(ctx.lang, service)}`}
+    >
       <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={service.name} />
       <span class="grow">
         <span class="name">{service.name}</span>
@@ -179,11 +191,12 @@ const ServiceCard: FC<{ ctx: PageCtx; service: PublicService }> = ({ ctx, servic
   );
 };
 
-const PlannedCard: FC<{ ctx: PageCtx; name: string; icon?: string | undefined; glyph?: string | undefined }> = ({
-  ctx,
-  name,
-  icon,
-}) => (
+const PlannedCard: FC<{
+  ctx: PageCtx;
+  name: string;
+  icon?: string | undefined;
+  glyph?: string | undefined;
+}> = ({ ctx, name, icon }) => (
   <div class="svc soon" data-search={name}>
     <ServiceLogo icon={icon} name={name} />
     <span class="grow">
@@ -197,6 +210,8 @@ const Check: FC = () => <Icon name="check" />;
 
 const limitText = (t: Translate, lang: string, metric: Metric, value: number | null): string => {
   if (value === null) return t(`plan.metric.${metric}.unlimited`);
+  if (metric === 'messengers' && value === 0) return t('plan.metric.messengers.none');
+  if (metric === 'seats' && value === 1) return t('plan.metric.seats.solo');
   return t(`plan.metric.${metric}`, { n: fmtNumber(lang, value) });
 };
 
@@ -226,7 +241,9 @@ export const PlanCard: FC<{
       <div>
         <div class="price">
           <span class="amount when-month">${plan.priceMonthly}</span>
-          <span class="amount when-year">${plan.priceYearly === 0 ? 0 : Math.round((plan.priceYearly / 12) * 10) / 10}</span>
+          <span class="amount when-year">
+            ${plan.priceYearly === 0 ? 0 : Math.round((plan.priceYearly / 12) * 10) / 10}
+          </span>
           <span class="per">{t('pricing.perMonth')}</span>
         </div>
         <div class="price-year">
@@ -234,8 +251,8 @@ export const PlanCard: FC<{
             t('pricing.forever')
           ) : (
             <>
-              <span class="when-month">{t('pricing.orYear', { price: plan.priceYearly })}</span>
-              <span class="when-year">{t('pricing.billedYear', { price: plan.priceYearly })}</span>
+              <span class="when-month">{t('pricing.orYear', { price: `$${plan.priceYearly}` })}</span>
+              <span class="when-year">{t('pricing.billedYear', { price: `$${plan.priceYearly}` })}</span>
             </>
           )}
         </div>
@@ -271,14 +288,15 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
   actions,
 }) => (
   <div data-interval="month" data-interval-root>
-    <div class="billing-switch" role="group" aria-label={ctx.t('pricing.interval')}>
+    <fieldset class="billing-switch">
+      <legend class="sr-only">{ctx.t('pricing.interval')}</legend>
       <button type="button" aria-pressed="true" data-interval-set="month">
         {ctx.t('pricing.monthly')}
       </button>
       <button type="button" aria-pressed="false" data-interval-set="year">
         {ctx.t('pricing.yearly')} <span class="save">{ctx.t('pricing.save')}</span>
       </button>
-    </div>
+    </fieldset>
     <div class="plans">
       {PLANS.filter((p) => p.public).map((plan) => (
         <PlanCard
@@ -296,7 +314,9 @@ const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
   const href = ctx.user ? (plan.priceMonthly === 0 ? '/app' : '/app/billing') : '/signup';
   return (
     <a class={`btn block ${plan.featured ? 'primary' : ''}`} href={href}>
-      {plan.priceMonthly === 0 ? ctx.t('pricing.startFree') : ctx.t('pricing.choose', { plan: ctx.t(`plan.${plan.id}.name` as 'plan.free.name') })}
+      {plan.priceMonthly === 0
+        ? ctx.t('pricing.startFree')
+        : ctx.t('pricing.choose', { plan: ctx.t(`plan.${plan.id}.name` as 'plan.free.name') })}
     </a>
   );
 };
@@ -354,7 +374,13 @@ const WORKS_WITH: { name: string; icon?: string }[] = [
 export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ ctx, services }) => {
   const { t } = ctx;
   return (
-    <SiteLayout ctx={ctx} title={t('landing.title')} description={t('landing.description')} current="home" canonicalPath="/">
+    <SiteLayout
+      ctx={ctx}
+      title={t('landing.title')}
+      description={t('landing.description')}
+      current="home"
+      canonicalPath="/"
+    >
       <section class="hero">
         <div class="wrap">
           <div>
@@ -386,7 +412,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       </section>
 
       <div class="wrap">
-        <div class="works" aria-label={t('landing.works')}>
+        <div class="works">
           <span>{t('landing.works')}</span>
           {WORKS_WITH.map((c) => (
             <strong>
@@ -456,7 +482,13 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
             <div class="hub-core">
               <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
                 <rect class="bm-bg" width="32" height="32" rx="8" />
-                <path class="bm-fg" d="M16 7a9 9 0 1 1-9 9" fill="none" stroke-width="2.8" stroke-linecap="round" />
+                <path
+                  class="bm-fg"
+                  d="M16 7a9 9 0 1 1-9 9"
+                  fill="none"
+                  stroke-width="2.8"
+                  stroke-linecap="round"
+                />
                 <circle class="bm-dot" cx="16" cy="16" r="3.4" />
                 <circle class="bm-dot" cx="7" cy="9.6" r="2" />
               </svg>
@@ -526,7 +558,8 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
                   </span>
                 </div>
                 <div class="codebox">
-                  <b>mail_search</b>({'{'} account: <i>"all"</i>, query: <i>"счёт"</i> {'}'}) → 3 {t('landing.f.accounts.inboxes')}
+                  <b>mail_search</b>({'{'} account: <i>"all"</i>, query:{' '}
+                  <i>"{t('landing.f.accounts.query')}"</i> {'}'}) → 3 {t('landing.f.accounts.inboxes')}
                 </div>
               </div>
             </div>
@@ -697,7 +730,17 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
   );
 };
 
-type FaqKey = 'mcp' | 'why' | 'secrets' | 'action' | 'limit' | 'custom' | 'delete' | 'reset' | 'upgrade' | 'many';
+type FaqKey =
+  | 'mcp'
+  | 'why'
+  | 'secrets'
+  | 'action'
+  | 'limit'
+  | 'custom'
+  | 'delete'
+  | 'reset'
+  | 'upgrade'
+  | 'many';
 
 const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
   <div>
@@ -728,7 +771,13 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
   const { t, lang } = ctx;
   const plans = PLANS.filter((p) => p.public);
   return (
-    <SiteLayout ctx={ctx} title={t('pricing.title')} description={t('pricing.description')} current="pricing" canonicalPath="/pricing">
+    <SiteLayout
+      ctx={ctx}
+      title={t('pricing.title')}
+      description={t('pricing.description')}
+      current="pricing"
+      canonicalPath="/pricing"
+    >
       <section class="section">
         <div class="wrap">
           <div class="section-head">
@@ -769,7 +818,12 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                       <td class="num">
                         {cell(t, lang, metric, p.limits)}
                         {metric === 'actions' && p.intro?.limits.actions ? (
-                          <div class="tiny muted">{t('pricing.introCell', { n: fmtNumber(lang, p.intro.limits.actions), days: p.intro.days })}</div>
+                          <div class="tiny muted">
+                            {t('pricing.introCell', {
+                              n: fmtNumber(lang, p.intro.limits.actions),
+                              days: p.intro.days,
+                            })}
+                          </div>
                         ) : null}
                       </td>
                     ))}
@@ -811,7 +865,13 @@ const categoryOf = (id: string): ServiceCategory => serviceMeta(id)?.category ??
 export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ ctx, services }) => {
   const { t } = ctx;
   return (
-    <SiteLayout ctx={ctx} title={t('services.title')} description={t('services.description')} current="services" canonicalPath="/services">
+    <SiteLayout
+      ctx={ctx}
+      title={t('services.title')}
+      description={t('services.description')}
+      current="services"
+      canonicalPath="/services"
+    >
       <section class="section">
         <div class="wrap">
           <div class="section-head">
@@ -823,7 +883,13 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
             <label class="sr-only" for="svc-q">
               {t('services.search')}
             </label>
-            <input id="svc-q" type="search" placeholder={t('services.search')} data-filter="#svc-all" autocomplete="off" />
+            <input
+              id="svc-q"
+              type="search"
+              placeholder={t('services.search')}
+              data-filter="#svc-all"
+              autocomplete="off"
+            />
           </div>
           <div id="svc-all">
             {CATEGORY_ORDER.map((cat) => {
@@ -900,7 +966,14 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
                 <li>{t('service.step3')}</li>
               </ol>
               <div class="actions start">
-                <a class="btn primary" href={ctx.user ? `/app/services#add-${service.id}` : `/signup?next=${encodeURIComponent('/app/services')}`}>
+                <a
+                  class="btn primary"
+                  href={
+                    ctx.user
+                      ? `/app/services#add-${service.id}`
+                      : `/signup?next=${encodeURIComponent('/app/services')}`
+                  }
+                >
                   {t('service.connectCta', { service: service.name })}
                 </a>
                 {service.homepage ? (
@@ -943,7 +1016,9 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
                         <div class="small muted">{a.description}</div>
                       </td>
                       <td>
-                        <span class={`badge ${a.risk === 'dangerous' ? 'bad' : a.risk === 'write' ? 'accent' : ''}`}>
+                        <span
+                          class={`badge ${a.risk === 'dangerous' ? 'bad' : a.risk === 'write' ? 'accent' : ''}`}
+                        >
                           {t(`risk.${a.risk}`)}
                         </span>
                       </td>
@@ -1003,7 +1078,13 @@ export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; 
 export const DocsPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
   const { t, lang } = ctx;
   return (
-    <SiteLayout ctx={ctx} title={t('docs.title')} description={t('docs.description')} current="docs" canonicalPath="/docs">
+    <SiteLayout
+      ctx={ctx}
+      title={t('docs.title')}
+      description={t('docs.description')}
+      current="docs"
+      canonicalPath="/docs"
+    >
       <div class="wrap">
         <div class="doc-layout">
           <nav class="doc-nav" aria-label={t('docs.nav')}>
@@ -1070,7 +1151,13 @@ export interface LegalDoc {
 }
 
 export const LegalPage: FC<{ ctx: PageCtx; doc: LegalDoc; path: string }> = ({ ctx, doc, path }) => (
-  <SiteLayout ctx={ctx} title={`${doc.title} · AnyConnect`} description={doc.intro} current="legal" canonicalPath={path}>
+  <SiteLayout
+    ctx={ctx}
+    title={`${doc.title} · AnyConnect`}
+    description={doc.intro}
+    current="legal"
+    canonicalPath={path}
+  >
     <div class="wrap">
       <article class="prose">
         <h1>{doc.title}</h1>

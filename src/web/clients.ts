@@ -77,7 +77,10 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'Выполните команду в терминале.',
         'Запустите claude, введите /mcp, выберите anyconnect и пройдите вход в браузере.',
       ],
-      en: ['Run the command in a terminal.', 'Start claude, type /mcp, pick anyconnect and sign in in the browser.'],
+      en: [
+        'Run the command in a terminal.',
+        'Start claude, type /mcp, pick anyconnect and sign in in the browser.',
+      ],
     },
     code: (url) => `claude mcp add --transport http --scope user anyconnect ${url}`,
   },
@@ -131,8 +134,14 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     glyph: 'terminal',
     note: { ru: 'Codex CLI и расширение для IDE.', en: 'Codex CLI and the IDE extension.' },
     steps: {
-      ru: ['Добавьте сервер в ~/.codex/config.toml.', 'Выполните codex mcp login anyconnect и войдите в браузере.'],
-      en: ['Add the server to ~/.codex/config.toml.', 'Run codex mcp login anyconnect and sign in in the browser.'],
+      ru: [
+        'Добавьте сервер в ~/.codex/config.toml.',
+        'Выполните codex mcp login anyconnect и войдите в браузере.',
+      ],
+      en: [
+        'Add the server to ~/.codex/config.toml.',
+        'Run codex mcp login anyconnect and sign in in the browser.',
+      ],
     },
     code: (url) => `[mcp_servers.anyconnect]\nurl = "${url}"`,
   },
@@ -153,7 +162,10 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     icon: 'windsurf',
     note: { ru: 'Windsurf Editor.', en: 'Windsurf Editor.' },
     steps: {
-      ru: ['Добавьте сервер в ~/.codeium/windsurf/mcp_config.json.', 'Обновите список MCP-серверов и войдите.'],
+      ru: [
+        'Добавьте сервер в ~/.codeium/windsurf/mcp_config.json.',
+        'Обновите список MCP-серверов и войдите.',
+      ],
       en: ['Add the server to ~/.codeium/windsurf/mcp_config.json.', 'Refresh the MCP servers and sign in.'],
     },
     code: (url) => json({ mcpServers: { anyconnect: { serverUrl: url } } }),

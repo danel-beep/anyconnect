@@ -28,7 +28,8 @@ const ICONS = {
   card: 'M3 6h18v12H3zM3 10h18M7 15h4',
   settings:
     'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z',
-  users: 'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  users:
+    'M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5Z',
   grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
   logout: 'M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4M16 17l5-5-5-5M21 12H9',
@@ -39,7 +40,8 @@ const ICONS = {
   terminal: 'M4 17l6-5-6-5M12 19h8',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18',
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7',
-  braces: 'M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1',
+  braces:
+    'M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1',
   zap: 'M13 2 3 14h9l-1 8 10-12h-9l1-8Z',
   eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
@@ -140,7 +142,12 @@ export const ServiceLogo: FC<{
 );
 
 /** A read-only value with a copy button (the button needs JS; the text stays selectable without it). */
-export const CopyField: FC<{ t: Translate; id: string; value: string; label: string }> = ({ t, id, value, label }) => (
+export const CopyField: FC<{ t: Translate; id: string; value: string; label: string }> = ({
+  t,
+  id,
+  value,
+  label,
+}) => (
   <div class="copy">
     <input id={id} type="text" readonly value={value} aria-label={label} data-select-on-focus />
     <button type="button" class="primary" data-copy={`#${id}`}>
@@ -179,6 +186,7 @@ export const Meter: FC<{ used: number; limit: number | null; label: string }> = 
   const ratio = limit === null ? 0 : used / Math.max(1, limit);
   const tone = ratio >= 1 ? 'bad' : ratio >= 0.8 ? '' : 'ok';
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a styled bar (no inline styles under the CSP); <meter> cannot be themed reliably
     <div
       class={`meter ${tone}`}
       role="meter"
@@ -193,17 +201,24 @@ export const Meter: FC<{ used: number; limit: number | null; label: string }> = 
 };
 
 /** Light/dark switch (JS) and RU/EN links; both remember the choice. */
-export const Prefs: FC<{ t: Translate; lang: string; path: string }> = ({ t, lang, path }) => {
+export const Prefs: FC<{ t: Translate; lang: string; path?: string }> = ({ t, lang, path }) => {
   const other = lang === 'ru' ? 'en' : 'ru';
   return (
     <div class="prefs">
-      <button type="button" class="icon-btn" data-theme-toggle aria-label={t('ui.theme')} title={t('ui.theme')} hidden>
+      <button
+        type="button"
+        class="icon-btn"
+        data-theme-toggle
+        aria-label={t('ui.theme')}
+        title={t('ui.theme')}
+        hidden
+      >
         <Icon name="moon" class="theme-light-icon" />
         <Icon name="sun" class="theme-dark-icon" />
       </button>
       <a
         class="lang-link"
-        href={`/prefs/lang?to=${other}&next=${encodeURIComponent(path)}`}
+        href={`/prefs/lang?to=${other}${path ? `&next=${encodeURIComponent(path)}` : ''}`}
         hreflang={other}
         lang={other}
         title={other === 'en' ? 'English' : 'Русский'}
@@ -262,7 +277,8 @@ export const Hidden: FC<{ values: Record<string, string> }> = ({ values }) => (
   </>
 );
 
-export const fmtNumber = (lang: string, n: number) => new Intl.NumberFormat(lang === 'ru' ? 'ru-RU' : 'en-US').format(n);
+export const fmtNumber = (lang: string, n: number) =>
+  new Intl.NumberFormat(lang === 'ru' ? 'ru-RU' : 'en-US').format(n);
 
 export const fmtDate = (lang: string, date: Date, withTime = false) =>
   new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-GB', {

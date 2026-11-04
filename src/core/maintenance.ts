@@ -1,9 +1,9 @@
 import { and, lt, notExists, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
+  loginStates,
   oauthAuthorizationCodes,
   oauthClients,
-  loginStates,
   oauthConnectStates,
   oauthGrants,
   oauthTokens,

@@ -50,6 +50,7 @@ export async function truncateAll(services: Services): Promise<void> {
     TRUNCATE tool_calls, account_oauth, oauth_connect_states, oauth_apps, custom_connectors, accounts,
              api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants, oauth_clients, web_sessions,
              pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
+             login_states, admin_audit_log, limit_grants, subscriptions, user_identities,
              workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
 }
 

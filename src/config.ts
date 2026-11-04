@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IpAllowlist } from './lib/ip-allowlist.js';
 
 /**
  * All runtime configuration comes from environment variables (12-factor).
@@ -285,10 +286,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
             .filter((e): e is string => Boolean(e)),
         ),
       ],
-      adminAllowedIps: (env.ADMIN_ALLOWED_IPS ?? '')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean),
+      adminAllowedIps: adminAllowedIps(env.ADMIN_ALLOWED_IPS),
       adminSessionMaxAgeMs: env.ADMIN_SESSION_HOURS * 3_600_000,
       supportEmail: env.SUPPORT_EMAIL,
       google: googleLogin(env, source),
@@ -313,4 +311,18 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     oauthApps: readOAuthApps(source),
     jobs: { enabled: env.JOBS_ENABLED },
   };
+}
+
+/** ADMIN_ALLOWED_IPS as a list, checked up front (a typo must not silently open or close the panel). */
+function adminAllowedIps(value: string | undefined): string[] {
+  const entries = (value ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  try {
+    new IpAllowlist(entries);
+  } catch (error) {
+    throw new Error(`ADMIN_ALLOWED_IPS: ${(error as Error).message}`);
+  }
+  return entries;
 }

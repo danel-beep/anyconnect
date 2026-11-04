@@ -1,5 +1,6 @@
 import { parseArgs } from 'node:util';
 import { eq } from 'drizzle-orm';
+import { METRICS, PLANS } from '../billing/plans.js';
 import { loadConfig } from '../config.js';
 import { toAccountView } from '../core/accounts.js';
 import { createUser, findUserByEmail, getDefaultWorkspace, setPassword } from '../core/identity.js';
@@ -21,6 +22,15 @@ Usage: npm run cli -- <command> [options]
   users:password --email E --password P  Set a user's password
   users:2fa:reset --email E              Remove a user's second factors (lost authenticator):
                                          authenticator app, passkeys, recovery codes
+  users:list [--q TEXT]                  List users with plan and usage
+  users:role --email E --role admin|user Make a user an administrator (or remove the role)
+  users:suspend --email E [--reason R]   Suspend a user (signs them out everywhere)
+  users:reactivate --email E             Let a suspended user sign in again
+  plans:list                             List plans and their limits
+  plans:set --email E --plan ID [--days N]
+                                         Put a user's workspace on a plan (optionally for N days)
+  limits:grant --email E --metric M (--amount N | --unlimited) [--days N] [--reason R]
+                                         Add an extra limit on top of the plan
   connectors:list                        List available services
   accounts:list [--email E]              List connected accounts
   accounts:add --connector C --label L [--name N] [--description D]
@@ -78,6 +88,13 @@ async function main() {
       id: { type: 'string' },
       days: { type: 'string' },
       mode: { type: 'string' },
+      role: { type: 'string' },
+      reason: { type: 'string' },
+      plan: { type: 'string' },
+      metric: { type: 'string' },
+      amount: { type: 'string' },
+      unlimited: { type: 'boolean' },
+      q: { type: 'string' },
     },
   });
 
@@ -125,6 +142,91 @@ async function main() {
             `passkeys ${removed.passkeys}, unused recovery codes ${removed.recoveryCodes}. ` +
             'The user can now sign in with the password alone and set up new factors on /security.',
         );
+        break;
+      }
+      case 'users:list': {
+        const list = await services.adminPanel.listUsers({ q: values.q, perPage: 100 });
+        for (const item of list.items) {
+          const u = item.user;
+          console.log(
+            [
+              u.email,
+              u.role,
+              u.status,
+              item.planId,
+              `accounts ${item.accounts}`,
+              `actions ${item.actionsThisMonth}`,
+            ].join('\t'),
+          );
+        }
+        console.log(`${list.total} users`);
+        break;
+      }
+      case 'users:role': {
+        if (!values.email || (values.role !== 'admin' && values.role !== 'user'))
+          throw new Error('--email and --role admin|user are required');
+        const user = await findUserByEmail(services.db, values.email);
+        if (!user) throw new Error('User not found');
+        await services.users.setRole(user.id, values.role);
+        if (values.role === 'user' && services.config.site.adminEmails.includes(user.email))
+          console.log(
+            'Note: this email is in ADMIN_EMAILS / ADMIN_EMAIL; remove it there too, or it becomes admin again at the next sign-in.',
+          );
+        console.log(`${user.email} is now ${values.role}.`);
+        break;
+      }
+      case 'users:suspend':
+      case 'users:reactivate': {
+        if (!values.email) throw new Error('--email is required');
+        const user = await findUserByEmail(services.db, values.email);
+        if (!user) throw new Error('User not found');
+        const suspend = command === 'users:suspend';
+        await services.users.setStatus(
+          user.id,
+          suspend ? 'suspended' : 'active',
+          suspend ? (values.reason ?? null) : null,
+        );
+        console.log(`${user.email} is now ${suspend ? 'suspended' : 'active'}.`);
+        break;
+      }
+      case 'plans:list': {
+        for (const plan of PLANS) {
+          const limits = Object.entries(plan.limits)
+            .map(([k, v]) => `${k}=${v ?? 'unlimited'}`)
+            .join(' ');
+          const price = `${plan.priceMonthly} USD/mo`;
+          console.log([plan.id, price, plan.public ? '' : '(hidden)', limits].join('\t'));
+        }
+        break;
+      }
+      case 'plans:set': {
+        if (!values.plan) throw new Error('--plan is required (see plans:list)');
+        const { workspace } = await workspaceFor(services, values.email);
+        const days = values.days ? Number(values.days) : undefined;
+        if (days !== undefined && !(Number.isInteger(days) && days > 0))
+          throw new Error('--days must be a positive whole number');
+        await services.entitlements.setPlan(workspace.id, values.plan, {
+          provider: 'manual',
+          periodEnd: days ? new Date(Date.now() + days * 86_400_000) : null,
+          note: 'set with the CLI',
+        });
+        console.log(`Workspace ${workspace.id} is on ${values.plan}${days ? ` for ${days} days` : ''}.`);
+        break;
+      }
+      case 'limits:grant': {
+        if (!values.metric) throw new Error(`--metric is required (${METRICS.join(', ')})`);
+        if (!values.unlimited && !values.amount) throw new Error('--amount N or --unlimited is required');
+        const { user, workspace } = await workspaceFor(services, values.email);
+        const days = values.days ? Number(values.days) : undefined;
+        const grant = await services.entitlements.grant(workspace.id, {
+          metric: values.metric,
+          amount: values.unlimited ? null : Number(values.amount),
+          expiresAt: days ? new Date(Date.now() + days * 86_400_000) : null,
+          reason: values.reason ?? 'granted with the CLI',
+          grantedBy: null,
+        });
+        const until = grant.expiresAt ? ` until ${grant.expiresAt.toISOString()}` : '';
+        console.log(`Granted ${grant.amount ?? 'unlimited'} ${grant.metric} to ${user.email}${until}.`);
         break;
       }
       case 'connectors:list':

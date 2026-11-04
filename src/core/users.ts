@@ -13,7 +13,14 @@ import { AppError, notFound } from '../lib/errors.js';
 import type { OAuthServer } from '../oauth/server.js';
 import type { AccountService } from './accounts.js';
 import type { ApiTokenService } from './api-tokens.js';
-import { createUser, findUserByEmail, getUser, normalizeEmail, type User, type Workspace } from './identity.js';
+import {
+  createUser,
+  findUserByEmail,
+  getUser,
+  normalizeEmail,
+  type User,
+  type Workspace,
+} from './identity.js';
 
 /** A person as an external sign-in provider (Google) describes them. */
 export interface ExternalProfile {
@@ -108,7 +115,9 @@ export class UserService {
       await db
         .update(userIdentities)
         .set({ email, lastUsedAt: new Date() })
-        .where(and(eq(userIdentities.provider, profile.provider), eq(userIdentities.subject, profile.subject)));
+        .where(
+          and(eq(userIdentities.provider, profile.provider), eq(userIdentities.subject, profile.subject)),
+        );
       return { user: await this.syncRole(user), created: false };
     }
     if (!profile.emailVerified) throw new SignInRefused('email_unverified');
@@ -118,7 +127,10 @@ export class UserService {
       if (existing.status !== 'active') throw new SignInRefused('suspended');
       await this.link(existing.id, profile, email);
       if (!existing.name && profile.name)
-        await db.update(users).set({ name: profile.name.slice(0, 100) }).where(eq(users.id, existing.id));
+        await db
+          .update(users)
+          .set({ name: profile.name.slice(0, 100) })
+          .where(eq(users.id, existing.id));
       return { user: await this.syncRole(existing), created: false };
     }
 

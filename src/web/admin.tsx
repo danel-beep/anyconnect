@@ -53,7 +53,9 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
         <div class="stat">
           <span class="label">{t('admin.stat.calls')}</span>
           <div class="value">{fmtNumber(lang, view.calls30d)}</div>
-          <div class="sub">{t('admin.stat.calls24h', { n: fmtNumber(lang, view.calls24h), rate: errRate })}</div>
+          <div class="sub">
+            {t('admin.stat.calls24h', { n: fmtNumber(lang, view.calls24h), rate: errRate })}
+          </div>
         </div>
         <div class="stat">
           <span class="label">{t('admin.stat.accounts')}</span>
@@ -179,14 +181,18 @@ export interface AdminUsersView {
   }[];
 }
 
-export const AdminUsersPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUsersView }> = ({ ctx, shell, view }) => {
+export const AdminUsersPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUsersView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   const qs = (page: number) =>
     `/admin/users?${new URLSearchParams({ q: view.q, status: view.status, role: view.role, page: String(page) })}`;
   return (
     <AppShell ctx={ctx} shell={shell} section="admin-users" title={t('admin.nav.users')}>
       <PageHead title={t('admin.nav.users')} sub={t('admin.users.sub', { n: fmtNumber(lang, view.total) })} />
-      <form method="get" action="/admin/users" class="filters" role="search">
+      <form method="get" action="/admin/users" class="filters">
         <label class="sr-only" for="uq">
           {t('admin.users.search')}
         </label>
@@ -242,13 +248,17 @@ export const AdminUsersPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUse
                         <span>
                           <a href={`/admin/users/${u.id}`}>{u.email}</a>
                           {u.role === 'admin' ? <span class="admin-tag">admin</span> : null}
-                          {u.status === 'suspended' ? <span class="badge bad">{t('admin.status.suspended')}</span> : null}
+                          {u.status === 'suspended' ? (
+                            <span class="badge bad">{t('admin.status.suspended')}</span>
+                          ) : null}
                           {u.name ? <div class="small muted">{u.name}</div> : null}
                         </span>
                       </span>
                     </td>
                     <td>
-                      <span class={`badge ${u.planId === 'free' ? '' : 'accent'}`}>{planName(ctx, u.planId)}</span>
+                      <span class={`badge ${u.planId === 'free' ? '' : 'accent'}`}>
+                        {planName(ctx, u.planId)}
+                      </span>
                     </td>
                     <td class="right num">{fmtNumber(lang, u.actions)}</td>
                     <td class="right num">{u.accounts}</td>
@@ -299,7 +309,13 @@ export interface AdminUserView extends Flashing {
   apps: number;
   workspaceId: string | null;
   plan: { id: string; until: Date | null; provider: string | null; note: string | null };
-  usage: { actions: number; actionsLimit: number | null; accounts: number; accountsLimit: number | null; resetsAt: Date } | null;
+  usage: {
+    actions: number;
+    actionsLimit: number | null;
+    accounts: number;
+    accountsLimit: number | null;
+    resetsAt: Date;
+  } | null;
   limits: Record<Metric, number | null> | null;
   grants: {
     id: string;
@@ -318,7 +334,11 @@ export interface AdminUserView extends Flashing {
 const metricLabel = (ctx: PageCtx, m: string) =>
   (METRICS as readonly string[]).includes(m) ? ctx.t(`pricing.row.${m as Metric}`) : m;
 
-export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUserView }> = ({ ctx, shell, view }) => {
+export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUserView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   const u = view.user;
   const base = `/admin/users/${u.id}`;
@@ -333,13 +353,17 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
           <>
             {u.name ? `${u.name} · ` : ''}
             {t('admin.user.since', { date: fmtDate(lang, u.createdAt) })} ·{' '}
-            {u.lastLoginAt ? t('admin.user.lastLogin', { ago: fmtAgo(lang, u.lastLoginAt) }) : t('admin.user.neverLogin')}
+            {u.lastLoginAt
+              ? t('admin.user.lastLogin', { ago: fmtAgo(lang, u.lastLoginAt) })
+              : t('admin.user.neverLogin')}
           </>
         }
         actions={
           <>
             {u.role === 'admin' ? <span class="admin-tag">admin</span> : null}
-            <span class={`badge ${u.status === 'active' ? 'ok' : 'bad'}`}>{t(`admin.status.${u.status as 'active'}`)}</span>
+            <span class={`badge ${u.status === 'active' ? 'ok' : 'bad'}`}>
+              {t(`admin.status.${u.status as 'active'}`)}
+            </span>
           </>
         }
       />
@@ -353,7 +377,9 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
             <span class="label">{t('app.usage.actions')}</span>
             <div class="value">
               {fmtNumber(lang, view.usage.actions)}{' '}
-              <span class="muted small">/ {view.usage.actionsLimit === null ? '∞' : fmtNumber(lang, view.usage.actionsLimit)}</span>
+              <span class="muted small">
+                / {view.usage.actionsLimit === null ? '∞' : fmtNumber(lang, view.usage.actionsLimit)}
+              </span>
             </div>
             <Meter used={view.usage.actions} limit={view.usage.actionsLimit} label={t('app.usage.actions')} />
             <div class="sub">{t('app.usage.resets', { date: fmtDate(lang, view.usage.resetsAt) })}</div>
@@ -362,20 +388,30 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
             <span class="label">{t('app.usage.accounts')}</span>
             <div class="value">
               {view.usage.accounts}{' '}
-              <span class="muted small">/ {view.usage.accountsLimit === null ? '∞' : view.usage.accountsLimit}</span>
+              <span class="muted small">
+                / {view.usage.accountsLimit === null ? '∞' : view.usage.accountsLimit}
+              </span>
             </div>
-            <Meter used={view.usage.accounts} limit={view.usage.accountsLimit} label={t('app.usage.accounts')} />
+            <Meter
+              used={view.usage.accounts}
+              limit={view.usage.accountsLimit}
+              label={t('app.usage.accounts')}
+            />
           </div>
           <div class="stat">
             <span class="label">{t('admin.users.plan')}</span>
             <div class="value">{planName(ctx, view.plan.id)}</div>
             <div class="sub">
-              {view.plan.until ? t('app.billing.until', { date: fmtDate(lang, view.plan.until) }) : t('admin.user.noEnd')}
+              {view.plan.until
+                ? t('app.billing.until', { date: fmtDate(lang, view.plan.until) })
+                : t('admin.user.noEnd')}
             </div>
           </div>
           <div class="stat">
             <span class="label">{t('admin.user.security')}</span>
-            <div class="value small-value">{view.secondFactor ? t('admin.user.2fa') : t('admin.user.no2fa')}</div>
+            <div class="value small-value">
+              {view.secondFactor ? t('admin.user.2fa') : t('admin.user.no2fa')}
+            </div>
             <div class="sub">{t('admin.user.sessionsApps', { s: view.sessions, a: view.apps })}</div>
           </div>
         </div>
@@ -428,7 +464,15 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
               </div>
               <div>
                 <label for="amount">{t('admin.user.amount')}</label>
-                <input id="amount" type="number" name="amount" min={1} max={1000000000} step={1} placeholder="1000" />
+                <input
+                  id="amount"
+                  type="number"
+                  name="amount"
+                  min={1}
+                  max={1000000000}
+                  step={1}
+                  placeholder="1000"
+                />
               </div>
             </div>
             <label class="check">
@@ -447,7 +491,13 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
               </div>
               <div>
                 <label for="reason">{t('admin.user.reasonLabel')}</label>
-                <input id="reason" type="text" name="reason" maxlength={200} placeholder={t('admin.user.reasonPh')} />
+                <input
+                  id="reason"
+                  type="text"
+                  name="reason"
+                  maxlength={200}
+                  placeholder={t('admin.user.reasonPh')}
+                />
               </div>
             </div>
             <div class="actions start">
@@ -481,19 +531,29 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
                 {view.grants.map((g) => (
                   <tr>
                     <td>{metricLabel(ctx, g.metric)}</td>
-                    <td class="num">{g.amount === null ? t('pricing.unlimited') : `+${fmtNumber(lang, g.amount)}`}</td>
-                    <td class="small">{g.expiresAt ? fmtDate(lang, g.expiresAt) : t('app.billing.forever')}</td>
+                    <td class="num">
+                      {g.amount === null ? t('pricing.unlimited') : `+${fmtNumber(lang, g.amount)}`}
+                    </td>
+                    <td class="small">
+                      {g.expiresAt ? fmtDate(lang, g.expiresAt) : t('app.billing.forever')}
+                    </td>
                     <td class="small muted">{g.reason ?? '—'}</td>
                     <td class="right">
                       {g.active ? (
-                        <form method="post" action={`${base}/limits/${g.id}/revoke`} data-confirm={t('admin.user.revokeConfirm')}>
+                        <form
+                          method="post"
+                          action={`${base}/limits/${g.id}/revoke`}
+                          data-confirm={t('admin.user.revokeConfirm')}
+                        >
                           <Hidden values={csrf} />
                           <button type="submit" class="sm danger">
                             {t('home.revoke')}
                           </button>
                         </form>
                       ) : (
-                        <span class="badge">{g.revokedAt ? t('admin.user.revoked') : t('admin.user.expired')}</span>
+                        <span class="badge">
+                          {g.revokedAt ? t('admin.user.revoked') : t('admin.user.expired')}
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -641,7 +701,11 @@ export interface AdminAuditView {
   }[];
 }
 
-export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAuditView }> = ({ ctx, shell, view }) => {
+export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAuditView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   return (
     <AppShell ctx={ctx} shell={shell} section="admin-audit" title={t('admin.nav.audit')}>
@@ -679,7 +743,11 @@ export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAud
                       <code>{r.action}</code>
                     </td>
                     <td class="small">
-                      {r.targetUserId ? <a href={`/admin/users/${r.targetUserId}`}>{r.targetUserId.slice(0, 12)}…</a> : '—'}
+                      {r.targetUserId ? (
+                        <a href={`/admin/users/${r.targetUserId}`}>{r.targetUserId.slice(0, 12)}…</a>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td class="small muted">
                       {Object.entries(r.details)
@@ -720,7 +788,11 @@ export interface AdminSystemView {
   checks: { label: string; ok: boolean; detail: string }[];
 }
 
-export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSystemView }> = ({ ctx, shell, view }) => {
+export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSystemView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t } = ctx;
   return (
     <AppShell ctx={ctx} shell={shell} section="admin-system" title={t('admin.nav.system')}>

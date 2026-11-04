@@ -71,7 +71,14 @@ export const PLANS: readonly Plan[] = [
     id: 'pro',
     priceMonthly: 12,
     priceYearly: 115,
-    limits: { actions: 50_000, accounts: null, messengers: 3, backgroundJobs: null, historyDays: 365, seats: 1 },
+    limits: {
+      actions: 50_000,
+      accounts: null,
+      messengers: 3,
+      backgroundJobs: null,
+      historyDays: 365,
+      seats: 1,
+    },
     public: true,
   },
   {

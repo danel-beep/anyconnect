@@ -42,6 +42,7 @@ import {
 } from './executor.js';
 import type { IdempotencyStore } from './idempotency.js';
 import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
+import type { QuotaGate } from './quota.js';
 import {
   carryUntrusted,
   dataResult,
@@ -55,7 +56,6 @@ import {
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
-import type { QuotaGate } from './quota.js';
 import type { UsageMeter } from './usage.js';
 
 export type { ToolCallResult } from './result.js';

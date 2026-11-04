@@ -61,7 +61,7 @@ export function connectRoutes() {
           identity,
           problem:
             result.account.status === 'active' ? undefined : (result.account.statusMessage ?? undefined),
-          returnTo: safeNextPath(result.returnTo ?? '/'),
+          returnTo: safeNextPath(result.returnTo, '/app/services'),
         }}
       />,
     );
@@ -182,7 +182,7 @@ export function connectRoutes() {
           created: !reconnect,
           identity: test.identity,
           problem: test.ok ? undefined : (test.message ?? undefined),
-          returnTo: safeNextPath(form.returnTo ?? '/'),
+          returnTo: safeNextPath(form.returnTo, '/app/services'),
         }}
       />,
     );

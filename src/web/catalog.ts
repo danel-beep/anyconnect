@@ -5,7 +5,18 @@ import type { IconName } from './ui.js';
  * languages. Connectors stay free of presentation; a service without an entry here still shows up
  * (first letter as logo, its own description, category "other").
  */
-export type ServiceCategory = 'mail' | 'messengers' | 'calendar' | 'files' | 'docs' | 'tasks' | 'dev' | 'payments' | 'crm' | 'custom' | 'other';
+export type ServiceCategory =
+  | 'mail'
+  | 'messengers'
+  | 'calendar'
+  | 'files'
+  | 'docs'
+  | 'tasks'
+  | 'dev'
+  | 'payments'
+  | 'crm'
+  | 'custom'
+  | 'other';
 
 export const CATEGORY_ORDER: ServiceCategory[] = [
   'mail',
@@ -37,7 +48,10 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   outlook: {
     glyph: 'mail',
     category: 'mail',
-    blurb: { ru: 'Почта и календарь Microsoft 365 и Outlook.com.', en: 'Microsoft 365 and Outlook.com mail and calendar.' },
+    blurb: {
+      ru: 'Почта и календарь Microsoft 365 и Outlook.com.',
+      en: 'Microsoft 365 and Outlook.com mail and calendar.',
+    },
   },
   imap: {
     glyph: 'mail',
@@ -69,7 +83,10 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   todoist: {
     icon: 'todoist',
     category: 'tasks',
-    blurb: { ru: 'Задачи и проекты: списки, создание, закрытие.', en: 'Tasks and projects: list, add, complete.' },
+    blurb: {
+      ru: 'Задачи и проекты: списки, создание, закрытие.',
+      en: 'Tasks and projects: list, add, complete.',
+    },
   },
   github: {
     icon: 'github',
@@ -97,7 +114,12 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
 };
 
 /** Services in the works, shown as "soon" on the website (they are not connectable yet). */
-export const PLANNED_SERVICES: { name: string; icon?: string; glyph?: IconName; category: ServiceCategory }[] = [
+export const PLANNED_SERVICES: {
+  name: string;
+  icon?: string;
+  glyph?: IconName;
+  category: ServiceCategory;
+}[] = [
   { name: 'Telegram', icon: 'telegram', category: 'messengers' },
   { name: 'WhatsApp', icon: 'whatsapp', category: 'messengers' },
   { name: 'Jira', icon: 'jira', category: 'tasks' },

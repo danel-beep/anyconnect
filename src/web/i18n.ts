@@ -1,6 +1,10 @@
+import { appEn, appRu } from './i18n/app.js';
+import { authEn, authRu } from './i18n/auth.js';
+import { siteEn, siteRu } from './i18n/site.js';
+
 export type Locale = 'ru' | 'en';
 
-const en = {
+const coreEn = {
   'login.title': 'Sign in to AnyConnect',
   'login.subtitle': 'Your hub for connecting services to AI assistants.',
   'login.email': 'Email',
@@ -171,9 +175,11 @@ const en = {
   'home.manageHint': 'Accounts are managed through the REST API or CLI for now; the web panel comes next.',
 } as const;
 
-type Key = keyof typeof en;
+const en = { ...coreEn, ...siteEn, ...appEn, ...authEn } as const;
 
-const ru: Record<Key, string> = {
+export type Key = keyof typeof en;
+
+const coreRu: Record<keyof typeof coreEn, string> = {
   'login.title': 'Вход в AnyConnect',
   'login.subtitle': 'Ваш хаб для подключения сервисов к ИИ-ассистентам.',
   'login.email': 'Email',
@@ -343,6 +349,8 @@ const ru: Record<Key, string> = {
   'home.disabled': 'выключен',
   'home.manageHint': 'Пока аккаунты управляются через REST API или CLI; веб-панель — следующий этап.',
 };
+
+const ru: Record<Key, string> = { ...coreRu, ...siteRu, ...appRu, ...authRu };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
 

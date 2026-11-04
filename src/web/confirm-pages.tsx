@@ -125,11 +125,6 @@ export const ConfirmListPage: FC<{
   csrf: string;
 }> = ({ t, lang, calls, telegram, csrf }) => (
   <Layout title={t('confirm.listTitle')} lang={lang}>
-    <header class="top">
-      <a class="brand" href="/">
-        AnyConnect
-      </a>
-    </header>
     <div class="card">
       <h1>{t('confirm.listTitle')}</h1>
       {calls.length === 0 ? <p class="muted">{t('confirm.none')}</p> : null}

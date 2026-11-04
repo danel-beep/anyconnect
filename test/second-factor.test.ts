@@ -114,7 +114,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     expect(password.status).toBe(303);
     expect(password.headers.get('location')).toBe('/login/verify?next=%2Fsecurity');
     expect(await sessionAmr(hub)).toEqual([]);
-    expect((await browser.request('/')).headers.get('location')).toBe('/login');
+    expect((await browser.request('/app')).headers.get('location')).toBe('/login?next=%2Fapp');
 
     const verify = await browser.request(password.headers.get('location')!);
     expect(verify.status).toBe(200);
@@ -125,7 +125,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     const ok = await browser.request('/login/verify', { form: { ...hidden, code } });
     expect(ok.status).toBe(303);
     expect(ok.headers.get('location')).toBe('/security');
-    expect((await browser.request('/')).status).toBe(200);
+    expect((await browser.request('/app')).status).toBe(200);
     expect(await sessionAmr(hub)).toEqual([['pwd', 'otp']]);
 
     // The same code cannot be replayed for another sign-in.
@@ -242,7 +242,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     });
     expect(signedIn.status).toBe(200);
     expect(await signedIn.json()).toEqual({ redirect: '/security' });
-    expect((await browser.request('/')).status).toBe(200);
+    expect((await browser.request('/app')).status).toBe(200);
     expect(await sessionAmr(hub)).toEqual([['hwk']]);
 
     // The same assertion (and its challenge) cannot be used twice.
@@ -389,16 +389,16 @@ describe('REQUIRE_2FA', () => {
   it('sends users without a second factor to /security first, then lets them continue', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await browser.login();
-    const home = await browser.request('/');
+    const home = await browser.request('/app');
     expect(home.status).toBe(302);
-    expect(home.headers.get('location')).toBe('/security?next=%2F');
+    expect(home.headers.get('location')).toBe('/security?next=%2Fapp');
     const api = await browser.request('/api/v1/me');
     expect(api.status).toBe(403);
 
     const page = await (await browser.request('/security?next=%2F')).text();
     expect(page).toContain('обязателен второй фактор');
     await enableTotp(browser);
-    expect((await browser.request('/')).status).toBe(200);
+    expect((await browser.request('/app')).status).toBe(200);
     expect((await browser.request('/security?next=%2F')).status).toBe(200);
   });
 

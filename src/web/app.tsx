@@ -1,10 +1,11 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan } from '../billing/plans.js';
 import { serviceMeta } from './catalog.js';
+import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { ClientGuides, PlanCard } from './site.js';
+import { PlanCard } from './site.js';
 import {
   Brand,
   CopyField,
@@ -16,12 +17,11 @@ import {
   type IconName,
   initials,
   Meter,
-  pctClass,
   Prefs,
+  pctClass,
   ServiceLogo,
   Tabs,
 } from './ui.js';
-import { CLIENT_GUIDES, clientName } from './clients.js';
 
 // ---------------------------------------------------------------------------
 // Shell
@@ -46,7 +46,13 @@ export interface ShellInfo {
   pendingConfirmations: number;
 }
 
-const NAV: { id: AppSection; href: string; icon: IconName; key: string; group: 'main' | 'account' | 'admin' }[] = [
+const NAV: {
+  id: AppSection;
+  href: string;
+  icon: IconName;
+  key: string;
+  group: 'main' | 'account' | 'admin';
+}[] = [
   { id: 'overview', href: '/app', icon: 'home', key: 'app.nav.overview', group: 'main' },
   { id: 'services', href: '/app/services', icon: 'plug', key: 'app.nav.services', group: 'main' },
   { id: 'apps', href: '/app/apps', icon: 'zap', key: 'app.nav.apps', group: 'main' },
@@ -105,8 +111,9 @@ export const AppShell: FC<{
                   <Icon name={n.icon} />
                   <span>{t(n.key as 'app.nav.overview')}</span>
                   {n.id === 'confirm' && shell.pendingConfirmations > 0 ? (
-                    <span class="count" aria-label={t('app.nav.pending', { n: shell.pendingConfirmations })}>
-                      {shell.pendingConfirmations}
+                    <span class="count">
+                      <span aria-hidden="true">{shell.pendingConfirmations}</span>
+                      <span class="sr-only">{t('app.nav.pending', { n: shell.pendingConfirmations })}</span>
                     </span>
                   ) : null}
                 </a>
@@ -135,7 +142,12 @@ export const AppShell: FC<{
               </a>
               <form method="post" action="/logout" class="inline">
                 <input type="hidden" name="csrf" value={ctx.csrf} />
-                <button type="submit" class="icon-btn" title={t('home.signOut')} aria-label={t('home.signOut')}>
+                <button
+                  type="submit"
+                  class="icon-btn"
+                  title={t('home.signOut')}
+                  aria-label={t('home.signOut')}
+                >
                   <Icon name="logout" />
                 </button>
               </form>
@@ -284,10 +296,12 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
     <div class="stats">
       <div class="stat">
         <span class="label">
-          {t('app.usage.actions')} <a href="/app/billing">{t(`plan.${usage.planId}.name` as 'plan.free.name')}</a>
+          {t('app.usage.actions')}{' '}
+          <a href="/app/billing">{t(`plan.${usage.planId}.name` as 'plan.free.name')}</a>
         </span>
         <div class="value">
-          {fmtNumber(lang, usage.actions.used)} <span class="muted small">/ {limitText(usage.actions.limit)}</span>
+          {fmtNumber(lang, usage.actions.used)}{' '}
+          <span class="muted small">/ {limitText(usage.actions.limit)}</span>
         </div>
         <Meter used={usage.actions.used} limit={usage.actions.limit} label={t('app.usage.actions')} />
         <div class="sub">{t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}</div>
@@ -299,7 +313,9 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
         </div>
         <Meter used={usage.accounts.used} limit={usage.accounts.limit} label={t('app.usage.accounts')} />
         <div class="sub">
-          {usage.introUntil ? t('app.usage.intro', { date: fmtDate(lang, usage.introUntil) }) : t('app.usage.accountsHint')}
+          {usage.introUntil
+            ? t('app.usage.intro', { date: fmtDate(lang, usage.introUntil) })
+            : t('app.usage.accountsHint')}
         </div>
       </div>
       {extra}
@@ -322,12 +338,21 @@ export interface OverviewView {
   recent: CallView[];
 }
 
-export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewView }> = ({ ctx, shell, view }) => {
+export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t } = ctx;
   const allDone = view.steps.ai && view.steps.service && view.steps.call;
   const steps: { done: boolean; title: string; text: string; href: string }[] = [
     { done: view.steps.ai, title: t('app.onb.ai'), text: t('app.onb.aiText'), href: '#connect-ai' },
-    { done: view.steps.service, title: t('app.onb.service'), text: t('app.onb.serviceText'), href: '/app/services' },
+    {
+      done: view.steps.service,
+      title: t('app.onb.service'),
+      text: t('app.onb.serviceText'),
+      href: '/app/services',
+    },
     { done: view.steps.call, title: t('app.onb.call'), text: t('app.onb.callText'), href: '/docs#services' },
   ];
   return (
@@ -513,11 +538,16 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
           {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
           {a.identity ? ` · ${a.identity}` : ''}
         </div>
-        {a.enabled && a.status !== 'active' && a.statusMessage ? <div class="sub error">{a.statusMessage}</div> : null}
+        {a.enabled && a.status !== 'active' && a.statusMessage ? (
+          <div class="sub error">{a.statusMessage}</div>
+        ) : null}
       </div>
       <div class="ops">
         {a.enabled && a.status !== 'active' ? (
-          <a class="btn sm primary" href={`/connect/${a.connectorId}?account=${a.id}&returnTo=%2Fapp%2Fservices`}>
+          <a
+            class="btn sm primary"
+            href={`/connect/${a.connectorId}?account=${a.id}&returnTo=%2Fapp%2Fservices`}
+          >
             <Icon name="refresh" /> {t('app.acc.reconnect')}
           </a>
         ) : null}
@@ -548,10 +578,15 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
             <form method="post" action={`${base}/toggle`}>
               <input type="hidden" name="csrf" value={ctx.csrf} />
               <button type="submit">
-                <Icon name={a.enabled ? 'pause' : 'play'} /> {a.enabled ? t('app.acc.disable') : t('app.acc.enable')}
+                <Icon name={a.enabled ? 'pause' : 'play'} />{' '}
+                {a.enabled ? t('app.acc.disable') : t('app.acc.enable')}
               </button>
             </form>
-            <form method="post" action={`${base}/delete`} data-confirm={t('app.acc.deleteConfirm', { label: a.label })}>
+            <form
+              method="post"
+              action={`${base}/delete`}
+              data-confirm={t('app.acc.deleteConfirm', { label: a.label })}
+            >
               <input type="hidden" name="csrf" value={ctx.csrf} />
               <button type="submit" class="danger">
                 <Icon name="trash" /> {t('app.acc.delete')}
@@ -564,7 +599,11 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
   );
 };
 
-export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ServicesView }> = ({ ctx, shell, view }) => {
+export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ServicesView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   const full = view.usage.accounts.limit !== null && view.usage.accounts.used >= view.usage.accounts.limit;
   return (
@@ -593,7 +632,8 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
       </div>
       {full ? (
         <div class="notice">
-          {t('app.services.full', { n: view.usage.accounts.limit ?? 0 })} <a href="/app/billing">{t('app.billing.upgrade')}</a>
+          {t('app.services.full', { n: view.usage.accounts.limit ?? 0 })}{' '}
+          <a href="/app/billing">{t('app.billing.upgrade')}</a>
         </div>
       ) : null}
       <div class="card" id="add">
@@ -627,7 +667,8 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                       </a>
                     ) : (
                       <a class="btn sm" href={`/connect/${s.service}?returnTo=%2Fapp%2Fservices`}>
-                        <Icon name="plus" /> {s.accounts > 0 ? t('app.services.addAnother') : t('app.services.connect')}
+                        <Icon name="plus" />{' '}
+                        {s.accounts > 0 ? t('app.services.addAnother') : t('app.services.connect')}
                       </a>
                     )
                   ) : (
@@ -654,7 +695,11 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                   </span>
                   {c.lastError ? <div class="small error">{c.lastError}</div> : null}
                 </span>
-                <form method="post" action={`/app/custom/${c.connectorId}/delete`} data-confirm={t('app.custom.deleteConfirm', { name: c.name })}>
+                <form
+                  method="post"
+                  action={`/app/custom/${c.connectorId}/delete`}
+                  data-confirm={t('app.custom.deleteConfirm', { name: c.name })}
+                >
                   <input type="hidden" name="csrf" value={ctx.csrf} />
                   <button type="submit" class="sm danger">
                     {t('app.acc.delete')}
@@ -724,7 +769,11 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
                     {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('home.never')}
                   </div>
                 </span>
-                <form method="post" action={`/grants/${g.id}/revoke`} data-confirm={t('app.apps.revokeConfirm', { name: g.name })}>
+                <form
+                  method="post"
+                  action={`/grants/${g.id}/revoke`}
+                  data-confirm={t('app.apps.revokeConfirm', { name: g.name })}
+                >
                   <input type="hidden" name="csrf" value={ctx.csrf} />
                   <button class="sm danger" type="submit">
                     {t('home.revoke')}
@@ -768,11 +817,19 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
                   <strong>{tok.name}</strong>
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
-                    {tok.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, tok.lastUsedAt) }) : t('home.never')}
-                    {tok.expiresAt ? ` · ${t('app.tokens.expires', { date: fmtDate(lang, tok.expiresAt) })}` : ''}
+                    {tok.lastUsedAt
+                      ? t('app.apps.used', { ago: fmtAgo(lang, tok.lastUsedAt) })
+                      : t('home.never')}
+                    {tok.expiresAt
+                      ? ` · ${t('app.tokens.expires', { date: fmtDate(lang, tok.expiresAt) })}`
+                      : ''}
                   </div>
                 </span>
-                <form method="post" action={`/app/tokens/${tok.id}/revoke`} data-confirm={t('app.tokens.revokeConfirm', { name: tok.name })}>
+                <form
+                  method="post"
+                  action={`/app/tokens/${tok.id}/revoke`}
+                  data-confirm={t('app.tokens.revokeConfirm', { name: tok.name })}
+                >
                   <input type="hidden" name="csrf" value={ctx.csrf} />
                   <button class="sm danger" type="submit">
                     {t('home.revoke')}
@@ -786,7 +843,14 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
           <input type="hidden" name="csrf" value={ctx.csrf} />
           <div class="wide-2">
             <label for="tok-name">{t('app.tokens.name')}</label>
-            <input id="tok-name" type="text" name="name" required maxlength={80} placeholder={t('app.tokens.placeholder')} />
+            <input
+              id="tok-name"
+              type="text"
+              name="name"
+              required
+              maxlength={80}
+              placeholder={t('app.tokens.placeholder')}
+            />
           </div>
           <div>
             <label for="tok-exp">{t('app.tokens.expiry')}</label>
@@ -824,7 +888,11 @@ export interface ActivityView {
   historyDays: number | null;
 }
 
-export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityView }> = ({ ctx, shell, view }) => {
+export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   const max = Math.max(1, ...view.daily.map((d) => d.calls));
   const maxSvc = Math.max(1, ...view.byService.map((s) => s.calls));
@@ -897,7 +965,11 @@ export interface BillingView {
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
 
-export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView }> = ({ ctx, shell, view }) => {
+export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   return (
     <AppShell ctx={ctx} shell={shell} section="billing" title={t('app.nav.billing')}>
@@ -908,7 +980,9 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
         <div class="card-head">
           <h2>{t('app.billing.current', { plan: t(`plan.${view.plan.id}.name` as 'plan.free.name') })}</h2>
           {view.subscription?.periodEnd ? (
-            <span class="badge">{t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}</span>
+            <span class="badge">
+              {t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}
+            </span>
           ) : null}
         </div>
         <p class="muted">{t(`plan.${view.plan.id}.for` as 'plan.free.for')}</p>
@@ -922,12 +996,17 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                     <strong>
                       {g.amount === null
                         ? t('app.billing.bonusUnlimited', { metric: t(`pricing.row.${g.metric}`) })
-                        : t('app.billing.bonus', { n: fmtNumber(lang, g.amount), metric: t(`pricing.row.${g.metric}`) })}
+                        : t('app.billing.bonus', {
+                            n: fmtNumber(lang, g.amount),
+                            metric: t(`pricing.row.${g.metric}`),
+                          })}
                     </strong>
                     {g.reason ? <span class="small muted"> · {g.reason}</span> : null}
                   </span>
                   <span class="small muted">
-                    {g.expiresAt ? t('app.billing.until', { date: fmtDate(lang, g.expiresAt) }) : t('app.billing.forever')}
+                    {g.expiresAt
+                      ? t('app.billing.until', { date: fmtDate(lang, g.expiresAt) })
+                      : t('app.billing.forever')}
                   </span>
                 </li>
               ))}
@@ -935,18 +1014,21 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           </>
         ) : null}
       </div>
-      {ctx.billing ? null : <div class="notice info">{t('app.billing.manual', { email: ctx.supportEmail ?? '' })}</div>}
+      {ctx.billing ? null : (
+        <div class="notice info">{t('app.billing.manual', { email: ctx.supportEmail ?? '' })}</div>
+      )}
       <div data-interval="month" data-interval-root>
         <div class="row between">
           <h2>{t('app.billing.plans')}</h2>
-          <div class="billing-switch" role="group" aria-label={t('pricing.interval')}>
+          <fieldset class="billing-switch">
+            <legend class="sr-only">{t('pricing.interval')}</legend>
             <button type="button" aria-pressed="true" data-interval-set="month">
               {t('pricing.monthly')}
             </button>
             <button type="button" aria-pressed="false" data-interval-set="year">
               {t('pricing.yearly')} <span class="save">{t('pricing.save')}</span>
             </button>
-          </div>
+          </fieldset>
         </div>
         <div class="plan-mini">
           {PLANS.filter((p) => p.public).map((plan) => (
@@ -1030,7 +1112,11 @@ const agentName = (ua: string | null) => {
   return os ? `${browser} · ${os}` : browser;
 };
 
-export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsView }> = ({ ctx, shell, view }) => {
+export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   return (
     <AppShell ctx={ctx} shell={shell} section="settings" title={t('app.nav.settings')}>
@@ -1042,7 +1128,14 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
           <form method="post" action="/app/settings/profile">
             <input type="hidden" name="csrf" value={ctx.csrf} />
             <label for="name">{t('app.settings.name')}</label>
-            <input id="name" type="text" name="name" value={view.name ?? ''} maxlength={100} autocomplete="name" />
+            <input
+              id="name"
+              type="text"
+              name="name"
+              value={view.name ?? ''}
+              maxlength={100}
+              autocomplete="name"
+            />
             <label for="email">{t('login.email')}</label>
             <input id="email" type="email" value={view.email} readonly />
             <label for="locale">{t('app.settings.language')}</label>

@@ -1,7 +1,7 @@
 import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql, sum } from 'drizzle-orm';
 import type { EntitlementService } from '../billing/entitlements.js';
-import { DEFAULT_PLAN_ID } from '../billing/plans.js';
 import { monthPeriod } from '../billing/period.js';
+import { DEFAULT_PLAN_ID } from '../billing/plans.js';
 import type { UserService } from '../core/users.js';
 import type { Db } from '../db/client.js';
 import {
@@ -71,14 +71,24 @@ export class AdminService {
         .from(users),
       db.select({ n: count() }).from(accounts),
       db.select({ n: count() }).from(oauthGrants).where(isNull(oauthGrants.revokedAt)),
-      db.select({ planId: subscriptions.planId, n: count() }).from(subscriptions).groupBy(subscriptions.planId),
       db
-        .select({ day: usageCounters.day, calls: sum(usageCounters.calls), errors: sum(usageCounters.errors) })
+        .select({ planId: subscriptions.planId, n: count() })
+        .from(subscriptions)
+        .groupBy(subscriptions.planId),
+      db
+        .select({
+          day: usageCounters.day,
+          calls: sum(usageCounters.calls),
+          errors: sum(usageCounters.errors),
+        })
         .from(usageCounters)
         .where(gte(usageCounters.day, isoDay(since30)))
         .groupBy(usageCounters.day),
       db
-        .select({ day: sql<string>`to_char(${users.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, n: count() })
+        .select({
+          day: sql<string>`to_char(${users.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`,
+          n: count(),
+        })
         .from(users)
         .where(gte(users.createdAt, since30))
         .groupBy(sql`1`),
@@ -136,7 +146,13 @@ export class AdminService {
     const page = Math.max(opts.page ?? 1, 1);
     const q = opts.q?.trim().slice(0, 100);
     const where = and(
-      q ? or(ilike(users.email, `%${escapeLike(q)}%`), ilike(users.name, `%${escapeLike(q)}%`), eq(users.id, q)) : undefined,
+      q
+        ? or(
+            ilike(users.email, `%${escapeLike(q)}%`),
+            ilike(users.name, `%${escapeLike(q)}%`),
+            eq(users.id, q),
+          )
+        : undefined,
       opts.status ? eq(users.status, opts.status) : undefined,
       opts.role ? eq(users.role, opts.role) : undefined,
     );
@@ -322,12 +338,17 @@ export class AdminService {
       periodEnd: input.periodEnd,
       note: input.note ?? null,
     });
-    await this.log(actor, 'plan.set', { userId, workspaceId }, {
-      from: before,
-      to: input.planId,
-      until: input.periodEnd?.toISOString() ?? null,
-      ...(input.note ? { note: input.note } : {}),
-    });
+    await this.log(
+      actor,
+      'plan.set',
+      { userId, workspaceId },
+      {
+        from: before,
+        to: input.planId,
+        until: input.periodEnd?.toISOString() ?? null,
+        ...(input.note ? { note: input.note } : {}),
+      },
+    );
   }
 
   async grantLimit(
@@ -343,13 +364,18 @@ export class AdminService {
       reason: input.reason ?? null,
       grantedBy: actor.userId,
     });
-    await this.log(actor, 'limit.grant', { userId, workspaceId }, {
-      grantId: grant.id,
-      metric: grant.metric,
-      amount: grant.amount,
-      until: grant.expiresAt?.toISOString() ?? null,
-      ...(input.reason ? { reason: input.reason } : {}),
-    });
+    await this.log(
+      actor,
+      'limit.grant',
+      { userId, workspaceId },
+      {
+        grantId: grant.id,
+        metric: grant.metric,
+        amount: grant.amount,
+        until: grant.expiresAt?.toISOString() ?? null,
+        ...(input.reason ? { reason: input.reason } : {}),
+      },
+    );
   }
 
   async revokeLimit(actor: AdminActor, userId: string, grantId: string): Promise<void> {
@@ -378,7 +404,8 @@ export class AdminService {
 
   async deleteUser(actor: AdminActor, userId: string, confirmEmail: string): Promise<void> {
     const user = await this.assertManageable(actor, userId);
-    if (confirmEmail.trim().toLowerCase() !== user.email) throw badRequest('Type the user’s email to confirm');
+    if (confirmEmail.trim().toLowerCase() !== user.email)
+      throw badRequest('Type the user’s email to confirm');
     await this.deps.users.delete(userId);
     await this.log(actor, 'user.delete', { userId }, { email: user.email });
   }

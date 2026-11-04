@@ -6,7 +6,6 @@ import { THEMES, themeCss } from './theme.js';
 /** QR codes stay dark-on-light in both themes (not every scanner reads inverted codes). */
 const QR_COLORS = `background:${THEMES.light.card};color:${THEMES.light.text}`;
 
-
 /**
  * Base and components: typography, buttons, forms, cards, badges, tables, tabs, meters.
  * Shared by the website, the dashboard, the admin panel and the sign-in / consent pages.
@@ -212,4 +211,3 @@ ul.codes code{font-size:15px}
 
 /** Served at /assets/app.css (no inline styles, so the CSP can forbid them). Colors come from `theme.ts`. */
 export const APP_CSS = [FONT_FACES, themeCss(), BASE_CSS, SITE_CSS, APP_SHELL_CSS].join('\n');
-

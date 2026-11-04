@@ -1,18 +1,19 @@
 import type { McpHttpHandler } from '@modelcontextprotocol/server';
-import type { AppConfig } from './config.js';
+import { AdminService } from './admin/service.js';
 import { EntitlementService } from './billing/entitlements.js';
 import type { BillingProvider } from './billing/provider.js';
+import type { AppConfig } from './config.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
+import { ActivityService } from './core/activity.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
-import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
-import { UserService } from './core/users.js';
 import { ConnectService } from './core/connect.js';
 import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-connectors.js';
 import { CustomServiceManager } from './core/custom-services.js';
+import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
 import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
@@ -20,6 +21,7 @@ import { PasskeyService } from './core/passkeys.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
 import { TotpService } from './core/totp.js';
+import { UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
@@ -110,6 +112,10 @@ export interface Services {
   sessions: SessionService;
   /** Sign-up through external providers, roles, suspension, deletion. */
   users: UserService;
+  /** The hub owner's admin panel: user directory, plans, extra limits, admin log. */
+  adminPanel: AdminService;
+  /** Counts over the audit log for the dashboard. */
+  activity: ActivityService;
   /** "Sign in with Google" and other OpenID Connect providers. */
   externalLogin: ExternalLoginService;
   /** Sign-ins waiting for a second factor. */
@@ -318,6 +324,8 @@ export function createServices(
     overrides.loginProviders ??
       (config.site.google ? [new OidcLoginProvider(googleLoginSpec(config.site.google), network.fetch)] : []),
   );
+  const adminPanel = new AdminService({ db, users, entitlements });
+  const activity = new ActivityService(db);
   const pendingLogins = new PendingLoginService(db);
   const secondFactors = new SecondFactorService(
     new TotpService(db, secrets, config.auth.rpName),
@@ -366,6 +374,8 @@ export function createServices(
     sessions,
     users,
     externalLogin,
+    adminPanel,
+    activity,
     pendingLogins,
     secondFactors,
     rateLimiter,

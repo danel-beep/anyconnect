@@ -34,7 +34,13 @@ export const Doc: FC<{
       <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#232326" media="(prefers-color-scheme: dark)" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      <link rel="preload" href="/assets/fonts/onest-latin.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+      <link
+        rel="preload"
+        href="/assets/fonts/onest-latin.woff2"
+        as="font"
+        type="font/woff2"
+        crossorigin="anonymous"
+      />
       <link rel="stylesheet" href="/assets/app.css" />
       <script src="/assets/theme.js" />
       <script src="/assets/site.js" defer />

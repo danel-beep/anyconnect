@@ -34,7 +34,10 @@ export interface OidcProviderSpec {
   authorizeParams?: Record<string, string>;
 }
 
-export const googleLoginSpec = (client: { clientId: string; clientSecret?: string | undefined }): OidcProviderSpec => ({
+export const googleLoginSpec = (client: {
+  clientId: string;
+  clientSecret?: string | undefined;
+}): OidcProviderSpec => ({
   id: 'google',
   name: 'Google',
   authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -92,7 +95,12 @@ export class OidcLoginProvider {
     return this.spec.name;
   }
 
-  authorizationUrl(input: { redirectUri: string; state: string; codeChallenge: string; nonce: string }): string {
+  authorizationUrl(input: {
+    redirectUri: string;
+    state: string;
+    codeChallenge: string;
+    nonce: string;
+  }): string {
     const url = new URL(this.spec.authorizationUrl);
     const params: Record<string, string> = {
       response_type: 'code',
@@ -143,8 +151,10 @@ export class OidcLoginProvider {
     const claims = parsed.data;
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     const now = Math.floor(Date.now() / 1000);
-    if (!this.spec.issuers.includes(claims.iss)) throw new ExternalLoginError('ID token from an unexpected issuer');
-    if (!audiences.includes(this.spec.clientId)) throw new ExternalLoginError('ID token for another application');
+    if (!this.spec.issuers.includes(claims.iss))
+      throw new ExternalLoginError('ID token from an unexpected issuer');
+    if (!audiences.includes(this.spec.clientId))
+      throw new ExternalLoginError('ID token for another application');
     if (audiences.length > 1 && claims.azp !== this.spec.clientId)
       throw new ExternalLoginError('ID token for another application');
     if (claims.exp + CLOCK_SKEW_S < now) throw new ExternalLoginError('The ID token has expired');
@@ -230,9 +240,14 @@ export class ExternalLoginService {
     const provider = this.providers.get(providerId);
     if (!provider) throw badRequest(`Sign-in with "${providerId}" is not configured on this hub`);
     if (!params.state || !browserState || !safeEqual(params.state, browserState))
-      throw new ExternalLoginError('This sign-in link was started in another browser or has expired. Try again.');
+      throw new ExternalLoginError(
+        'This sign-in link was started in another browser or has expired. Try again.',
+      );
     const stateHash = hashToken(params.state);
-    const [row] = await this.deps.db.delete(loginStates).where(eq(loginStates.stateHash, stateHash)).returning();
+    const [row] = await this.deps.db
+      .delete(loginStates)
+      .where(eq(loginStates.stateHash, stateHash))
+      .returning();
     if (!row || row.provider !== provider.id || row.expiresAt.getTime() < Date.now())
       throw new ExternalLoginError('This sign-in link has expired or was already used. Try again.');
     if (params.error) throw new ExternalLoginError(`${provider.name} sign-in was cancelled`);
