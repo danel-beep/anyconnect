@@ -44,4 +44,8 @@ export type IdPrefix =
   | 'grt' // OAuth grant (an AI client connected to a workspace)
   | 'pat' // personal access token
   | 'oap' // OAuth app of a service provider (bring your own app)
-  | 'svc'; // user-defined service (remote MCP server, HTTP manifest)
+  | 'svc' // user-defined service (remote MCP server, HTTP manifest)
+  | 'cht' // messenger chat
+  | 'msg' // messenger message
+  | 'out' // messenger outbox job
+  | 'lgn'; // messenger login flow

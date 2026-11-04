@@ -63,6 +63,10 @@ const EnvSchema = z.object({
   IDEMPOTENCY_WINDOW_SECONDS: z.coerce.number().int().min(0).default(300),
   /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
   TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
+  /** Internal URL of the messenger gateway (Render private service), e.g. http://anyconnect-gateway:10000. */
+  GATEWAY_URL: optionalString,
+  /** Shared secret between the hub and the gateway. */
+  GATEWAY_TOKEN: optionalString,
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -104,6 +108,8 @@ export interface AppConfig {
   /** Run background jobs (pg-boss) in this process. */
   jobs: { enabled: boolean };
   tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
+  /** The messenger gateway, when deployed. */
+  gateway: { url: string; token: string } | undefined;
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -136,6 +142,18 @@ function normalizePublicUrl(raw: string): string {
     throw new ConfigError('PUBLIC_URL must be an origin without a path, e.g. https://hub.example.com');
   }
   return url.origin;
+}
+
+function gatewayConfig(url: string | undefined, token: string | undefined): AppConfig['gateway'] {
+  if (!url && !token) return undefined;
+  if (!url || !token) throw new ConfigError('GATEWAY_URL and GATEWAY_TOKEN must be set together');
+  if (token.length < 32) throw new ConfigError('GATEWAY_TOKEN must be at least 32 characters');
+  try {
+    new URL(url);
+  } catch {
+    throw new ConfigError(`GATEWAY_URL is not a valid URL: ${url}`);
+  }
+  return { url: url.replace(/\/+$/, ''), token };
 }
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -215,5 +233,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
       listTokenBudget: env.TOOL_LIST_TOKEN_BUDGET,
     },
+    gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
   };
 }

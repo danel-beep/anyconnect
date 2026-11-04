@@ -4,6 +4,7 @@ import pg from 'pg';
 import { createApp } from '../src/app.js';
 import { bootstrap } from '../src/bootstrap.js';
 import { loadConfig } from '../src/config.js';
+import type { BuiltinDeps } from '../src/connectors/index.js';
 import type { ConnectorRegistry } from '../src/connectors/registry.js';
 import { runMigrations } from '../src/db/migrate.js';
 import type { StageMap } from '../src/hub/executor.js';
@@ -62,7 +63,7 @@ export interface TestHub {
 export async function startTestHub(
   options: {
     env?: Record<string, string>;
-    connectors?: ConnectorRegistry;
+    connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     fetchDocument?: typeof safeFetch;
     seed?: boolean;
     databaseUrl?: string;

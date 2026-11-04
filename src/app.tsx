@@ -3,6 +3,7 @@ import { AppError } from './lib/errors.js';
 import { apiRoutes } from './routes/api.js';
 import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
+import { hookRoutes } from './routes/hooks.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { webRoutes } from './routes/web.js';
@@ -42,6 +43,7 @@ export function createApp(services: Services) {
 
   app.route('/', oauthRoutes());
   app.route('/', mcpRoutes());
+  app.route('/', hookRoutes());
   app.route('/api/v1', apiRoutes());
   app.route('/', connectRoutes());
   app.route('/', webRoutes());

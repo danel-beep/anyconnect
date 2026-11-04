@@ -9,6 +9,7 @@ export async function bootstrap(services: Services): Promise<void> {
     await runMigrations(database.pool);
     logger.info('database migrations applied');
   }
+  await services.messaging.init();
   if (services.secrets.usingDevelopmentKey) {
     logger.warn('ENCRYPTION_KEY is not set: using an insecure development key. Never do this in production.');
   }

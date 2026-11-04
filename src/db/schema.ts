@@ -418,3 +418,187 @@ export const customConnectors = pgTable(
   },
   (t) => [uniqueIndex().on(t.workspaceId, t.connectorId)],
 );
+
+// ---------------------------------------------------------------------------
+// Messengers (Telegram, WhatsApp, ...): see docs/MESSENGERS.md
+// ---------------------------------------------------------------------------
+
+/**
+ * Data keys of the hub, stored wrapped (encrypted) by the SecretBox so that rotating
+ * ENCRYPTION_KEY only re-wraps them and never invalidates data derived from them
+ * (e.g. the blind search index of messages).
+ */
+export const dataKeys = pgTable('data_keys', {
+  purpose: text().primaryKey(),
+  keyEncrypted: text().notNull(),
+  createdAt: createdAt(),
+});
+
+export type MessengerSessionState =
+  /** No session yet: the user has to log in (QR code, phone code). */
+  | 'needs_login'
+  /** The gateway is (re)connecting. */
+  | 'connecting'
+  | 'online'
+  /** Waiting before the next reconnect attempt. */
+  | 'backoff'
+  /** Stopped until the user acts (logged out, banned, too many failures...). */
+  | 'stopped';
+
+export type MessengerProblem =
+  | 'logged_out'
+  | 'needs_password'
+  | 'frozen'
+  | 'banned'
+  | 'phone_offline'
+  | 'flood'
+  | 'network'
+  | 'protocol'
+  | 'failing';
+
+/**
+ * Runtime state of a messenger account: the gateway lease (exactly one connection per account),
+ * connection status and the sending pause. One row per messenger account, created lazily.
+ */
+export const messengerAccounts = pgTable(
+  'messenger_accounts',
+  {
+    accountId: text()
+      .primaryKey()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Gateway instance that holds the session. */
+    leaseOwner: text(),
+    /** Internal URL of that instance, for requests that must reach the live session. */
+    leaseOwnerUrl: text(),
+    leaseExpiresAt: timestamp({ withTimezone: true }),
+    /** Incremented on every new lease: writes from a stale holder are rejected. */
+    fencingToken: bigint({ mode: 'number' }).notNull().default(0),
+    state: text().$type<MessengerSessionState>().notNull().default('needs_login'),
+    problem: text().$type<MessengerProblem>(),
+    problemMessage: text(),
+    /** Consecutive failed connection attempts (reset when online). */
+    failures: integer().notNull().default(0),
+    nextAttemptAt: timestamp({ withTimezone: true }),
+    lastOnlineAt: timestamp({ withTimezone: true }),
+    /** Sending is paused (spam warning, long flood wait); reading keeps working. */
+    sendPausedUntil: timestamp({ withTimezone: true }),
+    sendPauseReason: text(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.leaseExpiresAt)],
+);
+
+/** Encrypted key-value state of a messenger session (auth keys, update state, peer cache...). */
+export const messengerState = pgTable(
+  'messenger_state',
+  {
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    key: text().notNull(),
+    /** SecretBox envelope, AAD = account id + key. */
+    valueEncrypted: text().notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.accountId, t.key] })],
+);
+
+export const messengerChats = pgTable(
+  'messenger_chats',
+  {
+    id: text().primaryKey(),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Keyed hash of the messenger's chat id: lookups without storing the id in clear. */
+    externalKey: text().notNull(),
+    /** Encrypted `{ externalId, title, username }`. */
+    infoEncrypted: text().notNull(),
+    kind: text().$type<'direct' | 'group' | 'channel' | 'bot'>().notNull(),
+    /** Blind index of the title words (see messaging/search-index.ts). */
+    titleIndex: integer().array().notNull().default(sql`'{}'::int[]`),
+    unread: integer().notNull().default(0),
+    /** The other side has written at least once (first-contact detection). */
+    hasInbound: boolean().notNull().default(false),
+    lastMessageAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex().on(t.accountId, t.externalKey),
+    index().on(t.accountId, t.lastMessageAt),
+    index().using('gin', t.titleIndex),
+  ],
+);
+
+export const messengerMessages = pgTable(
+  'messenger_messages',
+  {
+    /** Ingestion order: the cursor of "what's new". */
+    seq: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    id: text().notNull().unique(),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    chatId: text()
+      .notNull()
+      .references(() => messengerChats.id, { onDelete: 'cascade' }),
+    /** Keyed hash of the messenger's message id (dedupe across restarts, webhooks and echoes). */
+    externalKey: text().notNull(),
+    direction: text().$type<'in' | 'out'>().notNull(),
+    sentAt: timestamp({ withTimezone: true }).notNull(),
+    editedAt: timestamp({ withTimezone: true }),
+    deleted: boolean().notNull().default(false),
+    /** Encrypted `{ externalId, text, sender, replyTo, attachments }`. */
+    bodyEncrypted: text().notNull(),
+    /** Blind index of words and sender name for encrypted full-text search. */
+    searchIndex: integer().array().notNull().default(sql`'{}'::int[]`),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex().on(t.chatId, t.externalKey),
+    index().on(t.accountId, t.sentAt),
+    index().on(t.chatId, t.sentAt),
+    index().on(t.accountId, t.seq),
+    index().using('gin', t.searchIndex),
+  ],
+);
+
+export type OutboxStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'uncertain' | 'cancelled';
+
+/** Durable, idempotent queue of everything the hub sends to messengers. */
+export const messengerOutbox = pgTable(
+  'messenger_outbox',
+  {
+    id: text().primaryKey(),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    chatId: text()
+      .notNull()
+      .references(() => messengerChats.id, { onDelete: 'cascade' }),
+    kind: text().$type<'message' | 'mark_read'>().notNull(),
+    /** Encrypted job payload (text, reply target). */
+    payloadEncrypted: text().notNull(),
+    /** Keyed hash of chat + content: identical requests within a short window are merged. */
+    contentKey: text().notNull(),
+    status: text().$type<OutboxStatus>().notNull().default('queued'),
+    /** First message to someone who never wrote to this account (stricter limits). */
+    newContact: boolean().notNull().default(false),
+    attempts: integer().notNull().default(0),
+    notBefore: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    claimedBy: text(),
+    claimExpiresAt: timestamp({ withTimezone: true }),
+    /** Hub id of the stored message once sent. */
+    messageId: text(),
+    error: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    sentAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [
+    index().on(t.status, t.notBefore),
+    index().on(t.accountId, t.sentAt),
+    index().on(t.accountId, t.contentKey, t.createdAt),
+  ],
+);

@@ -12,6 +12,7 @@
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import { z } from 'zod';
 import type { CapabilityId } from './capabilities.js';
+import type { MessengerSpec } from './messaging.js';
 
 export type { CapabilityId } from './capabilities.js';
 export * from './shape.js';
@@ -332,6 +333,8 @@ export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> 
   rateLimit?: RateLimitSpec;
   /** Verify that an account works (called when it is added and on demand). */
   test?(ctx: AccountContext<TConfig, TCredentials>): Promise<TestResult>;
+  /** Present for chat services: how messages are delivered (see `messaging.ts`). */
+  messenger?: MessengerSpec<TConfig, TCredentials>;
 }
 
 type ActionSpec<TInput extends AnyObjectSchema, TConfig, TCredentials> = Omit<
@@ -368,6 +371,7 @@ export interface ConnectorSpec<TConfig extends AnyObjectSchema, TCredentials ext
     action: ActionFactory<z.output<TConfig>, z.output<TCredentials>>,
   ) => ActionDefinition<z.output<TConfig>, z.output<TCredentials>>[];
   test?(ctx: AccountContext<z.output<TConfig>, z.output<TCredentials>>): Promise<TestResult>;
+  messenger?: MessengerSpec<z.output<TConfig>, z.output<TCredentials>>;
 }
 
 /**
@@ -412,6 +416,7 @@ export function defineConnector<
     actions: spec.actions(factory),
     rateLimit: spec.rateLimit,
     test: spec.test,
+    messenger: spec.messenger,
   };
   return definition as unknown as ConnectorDefinition;
 }
