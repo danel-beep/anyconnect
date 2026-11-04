@@ -235,7 +235,8 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   setupAction({
     name: 'update_account',
     title: 'Change an account',
-    description: 'Renames or relabels an account, turns it on or off, or hides / shows some of its tools.',
+    description:
+      'Renames or relabels an account, turns it on or off, or hides / shows some of its tools. Turning back on what the user turned off waits for their confirmation.',
     input: z.object({
       account: accountRef,
       label: z.string().trim().min(1).max(100).optional(),
