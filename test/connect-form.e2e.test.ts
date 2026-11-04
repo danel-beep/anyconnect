@@ -202,7 +202,10 @@ describe('connect form for services without OAuth', () => {
     const account = (await hub.services.accounts.findByName(workspaceId, 'demo', 'work'))!;
     const { html, hidden } = await openForm(`/connect/demo?account=${account.id}`);
     expect(html).toContain('value="Hi"');
-    expect(html).not.toContain('s3');
+    // The secret must not be echoed back. Check the field value, not the whole page: a random CSRF
+    // token can contain "s3".
+    expect(html).not.toMatch(/value="s3"/);
+    expect(html).toMatch(/name="credentials\.secret"[^>]*type="password"(?![^>]*value=)/);
     const saved = await browser.request('/connect/demo', {
       form: { ...hidden, 'config.greeting': 'Hello again', 'credentials.secret': '' },
     });

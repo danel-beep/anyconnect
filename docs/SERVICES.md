@@ -1,6 +1,6 @@
 # Встроенные сервисы
 
-Сорок один коннектор идут в коробке. У каждого может быть сколько угодно аккаунтов: две почты
+Сорок пять коннекторов идут в коробке. У каждого может быть сколько угодно аккаунтов: две почты
 Gmail, рабочий и личный Outlook, пять ящиков на Яндексе. ИИ видит один набор инструментов на сервис
 и выбирает аккаунт аргументом `account` (или, по настройке пространства, видит отдельные инструменты
 на каждый аккаунт).
@@ -43,6 +43,10 @@ Gmail, рабочий и личный Outlook, пять ящиков на Янд
 | Brevo | `brevo` | ключ API `xkeysib-…` | контакты, списки, рассылки со статистикой, отдельные транзакционные письма |
 | Cal.com | `calcom` | ключ API `cal_…` | типы встреч, записи, отмена и подтверждение |
 | Webflow | `webflow` | API-токен сайта | сайты, коллекции CMS, черновики, правка и публикация записей, заявки из форм |
+| Zoom | `zoom` | своё приложение Server-to-Server OAuth (Account ID, Client ID, Secret) | встречи: список, создание, перенос, отмена; облачные записи |
+| Miro | `miro` | токен своего приложения Miro | доски, элементы досок, стикеры, карточки, текст, новые доски |
+| SendGrid | `sendgrid` | ключ API `SG.…` | письма и письма по шаблону, шаблоны, маркетинговые контакты и списки, статистика |
+| Smartsheet | `smartsheet` | личный токен + регион | таблицы, поиск, строки (чтение, добавление, изменение), комментарии |
 | Telegram | `telegram` | бот (Bot API) или личный аккаунт через шлюз | чаты, поиск, чтение, новое, отправка, вложения; подробно в [MESSENGERS.md](MESSENGERS.md) |
 | WhatsApp | `whatsapp` | WhatsApp Cloud API или официальное приложение через шлюз | то же, что у Telegram; подробно в [MESSENGERS.md](MESSENGERS.md) |
 | Stripe | `stripe` | секретный или ограниченный ключ | баланс, поиск клиентов, платежей и счетов, подписки, возвраты |
@@ -342,6 +346,30 @@ API v2, ключ `cal_…` как Bearer. Версия API задаётся за
 создаются черновиками, публикация — отдельное действие `dangerous`. Поля записей задаются по slug
 поля из `webflow_get_collection`.
 
+## Zoom
+
+Пользователь создаёт своё приложение Server-to-Server OAuth в Zoom Marketplace (оно не публикуется)
+и вставляет Account ID, Client ID и Client Secret. Коннектор меняет их на часовой токен
+(`grant_type=account_credentials`) и держит его в памяти процесса по id аккаунта; при смене
+секрета токен берётся заново. Неверные данные приложения — ошибка `auth`. Встречи входят в единые
+`calendar_list_events` и `calendar_create_event`; отмена — `dangerous`.
+
+## Miro
+
+Токен своего приложения Miro (Install app and get OAuth token) с правами `boards:read` и
+`boards:write`; истечение токенов в приложении нужно выключить. Id доски с `=` в пути кодируется.
+
+## SendGrid
+
+Ключ `SG.…` как Bearer; сервер `api.eu.sendgrid.com` для субаккаунтов в ЕС. Письма и письма по
+шаблону — `dangerous`, уходят только с подтверждённого отправителя. Изменения контактов SendGrid
+применяет асинхронно (ответ — `job_id`).
+
+## Smartsheet
+
+Личный токен; регион (`api.smartsheet.com`, `.eu`, `.au`) выбирает адрес API. Ячейки задаются по id
+столбца из `smartsheet_get_sheet`; строки отправляются массивом как есть.
+
 ## Stripe
 
 Ключ `sk_live_…`/`sk_test_…` или, лучше, ограниченный `rk_…` с правами только на нужное
@@ -368,7 +396,7 @@ API v2, ключ `cal_…` как Bearer. Версия API задаётся за
 | Интерфейс | Сервисы |
 | --- | --- |
 | почта (`mail_search`, `mail_read`, `mail_send`) | IMAP/SMTP, Gmail, Outlook |
-| календарь (`calendar_list_events`, `calendar_create_event`) | Google Calendar, Outlook, Calendly и Cal.com (только список) |
+| календарь (`calendar_list_events`, `calendar_create_event`) | Google Calendar, Outlook, Zoom; Calendly и Cal.com (только список) |
 | файлы и документы (`files_search`, `files_read`) | Google Drive, Notion, Confluence |
 | задачи (`tasks_list`, `tasks_create`) | Todoist, Jira, Linear, Asana, ClickUp, Trello (только список) |
 | контакты (`contacts_search`) | HubSpot, Pipedrive, Zendesk, Intercom, Freshdesk |
