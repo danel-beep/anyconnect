@@ -672,7 +672,9 @@ export class Hub {
       const value = await new Promise<unknown>((resolve, reject) => {
         const onAbort = () =>
           reject(
-            Date.now() >= call.deadline
+            // The timer can fire a millisecond before the deadline: trust the abort reason first.
+            (signal.reason as { name?: string } | undefined)?.name === 'TimeoutError' ||
+              Date.now() >= call.deadline
               ? new ToolTimeoutError()
               : new ConnectorError('upstream', 'The call was cancelled'),
           );
