@@ -133,6 +133,7 @@ describe('action metadata', () => {
           label: 'Main',
           description: null,
           config: {},
+          dataKeyEncrypted: null,
           credentialsEncrypted: null,
           enabled: true,
           status: 'active',

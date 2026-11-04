@@ -29,6 +29,13 @@
       "when": 1793753101012,
       "tag": "0003_tool_call_outcome",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793753389577,
+      "tag": "0004_data_protection",
+      "breakpoints": true
     }
   ]
 }

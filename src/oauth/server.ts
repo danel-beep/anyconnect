@@ -52,7 +52,13 @@ export interface TokenResponse {
   scope: string;
 }
 
-export interface VerifiedAccessToken {
+/** What the hub ties to a grant when the user approves: the AI client entity and the persona. */
+export interface GrantBinding {
+  aiClientId?: string | undefined;
+  personaId?: string | undefined;
+}
+
+export interface VerifiedAccessToken extends GrantBinding {
   userId: string;
   workspaceId: string;
   clientId: string;
@@ -75,6 +81,11 @@ export class OAuthServer {
       issuer: string;
       /** The protected resource (MCP endpoint URL). */
       resource: string;
+      /**
+       * Path segments below the MCP URL that are protected resources of their own
+       * (persona endpoints `<resource>/<segment>`). Each one gets separately bound tokens.
+       */
+      subResource?: RegExp;
       accessTokenTtlSeconds: number;
       refreshTokenTtlSeconds: number;
       logger: Logger;
@@ -112,10 +123,10 @@ export class OAuthServer {
     };
   }
 
-  /** RFC 9728 protected resource metadata for the MCP endpoint. */
-  protectedResourceMetadata(): Record<string, unknown> {
+  /** RFC 9728 protected resource metadata for the MCP endpoint (or one of its sub-resources). */
+  protectedResourceMetadata(resource: string = this.resource): Record<string, unknown> {
     return {
-      resource: this.resource,
+      resource,
       authorization_servers: [this.issuer],
       scopes_supported: [...DEFAULT_SCOPES],
       bearer_methods_supported: ['header'],
@@ -125,8 +136,9 @@ export class OAuthServer {
   }
 
   /**
-   * Maps a requested `resource` to the canonical MCP URL. Accepts the MCP URL itself and the hub
-   * origin (some clients send the server origin), with or without a trailing slash.
+   * Maps a requested `resource` to a canonical protected resource. Accepts the MCP URL itself and
+   * the hub origin (some clients send the server origin), with or without a trailing slash, and
+   * sub-resources such as persona endpoints (`<mcp url>/<slug>`).
    */
   canonicalResource(raw: string | undefined): string | undefined {
     if (raw === undefined || raw === '') return this.resource;
@@ -139,6 +151,11 @@ export class OAuthServer {
     url.hash = '';
     const normalized = url.href.replace(/\/+$/, '');
     if (normalized === this.resource || normalized === this.issuer) return this.resource;
+    const pattern = this.deps.subResource;
+    if (pattern && normalized.startsWith(`${this.resource}/`) && !url.search) {
+      const segment = normalized.slice(this.resource.length + 1);
+      if (pattern.test(segment)) return normalized;
+    }
     return undefined;
   }
 
@@ -214,7 +231,12 @@ export class OAuthServer {
   }
 
   /** Called after the user approved on the consent screen. Returns the redirect location. */
-  async approve(request: AuthorizationRequest, userId: string, workspaceId: string): Promise<string> {
+  async approve(
+    request: AuthorizationRequest,
+    userId: string,
+    workspaceId: string,
+    binding: GrantBinding = {},
+  ): Promise<string> {
     const code = generateToken('ac_code');
     await this.deps.db.insert(oauthAuthorizationCodes).values({
       codeHash: hashToken(code),
@@ -225,6 +247,8 @@ export class OAuthServer {
       codeChallenge: request.codeChallenge,
       scopes: request.scopes,
       resource: request.resource,
+      aiClientId: binding.aiClientId ?? null,
+      personaId: binding.personaId ?? null,
       expiresAt: new Date(Date.now() + CODE_TTL_MS),
     });
     return this.redirectWith(request.redirectUri, { code, state: request.state });
@@ -331,6 +355,8 @@ export class OAuthServer {
         scopes: row.scopes,
         resource: row.resource,
         clientName: client.metadata.client_name ?? null,
+        aiClientId: row.aiClientId,
+        personaId: row.personaId,
       });
       await tx
         .update(oauthAuthorizationCodes)
@@ -502,6 +528,8 @@ export class OAuthServer {
       scopes: row.grant.scopes,
       resource: row.grant.resource,
       expiresAt: row.token.expiresAt,
+      ...(row.grant.aiClientId ? { aiClientId: row.grant.aiClientId } : {}),
+      ...(row.grant.personaId ? { personaId: row.grant.personaId } : {}),
     };
   }
 }

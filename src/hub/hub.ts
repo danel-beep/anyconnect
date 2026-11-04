@@ -42,6 +42,7 @@ import {
 import type { IdempotencyStore } from './idempotency.js';
 import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
 import {
+  carryUntrusted,
   dataResult,
   type ExecResult,
   errorResult,
@@ -265,6 +266,53 @@ export class Hub {
     return result;
   }
 
+  /**
+   * Runs a call the user already approved out of band (Telegram, web page) as its original caller.
+   * The call goes through the whole chain again: if the caller lost access meanwhile, it is denied;
+   * `preApproved` only lets it pass the confirmation stage.
+   */
+  async runApproved(
+    principal: Principal,
+    target: { toolName: string; connectorId: string; action: string; accountId: string },
+    args: Record<string, unknown>,
+  ): Promise<ExecResult> {
+    try {
+      const catalog = await this.getCatalog(principal);
+      const candidates = catalog.tools.filter(
+        (t) =>
+          t.target.kind === 'action' &&
+          t.target.connectorId === target.connectorId &&
+          t.target.action === target.action &&
+          t.target.accounts.some((a) => a.id === target.accountId),
+      );
+      const tool = candidates.find((t) => t.name === target.toolName) ?? candidates[0];
+      if (tool?.target.kind !== 'action') {
+        return errorResult(
+          'This action is no longer available for the account, so nothing was done.',
+          'permission',
+        );
+      }
+      const account = tool.target.accounts.find((a) => a.id === target.accountId)!;
+      const connector = await this.deps.connectors.get(principal.workspaceId, target.connectorId);
+      const action = connector?.actions.find((a) => a.name === target.action);
+      if (!connector || !action) {
+        return errorResult('This action is no longer available, so nothing was done.', 'permission');
+      }
+      const { [FIELDS_ARGUMENT]: fields, ...input } = args;
+      const parsed = action.input.safeParse(input);
+      if (!parsed.success) return errorResult(`Invalid arguments: ${issuesOf(parsed.error)}`);
+      const unit = await this.unit(principal, catalog, tool, connector, action, account, parsed.data, {
+        options: Array.isArray(fields) ? { fields: fields.filter((f) => typeof f === 'string') } : {},
+        signal: undefined,
+        interaction: undefined,
+      });
+      if ('rejected' in unit) return unit.rejected;
+      return await this.executor.execute({ ...unit.call, preApproved: true });
+    } catch (error) {
+      return this.toErrorResult(error, target.toolName);
+    }
+  }
+
   // --- Hub tools -------------------------------------------------------------
 
   private runBuiltin(catalog: Catalog, id: string, args: Record<string, unknown>): ExecResult {
@@ -389,6 +437,7 @@ export class Hub {
           ? errorResult('Nested batches are not allowed.')
           : await this.dispatch(principal, catalog, name, argsOf(call.arguments), batched);
         return {
+          raw: result,
           name,
           ok: !result.isError,
           result: result.isError
@@ -397,8 +446,15 @@ export class Hub {
         };
       }),
     );
-    const shaped = shapeData({ results }, { maxTokens: this.deps.maxResultTokens * 2 });
-    const out = dataResult(shaped.data);
+    const shaped = shapeData(
+      { results: results.map(({ raw: _raw, ...r }) => r) },
+      { maxTokens: this.deps.maxResultTokens * 2 },
+    );
+    const out = carryUntrusted(
+      dataResult(shaped.data),
+      results.map((r) => r.raw),
+      tool.name,
+    );
     return results.every((r) => !r.ok) ? { ...out, isError: true } : out;
   }
 
@@ -483,7 +539,14 @@ export class Hub {
         ),
       };
     }
-    return { result: dataResult(shapeData(merged.data, { maxTokens: this.deps.maxResultTokens }).data) };
+    const result = dataResult(shapeData(merged.data, { maxTokens: this.deps.maxResultTokens }).data);
+    return {
+      result: carryUntrusted(
+        result,
+        outcomes.map((o) => o.result),
+        tool.name,
+      ),
+    };
   }
 
   // --- Unified tools -----------------------------------------------------------
@@ -575,16 +638,13 @@ export class Hub {
       if (!outcome || outcome.result.isError) return { result: outcome?.result ?? errorResult('No result.') };
       const parsedOutput = capability.output.safeParse(outcome.output);
       const data = parsedOutput.success ? parsedOutput.data : outcome.output;
-      return {
-        result: dataResult(
-          shapeData(
-            { service: outcome.service, account: outcome.account, ...asObject(data) },
-            {
-              maxTokens: this.deps.maxResultTokens,
-            },
-          ).data,
-        ),
-      };
+      const result = dataResult(
+        shapeData(
+          { service: outcome.service, account: outcome.account, ...asObject(data) },
+          { maxTokens: this.deps.maxResultTokens },
+        ).data,
+      );
+      return { result: carryUntrusted(result, [outcome.result], tool.name) };
     }
 
     const merged = mergeCapabilityList(
@@ -599,7 +659,14 @@ export class Hub {
         ),
       };
     }
-    return { result: dataResult(shapeData(merged.data, { maxTokens: this.deps.maxResultTokens }).data) };
+    const result = dataResult(shapeData(merged.data, { maxTokens: this.deps.maxResultTokens }).data);
+    return {
+      result: carryUntrusted(
+        result,
+        outcomes.map((o) => o.result),
+        tool.name,
+      ),
+    };
   }
 
   // --- Units -------------------------------------------------------------------
@@ -673,6 +740,8 @@ export class Hub {
     try {
       const ctx = await call.context();
       const value = await new Promise<unknown>((resolve, reject) => {
+        // The timeout signal aborts with a TimeoutError; comparing clocks with the deadline is not
+        // reliable (timers may fire a millisecond before Date.now() reaches it).
         const onAbort = () =>
           reject(
             // The timer can fire a millisecond before the deadline: trust the abort reason first.

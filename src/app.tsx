@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import { AppError } from './lib/errors.js';
 import { apiRoutes } from './routes/api.js';
+import { confirmRoutes } from './routes/confirm.js';
 import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
+import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
+import { securityRoutes } from './routes/security.js';
 import { webRoutes } from './routes/web.js';
 import type { Services } from './services.js';
 import { pageSecurityHeaders } from './web/http.js';
@@ -41,8 +44,11 @@ export function createApp(services: Services) {
   });
 
   app.route('/', oauthRoutes());
+  app.route('/', loginRoutes());
+  app.route('/', securityRoutes());
   app.route('/', mcpRoutes());
   app.route('/api/v1', apiRoutes());
+  app.route('/', confirmRoutes());
   app.route('/', connectRoutes());
   app.route('/', webRoutes());
 

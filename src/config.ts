@@ -55,12 +55,21 @@ const EnvSchema = z.object({
    * Off by default: in the cloud it would expose internal services to anyone who can add an account.
    */
   ALLOW_PRIVATE_NETWORK: bool(false),
-  /** Background jobs: account health checks, token refresh, later schedules and triggers. */
-  JOBS_ENABLED: bool(true),
   /** Default size budget of one tool result, in tokens (larger results are trimmed with a note). */
   TOOL_RESULT_MAX_TOKENS: z.coerce.number().int().min(200).default(2000),
   /** How long a successful write is remembered to suppress accidental duplicates (0 disables). */
   IDEMPOTENCY_WINDOW_SECONDS: z.coerce.number().int().min(0).default(300),
+  /** The hub's own Telegram bot (from @BotFather) for confirmations; optional. */
+  TELEGRAM_BOT_TOKEN: optionalString,
+  TELEGRAM_API_URL: z.string().url().default('https://api.telegram.org'),
+  /** How long a call that needs confirmation waits for the answer before returning "pending". */
+  CONFIRMATION_WAIT_SECONDS: z.coerce.number().int().min(0).max(110).default(40),
+  /** How long the user has to answer a confirmation. */
+  CONFIRMATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
+  /** Users must set up a second factor (authenticator app or passkey) before using the hub. */
+  REQUIRE_2FA: bool(false),
+  /** Background jobs: account health checks, token refresh, later schedules and triggers. */
+  JOBS_ENABLED: bool(true),
   /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
   TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
 });
@@ -95,6 +104,23 @@ export interface AppConfig {
   toolTimeoutMs: number;
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
+  tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
+  confirmations: {
+    waitMs: number;
+    ttlMs: number;
+    /** How often approved calls are checked for the end of their undo window. */
+    runnerIntervalMs: number;
+  };
+  telegram: { botToken: string | undefined; apiUrl: string };
+  /** Sign-in hardening: whether a second factor is mandatory, and the WebAuthn relying party. */
+  auth: {
+    requireSecondFactor: boolean;
+    /** RP ID = hostname of the public URL; passkeys are bound to it. */
+    rpId: string;
+    rpName: string;
+    /** Expected origin of WebAuthn ceremonies = the public URL. */
+    origin: string;
+  };
   /**
    * Hub-wide OAuth apps of service providers, by provider id, from
    * `OAUTH_APP_<PROVIDER>_CLIENT_ID` / `OAUTH_APP_<PROVIDER>_CLIENT_SECRET`
@@ -103,7 +129,6 @@ export interface AppConfig {
   oauthApps: Record<string, { clientId: string; clientSecret: string | undefined }>;
   /** Run background jobs (pg-boss) in this process. */
   jobs: { enabled: boolean };
-  tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -208,12 +233,24 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionTtlSeconds: env.SESSION_TTL_DAYS * 86_400,
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
-    oauthApps: readOAuthApps(source),
-    jobs: { enabled: env.JOBS_ENABLED },
     tools: {
       maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
       listTokenBudget: env.TOOL_LIST_TOKEN_BUDGET,
     },
+    confirmations: {
+      waitMs: env.CONFIRMATION_WAIT_SECONDS * 1000,
+      ttlMs: env.CONFIRMATION_TTL_MINUTES * 60_000,
+      runnerIntervalMs: 2000,
+    },
+    telegram: { botToken: env.TELEGRAM_BOT_TOKEN, apiUrl: env.TELEGRAM_API_URL.replace(/\/+$/, '') },
+    auth: {
+      requireSecondFactor: env.REQUIRE_2FA,
+      rpId: new URL(publicUrl).hostname,
+      rpName: 'AnyConnect',
+      origin: publicUrl,
+    },
+    oauthApps: readOAuthApps(source),
+    jobs: { enabled: env.JOBS_ENABLED },
   };
 }

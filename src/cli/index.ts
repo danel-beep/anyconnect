@@ -14,9 +14,13 @@ const HELP = `AnyConnect admin CLI
 Usage: npm run cli -- <command> [options]
 
   keys:generate                          Print a new ENCRYPTION_KEY
+  keys:rotate                            Re-wrap account data keys with the current ENCRYPTION_KEY
+                                         (run after moving the old key to ENCRYPTION_KEYS_PREVIOUS)
   db:migrate                             Apply database migrations
   users:create --email E --password P    Create a user with a personal workspace
   users:password --email E --password P  Set a user's password
+  users:2fa:reset --email E              Remove a user's second factors (lost authenticator):
+                                         authenticator app, passkeys, recovery codes
   connectors:list                        List available services
   accounts:list [--email E]              List connected accounts
   accounts:add --connector C --label L [--name N] [--description D]
@@ -85,6 +89,14 @@ async function main() {
         await runMigrations(services.database.pool);
         console.log('Migrations applied.');
         break;
+      case 'keys:rotate': {
+        const result = await services.accounts.upgradeEncryption();
+        console.log(
+          `Accounts upgraded to their own data key: ${result.upgraded}; data keys re-wrapped: ${result.rewrapped}; unreadable: ${result.failed}.`,
+        );
+        if (result.failed) process.exitCode = 1;
+        break;
+      }
       case 'users:create': {
         if (!values.email || !values.password) throw new Error('--email and --password are required');
         const { user, workspace } = await createUser(services.db, {
@@ -100,6 +112,19 @@ async function main() {
         if (!user) throw new Error('User not found');
         await setPassword(services.db, user.id, values.password);
         console.log('Password updated.');
+        break;
+      }
+      case 'users:2fa:reset': {
+        if (!values.email) throw new Error('--email is required');
+        const user = await findUserByEmail(services.db, values.email);
+        if (!user) throw new Error('User not found');
+        const removed = await services.secondFactors.reset(user.id);
+        await services.pendingLogins.deleteForUser(user.id);
+        console.log(
+          `Second factors removed for ${user.email}: authenticator app ${removed.totp ? 'yes' : 'no'}, ` +
+            `passkeys ${removed.passkeys}, unused recovery codes ${removed.recoveryCodes}. ` +
+            'The user can now sign in with the password alone and set up new factors on /security.',
+        );
         break;
       }
       case 'connectors:list':

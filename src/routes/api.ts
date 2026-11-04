@@ -10,35 +10,13 @@ import { principalFromAuthInfo } from '../core/auth.js';
 import { StartConnectInput } from '../core/connect.js';
 import { getDefaultWorkspace, getUser, getWorkspace } from '../core/identity.js';
 import { CreateOAuthAppInput } from '../core/oauth-apps.js';
-import type { Principal } from '../core/principal.js';
 import { workspaces } from '../db/schema.js';
-import { AppError, badRequest, notFound, unauthorized } from '../lib/errors.js';
-import { type AppContext, type AppEnv, currentUser } from './context.js';
+import { AppError, notFound, unauthorized } from '../lib/errors.js';
+import { json, principal } from './api-helpers.js';
+import { securityRoutes } from './api-security.js';
+import { type AppEnv, currentSession, secondFactorRedirect } from './context.js';
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-
-async function json<T extends z.ZodType>(c: AppContext, schema: T): Promise<z.output<T>> {
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    throw badRequest('Request body must be JSON');
-  }
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    throw badRequest(
-      'Invalid request body',
-      parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-    );
-  }
-  return parsed.data;
-}
-
-function principal(c: AppContext): Principal {
-  const p = c.get('principal');
-  if (!p) throw unauthorized();
-  return p;
-}
 
 /**
  * Management REST API (`/api/v1`). Authenticated with a personal access token
@@ -62,8 +40,12 @@ export function apiRoutes() {
         throw unauthorized('Invalid or insufficient token: use a personal access token');
       }
     } else {
-      const user = await currentUser(c);
-      if (!user) throw unauthorized();
+      const session = await currentSession(c);
+      if (!session) throw unauthorized();
+      if (await secondFactorRedirect(c, session, '/')) {
+        throw new AppError(403, 'second_factor_required', 'Set up a second factor on /security first');
+      }
+      const user = session.user;
       // Cookie-authenticated writes must come from the hub's own pages.
       if (UNSAFE.has(c.req.method) && c.req.header('origin') !== s.config.publicUrl) {
         throw new AppError(403, 'forbidden', 'Cross-origin request rejected');
@@ -324,6 +306,8 @@ export function apiRoutes() {
         id: g.id,
         clientId: g.clientId,
         clientName: g.clientName,
+        aiClientId: g.aiClientId,
+        personaId: g.personaId,
         scopes: g.scopes,
         createdAt: g.createdAt,
         lastUsedAt: g.lastUsedAt,
@@ -336,6 +320,8 @@ export function apiRoutes() {
     if (!revoked) throw notFound('Grant');
     return c.body(null, 204);
   });
+
+  securityRoutes(api);
 
   // --- Personal access tokens -----------------------------------------------
   api.get('/tokens', async (c) => {
@@ -355,12 +341,21 @@ export function apiRoutes() {
           .array(z.enum(['mcp', 'api']))
           .min(1)
           .optional(),
+        /** Act as an existing AI client (shares its access rules); by default a new one is created. */
+        aiClientId: z.string().optional(),
+        /** Bind the token to a persona's MCP URL. */
+        personaId: z.string().optional(),
       }),
     );
+    if (body.personaId) await s.personas.get(p.workspaceId, body.personaId);
+    const aiClient = body.aiClientId
+      ? await s.aiClients.get(p.workspaceId, body.aiClientId)
+      : await s.aiClients.createUnique(p.workspaceId, body.name, 'api_token');
     const { token, row } = await s.apiTokens.create({
       workspaceId: p.workspaceId,
       userId: p.userId,
       ...body,
+      aiClientId: aiClient.id,
     });
     return c.json({ token, ...toApiTokenView(row) }, 201);
   });

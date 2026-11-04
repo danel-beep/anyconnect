@@ -2,6 +2,7 @@ import type { McpHttpHandler } from '@modelcontextprotocol/server';
 import type { AppConfig } from './config.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
+import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
@@ -11,6 +12,10 @@ import { CustomServiceManager } from './core/custom-services.js';
 import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
+import { PasskeyService } from './core/passkeys.js';
+import { RecoveryCodeService } from './core/recovery-codes.js';
+import { SecondFactorService } from './core/second-factors.js';
+import { TotpService } from './core/totp.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
@@ -25,7 +30,24 @@ import { createLogger, type Logger } from './logger.js';
 import { createHubMcpHandler } from './mcp/handler.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
+import { AiClientService } from './security/clients.js';
+import { type CallDescription, ConfirmationCenter } from './security/confirmations.js';
+import { NotificationChannels } from './security/notifications.js';
+import { PendingCallService, principalOf } from './security/pending-calls.js';
+import { PERSONA_SLUG, PersonaService } from './security/personas.js';
+import { PolicyService } from './security/policy-service.js';
+import { PendingCallRunner } from './security/runner.js';
+import {
+  confirmStage,
+  createCatalogFilter,
+  policyStage,
+  toStored,
+  untrustedStage,
+} from './security/stages.js';
+import { TelegramBot } from './security/telegram.js';
 import { VERSION } from './version.js';
+import { translator } from './web/i18n.js';
+import { PendingLoginService } from './web/pending-logins.js';
 import { SessionService } from './web/sessions.js';
 
 /** Everything the app needs, wired once. Tests build the same graph with overrides. */
@@ -57,7 +79,24 @@ export interface Services {
   clients: ClientRegistry;
   oauth: OAuthServer;
   verifier: HubTokenVerifier;
+  aiClients: AiClientService;
+  personas: PersonaService;
+  policies: PolicyService;
+  /** Calls held back for the user's confirmation or an undo window. */
+  pendingCalls: PendingCallService;
+  notificationChannels: NotificationChannels;
+  confirmations: ConfirmationCenter;
+  /** Runs approved calls when their undo window ends (started by the server, not by tests). */
+  pendingRunner: PendingCallRunner;
+  /** The hub's own Telegram bot, when TELEGRAM_BOT_TOKEN is set. */
+  telegramBot: TelegramBot | undefined;
+  /** Secret Telegram must send with webhook updates (derived from the master key). */
+  telegramWebhookSecret: string;
   sessions: SessionService;
+  /** Sign-ins waiting for a second factor. */
+  pendingLogins: PendingLoginService;
+  /** TOTP, recovery codes and passkeys. */
+  secondFactors: SecondFactorService;
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
@@ -75,6 +114,8 @@ export function createServices(
     /** Executor stages to add or replace (security layer: policy, confirm, untrusted). */
     stages?: StageMap;
     catalogFilter?: HubDeps['catalogFilter'];
+    /** Tests: talk to a fake Telegram Bot API. */
+    telegramFetch?: typeof fetch;
   } = {},
 ): Services {
   const logger =
@@ -92,8 +133,9 @@ export function createServices(
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
-  const tokens = new TokenManager({ db, secrets, apps: oauthApps, fetch: network.fetch, logger });
-  const accounts = new AccountService(db, connectors, secrets, network, tokens);
+  const keyring = new AccountKeyring(secrets, secrets);
+  const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
+  const accounts = new AccountService(db, connectors, keyring, network, tokens);
   const customServices = new CustomServiceManager({
     db,
     store: customStore,
@@ -123,6 +165,61 @@ export function createServices(
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
+
+  // Security layer: who may do what, confirmations, undo windows.
+  const personas = new PersonaService(db, config.mcpUrl);
+  const aiClients = new AiClientService(db);
+  const policies = new PolicyService(db);
+  const pendingCalls = new PendingCallService(db, secrets, { confirmationTtlMs: config.confirmations.ttlMs });
+  const notificationChannels = new NotificationChannels(db);
+  const telegramBot = config.telegram.botToken
+    ? new TelegramBot(config.telegram.botToken, {
+        apiUrl: config.telegram.apiUrl,
+        logger,
+        ...(overrides.telegramFetch ? { fetch: overrides.telegramFetch } : {}),
+      })
+    : undefined;
+  const describeCall = async (
+    row: Parameters<ConfirmationCenter['describe']>[0],
+  ): Promise<CallDescription> => {
+    const [connector, account, client] = await Promise.all([
+      connectors.get(row.workspaceId, row.connectorId),
+      accounts.get(row.workspaceId, row.accountId).catch(() => undefined),
+      row.principal.aiClientId
+        ? aiClients.get(row.workspaceId, row.principal.aiClientId).catch(() => undefined)
+        : undefined,
+    ]);
+    const action = connector?.actions.find((a) => a.name === row.action);
+    return {
+      service: connector?.name ?? row.connectorId,
+      action: action?.title ?? row.action,
+      account: account ? `${account.label} (${account.name})` : row.accountId,
+      client: client?.name ?? (row.principal.kind === 'api_token' ? 'API token' : 'AI app'),
+      risk: row.risk,
+      reason: row.reason ?? undefined,
+    };
+  };
+  const confirmations = new ConfirmationCenter({
+    pending: pendingCalls,
+    channels: notificationChannels,
+    bot: telegramBot,
+    publicUrl: config.publicUrl,
+    describe: describeCall,
+    t: translator('ru'),
+    logger,
+  });
+  const securityStages: StageMap = {
+    policy: policyStage(policies),
+    confirm: confirmStage({
+      policies,
+      pending: pendingCalls,
+      center: confirmations,
+      stateKey: secrets.deriveKey('confirm-state'),
+      waitMs: config.confirmations.waitMs,
+    }),
+    untrusted: untrustedStage,
+  };
+
   const hub = new Hub({
     db,
     connectors,
@@ -134,8 +231,15 @@ export function createServices(
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
     toolListTokenBudget: config.tools.listTokenBudget,
-    ...(overrides.stages ? { stages: overrides.stages } : {}),
-    ...(overrides.catalogFilter ? { catalogFilter: overrides.catalogFilter } : {}),
+    stages: { ...securityStages, ...overrides.stages },
+    catalogFilter: overrides.catalogFilter ?? createCatalogFilter(policies),
+  });
+  const pendingRunner = new PendingCallRunner({
+    pending: pendingCalls,
+    center: confirmations,
+    run: async (row, args) => toStored(await hub.runApproved(principalOf(row), row, args)),
+    logger,
+    intervalMs: config.confirmations.runnerIntervalMs,
   });
   const clients = new ClientRegistry(db, {
     dynamicRegistration: config.oauth.dynamicRegistration,
@@ -149,12 +253,22 @@ export function createServices(
     clients,
     issuer: config.publicUrl,
     resource: config.mcpUrl,
+    subResource: PERSONA_SLUG,
     accessTokenTtlSeconds: config.oauth.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
   });
-  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl);
+  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl, async (workspaceId, personaId) => {
+    const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
+    return persona && personas.urlFor(persona.slug);
+  });
   const sessions = new SessionService(db, config.sessionTtlSeconds);
+  const pendingLogins = new PendingLoginService(db);
+  const secondFactors = new SecondFactorService(
+    new TotpService(db, secrets, config.auth.rpName),
+    new RecoveryCodeService(db),
+    new PasskeyService(db, { id: config.auth.rpId, name: config.auth.rpName, origin: config.auth.origin }),
+  );
   const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
 
   return {
@@ -178,11 +292,23 @@ export function createServices(
     clients,
     oauth,
     verifier,
+    aiClients,
+    personas,
+    policies,
+    pendingCalls,
+    notificationChannels,
+    confirmations,
+    pendingRunner,
+    telegramBot,
+    telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
+    pendingLogins,
+    secondFactors,
     rateLimiter,
     idempotency,
     mcp,
     async close() {
+      await pendingRunner.stop();
       rateLimiter.close();
       await jobs.stop();
       await mcp.close();

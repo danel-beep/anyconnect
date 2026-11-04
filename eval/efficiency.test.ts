@@ -28,6 +28,7 @@ function rows(services: string[]) {
       description: null,
       config: {},
       credentialsEncrypted: null,
+      dataKeyEncrypted: null,
       enabled: true,
       status: 'active' as const,
       statusMessage: null,

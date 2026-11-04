@@ -19,6 +19,8 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
     private readonly oauth: OAuthServer,
     private readonly apiTokens: ApiTokenService,
     private readonly resource: string,
+    /** MCP URL of a persona; personal tokens bound to a persona only work there. */
+    private readonly personaResource: (workspaceId: string, personaId: string) => Promise<string | undefined>,
   ) {}
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
@@ -31,6 +33,8 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
         scopes: oauth.scopes,
         clientId: oauth.clientId,
         credentialId: oauth.grantId,
+        ...(oauth.aiClientId ? { aiClientId: oauth.aiClientId } : {}),
+        ...(oauth.personaId ? { personaId: oauth.personaId } : {}),
       };
       return {
         token,
@@ -49,13 +53,19 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
         workspaceId: pat.workspaceId,
         scopes: pat.scopes,
         credentialId: pat.id,
+        ...(pat.aiClientId ? { aiClientId: pat.aiClientId } : {}),
+        ...(pat.personaId ? { personaId: pat.personaId } : {}),
       };
+      const resource = pat.personaId
+        ? await this.personaResource(pat.workspaceId, pat.personaId)
+        : this.resource;
+      if (!resource) throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired access token');
       return {
         token,
         clientId: `pat:${pat.id}`,
         scopes: pat.scopes,
         expiresAt: Math.floor(pat.effectiveExpiresAt.getTime() / 1000),
-        resource: new URL(this.resource),
+        resource: new URL(resource),
         extra: { [PRINCIPAL]: principal },
       };
     }

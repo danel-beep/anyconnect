@@ -21,6 +21,7 @@ async function main() {
   const { logger } = services;
   await bootstrap(services);
   const stopMaintenance = scheduleMaintenance(services.db, logger);
+  services.pendingRunner.start();
   if (config.jobs.enabled) await services.jobs.start();
 
   const app = createApp(services);

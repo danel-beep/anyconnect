@@ -8,4 +8,8 @@ export interface Principal {
   clientId?: string;
   /** OAuth grant id or personal access token id. */
   credentialId?: string;
+  /** The AI client (Claude, ChatGPT, a script) access rules apply to. */
+  aiClientId?: string;
+  /** Set when the caller is bound to a persona's MCP URL: it only sees that persona's accounts. */
+  personaId?: string;
 }

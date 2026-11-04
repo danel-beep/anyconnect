@@ -1,12 +1,14 @@
 import type { Child, FC } from 'hono/jsx';
 import type { Translate } from './i18n.js';
 
-const Layout: FC<{ title: string; narrow?: boolean; lang: string; children?: Child }> = ({
-  title,
-  narrow,
-  lang,
-  children,
-}) => (
+/** Page shell (exported for other page modules). `script` adds /assets/webauthn.js (passkeys); pages work without it. */
+export const Layout: FC<{
+  title: string;
+  narrow?: boolean;
+  lang: string;
+  script?: boolean;
+  children?: Child;
+}> = ({ title, narrow, lang, script, children }) => (
   <html lang={lang}>
     <head>
       <meta charset="utf-8" />
@@ -14,11 +16,36 @@ const Layout: FC<{ title: string; narrow?: boolean; lang: string; children?: Chi
       <meta name="referrer" content="no-referrer" />
       <title>{title}</title>
       <link rel="stylesheet" href="/assets/app.css" />
+      {script ? <script src="/assets/webauthn.js" defer /> : null}
     </head>
     <body>
       <main class={narrow ? 'narrow' : undefined}>{children}</main>
     </body>
   </html>
+);
+
+/**
+ * A passkey ceremony button, revealed by /assets/webauthn.js when the browser supports passkeys
+ * (see `webauthn-client.ts` for the contract). Hidden fields are sent along as JSON.
+ */
+export const PasskeyForm: FC<{
+  mode: 'register' | 'authenticate';
+  options: string;
+  action: string;
+  error: string;
+  hidden: Record<string, string>;
+  /** Rendered below the error line, e.g. an "or" divider before the next sign-in option. */
+  after?: Child;
+  children?: Child;
+}> = ({ mode, options, action, error, hidden, after, children }) => (
+  <form method="post" action={action} data-passkey={mode} data-options={options} data-error={error} hidden>
+    {Object.entries(hidden).map(([name, value]) => (
+      <input type="hidden" name={name} value={value} />
+    ))}
+    {children}
+    <p class="error" data-role="passkey-error" hidden />
+    {after}
+  </form>
 );
 
 export const LoginPage: FC<{
@@ -28,11 +55,13 @@ export const LoginPage: FC<{
   next: string;
   email?: string;
   error?: string;
-}> = ({ t, lang, csrf, next, email, error }) => (
-  <Layout title={t('login.title')} narrow lang={lang}>
+  /** Re-confirming an existing session before a security change. */
+  reauth?: boolean;
+}> = ({ t, lang, csrf, next, email, error, reauth }) => (
+  <Layout title={reauth ? t('login.reauthTitle') : t('login.title')} narrow lang={lang} script>
     <div class="card">
-      <h1>{t('login.title')}</h1>
-      <p class="muted">{t('login.subtitle')}</p>
+      <h1>{reauth ? t('login.reauthTitle') : t('login.title')}</h1>
+      <p class="muted">{reauth ? t('login.reauthSubtitle') : t('login.subtitle')}</p>
       <form method="post" action="/login">
         <input type="hidden" name="csrf" value={csrf} />
         <input type="hidden" name="next" value={next} />
@@ -47,6 +76,18 @@ export const LoginPage: FC<{
           </button>
         </div>
       </form>
+      <PasskeyForm
+        mode="authenticate"
+        options="/login/passkey/options"
+        action="/login/passkey"
+        error={t('passkey.failed')}
+        hidden={{ csrf, next, flow: 'passwordless' }}
+      >
+        <p class="divider small muted">{t('login.or')}</p>
+        <div class="actions">
+          <button type="submit">{t('login.passkey')}</button>
+        </div>
+      </PasskeyForm>
     </div>
   </Layout>
 );
@@ -78,6 +119,10 @@ export interface ConsentView {
   loopback: boolean;
   workspaceName: string;
   activeAccounts: number;
+  /** Set when the app connects to a persona's MCP URL. */
+  persona?: { name: string; slug: string };
+  /** Which AI client entity the app will be linked to (policies apply to it). */
+  clientChoice: { selected: string; options: { value: string; label: string }[] };
   email: string;
   csrf: string;
   hidden: Record<string, string>;
@@ -110,6 +155,12 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
         <li>{t('consent.access.mcp', { count: view.activeAccounts })}</li>
         <li>{t('consent.access.offline')}</li>
       </ul>
+      {view.persona ? (
+        <p class="small">
+          {t('consent.persona')}: <strong>{view.persona.name}</strong> ({view.persona.slug}) ·{' '}
+          {t('consent.personaHint')}
+        </p>
+      ) : null}
       <p class="small muted">
         {t('consent.workspace')}: {view.workspaceName} · {t('consent.signedInAs', { email: view.email })}
       </p>
@@ -118,6 +169,15 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
         {Object.entries(view.hidden).map(([name, value]) => (
           <input type="hidden" name={name} value={value} />
         ))}
+        <label for="ai_client">{t('consent.clientAs')}</label>
+        <select id="ai_client" name="ai_client">
+          {view.clientChoice.options.map((option) => (
+            <option value={option.value} selected={option.value === view.clientChoice.selected}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p class="small muted">{t('consent.clientHint')}</p>
         <div class="actions">
           <button type="submit" name="decision" value="deny">
             {t('consent.deny')}
@@ -148,7 +208,7 @@ export interface HomeView {
   calls: { toolName: string; status: string; createdAt: Date; durationMs: number }[];
 }
 
-const fmt = (date: Date) => date.toISOString().replace('T', ' ').slice(0, 16);
+export const fmt = (date: Date) => date.toISOString().replace('T', ' ').slice(0, 16);
 
 export const HomePage: FC<{ t: Translate; lang: string; view: HomeView }> = ({ t, lang, view }) => (
   <Layout title={t('home.title')} lang={lang}>
@@ -157,6 +217,14 @@ export const HomePage: FC<{ t: Translate; lang: string; view: HomeView }> = ({ t
       <form class="inline" method="post" action="/logout">
         <input type="hidden" name="csrf" value={view.csrf} />
         <span class="small muted">{view.email} · </span>
+        <a class="small" href="/confirm">
+          {t('home.confirmations')}
+        </a>
+        <span class="small muted"> · </span>
+        <a class="small" href="/security">
+          {t('home.security')}
+        </a>
+        <span class="small muted"> · </span>
         <button class="link" type="submit">
           {t('home.signOut')}
         </button>

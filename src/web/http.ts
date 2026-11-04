@@ -94,8 +94,9 @@ export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler 
     if (!type.includes('text/html')) return;
     setResponseHeaders(c, {
       // No form-action: Chrome applies it to the redirect after the consent form, which must reach the AI app.
+      // Scripts only from our own files (/assets/webauthn.js), which call back to our own endpoints.
       'Content-Security-Policy':
-        "default-src 'none'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',

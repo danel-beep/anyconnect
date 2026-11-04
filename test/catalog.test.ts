@@ -15,6 +15,7 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
     label: partial.name.toUpperCase(),
     description: null,
     config: {},
+    dataKeyEncrypted: null,
     credentialsEncrypted: null,
     enabled: true,
     status: 'active',

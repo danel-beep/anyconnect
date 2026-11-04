@@ -34,12 +34,15 @@ export async function startEvalHub(
   const s = hub.services;
   const workspace = (await s.db.query.workspaces.findFirst())!;
   const user = (await s.db.query.users.findFirst())!;
-  if (options.listing) {
-    await s.database.pool.query(`UPDATE workspaces SET settings = settings || $1::jsonb WHERE id = $2`, [
-      JSON.stringify({ toolListing: options.listing }),
-      workspace.id,
-    ]);
-  }
+  // The eval counts the agent's tool calls; confirmations happen outside them (in the chat or in
+  // Telegram) and have their own tests, so the scripted agent's dangerous actions run at once.
+  await s.database.pool.query(`UPDATE workspaces SET settings = settings || $1::jsonb WHERE id = $2`, [
+    JSON.stringify({
+      ...(options.listing ? { toolListing: options.listing } : {}),
+      security: { defaultConfirm: 'never' },
+    }),
+    workspace.id,
+  ]);
   for (const connector of registry.all()) {
     for (const [name, label, identity] of ACCOUNTS[connector.id] ?? []) {
       const row = await s.accounts.create(workspace.id, { connectorId: connector.id, name, label });

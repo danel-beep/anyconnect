@@ -4,7 +4,7 @@ import { ConnectorRegistry } from '../src/connectors/registry.js';
 import { ConnectorError, defineConnector } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import type { Catalog } from '../src/hub/catalog-types.js';
-import type { ToolCallResult } from '../src/hub/result.js';
+import { isUntrusted, resultText, type ToolCallResult } from '../src/hub/result.js';
 import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
 
 /** Whether each executed unit could ask the user in the chat. */
@@ -60,8 +60,11 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
 
   const call = (tool: string, args: Record<string, unknown>) =>
     hub.services.hub.callTool(principal, catalog, tool, args);
+  // Results with third-party content arrive wrapped in ⟦untrusted⟧ markers.
+  const unwrap = (text: string) =>
+    text.replace(/^⟦untrusted (\w+) source="[^"]*"⟧\n([\s\S]*)\n⟦\/untrusted \1⟧$/, '$2');
   const json = (result: ToolCallResult): any =>
-    result.structuredContent ?? JSON.parse((result.content[0] as { text: string }).text);
+    result.structuredContent ?? JSON.parse(unwrap((result.content[0] as { text: string }).text));
 
   beforeAll(async () => {
     await resetDatabase();
@@ -130,7 +133,11 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
   });
 
   it('fans a service read tool out over its accounts by default', async () => {
-    const data = json(await call('alpha_search', { query: 'q' }));
+    const fanned = await call('alpha_search', { query: 'q' });
+    // Merging keeps the third-party marking of the units.
+    expect(isUntrusted(fanned)).toBe(true);
+    expect(resultText(fanned)).toMatch(/^⟦untrusted \w+ source="alpha_search"⟧/);
+    const data = json(fanned);
     expect(data.items.map((i: { account: string }) => i.account)).toEqual(['main']);
     expect(data.errors).toEqual([{ account: 'broken', error: expect.stringContaining('No access') }]);
     const one = json(await call('alpha_search', { query: 'q', account: 'main' }));

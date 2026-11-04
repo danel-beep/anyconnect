@@ -236,6 +236,8 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     });
     const stored = await hub.services.database.pool.query('select * from account_oauth');
     expect(stored.rows[0].tokens_encrypted).not.toContain(provider.accessToken);
+    // Encrypted with the account's own data key, like its credentials.
+    expect(stored.rows[0].tokens_encrypted).toMatch(/^d1\./);
     expect(stored.rows[0].app_ref).toBe('env:fakeprov');
 
     const result = await callMe();

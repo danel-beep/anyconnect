@@ -115,7 +115,7 @@ describe('REST API, personal tokens and account management', () => {
       'SELECT credentials_encrypted FROM accounts WHERE id = $1',
       [created.body.account.id],
     );
-    expect(rows[0].credentials_encrypted).toMatch(/^v1\./);
+    expect(rows[0].credentials_encrypted).toMatch(/^d1\./);
     expect(rows[0].credentials_encrypted).not.toContain('sk-live');
 
     const invalid = await api('/accounts', {

@@ -6,7 +6,9 @@ import {
   oauthConnectStates,
   oauthGrants,
   oauthTokens,
+  pendingLogins,
   toolCalls,
+  webauthnChallenges,
   webSessions,
 } from '../db/schema.js';
 import type { Logger } from '../logger.js';
@@ -19,6 +21,8 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
   await db.delete(oauthAuthorizationCodes).where(lt(oauthAuthorizationCodes.expiresAt, new Date(now - DAY)));
   await db.delete(oauthTokens).where(lt(oauthTokens.expiresAt, new Date(now - DAY)));
   await db.delete(webSessions).where(lt(webSessions.expiresAt, new Date(now)));
+  await db.delete(pendingLogins).where(lt(pendingLogins.expiresAt, new Date(now)));
+  await db.delete(webauthnChallenges).where(lt(webauthnChallenges.expiresAt, new Date(now)));
   // Abandoned "connect an account" OAuth flows.
   await db.delete(oauthConnectStates).where(lt(oauthConnectStates.expiresAt, new Date(now)));
   // Dynamically registered clients that never completed an authorization within 30 days.

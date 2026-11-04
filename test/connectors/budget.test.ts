@@ -40,6 +40,7 @@ function account(connectorId: string): AccountRow {
     description: null,
     config: {},
     credentialsEncrypted: null,
+    dataKeyEncrypted: null,
     enabled: true,
     status: 'active',
     statusMessage: null,

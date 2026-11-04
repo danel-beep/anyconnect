@@ -1,0 +1,13 @@
+# Secret scanning rules for CI (gitleaks). Default rules plus AnyConnect's own token formats.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "anyconnect-token"
+description = "AnyConnect bearer token (access, refresh, personal access token)"
+regex = '''\bac_(at|rt|pat|ses|code|cs)_[A-Za-z0-9_-]{43}\b'''
+keywords = ["ac_at_", "ac_rt_", "ac_pat_", "ac_ses_", "ac_code_", "ac_cs_"]
+
+[allowlist]
+description = "Test fixtures with fake keys"
+paths = ['''^test/''', '''^package-lock\.json$''']
