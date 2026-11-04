@@ -187,7 +187,7 @@ export class CustomServiceManager {
     if (!provider || typeof provider === 'string') return;
     if (this.deps.builtin.oauthProvider(provider.id)) {
       throw new Error(
-        `The OAuth provider id "${provider.id}" belongs to a provider built into the hub: write "provider": "${provider.id}" to use it, or give your provider another id`,
+        'The OAuth provider id belongs to a provider built into the hub: to use that provider, write its id as "provider" (for example "provider": "google"); otherwise give yours another id',
       );
     }
   }

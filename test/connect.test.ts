@@ -490,7 +490,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
   it('refuses two different OAuth providers under one id in code', () => {
     const registry = new ConnectorRegistry().register(fakeConnector(provider.base));
     const other = { ...fakeConnector(provider.base), id: 'fake_two' };
-    expect(() => registry.register(other)).toThrow(/defines its own OAuth provider "fakeprov"/);
+    expect(() => registry.register(other)).toThrow(/"fake_two" defines its own OAuth provider/);
     const builtinId = defineManifestConnector({
       ...workspaceManifest('spoof', {
         id: 'google',
@@ -500,7 +500,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
       }),
     } as never);
     expect(() => new ConnectorRegistry().register(builtinId)).toThrow(
-      /defines its own OAuth provider "google"/,
+      /"spoof" defines its own OAuth provider/,
     );
   });
 

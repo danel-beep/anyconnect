@@ -46,8 +46,9 @@ export class ConnectorRegistry implements ConnectorResolver {
       const provider = resolveProvider(connector.oauth);
       const known = this.providers.get(provider.id);
       if (known && known !== provider) {
+        // The message names only the connector: provider specs stay out of logs.
         throw new Error(
-          `Connector "${connector.id}" defines its own OAuth provider "${provider.id}"; reference the existing one by id`,
+          `Connector "${connector.id}" defines its own OAuth provider under an id another provider already has; reference that provider by its id`,
         );
       }
       this.providers.set(provider.id, provider);
