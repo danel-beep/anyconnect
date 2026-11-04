@@ -4,7 +4,12 @@ import { oauthAuthorizationCodes, oauthGrants, oauthTokens } from '../db/schema.
 import { generateToken, hashToken, safeEqual, sha256Base64Url } from '../lib/crypto.js';
 import { newId } from '../lib/ids.js';
 import type { Logger } from '../logger.js';
-import { type ClientRegistry, type OAuthClient, OAuthProtocolError } from './clients.js';
+import {
+  type ClientRegistry,
+  type OAuthClient,
+  OAuthProtocolError,
+  SUPPORTED_GRANT_TYPES,
+} from './clients.js';
 import { isLoopbackRedirect, redirectUriMatches } from './redirect.js';
 
 /**
@@ -113,7 +118,7 @@ export class OAuthServer {
       scopes_supported: [...SCOPES],
       response_types_supported: ['code'],
       response_modes_supported: ['query'],
-      grant_types_supported: ['authorization_code', 'refresh_token'],
+      grant_types_supported: [...SUPPORTED_GRANT_TYPES],
       token_endpoint_auth_methods_supported: authMethods,
       revocation_endpoint_auth_methods_supported: authMethods,
       code_challenge_methods_supported: ['S256'],

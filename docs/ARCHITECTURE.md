@@ -243,6 +243,12 @@ src/
 - Регистрация клиентов: Client ID Metadata Documents (предпочтительно; Claude использует их,
   когда сервер объявляет `client_id_metadata_document_supported` и метод `none`) и DCR.
   Загрузка документов защищена от SSRF, документы кэшируются.
+- Метаданные клиентов принимаются терпимо: лишние типы грантов (у Claude `jwt-bearer`, у VS Code
+  `device_code`) и ответов отбрасываются, но `authorization_code` обязателен; описательные поля
+  (`client_name`, `logo_uri`, `contacts` и т. п.) с `null`, чужим типом или слишком длинные просто
+  не сохраняются. Строгими остаются redirect URI и метод аутентификации. Форматы реальных клиентов
+  (Claude, Claude Code, ChatGPT, VS Code, Cursor, Gemini CLI, Codex) проверяет
+  `test/oauth-client-compat.test.ts`: новый клиент добавляется туда же.
 - Только `response_type=code` + PKCE S256. Redirect URI сравниваются точно, для loopback порт
   игнорируется (RFC 8252), как требует Claude Code.
 - Токены непрозрачные (`ac_at_…`, `ac_rt_…`), в базе только SHA-256. Access — 1 час,
