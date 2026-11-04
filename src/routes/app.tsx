@@ -28,20 +28,19 @@ import { serviceAlternative } from '../web/catalog.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
 import { fmtAgo, fmtDate } from '../web/ui.js';
-import { type AppContext, type AppEnv, bodyParams, SESSION_COOKIE } from './context.js';
+import { type AppContext, type AppEnv, SESSION_COOKIE } from './context.js';
 import {
   type AppAuth,
+  appAction,
+  appPage,
   cookieOpts,
-  csrfFailedPage,
-  csrfOk,
   pageCtx,
-  requireApp,
   saveLocale,
   setFlash,
   shellInfo,
   takeFlash,
-  uiError,
 } from './page-helpers.js';
+import { profileBack } from './profiles.js';
 
 const DAY = 86_400_000;
 /** Ids of AI apps and accounts, as rule rows name them (and the rules page links to them). */
@@ -66,10 +65,6 @@ function accountView(a: AccountRow, serviceName: string, oauth: boolean): Accoun
   };
 }
 
-/** Error text for a failed form action: our own messages are user-safe, others are not shown. */
-const errorText = (c: AppContext, error: unknown): string =>
-  error instanceof AppError ? uiError(c, error) : c.get('t')('error.internal');
-
 /**
  * The signed-in dashboard (`/app/...`): overview, services and accounts, AI apps and tokens,
  * activity, plan and limits, settings. Every page needs a session (and the second factor when the
@@ -78,41 +73,8 @@ const errorText = (c: AppContext, error: unknown): string =>
 export function appRoutes() {
   const app = new Hono<AppEnv>();
 
-  /** Runs a GET page for the signed-in user. */
-  const page =
-    (path: string, render: (c: AppContext, auth: AppAuth) => Promise<Response>) => async (c: AppContext) => {
-      const auth = await requireApp(c, new URL(c.req.url).pathname + new URL(c.req.url).search || path);
-      if ('redirect' in auth) return c.redirect(auth.redirect, 302);
-      return render(c, auth);
-    };
-
-  /** Runs a form post: CSRF, session, then the action; errors come back as a flash note. */
-  const action =
-    (
-      /** Where to go afterwards: a fixed page, or one picked from the posted form. */
-      to: string | ((form: Record<string, string>) => string),
-      run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
-    ) =>
-    async (c: AppContext) => {
-      const form = await bodyParams(c);
-      const back = typeof to === 'string' ? to : to(form);
-      if (!csrfOk(c, form)) return csrfFailedPage(c);
-      const auth = await requireApp(c, back);
-      if ('redirect' in auth) return c.redirect(auth.redirect, 303);
-      try {
-        const response = await run(c, auth, form);
-        if (response) return response;
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          setFlash(c, 'bad', 'app.flash.invalid');
-          return c.redirect(back, 303);
-        }
-        if (!(error instanceof AppError))
-          c.get('services').logger.error({ err: error }, 'dashboard action failed');
-        setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
-      }
-      return c.redirect(back, 303);
-    };
+  const page = appPage;
+  const action = appAction;
 
   const usageOf = async (c: AppContext, workspaceId: string): Promise<UsageView> => {
     const summary = await c.get('services').entitlements.summary(workspaceId);
@@ -488,14 +450,19 @@ export function appRoutes() {
   const renderApps = async (c: AppContext, auth: AppAuth, extra: Pick<AppsView, 'newToken'> = {}) => {
     const s = c.get('services');
     const ws = auth.workspace.id;
-    const [grants, tokens, personas, clients, shell] = await Promise.all([
+    const [grants, tokens, personas, used, accounts, clients, shell] = await Promise.all([
       s.oauth.listGrants(ws),
       s.apiTokens.list(ws),
       s.personas.list(ws),
+      s.personas.connections(ws),
+      s.accounts.list(ws),
       s.aiClients.list(ws),
       shellInfo(c, ws),
     ]);
     const clientNames = new Map(clients.map((x) => [x.id, x.name]));
+    const profileNames = new Map(personas.map((p) => [p.id, p.name]));
+    const accountIds = new Set(accounts.map((a) => a.id));
+    const profileOf = (id: string | null) => (id ? (profileNames.get(id) ?? null) : null);
     return c.html(
       <AppsPage
         ctx={pageCtx(c, auth.user)}
@@ -505,17 +472,25 @@ export function appRoutes() {
             id: g.id,
             name: g.clientName ?? g.clientId,
             client: g.aiClientId ? (clientNames.get(g.aiClientId) ?? null) : null,
+            profile: profileOf(g.personaId),
             createdAt: g.createdAt,
             lastUsedAt: g.lastUsedAt,
           })),
           tokens: tokens.map((tok) => ({
             id: tok.id,
             name: tok.name,
+            profile: profileOf(tok.personaId),
             createdAt: tok.createdAt,
             lastUsedAt: tok.lastUsedAt,
             expiresAt: tok.expiresAt,
           })),
-          personas: personas.map((p) => ({ name: p.name, url: s.personas.urlFor(p.slug) })),
+          profiles: personas.map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            accounts: p.accountIds.filter((id) => accountIds.has(id)).length,
+            apps: (used.get(p.id)?.apps ?? 0) + (used.get(p.id)?.tokens ?? 0),
+          })),
           flash: takeFlash(c),
           ...extra,
         }}
@@ -535,6 +510,8 @@ export function appRoutes() {
       const input = z
         .object({ name: z.string().trim().min(1).max(80), days: z.coerce.number().int().min(0).max(3650) })
         .parse({ name: form.name, days: form.days ?? '0' });
+      // A token for an access profile works only with that profile's address.
+      const persona = form.profile ? await s.personas.get(auth.workspace.id, form.profile) : undefined;
       const client = await s.aiClients.createUnique(auth.workspace.id, input.name, 'api_token');
       const { token } = await s.apiTokens.create({
         workspaceId: auth.workspace.id,
@@ -542,6 +519,7 @@ export function appRoutes() {
         name: input.name,
         ...(input.days > 0 ? { expiresInDays: input.days } : {}),
         aiClientId: client.id,
+        ...(persona ? { personaId: persona.id } : {}),
       });
       // Shown once, right in the response: never stored in a cookie or the URL.
       return renderApps(c, auth, { newToken: token });
@@ -550,7 +528,7 @@ export function appRoutes() {
 
   app.post(
     '/app/tokens/:id/revoke',
-    action('/app/apps', async (c, auth) => {
+    action(profileBack, async (c, auth) => {
       await c.get('services').apiTokens.revoke(auth.workspace.id, c.req.param('id')!);
       setFlash(c, 'ok', 'app.flash.tokenRevoked');
     }),

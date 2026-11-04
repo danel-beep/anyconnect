@@ -1,7 +1,7 @@
 import { and, eq, like, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { messengerAccounts, messengerState } from '../db/schema.js';
-import type { SecretBox } from '../lib/crypto.js';
+import type { CipherSource } from '../messaging/ciphers.js';
 import type { SessionState } from './drivers/types.js';
 
 export class LeaseLostError extends Error {
@@ -13,16 +13,20 @@ export class LeaseLostError extends Error {
 
 /**
  * Session state in Postgres instead of the container disk, so a restart or a move to another
- * instance continues the same session. Values are SecretBox envelopes bound to account + key;
+ * instance continues the same session. Values are envelopes of the account's data key bound to account + key;
  * writes are fenced by the lease token.
  */
 export class FencedSessionState implements SessionState {
   constructor(
     private readonly db: Db,
-    private readonly secrets: SecretBox,
+    private readonly ciphers: CipherSource,
     private readonly accountId: string,
     private readonly lease: { owner: string; token: number },
   ) {}
+
+  private cipher() {
+    return this.ciphers.forAccount(this.accountId);
+  }
 
   private context(key: string): string {
     return `messenger:state:${this.accountId}:${key}`;
@@ -40,11 +44,12 @@ export class FencedSessionState implements SessionState {
       .from(messengerState)
       .where(and(eq(messengerState.accountId, this.accountId), eq(messengerState.key, key)))
       .limit(1);
-    return row ? this.secrets.decryptJson<T>(row.valueEncrypted, this.context(key)) : undefined;
+    if (!row) return undefined;
+    return (await this.cipher()).decryptJson<T>(row.valueEncrypted, this.context(key));
   }
 
   async set(key: string, value: unknown): Promise<void> {
-    const encrypted = this.secrets.encryptJson(value, this.context(key));
+    const encrypted = (await this.cipher()).encryptJson(value, this.context(key));
     // One statement: the insert only happens while the lease is held.
     const result = await this.db.execute(sql`
       insert into ${messengerState} (account_id, key, value_encrypted, updated_at)
@@ -65,9 +70,10 @@ export class FencedSessionState implements SessionState {
       .select()
       .from(messengerState)
       .where(and(eq(messengerState.accountId, this.accountId), like(messengerState.key, `${escaped}%`)));
+    const cipher = await this.cipher();
     return rows.map((row) => ({
       key: row.key,
-      value: this.secrets.decryptJson<T>(row.valueEncrypted, this.context(row.key)),
+      value: cipher.decryptJson<T>(row.valueEncrypted, this.context(row.key)),
     }));
   }
 

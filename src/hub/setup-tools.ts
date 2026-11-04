@@ -22,6 +22,7 @@ import {
 } from '../core/workspace-admin.js';
 import { AppError, badRequest } from '../lib/errors.js';
 import { billingActions, type WorkspaceBilling } from './billing-tools.js';
+import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
 
 /**
  * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
@@ -36,8 +37,9 @@ import { billingActions, type WorkspaceBilling } from './billing-tools.js';
  * lift its own restrictions: a change that tightens access rules applies at once, but one that
  * loosens them anywhere (more access, fewer confirmations, a shorter undo window, a tool or account
  * turned back on) is held for the user's confirmation (`assessRisk` with `confirm`), which only the
- * user can give, in the chat's own prompt, in Telegram or on the hub's page. Personas, AI clients
- * and sign-in security stay on the website.
+ * user can give, in the chat's own prompt, in Telegram or on the hub's page. The same goes for
+ * access profiles (`profile-tools.ts`): narrowing one applies at once, widening one waits. Sign-in
+ * security stays on the website.
  */
 
 export const SETUP_CONNECTOR_ID = BRAND.slug;
@@ -52,6 +54,8 @@ export interface SetupContext {
   admin: WorkspaceAdmin;
   /** Plans and payments (`billing-tools.ts`); absent in hubs built without billing. */
   billing?: WorkspaceBilling;
+  /** Access profiles (`profile-tools.ts`); absent in hubs built without the security layer. */
+  profiles?: WorkspaceProfiles;
   signal: AbortSignal;
 }
 
@@ -420,6 +424,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       };
     },
   }),
+  ...profileActions(setupAction),
   ...billingActions(setupAction),
 ];
 
@@ -427,7 +432,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
 export const SETUP_CONNECTOR: ConnectorDefinition = {
   id: SETUP_CONNECTOR_ID,
   name: BRAND.name,
-  description: 'Setting up this hub: services, accounts, settings and the plan.',
+  description: 'Setting up this hub: services, accounts, access rules and profiles, settings and the plan.',
   version: '1.0.0',
   config: z.object({}),
   credentials: z.object({}),

@@ -4,6 +4,7 @@ import { WEBAUTHN_JS } from '../web/webauthn-client.js';
 import type { AppEnv } from './context.js';
 import { bodyParams } from './context.js';
 import { csrfFailedPage, csrfOk, requireApp, setFlash } from './page-helpers.js';
+import { profileBack } from './profiles.js';
 
 /** Shared web assets (styles, passkey script) and revoking an AI app's access. */
 export function webRoutes() {
@@ -28,11 +29,13 @@ export function webRoutes() {
     const s = c.get('services');
     const form = await bodyParams(c);
     if (!csrfOk(c, form)) return csrfFailedPage(c);
-    const auth = await requireApp(c, '/app/apps');
+    // Revoking from a profile's page goes back there.
+    const back = profileBack(form);
+    const auth = await requireApp(c, back);
     if ('redirect' in auth) return c.redirect(auth.redirect, 303);
     await s.oauth.revokeGrant(auth.workspace.id, c.req.param('id'));
     setFlash(c, 'ok', 'app.flash.appRevoked');
-    return c.redirect('/app/apps', 303);
+    return c.redirect(back, 303);
   });
 
   return app;

@@ -274,4 +274,148 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
       expect(open.filter((r) => r.action === 'set_rule')).toEqual([]);
     });
   });
+
+  describe('access profiles from the chat', () => {
+    const approveOpen = async (action: string) => {
+      const row = (await hub.services.pendingCalls.listOpen(workspaceId)).find((r) => r.action === action);
+      expect(row).toBeDefined();
+      await hub.services.pendingCalls.decide(row!.id, true, 'web');
+      await hub.services.pendingRunner.tick();
+    };
+    const profile = async (slug: string) => hub.services.personas.bySlug(workspaceId, slug);
+    const idOf = async (name: string) =>
+      (await hub.services.accounts.findByName(workspaceId, 'demo', name))!.id;
+
+    beforeAll(async () => {
+      await hub.services.accounts.create(workspaceId, {
+        connectorId: 'demo',
+        name: 'extra',
+        label: 'Extra',
+        credentials: { secret: 's' },
+      });
+    });
+
+    it('lists the profiles with their address, accounts and access', async () => {
+      const data = json(await call('manyplug_access_profiles'));
+      expect(data.profiles).toContainEqual({
+        profile: 'Work',
+        address: 'work',
+        url: `${hub.baseUrl}/mcp/work`,
+        // No accounts: empty lists are left out of results.
+        max_access: 'full',
+        apps_connected: 0,
+      });
+    });
+
+    it('creates a profile with an address made from its name', async () => {
+      const data = json(
+        await call('manyplug_create_access_profile', {
+          name: 'Рабочий ИИ',
+          accounts: ['demo:rules', 'demo:extra'],
+          max_access: 'read',
+        }),
+      );
+      expect(data.created).toMatchObject({
+        profile: 'Рабочий ИИ',
+        address: 'rabochiy-ii',
+        url: `${hub.baseUrl}/mcp/rabochiy-ii`,
+        accounts: ['demo:rules', 'demo:extra'],
+        max_access: 'read',
+      });
+      expect(data.next).toContain('url');
+      // A taken address gets a number.
+      const second = json(
+        await call('manyplug_create_access_profile', { name: 'Work', accounts: ['demo:rules'] }),
+      );
+      expect(second.created.address).toBe('work-2');
+      const bad = await call('manyplug_create_access_profile', {
+        name: 'X',
+        accounts: ['demo:rules'],
+        address: 'Not valid!',
+      });
+      expect(bad.isError).toBe(true);
+      expect(text(bad)).toContain('lowercase letters');
+    });
+
+    it('narrows a profile at once and asks before widening it', async () => {
+      const narrowed = json(
+        await call('manyplug_update_access_profile', {
+          profile: 'rabochiy-ii',
+          remove_accounts: ['demo:extra'],
+        }),
+      );
+      expect(narrowed.updated.accounts).toEqual(['demo:rules']);
+
+      const held = await call('manyplug_update_access_profile', {
+        profile: 'Рабочий ИИ',
+        add_accounts: ['demo:extra'],
+      });
+      expect(text(held)).toContain('/confirm/');
+      expect((await profile('rabochiy-ii'))!.accountIds).toEqual([await idOf('rules')]);
+      const [row] = (await hub.services.pendingCalls.listOpen(workspaceId)).filter(
+        (r) => r.action === 'update_access_profile',
+      );
+      expect(row).toMatchObject({
+        risk: 'dangerous',
+        reason: expect.stringContaining('Lowers your protection: profile Рабочий ИИ shows 1 more account'),
+      });
+      await approveOpen('update_access_profile');
+      expect((await profile('rabochiy-ii'))!.accountIds).toEqual([await idOf('rules'), await idOf('extra')]);
+
+      const raise = await call('manyplug_update_access_profile', {
+        profile: 'rabochiy-ii',
+        max_access: 'full',
+      });
+      expect(text(raise)).toContain('/confirm/');
+      expect((await profile('rabochiy-ii'))!.maxAccess).toBe('read');
+      await approveOpen('update_access_profile');
+      expect((await profile('rabochiy-ii'))!.maxAccess).toBe('full');
+
+      // Lowering it again and renaming need no confirmation.
+      const lowered = json(
+        await call('manyplug_update_access_profile', {
+          profile: 'rabochiy-ii',
+          max_access: 'write',
+          name: 'Office',
+        }),
+      );
+      expect(lowered.updated).toMatchObject({
+        profile: 'Office',
+        address: 'rabochiy-ii',
+        max_access: 'write',
+      });
+    });
+
+    it('deletes a profile only after the user confirms, disconnecting its tokens', async () => {
+      const persona = (await profile('rabochiy-ii'))!;
+      const { row: token } = await hub.services.apiTokens.create({
+        workspaceId,
+        userId: principal.userId,
+        name: 'office script',
+        personaId: persona.id,
+      });
+      expect(json(await call('manyplug_access_profiles')).profiles).toContainEqual(
+        expect.objectContaining({ address: 'rabochiy-ii', apps_connected: 1 }),
+      );
+      const held = await call('manyplug_delete_access_profile', { profile: 'office' });
+      expect(text(held)).toContain('/confirm/');
+      expect(await profile('rabochiy-ii')).toBeDefined();
+      await approveOpen('delete_access_profile');
+      expect(await profile('rabochiy-ii')).toBeUndefined();
+      expect((await hub.services.apiTokens.list(workspaceId)).map((t) => t.id)).not.toContain(token.id);
+    });
+
+    it('explains an unknown profile or account without asking anything', async () => {
+      const unknown = await call('manyplug_update_access_profile', { profile: 'nope', name: 'X' });
+      expect(unknown.isError).toBe(true);
+      expect(text(unknown)).toContain('Access profile "nope" not found');
+      const account = await call('manyplug_update_access_profile', {
+        profile: 'work',
+        add_accounts: ['demo:nobody'],
+      });
+      expect(account.isError).toBe(true);
+      const open = await hub.services.pendingCalls.listOpen(workspaceId);
+      expect(open.filter((r) => r.action === 'update_access_profile')).toEqual([]);
+    });
+  });
 });
