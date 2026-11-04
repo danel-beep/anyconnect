@@ -170,8 +170,8 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
                 id="f-label"
                 type="text"
                 name="label"
-                value={view.label ?? view.service}
-                required
+                value={view.label ?? ''}
+                placeholder={t('connect.formLabelPlaceholder')}
                 maxlength={100}
               />
             </div>

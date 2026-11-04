@@ -36,7 +36,7 @@ export const APP_SHELL_CSS = `
 }
 
 /* Stats */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 16px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;min-width:0}
 .stat .label{font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums}
@@ -142,7 +142,7 @@ ul.plain.pad-x{padding:0 24px 6px}
 .choice input{margin-top:3px;width:auto}
 .choice span{display:flex;flex-direction:column;gap:2px}
 .rule-list{display:flex;flex-direction:column}
-.rule-row{display:grid;grid-template-columns:minmax(0,1fr) 200px 200px auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
+.rule-row{display:grid;grid-template-columns:minmax(0,1fr) 250px 250px auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
 .rule-row:first-child{border-top:0}
 .rule-row label{margin:0 0 4px;display:block}
 @media (max-width:760px){.rule-row{grid-template-columns:1fr 1fr}.rule-row .grow{grid-column:1/-1}}
@@ -153,4 +153,13 @@ ul.plain.pad-x{padding:0 24px 6px}
   .table-wrap table{min-width:520px}
 }
 @media (max-width:640px){.acc:has(.ops.inline){grid-template-columns:auto minmax(0,1fr) auto}.acc .ops.inline{grid-column:auto}}
+@media (max-width:640px){
+  .table-wrap table.calls{min-width:0}
+  table.calls thead{display:none}
+  table.calls tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 24px;border-top:1px solid var(--border)}
+  table.calls td{padding:0!important;border:0;text-align:left}
+  table.calls td.client{grid-column:1;color:var(--muted)}
+  table.calls td.status{grid-column:2;grid-row:1}
+  table.calls td.when{grid-column:1/-1}
+}
 `;

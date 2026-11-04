@@ -4,7 +4,18 @@ import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
 import { serviceMeta } from './catalog.js';
 import type { Key, Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { fmtAgo, fmtDate, fmtNumber, Hidden, Icon, initials, Meter, pctClass, ServiceLogo } from './ui.js';
+import {
+  fmtAgo,
+  fmtDate,
+  fmtDay,
+  fmtNumber,
+  Hidden,
+  Icon,
+  initials,
+  Meter,
+  pctClass,
+  ServiceLogo,
+} from './ui.js';
 
 type Flashing = { flash?: { kind: 'ok' | 'bad'; text: string } | undefined };
 
@@ -102,8 +113,8 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
             ))}
           </div>
           <div class="chart-axis">
-            <span>{view.days[0]?.day.slice(5)}</span>
-            <span>{view.days.at(-1)?.day.slice(5)}</span>
+            <span>{view.days[0] ? fmtDay(ctx.lang, view.days[0].day) : null}</span>
+            <span>{view.days.length ? fmtDay(ctx.lang, view.days.at(-1)!.day) : null}</span>
           </div>
         </div>
         <div class="card">
@@ -119,8 +130,8 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
             ))}
           </div>
           <div class="chart-axis">
-            <span>{view.days[0]?.day.slice(5)}</span>
-            <span>{view.days.at(-1)?.day.slice(5)}</span>
+            <span>{view.days[0] ? fmtDay(ctx.lang, view.days[0].day) : null}</span>
+            <span>{view.days.length ? fmtDay(ctx.lang, view.days.at(-1)!.day) : null}</span>
           </div>
         </div>
       </div>
@@ -160,7 +171,7 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
         <div class="card">
           <div class="card-head">
             <h2>{t('admin.recentUsers')}</h2>
-            <a class="btn sm ghost" href="/admin/users">
+            <a class="btn sm" href="/admin/users">
               {t('admin.allUsers')}
             </a>
           </div>

@@ -163,7 +163,12 @@ export function connectRoutes() {
           })
         : await s.accounts.create(workspace.id, {
             connectorId: connector.id,
-            label: form.label?.trim() || connector.name,
+            // A blank name becomes the mailbox address when there is one, so two mailboxes differ.
+            label:
+              form.label?.trim() ||
+              (typeof values.config.email === 'string' ? values.config.email : undefined) ||
+              (typeof form.email === 'string' && form.email.trim() ? form.email.trim() : undefined) ||
+              connector.name,
             ...(form.name ? { name: form.name } : {}),
             config: values.config,
             credentials: values.credentials,

@@ -95,7 +95,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     expect(csp).not.toContain('unsafe-inline');
     const html = await login.text();
     expect(html).toContain('<script src="/assets/webauthn.js"');
-    expect(html).toContain('Войти с passkey');
+    expect(html).toContain('Войти с ключом доступа');
     const script = await browser.request('/assets/webauthn.js');
     expect(script.headers.get('content-type')).toContain('text/javascript');
     expect(await script.text()).toContain('navigator.credentials.get');
@@ -256,7 +256,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     const password = await browser.login();
     expect(password.headers.get('location')).toBe('/login/verify?next=%2F');
     const verifyPage = await (await browser.request('/login/verify')).text();
-    expect(verifyPage).toContain('Подтвердить с passkey');
+    expect(verifyPage).toContain('Подтвердить ключом доступа');
     const hidden = TestBrowser.hiddenInputs(verifyPage);
     const second = await json(
       browser.request('/login/passkey/options', { json: { csrf: hidden.csrf, flow: 'second_factor' } }),

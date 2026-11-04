@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { actionRisk, actionText } from '../connectors/sdk.js';
+import { actionRisk, actionText, connectorText } from '../connectors/sdk.js';
 import { fontFile } from '../web/assets.js';
 import { HIDDEN_SERVICES } from '../web/catalog.js';
 import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
@@ -26,11 +26,14 @@ const HOURLY = 'public, max-age=3600';
 async function publicServices(c: AppContext): Promise<PublicService[]> {
   const s = c.get('services');
   const entries = await s.admin.services(undefined);
+  const builtin = new Map(s.connectors.builtin.all().map((x) => [x.id, x]));
+  const lang = c.get('locale');
   return entries
     .filter((e) => !HIDDEN_SERVICES.has(e.service))
     .map((e) => ({
       id: e.service,
-      name: e.name,
+      // Names in the page language ("Почта (IMAP/SMTP)"), as the connect form shows them.
+      name: builtin.has(e.service) ? connectorText(builtin.get(e.service)!, lang).name : e.name,
       description: e.description,
       connect: e.connect,
       ready: e.ready,

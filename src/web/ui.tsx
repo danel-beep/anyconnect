@@ -11,6 +11,7 @@ import type { Translate } from './i18n.js';
 
 const ICONS = {
   check: 'M20 6 9 17l-5-5',
+  minus: 'M5 12h14',
   copy: 'M9 9h10v10H9zM5 15V5h10',
   sun: 'M12 4V2M12 22v-2M4.9 4.9 3.5 3.5M20.5 20.5l-1.4-1.4M4 12H2M22 12h-2M4.9 19.1l-1.4 1.4M20.5 3.5l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   moon: 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z',
@@ -289,7 +290,20 @@ export const fmtDate = (lang: string, date: Date, withTime = false) =>
     year: 'numeric',
     ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
     timeZone: 'UTC',
-  }).format(date);
+  })
+    .format(date)
+    // Keep "1 дек. 2026 г." on one line.
+    .replace(/ /g, '\u00a0');
+
+/** A short day for chart axes: "6 окт." / "6 Oct". `day` is YYYY-MM-DD. */
+export const fmtDay = (lang: string, day: string) =>
+  new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+    .format(new Date(`${day}T00:00:00Z`))
+    .replace(/ /g, '\u00a0');
 
 /** "5 minutes ago" style time for activity lists. */
 export function fmtAgo(lang: string, date: Date, now = Date.now()): string {

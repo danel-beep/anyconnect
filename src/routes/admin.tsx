@@ -351,10 +351,16 @@ export function adminRoutes() {
       const t = c.get('t');
       const yes = t('admin.sys.on');
       const no = t('admin.sys.off');
+      // "Not set" names the variable that turns it on, so the owner knows what to change.
+      const off = (envVar: string) => `${no} · ${t('admin.sys.setVar', { name: envVar })}`;
       const hours = Math.round(cfg.site.adminSessionMaxAgeMs / 3_600_000);
       const forwarded = c.req.header('x-forwarded-for');
       const checks = [
-        { label: t('admin.sys.google'), ok: Boolean(cfg.site.google), detail: cfg.site.google ? yes : no },
+        {
+          label: t('admin.sys.google'),
+          ok: Boolean(cfg.site.google),
+          detail: cfg.site.google ? yes : off('LOGIN_GOOGLE_CLIENT_ID'),
+        },
         {
           label: t('admin.sys.signups'),
           ok: cfg.site.signups === 'open',
@@ -368,7 +374,9 @@ export function adminRoutes() {
         {
           label: t('admin.sys.allowlist'),
           ok: cfg.site.adminAllowedIps.length > 0,
-          detail: cfg.site.adminAllowedIps.length ? cfg.site.adminAllowedIps.join(', ') : no,
+          detail: cfg.site.adminAllowedIps.length
+            ? cfg.site.adminAllowedIps.join(', ')
+            : off('ADMIN_ALLOWED_IPS'),
         },
         {
           // Lets the owner check the proxy settings (TRUST_PROXY) before relying on the IP allowlist.
@@ -377,12 +385,20 @@ export function adminRoutes() {
           detail: `${auth.actor.ip ?? '—'}${forwarded ? ` (X-Forwarded-For: ${forwarded.slice(0, 200)})` : ''}`,
         },
         { label: t('admin.sys.adminSession'), ok: true, detail: t('admin.sys.hours', { n: hours }) },
-        { label: t('admin.sys.payments'), ok: Boolean(s.billing), detail: s.billing ? s.billing.name : no },
-        { label: t('admin.sys.telegram'), ok: Boolean(s.telegramBot), detail: s.telegramBot ? yes : no },
+        {
+          label: t('admin.sys.payments'),
+          ok: Boolean(s.billing),
+          detail: s.billing ? s.billing.name : t('admin.sys.paymentsOff'),
+        },
+        {
+          label: t('admin.sys.telegram'),
+          ok: Boolean(s.telegramBot),
+          detail: s.telegramBot ? yes : off('TELEGRAM_BOT_TOKEN'),
+        },
         {
           label: t('admin.sys.support'),
           ok: Boolean(cfg.site.supportEmail),
-          detail: cfg.site.supportEmail ?? no,
+          detail: cfg.site.supportEmail ?? off('SUPPORT_EMAIL'),
         },
         {
           label: t('admin.sys.https'),

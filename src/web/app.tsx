@@ -11,6 +11,7 @@ import {
   CopyField,
   fmtAgo,
   fmtDate,
+  fmtDay,
   fmtNumber,
   Hidden,
   Icon,
@@ -256,7 +257,7 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
     <p class="muted pad-x">{empty}</p>
   ) : (
     <div class="table-wrap">
-      <table>
+      <table class="calls">
         <thead>
           <tr>
             <th>{ctx.t('app.call.tool')}</th>
@@ -276,11 +277,11 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
                     <code>{call.toolName}</code>
                   </span>
                 </td>
-                {withClient ? <td class="small">{call.client ?? '—'}</td> : null}
-                <td>
+                {withClient ? <td class="small client">{call.client ?? '—'}</td> : null}
+                <td class="status">
                   <CallStatus t={ctx.t} call={call} />
                 </td>
-                <td class="right small muted nowrap" title={fmtDate(ctx.lang, call.createdAt, true)}>
+                <td class="right small muted nowrap when" title={fmtDate(ctx.lang, call.createdAt, true)}>
                   {fmtAgo(ctx.lang, call.createdAt)} · {call.durationMs} {ctx.t('app.ms')}
                 </td>
               </tr>
@@ -450,7 +451,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
         <div class="card flush">
           <div class="card-head pad">
             <h2>{t('app.activity.recent')}</h2>
-            <a class="btn sm ghost" href="/app/activity">
+            <a class="btn sm" href="/app/activity">
               {t('app.activity.all')}
             </a>
           </div>
@@ -468,7 +469,7 @@ export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, co
     <div class="card" id="connect-ai">
       <div class="card-head">
         <h2>{compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
-        <a class="btn sm ghost" href="/docs">
+        <a class="btn sm" href="/docs">
           <Icon name="book" /> {t('app.ai.docs')}
         </a>
       </div>
@@ -980,8 +981,8 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
             ))}
           </div>
           <div class="chart-axis">
-            <span>{view.daily[0]?.day.slice(5)}</span>
-            <span>{view.daily.at(-1)?.day.slice(5)}</span>
+            <span>{view.daily[0] ? fmtDay(ctx.lang, view.daily[0].day) : null}</span>
+            <span>{view.daily.length ? fmtDay(ctx.lang, view.daily.at(-1)!.day) : null}</span>
           </div>
         </div>
         <div class="card">
@@ -1278,7 +1279,9 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
               ))}
             </select>
             <div class="actions start">
-              <button type="submit">{t('app.settings.save')}</button>
+              <button type="submit" class="primary">
+                {t('app.settings.save')}
+              </button>
             </div>
           </form>
         </div>
@@ -1303,7 +1306,8 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
                 {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
               </span>
               <span class="small muted">
-                {s.ip ?? ''} · {fmtAgo(lang, s.lastSeenAt)}
+                {s.ip ? `${s.ip} · ` : ''}
+                {fmtAgo(lang, s.lastSeenAt)}
               </span>
             </li>
           ))}

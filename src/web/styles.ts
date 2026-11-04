@@ -187,7 +187,7 @@ ul.codes code{font-size:15px}
 /* Auth pages: centered card */
 .auth{min-height:100vh;display:flex;flex-direction:column}
 .auth-top{display:flex;justify-content:space-between;align-items:center;padding:20px 24px}
-.auth main{flex:1;width:100%;max-width:440px;margin:0 auto;padding:24px 16px 64px}
+.auth main{flex:1;width:100%;max-width:440px;margin:0 auto;padding:24px 16px 64px;display:flex;flex-direction:column;justify-content:center}
 .auth main.wide{max-width:760px}
 .auth .card{padding:28px}
 .auth h1{font-size:24px}
@@ -195,6 +195,8 @@ ul.codes code{font-size:15px}
 .auth-foot a{color:var(--muted)}
 .btn-google{background:var(--card);border-color:var(--border-strong);color:var(--text);min-height:46px;font-size:15px}
 .btn-google svg{width:18px;height:18px}
+.btn-google.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.btn-google.primary svg{background:#fff;border-radius:50%;padding:3px;width:24px;height:24px}
 .or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px;margin:18px 0}
 .or::before,.or::after{content:"";flex:1;border-top:1px solid var(--border)}
 

@@ -288,7 +288,7 @@ export const PlanCard: FC<{
       <ul>
         {features.map(([metric, on]) => (
           <li class={on ? undefined : 'off'}>
-            <Check />
+            {on ? <Check /> : <Icon name="minus" />}
             <span>
               {metric === 'actions' && intro
                 ? t('plan.metric.actionsIntro', {
@@ -996,11 +996,13 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
             <div class="card">
               <h3>{t('service.how')}</h3>
               <p class="muted">{t(`service.connect.${service.connect}`)}</p>
-              <ol class="bullets">
-                <li>{t('service.step1')}</li>
-                <li>{t('service.step2', { service: service.name })}</li>
-                <li>{t('service.step3')}</li>
-              </ol>
+              {service.ready ? (
+                <ol class="bullets">
+                  <li>{t('service.step1')}</li>
+                  <li>{t('service.step2', { service: service.name })}</li>
+                  <li>{t('service.step3')}</li>
+                </ol>
+              ) : null}
               {service.ready ? null : (
                 <div class="notice info">
                   {t('service.notReady', { service: service.name })}
@@ -1008,16 +1010,29 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
                 </div>
               )}
               <div class="actions start">
-                <a
-                  class="btn primary"
-                  href={
-                    ctx.user
-                      ? `/app/services#add-${service.id}`
-                      : `/signup?next=${encodeURIComponent('/app/services')}`
-                  }
-                >
-                  {t('service.connectCta', { service: service.name })}
-                </a>
+                {service.ready ? (
+                  <a
+                    class="btn primary"
+                    href={
+                      ctx.user
+                        ? `/app/services#add-${service.id}`
+                        : `/signup?next=${encodeURIComponent('/app/services')}`
+                    }
+                  >
+                    {t('service.connectCta', { service: service.name })}
+                  </a>
+                ) : service.id === 'gmail' || service.id === 'outlook' ? (
+                  <a
+                    class="btn primary"
+                    href={
+                      ctx.user
+                        ? '/app/services#add-imap'
+                        : `/signup?next=${encodeURIComponent('/app/services')}`
+                    }
+                  >
+                    {t('service.imapCta')}
+                  </a>
+                ) : null}
                 {service.homepage ? (
                   <a class="btn ghost" href={service.homepage} rel="noopener noreferrer" target="_blank">
                     {t('service.homepage')} <Icon name="external" />

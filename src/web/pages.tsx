@@ -142,7 +142,7 @@ export const LoginPage: FC<{
         ) : null}
         {google && !signupClosed ? (
           <>
-            <a class="btn block btn-google" href={googleHref}>
+            <a class="btn block primary btn-google" href={googleHref}>
               <GoogleG /> {t('login.google')}
             </a>
             {mode === 'signup' ? (

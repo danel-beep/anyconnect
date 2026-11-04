@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isMetric, type Metric } from '../billing/plans.js';
+import { connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
 import type { toolCalls } from '../db/schema.js';
@@ -21,7 +22,7 @@ import {
 } from '../web/app.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
-import { fmtAgo } from '../web/ui.js';
+import { fmtAgo, fmtDate } from '../web/ui.js';
 import { type AppContext, type AppEnv, bodyParams, SESSION_COOKIE } from './context.js';
 import {
   type AppAuth,
@@ -210,6 +211,9 @@ export function appRoutes() {
         usageOf(c, ws),
         shellInfo(c, ws),
       ]);
+      const builtinNames = new Map(
+        s.connectors.builtin.all().map((x) => [x.id, connectorText(x, c.get('locale')).name]),
+      );
       return c.html(
         <ServicesAppPage
           ctx={pageCtx(c, auth.user)}
@@ -220,7 +224,7 @@ export function appRoutes() {
               .filter((e) => e.service !== 'anyconnect' && e.service !== 'demo')
               .map((e) => ({
                 service: e.service,
-                name: e.name,
+                name: builtinNames.get(e.service) ?? e.name,
                 description: e.description,
                 connect: e.connect,
                 ready: e.ready,
@@ -539,13 +543,19 @@ export function appRoutes() {
     page('/app/rules', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [security, rules, clients, accounts, shell] = await Promise.all([
+      const [security, rules, allClients, grants, tokens, accounts, shell] = await Promise.all([
         s.admin.security(ws),
         s.policies.listRules(ws),
         s.aiClients.list(ws),
+        s.oauth.listGrants(ws),
+        s.apiTokens.list(ws),
         accountsOf(c, ws),
         shellInfo(c, ws),
       ]);
+      // Apps with live access (as on the AI apps page), plus any that already have a rule here.
+      const live = new Set([...grants, ...tokens].map((x) => x.aiClientId).filter(Boolean));
+      const ruled = new Set(rules.map((r) => r.aiClientId).filter(Boolean));
+      const clients = allClients.filter((x) => live.has(x.id) || ruled.has(x.id));
       const simple = (r: (typeof rules)[number]) => r.personaId === null && r.connectorId === null;
       const appRule = (id: string) =>
         rules.find((r) => simple(r) && r.aiClientId === id && r.accountId === null);
@@ -568,7 +578,11 @@ export function appRoutes() {
               id: x.id,
               name: x.name,
               // Two apps can share a name (e.g. two tokens called "Script"): tell them apart.
-              detail: `${c.get('t')(x.kind === 'api_token' ? 'app.rules.viaToken' : 'app.rules.viaOauth')} · ${c.get('t')('home.lastUsed')}: ${x.lastUsedAt ? fmtAgo(c.get('locale'), x.lastUsedAt) : c.get('t')('home.never')}`,
+              detail: [
+                c.get('t')(x.kind === 'api_token' ? 'app.rules.viaToken' : 'app.rules.viaOauth'),
+                c.get('t')('app.rules.added', { date: fmtDate(c.get('locale'), x.createdAt) }),
+                `${c.get('t')('home.lastUsed')}: ${x.lastUsedAt ? fmtAgo(c.get('locale'), x.lastUsedAt) : c.get('t')('home.never')}`,
+              ].join(' · '),
               access: appRule(x.id)?.access ?? null,
               confirm: appRule(x.id)?.confirm ?? null,
             })),

@@ -49,7 +49,7 @@ p{text-wrap:pretty}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .hero-note{margin:18px 0 0;color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap}
 .hero-note span{display:inline-flex;align-items:center;gap:6px}
-.hero-note svg{width:14px;height:14px;color:var(--ok)}
+.hero-note svg{width:14px;height:14px;color:var(--accent-ink)}
 @media (max-width:960px){.hero .wrap{grid-template-columns:1fr;gap:40px}.hero{padding:40px 0 64px}}
 
 /* Product demo window */
@@ -242,4 +242,7 @@ html:not(.js) .when-year{display:none}
 .doc-layout h1{font-size:clamp(32px,4vw,44px);letter-spacing:-.035em;line-height:1.05}
 .guide li code,.guide p code{font-size:.92em}
 details.more-ways{margin-top:14px}
+@media (max-width:640px){.svc-filter input{max-width:none}.svc-missing .row{flex-direction:column;align-items:stretch}.svc-missing .btn{width:100%}}
+.compare th:not(:first-child){font-size:14px;font-weight:600;color:var(--text)}
+.compare th:first-child,.compare td:first-child{width:30%}
 `;

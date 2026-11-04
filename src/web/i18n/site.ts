@@ -36,8 +36,9 @@ export const siteEn = {
   'landing.description':
     'One MCP address for Gmail, Outlook, Slack, Notion, GitHub and more. Any number of accounts per service, encrypted keys, confirmations for risky actions.',
   'landing.eyebrow': 'MCP hub for Claude, ChatGPT and Cursor',
-  'landing.h1a': 'Your mail, chats and docs,',
+  'landing.h1a': 'Your mail, tasks and docs,',
   'site.services.soonShort': 'soon',
+  'service.imapCta': 'Connect over IMAP',
   'service.notReady': '{service} is being set up on this hub and will be available soon.',
   'service.viaImap': 'Meanwhile you can connect the same mailbox over IMAP.',
   'landing.f.context.tokens': '≤ 3k tokens',
@@ -350,8 +351,9 @@ export const siteRu: Record<SiteKey, string> = {
   'landing.description':
     'Один MCP-адрес для Gmail, Outlook, Slack, Notion, GitHub и других сервисов. Сколько угодно аккаунтов, зашифрованные ключи, подтверждение опасных действий.',
   'landing.eyebrow': 'MCP-хаб для Claude, ChatGPT и Cursor',
-  'landing.h1a': 'Ваша почта, чаты и документы —',
+  'landing.h1a': 'Ваша почта, задачи и документы —',
   'site.services.soonShort': 'скоро',
+  'service.imapCta': 'Подключить через IMAP',
   'service.notReady': '{service} скоро появится: подключение настраивается.',
   'service.viaImap': 'Пока тот же ящик можно подключить через IMAP.',
   'landing.f.context.tokens': '≤ 3 тыс. токенов',
