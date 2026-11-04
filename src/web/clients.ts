@@ -33,15 +33,15 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     steps: {
       ru: [
         'Откройте «Настройки» → «Коннекторы».',
-        'Нажмите «Добавить свой коннектор», назовите его AnyConnect и вставьте адрес.',
-        'Нажмите «Подключить»: откроется AnyConnect — войдите и разрешите доступ.',
-        'В новом чате включите AnyConnect в меню инструментов и попросите: «Подключи мою почту».',
+        'Нажмите «Добавить свой коннектор», назовите его Manyplug и вставьте адрес.',
+        'Нажмите «Подключить»: откроется Manyplug — войдите и разрешите доступ.',
+        'В новом чате включите Manyplug в меню инструментов и попросите: «Подключи мою почту».',
       ],
       en: [
         'Open Settings → Connectors.',
-        'Click “Add custom connector”, name it AnyConnect and paste the URL.',
-        'Click Connect: AnyConnect opens — sign in and allow access.',
-        'In a new chat, turn AnyConnect on in the tools menu and ask: “Connect my email”.',
+        'Click “Add custom connector”, name it Manyplug and paste the URL.',
+        'Click Connect: Manyplug opens — sign in and allow access.',
+        'In a new chat, turn Manyplug on in the tools menu and ask: “Connect my email”.',
       ],
     },
   },
@@ -56,14 +56,14 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ru: [
         'Откройте «Настройки» → «Приложения и коннекторы» → «Расширенные настройки» и включите «Режим разработчика».',
         'Вернитесь в «Приложения и коннекторы» и нажмите «Создать».',
-        'Название — AnyConnect, адрес MCP-сервера — ваш адрес, аутентификация — OAuth. Подтвердите, что доверяете приложению.',
-        'Войдите в AnyConnect и разрешите доступ. В чате выберите AnyConnect через «+» → «Ещё».',
+        'Название — Manyplug, адрес MCP-сервера — ваш адрес, аутентификация — OAuth. Подтвердите, что доверяете приложению.',
+        'Войдите в Manyplug и разрешите доступ. В чате выберите Manyplug через «+» → «Ещё».',
       ],
       en: [
         'Open Settings → Apps & Connectors → Advanced settings and turn on Developer mode.',
         'Go back to Apps & Connectors and click Create.',
-        'Name: AnyConnect, MCP server URL: your URL, authentication: OAuth. Confirm you trust the app.',
-        'Sign in to AnyConnect and allow access. In a chat, pick AnyConnect under “+” → More.',
+        'Name: Manyplug, MCP server URL: your URL, authentication: OAuth. Confirm you trust the app.',
+        'Sign in to Manyplug and allow access. In a chat, pick Manyplug under “+” → More.',
       ],
     },
   },
@@ -75,14 +75,14 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     steps: {
       ru: [
         'Выполните команду в терминале.',
-        'Запустите claude, введите /mcp, выберите anyconnect и пройдите вход в браузере.',
+        'Запустите claude, введите /mcp, выберите manyplug и пройдите вход в браузере.',
       ],
       en: [
         'Run the command in a terminal.',
-        'Start claude, type /mcp, pick anyconnect and sign in in the browser.',
+        'Start claude, type /mcp, pick manyplug and sign in in the browser.',
       ],
     },
-    code: (url) => `claude mcp add --transport http --scope user anyconnect ${url}`,
+    code: (url) => `claude mcp add --transport http --scope user manyplug ${url}`,
   },
   {
     id: 'cursor',
@@ -92,16 +92,16 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     steps: {
       ru: [
         'Нажмите «Добавить в Cursor» или вставьте конфигурацию в ~/.cursor/mcp.json.',
-        'В Cursor Settings → MCP нажмите «Login» рядом с anyconnect и войдите.',
+        'В Cursor Settings → MCP нажмите «Login» рядом с manyplug и войдите.',
       ],
       en: [
         'Click “Add to Cursor” or paste the config into ~/.cursor/mcp.json.',
-        'In Cursor Settings → MCP click “Login” next to anyconnect and sign in.',
+        'In Cursor Settings → MCP click “Login” next to manyplug and sign in.',
       ],
     },
-    code: (url) => json({ mcpServers: { anyconnect: { url } } }),
+    code: (url) => json({ mcpServers: { manyplug: { url } } }),
     install: (url) => ({
-      href: `cursor://anysphere.cursor-deeplink/mcp/install?name=anyconnect&config=${encodeURIComponent(
+      href: `cursor://anysphere.cursor-deeplink/mcp/install?name=manyplug&config=${encodeURIComponent(
         Buffer.from(JSON.stringify({ url })).toString('base64'),
       )}`,
       label: { ru: 'Добавить в Cursor', en: 'Add to Cursor' },
@@ -122,9 +122,9 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'Start the server in the MCP list and sign in when VS Code asks.',
       ],
     },
-    code: (url) => json({ servers: { anyconnect: { type: 'http', url } } }),
+    code: (url) => json({ servers: { manyplug: { type: 'http', url } } }),
     install: (url) => ({
-      href: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: 'anyconnect', type: 'http', url }))}`,
+      href: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: 'manyplug', type: 'http', url }))}`,
       label: { ru: 'Установить в VS Code', en: 'Install in VS Code' },
     }),
   },
@@ -136,14 +136,14 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     steps: {
       ru: [
         'Добавьте сервер в ~/.codex/config.toml.',
-        'Выполните codex mcp login anyconnect и войдите в браузере.',
+        'Выполните codex mcp login manyplug и войдите в браузере.',
       ],
       en: [
         'Add the server to ~/.codex/config.toml.',
-        'Run codex mcp login anyconnect and sign in in the browser.',
+        'Run codex mcp login manyplug and sign in in the browser.',
       ],
     },
-    code: (url) => `[mcp_servers.anyconnect]\nurl = "${url}"`,
+    code: (url) => `[mcp_servers.manyplug]\nurl = "${url}"`,
   },
   {
     id: 'gemini',
@@ -151,10 +151,10 @@ export const CLIENT_GUIDES: ClientGuide[] = [
     icon: 'googlegemini',
     note: { ru: 'Gemini CLI.', en: 'Gemini CLI.' },
     steps: {
-      ru: ['Выполните команду.', 'В Gemini CLI введите /mcp auth anyconnect и войдите.'],
-      en: ['Run the command.', 'In Gemini CLI type /mcp auth anyconnect and sign in.'],
+      ru: ['Выполните команду.', 'В Gemini CLI введите /mcp auth manyplug и войдите.'],
+      en: ['Run the command.', 'In Gemini CLI type /mcp auth manyplug and sign in.'],
     },
-    code: (url) => `gemini mcp add --transport http anyconnect ${url}`,
+    code: (url) => `gemini mcp add --transport http manyplug ${url}`,
   },
   {
     id: 'windsurf',
@@ -168,7 +168,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ],
       en: ['Add the server to ~/.codeium/windsurf/mcp_config.json.', 'Refresh the MCP servers and sign in.'],
     },
-    code: (url) => json({ mcpServers: { anyconnect: { serverUrl: url } } }),
+    code: (url) => json({ mcpServers: { manyplug: { serverUrl: url } } }),
   },
   {
     id: 'other',

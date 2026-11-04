@@ -26,13 +26,13 @@ export const siteEn = {
   'site.footer.product': 'Product',
   'site.footer.account': 'Account',
   'site.footer.security': 'Security',
-  'site.footer.company': 'AnyConnect',
+  'site.footer.company': 'Manyplug',
   'site.footer.contact': 'Contact us',
   'site.footer.privacy': 'Privacy policy',
   'site.footer.terms': 'Terms of service',
   'site.footer.mcp': 'Built on the open Model Context Protocol',
 
-  'landing.title': 'AnyConnect: connect all your services to AI in one step',
+  'landing.title': 'Manyplug: connect all your services to AI in one step',
   'landing.description':
     'One MCP address for Gmail, Outlook, Slack, Notion, GitHub and more. Any number of accounts per service, encrypted keys, confirmations for risky actions.',
   'landing.eyebrow': 'MCP hub for Claude, ChatGPT and Cursor',
@@ -51,7 +51,7 @@ export const siteEn = {
   'landing.demo.label':
     'Example: the AI searches two inboxes, reads an invoice and sends it to Slack after you confirm',
   'landing.demo.title': 'Claude',
-  'landing.demo.connected': 'AnyConnect on',
+  'landing.demo.connected': 'Manyplug on',
   'landing.demo.input': 'Reply to Claude…',
   'landing.demo.ask': 'Find the ACME invoice in my mail and send it to Alex in Slack',
   'landing.demo.found': '3 emails in 2 inboxes',
@@ -114,7 +114,7 @@ export const siteEn = {
   'landing.security.eyebrow': 'Security',
   'landing.security.title': 'Your accounts stay yours',
   'landing.security.lead':
-    'AnyConnect sits between the AI and your data, so it is built to hold up to leaks, bugs and commands slipped into emails.',
+    'Manyplug sits between the AI and your data, so it is built to hold up to leaks, bugs and commands slipped into emails.',
   'landing.sec.encryption.title': 'Encryption per account',
   'landing.sec.encryption.text':
     'Every token and password is encrypted with its own key. A database dump alone is useless.',
@@ -138,10 +138,10 @@ export const siteEn = {
 
   'faq.mcp.q': 'What is MCP and why does my AI need it?',
   'faq.mcp.a':
-    'MCP (Model Context Protocol) is an open standard that lets AI assistants use tools: read mail, create tasks, look into a calendar. Claude, ChatGPT, Cursor and many others support it. AnyConnect is one MCP server that gives the AI all your services at once.',
+    'MCP (Model Context Protocol) is an open standard that lets AI assistants use tools: read mail, create tasks, look into a calendar. Claude, ChatGPT, Cursor and many others support it. Manyplug is one MCP server that gives the AI all your services at once.',
   'faq.why.q': 'Why not connect each service to the AI directly?',
   'faq.why.a':
-    'Each AI app would need its own setup, many services have no MCP server at all, and most of them allow one account only. With AnyConnect you connect a service once, keep several accounts, and every AI client gets the same tools and the same rules.',
+    'Each AI app would need its own setup, many services have no MCP server at all, and most of them allow one account only. With Manyplug you connect a service once, keep several accounts, and every AI client gets the same tools and the same rules.',
   'faq.secrets.q': 'Where are my passwords and tokens stored?',
   'faq.secrets.a':
     'In the hub’s database, encrypted with a separate key per account. The AI only sees tool results, never keys. You can disconnect any account at any moment, and its credentials are deleted.',
@@ -194,9 +194,9 @@ export const siteEn = {
   'plan.metric.seats.unlimited': 'Unlimited team members',
   'plan.feature.everything': 'All services, safety features and AI apps',
 
-  'pricing.title': 'Pricing · AnyConnect',
+  'pricing.title': 'Pricing · Manyplug',
   'pricing.description':
-    'AnyConnect plans: free, Personal $5, Pro $12, Business $29 a month. All security features in every plan.',
+    'Manyplug plans: free, Personal $5, Pro $12, Business $29 a month. All security features in every plan.',
   'pricing.h1': 'Simple plans that grow with you',
   'pricing.lead': 'All services and security features are in every plan. Pick by how much you use AI.',
   'pricing.paymentsSoon':
@@ -243,8 +243,8 @@ export const siteEn = {
   'category.custom': 'Your own',
   'category.other': 'Other',
 
-  'services.title': 'Services · AnyConnect',
-  'services.description': 'Services you can connect to Claude, ChatGPT and Cursor through AnyConnect.',
+  'services.title': 'Services · Manyplug',
+  'services.description': 'Services you can connect to Claude, ChatGPT and Cursor through Manyplug.',
   'services.h1': 'Services you can connect',
   'services.lead': 'Each one supports several accounts. More are added every month.',
   'services.search': 'Find a service',
@@ -265,9 +265,9 @@ export const siteEn = {
   'service.notReadyAlt': 'You can connect the same mail through {alternative} with an app password instead.',
   'service.promptsNone': 'Ask in plain words, for example “What is new in {service} today?”',
   'service.toolsNote': 'Each action can be turned off per account, and changes can wait for your OK.',
-  'service.title': '{service} for Claude and ChatGPT · AnyConnect',
+  'service.title': '{service} for Claude and ChatGPT · Manyplug',
   'service.how': 'How to connect',
-  'service.connect.oauth': 'You sign in on the service’s own page. AnyConnect never sees your password.',
+  'service.connect.oauth': 'You sign in on the service’s own page. Manyplug never sees your password.',
   'service.connect.form':
     'You paste an API key or an app password into a protected form. It is encrypted right away.',
   'service.connect.none': 'Nothing to configure, it works out of the box.',
@@ -278,9 +278,9 @@ export const siteEn = {
   'service.does': 'Action',
   'service.risk': 'Access',
 
-  'docs.title': 'Docs · AnyConnect',
+  'docs.title': 'Docs · Manyplug',
   'docs.description':
-    'How to connect AnyConnect to Claude, ChatGPT, Claude Code, Cursor, VS Code and other MCP clients.',
+    'How to connect Manyplug to Claude, ChatGPT, Claude Code, Cursor, VS Code and other MCP clients.',
   'docs.nav': 'Docs sections',
   'docs.start': 'Start',
   'docs.url': 'Your MCP address',
@@ -290,9 +290,9 @@ export const siteEn = {
   'docs.custom': 'Your own servers and APIs',
   'docs.safety': 'Safety',
   'docs.eyebrow': 'Docs',
-  'docs.h1': 'Connect AnyConnect to your AI',
+  'docs.h1': 'Connect Manyplug to your AI',
   'docs.lead':
-    'Every client uses the same address. On the first connection you sign in to AnyConnect and allow access, and the AI gets your services.',
+    'Every client uses the same address. On the first connection you sign in to Manyplug and allow access, and the AI gets your services.',
   'docs.urlHint':
     'Same address for every client. Access is granted per app and can be revoked in the dashboard.',
   'docs.services.text':
@@ -305,7 +305,7 @@ export const siteEn = {
   'docs.custom.mcp': 'any remote MCP server by its address, with an optional bearer token;',
   'docs.custom.http': 'a REST API described as a short manifest (operations, parameters, auth).',
   'docs.safety.text':
-    'Write actions such as sending or deleting can require your confirmation in the dashboard or in Telegram. Each AI app can be limited to certain accounts or to reading only. Turn on two-step verification for your AnyConnect account.',
+    'Write actions such as sending or deleting can require your confirmation in the dashboard or in Telegram. Each AI app can be limited to certain accounts or to reading only. Turn on two-step verification for your Manyplug account.',
   'docs.safety.link': 'Set up two-step verification',
   'docs.safety.rules': 'Rules for apps and accounts',
   'docs.api': 'API',
@@ -343,13 +343,13 @@ export const siteRu: Record<SiteKey, string> = {
   'site.footer.product': 'Продукт',
   'site.footer.account': 'Аккаунт',
   'site.footer.security': 'Безопасность',
-  'site.footer.company': 'AnyConnect',
+  'site.footer.company': 'Manyplug',
   'site.footer.contact': 'Написать нам',
   'site.footer.privacy': 'Политика конфиденциальности',
   'site.footer.terms': 'Условия использования',
   'site.footer.mcp': 'Работает на открытом протоколе MCP',
 
-  'landing.title': 'AnyConnect: все ваши сервисы в ИИ за один шаг',
+  'landing.title': 'Manyplug: все ваши сервисы в ИИ за один шаг',
   'landing.description':
     'Один MCP-адрес для Gmail, Outlook, Slack, Notion, GitHub и других сервисов. Сколько угодно аккаунтов, зашифрованные ключи, подтверждение опасных действий.',
   'landing.eyebrow': 'MCP-хаб для Claude, ChatGPT и Cursor',
@@ -368,7 +368,7 @@ export const siteRu: Record<SiteKey, string> = {
   'landing.demo.label':
     'Пример: ИИ ищет письмо в двух ящиках, читает счёт и после подтверждения отправляет его в Slack',
   'landing.demo.title': 'Claude',
-  'landing.demo.connected': 'AnyConnect подключён',
+  'landing.demo.connected': 'Manyplug подключён',
   'landing.demo.input': 'Ответить Claude…',
   'landing.demo.ask': 'Найди счёт от ACME в почте и отправь Алексу в Slack',
   'landing.demo.found': '3 письма в 2 ящиках',
@@ -434,7 +434,7 @@ export const siteRu: Record<SiteKey, string> = {
   'landing.security.eyebrow': 'Безопасность',
   'landing.security.title': 'Ваши аккаунты остаются вашими',
   'landing.security.lead':
-    'AnyConnect стоит между ИИ и вашими данными, поэтому устойчив к утечкам, ошибкам и подмене команд в письмах.',
+    'Manyplug стоит между ИИ и вашими данными, поэтому устойчив к утечкам, ошибкам и подмене команд в письмах.',
   'landing.sec.encryption.title': 'Шифрование каждого аккаунта',
   'landing.sec.encryption.text':
     'Каждый токен и пароль зашифрован своим ключом. Одна только копия базы ничего не даст.',
@@ -460,16 +460,16 @@ export const siteRu: Record<SiteKey, string> = {
 
   'faq.mcp.q': 'Что такое MCP и зачем он моему ИИ?',
   'faq.mcp.a':
-    'MCP (Model Context Protocol) — открытый стандарт, через который ИИ-ассистенты пользуются инструментами: читают почту, создают задачи, смотрят календарь. Его поддерживают Claude, ChatGPT, Cursor и многие другие. AnyConnect — один MCP-сервер, через который ИИ получает сразу все ваши сервисы.',
+    'MCP (Model Context Protocol) — открытый стандарт, через который ИИ-ассистенты пользуются инструментами: читают почту, создают задачи, смотрят календарь. Его поддерживают Claude, ChatGPT, Cursor и многие другие. Manyplug — один MCP-сервер, через который ИИ получает сразу все ваши сервисы.',
   'faq.why.q': 'Почему бы не подключать сервисы к ИИ напрямую?',
   'faq.why.a':
-    'Тогда каждое ИИ-приложение придётся настраивать отдельно, у многих сервисов нет своего MCP-сервера, а большинство позволяют только один аккаунт. С AnyConnect сервис подключается один раз, аккаунтов может быть несколько, и у всех ИИ одинаковые инструменты и правила.',
+    'Тогда каждое ИИ-приложение придётся настраивать отдельно, у многих сервисов нет своего MCP-сервера, а большинство позволяют только один аккаунт. С Manyplug сервис подключается один раз, аккаунтов может быть несколько, и у всех ИИ одинаковые инструменты и правила.',
   'faq.secrets.q': 'Где хранятся мои пароли и токены?',
   'faq.secrets.a':
-    'В базе AnyConnect, зашифрованные отдельным ключом для каждого аккаунта. ИИ видит только результаты инструментов, но не ключи. Любой аккаунт можно отключить в любой момент, и его данные для входа удаляются.',
+    'В базе Manyplug, зашифрованные отдельным ключом для каждого аккаунта. ИИ видит только результаты инструментов, но не ключи. Любой аккаунт можно отключить в любой момент, и его данные для входа удаляются.',
   'faq.action.q': 'Что считается действием?',
   'faq.action.a':
-    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. Служебные операции AnyConnect (список аккаунтов, подключение нового) не считаются.',
+    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются.',
   'faq.limit.q': 'Что будет, если действия закончатся?',
   'faq.limit.a':
     'ИИ получит вежливое сообщение, что месячный лимит исчерпан, и ничего не сломается. Аккаунты и настройки сохранятся. Счётчик обнулится 1-го числа, или можно перейти на тариф побольше.',
@@ -516,9 +516,9 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.metric.seats.unlimited': 'Участники без ограничений',
   'plan.feature.everything': 'Все сервисы, функции защиты и ИИ-приложения',
 
-  'pricing.title': 'Тарифы · AnyConnect',
+  'pricing.title': 'Тарифы · Manyplug',
   'pricing.description':
-    'Тарифы AnyConnect: бесплатный, Личный $5, Про $12, Бизнес $29 в месяц. Все функции безопасности в каждом тарифе.',
+    'Тарифы Manyplug: бесплатный, Личный $5, Про $12, Бизнес $29 в месяц. Все функции безопасности в каждом тарифе.',
   'pricing.h1': 'Понятные тарифы, которые растут вместе с вами',
   'pricing.lead':
     'Все сервисы и функции защиты есть в каждом тарифе. Выбирайте по тому, сколько вы пользуетесь ИИ.',
@@ -565,8 +565,8 @@ export const siteRu: Record<SiteKey, string> = {
   'category.custom': 'Свои',
   'category.other': 'Другое',
 
-  'services.title': 'Сервисы · AnyConnect',
-  'services.description': 'Сервисы, которые можно подключить к Claude, ChatGPT и Cursor через AnyConnect.',
+  'services.title': 'Сервисы · Manyplug',
+  'services.description': 'Сервисы, которые можно подключить к Claude, ChatGPT и Cursor через Manyplug.',
   'services.h1': 'Что можно подключить',
   'services.lead':
     'В каждом сервисе можно держать несколько аккаунтов. Новые сервисы добавляются каждый месяц.',
@@ -589,9 +589,9 @@ export const siteRu: Record<SiteKey, string> = {
   'service.promptsNone': 'Спрашивайте обычными словами, например «Что нового в {service} сегодня?»',
   'service.toolsNote':
     'Любое действие можно отключить для отдельного аккаунта, а изменения могут ждать вашего «да».',
-  'service.title': '{service} для Claude и ChatGPT · AnyConnect',
+  'service.title': '{service} для Claude и ChatGPT · Manyplug',
   'service.how': 'Как подключить',
-  'service.connect.oauth': 'Вы входите на странице самого сервиса. AnyConnect не видит ваш пароль.',
+  'service.connect.oauth': 'Вы входите на странице самого сервиса. Manyplug не видит ваш пароль.',
   'service.connect.form':
     'Вы вставляете API-ключ или пароль приложения в защищённую форму. Он сразу шифруется.',
   'service.connect.none': 'Ничего настраивать не нужно, работает сразу.',
@@ -602,9 +602,9 @@ export const siteRu: Record<SiteKey, string> = {
   'service.does': 'Действие',
   'service.risk': 'Доступ',
 
-  'docs.title': 'Инструкции · AnyConnect',
+  'docs.title': 'Инструкции · Manyplug',
   'docs.description':
-    'Как подключить AnyConnect к Claude, ChatGPT, Claude Code, Cursor, VS Code и другим MCP-клиентам.',
+    'Как подключить Manyplug к Claude, ChatGPT, Claude Code, Cursor, VS Code и другим MCP-клиентам.',
   'docs.nav': 'Разделы инструкций',
   'docs.start': 'Начало',
   'docs.url': 'Ваш MCP-адрес',
@@ -614,9 +614,9 @@ export const siteRu: Record<SiteKey, string> = {
   'docs.custom': 'Свои серверы и API',
   'docs.safety': 'Безопасность',
   'docs.eyebrow': 'Инструкции',
-  'docs.h1': 'Подключите AnyConnect к вашему ИИ',
+  'docs.h1': 'Подключите Manyplug к вашему ИИ',
   'docs.lead':
-    'У всех клиентов один и тот же адрес. При первом подключении вы входите в AnyConnect и разрешаете доступ, и ИИ получает ваши сервисы.',
+    'У всех клиентов один и тот же адрес. При первом подключении вы входите в Manyplug и разрешаете доступ, и ИИ получает ваши сервисы.',
   'docs.urlHint':
     'Адрес одинаковый для всех клиентов. Доступ выдаётся каждому приложению отдельно, отозвать его можно в кабинете.',
   'docs.services.text':
@@ -630,7 +630,7 @@ export const siteRu: Record<SiteKey, string> = {
   'docs.custom.mcp': 'любой удалённый MCP-сервер по адресу, при необходимости с токеном;',
   'docs.custom.http': 'REST API в виде короткого описания (операции, параметры, авторизация).',
   'docs.safety.text':
-    'Действия с записью, например отправка или удаление, могут требовать вашего подтверждения в кабинете или в Telegram. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение. Включите двухэтапную проверку для своего аккаунта AnyConnect.',
+    'Действия с записью, например отправка или удаление, могут требовать вашего подтверждения в кабинете или в Telegram. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение. Включите двухэтапную проверку для своего аккаунта Manyplug.',
   'docs.safety.link': 'Включить двухэтапную проверку',
   'docs.safety.rules': 'Правила для приложений и аккаунтов',
   'docs.api': 'API',

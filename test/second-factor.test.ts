@@ -161,7 +161,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     expect(verified.headers.get('location')).toBe(authorize);
     const consent = await browser.request(authorize);
     expect(consent.status).toBe(200);
-    expect(await consent.text()).toContain('Подключить Claude к AnyConnect?');
+    expect(await consent.text()).toContain('Подключить Claude к Manyplug?');
   });
 
   it('accepts each recovery code once', async () => {

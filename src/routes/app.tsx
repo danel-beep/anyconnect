@@ -5,6 +5,7 @@ import { actionRisk, actionText, connectorGuide, connectorText } from '../connec
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
 import type { toolCalls } from '../db/schema.js';
+import { isSetupConnector } from '../hub/setup-tools.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
 import { ACCESS_LEVELS, CONFIRM_LEVELS } from '../security/policy.js';
@@ -129,7 +130,7 @@ export function appRoutes() {
     ]);
     const byId = new Map(connectors.map((x) => [x.id, x]));
     return rows
-      .filter((a) => a.connectorId !== 'anyconnect')
+      .filter((a) => !isSetupConnector(a.connectorId))
       .map((a) =>
         accountView(
           a,
@@ -242,7 +243,7 @@ export function appRoutes() {
           view={{
             accounts,
             catalog: catalog
-              .filter((e) => e.service !== 'anyconnect' && e.service !== 'demo')
+              .filter((e) => !isSetupConnector(e.service) && e.service !== 'demo')
               .map((e) => ({
                 service: e.service,
                 name: builtinNames.get(e.service) ?? e.name,

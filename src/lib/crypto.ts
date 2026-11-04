@@ -92,6 +92,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
 // ---------------------------------------------------------------------------
 
 const ENVELOPE_VERSION = 'v1';
+// Key-derivation labels below keep the product's former name (AnyConnect): changing them would make
+// every stored credential undecryptable. They are identifiers, not branding.
 const DEV_KEY_MATERIAL = 'anyconnect-insecure-development-key-do-not-use-in-production';
 
 export function parseKey(raw: string): Buffer {

@@ -20,7 +20,7 @@ async function main() {
   const services = createServices(config);
   await bootstrap(services);
   await services.jobs.start();
-  services.logger.info({ version: services.version }, 'AnyConnect worker is running');
+  services.logger.info({ version: services.version }, 'Manyplug worker is running');
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

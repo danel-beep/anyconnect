@@ -10,7 +10,7 @@ import { generateKey } from '../lib/crypto.js';
 import { createLogger } from '../logger.js';
 import { createServices, type Services } from '../services.js';
 
-const HELP = `AnyConnect admin CLI
+const HELP = `Manyplug admin CLI
 
 Usage: npm run cli -- <command> [options]
 

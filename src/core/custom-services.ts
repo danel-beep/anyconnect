@@ -102,7 +102,7 @@ export interface ServiceView {
 export function hubClientMetadata(publicUrl: string, redirectUri: string) {
   return {
     client_id: `${publicUrl}/connect/client-metadata.json`,
-    client_name: 'AnyConnect',
+    client_name: 'Manyplug',
     client_uri: publicUrl,
     redirect_uris: [redirectUri],
     grant_types: ['authorization_code', 'refresh_token'],
@@ -349,7 +349,7 @@ export class CustomServiceManager {
       const client = await registerClient(discovery.authorizationServerUrl, {
         metadata,
         clientMetadata: {
-          client_name: 'AnyConnect',
+          client_name: 'Manyplug',
           client_uri: this.deps.publicUrl,
           redirect_uris: [this.deps.redirectUri],
           grant_types: ['authorization_code', 'refresh_token'],

@@ -50,7 +50,7 @@ export class JobQueue {
     const boss = new PgBoss({
       connectionString: this.options.connectionString,
       schema: this.options.schema ?? 'pgboss',
-      application_name: 'anyconnect-jobs',
+      application_name: 'manyplug-jobs',
     });
     boss.on('error', (err) => this.options.logger.warn({ err }, 'job queue error'));
     await boss.start();

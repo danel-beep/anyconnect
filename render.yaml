@@ -6,6 +6,9 @@
 #   2. Back up ENCRYPTION_KEY somewhere safe: without it stored credentials cannot be decrypted.
 #   3. For "Sign in with Google" set LOGIN_GOOGLE_CLIENT_ID / LOGIN_GOOGLE_CLIENT_SECRET (redirect URI
 #      <your URL>/auth/google/callback) and SUPPORT_EMAIL. See .env.example for the rest.
+#
+# Service and database names keep the former product name (AnyConnect): renaming them in the
+# Blueprint would create new resources instead of renaming the existing ones.
 services:
   - type: web
     name: anyconnect

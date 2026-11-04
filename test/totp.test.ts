@@ -64,16 +64,16 @@ describe('TOTP (RFC 6238)', () => {
     const secret = generateTotpSecret();
     expect(secret).toMatch(/^[A-Z2-7]{32}$/);
     expect(base32Decode(secret)).toHaveLength(20);
-    const uri = new URL(otpauthUri({ secret, issuer: 'AnyConnect', account: 'a@b.c' }));
+    const uri = new URL(otpauthUri({ secret, issuer: 'Manyplug', account: 'a@b.c' }));
     expect(uri.protocol).toBe('otpauth:');
-    expect(uri.host + uri.pathname).toBe('totp/AnyConnect:a%40b.c');
+    expect(uri.host + uri.pathname).toBe('totp/Manyplug:a%40b.c');
     expect(uri.searchParams.get('secret')).toBe(secret);
     expect(uri.searchParams.get('digits')).toBe('6');
     expect(uri.searchParams.get('period')).toBe('30');
   });
 
   it('renders a QR code as an SVG path', () => {
-    const { size, path } = qrMatrix('otpauth://totp/AnyConnect:a?secret=ABC');
+    const { size, path } = qrMatrix('otpauth://totp/Manyplug:a?secret=ABC');
     expect(size).toBeGreaterThanOrEqual(21);
     expect(path).toMatch(/^(M\d+ \d+h\d+v1h-\d+z)+$/);
   });

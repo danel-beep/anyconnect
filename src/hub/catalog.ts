@@ -181,7 +181,7 @@ export function buildInstructions(
   setup = false,
 ): string {
   const lines = [
-    'AnyConnect is a hub that connects the user’s services and accounts. Several accounts of the same service can be connected (for example two mailboxes or two Telegram accounts).',
+    'Manyplug is a hub that connects the user’s services and accounts. Several accounts of the same service can be connected (for example two mailboxes or two Telegram accounts).',
     mode === 'grouped'
       ? `Service tools take an "account" argument. Read tools accept "${ALL_ACCOUNTS}" (the default) to query every account at once. For actions that change something, use the account the user means; ask if it is unclear.`
       : 'Each tool is bound to one account; its name and description say which.',
@@ -198,15 +198,15 @@ export function buildInstructions(
   lines.push(`Call ${BUILTIN_TOOLS.list_accounts.name} for details of all connected accounts.`);
   if (setup) {
     lines.push(
-      'The user manages this hub from the chat: anyconnect_services lists what can be connected, anyconnect_connect_account returns a link to connect an account (never ask for passwords or keys in the chat), anyconnect_update_account / anyconnect_remove_account / anyconnect_add_service / anyconnect_update_settings change the setup. Find them with anyconnect_search_tools if they are not listed.',
+      'The user manages this hub from the chat: manyplug_services lists what can be connected, manyplug_connect_account returns a link to connect an account (never ask for passwords or keys in the chat), manyplug_update_account / manyplug_remove_account / manyplug_add_service / manyplug_update_settings change the setup. Find them with manyplug_search_tools if they are not listed.',
     );
   }
   const active = services.filter((s) => s.accounts.some((a) => a.enabled));
   if (active.length === 0) {
     lines.push(
       setup
-        ? 'No services are connected yet. Offer to connect one: anyconnect_services, then anyconnect_connect_account.'
-        : 'No services are connected yet. The user can add accounts in the AnyConnect web panel.',
+        ? 'No services are connected yet. Offer to connect one: manyplug_services, then manyplug_connect_account.'
+        : 'No services are connected yet. The user can add accounts in the Manyplug web panel.',
     );
   } else {
     lines.push('Connected services:');
@@ -307,7 +307,7 @@ export function buildCatalog(input: {
   client?: ClientProfile;
   /** Recent call counts per tool name: the most used tools stay listed in discovery mode. */
   usage?: Record<string, number>;
-  /** The hub's setup tools (connector `anyconnect`, see `setup-tools.ts`), acting on the workspace. */
+  /** The hub's setup tools (connector `manyplug`, see `setup-tools.ts`), acting on the workspace. */
   setup?: ConnectorDefinition;
 }): Catalog {
   const mode = input.mode ?? 'grouped';
@@ -412,7 +412,7 @@ export function buildCatalog(input: {
         inputSchema: action.inputSchema ?? toJsonSchema(action.input),
         annotations: annotationsFor(title, action),
         risk: actionRisk(action),
-        keywords: 'setup settings hub anyconnect',
+        keywords: 'setup settings hub manyplug',
         target: { kind: 'workspace', connectorId: connector.id, action: action.name },
       });
     }

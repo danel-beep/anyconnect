@@ -98,7 +98,7 @@ describe('connect form for services without OAuth', () => {
       scopes: ['mcp'],
     };
     const catalog = await hub.services.hub.getCatalog(principal);
-    const link = await hub.services.hub.callTool(principal, catalog, 'anyconnect_connect_account', {
+    const link = await hub.services.hub.callTool(principal, catalog, 'manyplug_connect_account', {
       service: 'demo',
       label: 'Work',
       name: 'work',

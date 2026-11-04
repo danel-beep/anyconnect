@@ -8,7 +8,7 @@ import { ACCOUNTS, evalRegistry, resetOutbox } from './fixtures.js';
 /**
  * Efficiency eval harness: a hub with the synthetic workspace from `fixtures.ts`, and an "agent
  * session" that counts the calls a model would make. A scripted agent uses a tool directly when it
- * is listed and otherwise finds it with `anyconnect_search_tools` first — exactly what the hub
+ * is listed and otherwise finds it with `manyplug_search_tools` first — exactly what the hub
  * instructions tell real models to do. A live runner (planned) will replace the script with a real model.
  */
 export interface EvalHub {
@@ -74,10 +74,10 @@ export interface Session {
   call(tool: string, args: Record<string, unknown>): Promise<ToolCallResult>;
   /**
    * Uses a tool like a model following the hub instructions: directly when listed, otherwise
-   * searched for first (once per tool) and run through `anyconnect_call_tool`.
+   * searched for first (once per tool) and run through `manyplug_call_tool`.
    */
   use(tool: string, args: Record<string, unknown>, searchQuery: string): Promise<ToolCallResult>;
-  /** Several independent tools in one `anyconnect_call_tools` step (searching unlisted ones first). */
+  /** Several independent tools in one `manyplug_call_tools` step (searching unlisted ones first). */
   batch(
     calls: Array<{ tool: string; args: Record<string, unknown>; searchQuery: string }>,
   ): Promise<ToolCallResult>;
@@ -105,7 +105,7 @@ export async function session(evalHub: EvalHub): Promise<Session> {
     if (missing.length === 0) return;
     const query = missing.map((m) => m.searchQuery).join(', ');
     const result = data(
-      await call('anyconnect_search_tools', { query, limit: Math.max(5, missing.length * 3) }),
+      await call('manyplug_search_tools', { query, limit: Math.max(5, missing.length * 3) }),
     );
     const names = (result.tools as Array<{ name: string }>).map((t) => t.name);
     for (const name of names) found.add(name);
@@ -122,11 +122,11 @@ export async function session(evalHub: EvalHub): Promise<Session> {
       await discover([{ tool, searchQuery }]);
       return listed.has(tool)
         ? call(tool, args)
-        : call('anyconnect_call_tool', { name: tool, arguments: args });
+        : call('manyplug_call_tool', { name: tool, arguments: args });
     },
     async batch(items) {
       await discover(items);
-      return call('anyconnect_call_tools', {
+      return call('manyplug_call_tools', {
         calls: items.map((i) => ({ name: i.tool, arguments: i.args })),
       });
     },

@@ -13,7 +13,7 @@ import type { TokenManager } from './oauth-tokens.js';
  * - refreshes OAuth tokens shortly before they expire (also keeps "sliding" refresh tokens alive,
  *   e.g. Microsoft's expire after 90 days without use);
  * - periodically re-runs each account's connection test, so a revoked password or token shows up
- *   as `needs_reauth` / `error` in the panel and in `anyconnect_list_accounts` before the AI hits it.
+ *   as `needs_reauth` / `error` in the panel and in `manyplug_list_accounts` before the AI hits it.
  */
 export class AccountHealthService {
   constructor(

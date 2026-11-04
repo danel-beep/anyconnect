@@ -60,7 +60,7 @@ function fakeTelegram() {
     calls.push({ method, body });
     const result =
       method === 'getMe'
-        ? { id: 1, username: 'anyconnect_test_bot' }
+        ? { id: 1, username: 'manyplug_test_bot' }
         : method === 'sendMessage'
           ? { message_id: ++messageId, chat: { id: Number(body.chat_id) } }
           : true;
@@ -210,7 +210,7 @@ describe('data protection in the running hub', () => {
     expect(catalog.services.map((x) => x.connector.id)).toEqual(['inbox']);
     expect(catalog.instructions).not.toContain('"home"');
     expect(catalog.instructions).not.toContain('Demo');
-    const listed = JSON.parse(resultText(await call('anyconnect_list_accounts', {}, scoped)));
+    const listed = JSON.parse(resultText(await call('manyplug_list_accounts', {}, scoped)));
     expect(listed.services).toHaveLength(1);
     expect(listed.services[0].accounts.map((a: { name: string }) => a.name)).toEqual(['work']);
 
@@ -220,7 +220,7 @@ describe('data protection in the running hub', () => {
 
     // Deleting the persona leaves its tokens with nothing.
     await hub.services.personas.delete(workspaceId, persona.id);
-    expect((await toolNames(scoped)).filter((name) => !name.startsWith('anyconnect_'))).toEqual([]);
+    expect((await toolNames(scoped)).filter((name) => !name.startsWith('manyplug_'))).toEqual([]);
   });
 
   it('binds persona tokens to the persona’s own MCP URL', async () => {
@@ -311,7 +311,7 @@ describe('data protection in the running hub', () => {
     const browser = await signIn();
     const page = TestBrowser.hiddenInputs(await (await browser.request('/confirm')).text());
     const linkPage = await (await browser.request('/telegram/link', { form: { csrf: page.csrf! } })).text();
-    const code = /https:\/\/t\.me\/anyconnect_test_bot\?start=([\w-]+)/.exec(linkPage)?.[1];
+    const code = /https:\/\/t\.me\/manyplug_test_bot\?start=([\w-]+)/.exec(linkPage)?.[1];
     expect(code).toBeDefined();
 
     const webhook = (update: unknown, secret = s.telegramWebhookSecret) =>

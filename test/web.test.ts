@@ -107,7 +107,7 @@ describe('web pages: login, consent and home', () => {
     const page = await browser.request(url.toString());
     const html = await page.text();
     expect(page.status).toBe(200);
-    expect(html).toContain('Подключить Claude к AnyConnect?');
+    expect(html).toContain('Подключить Claude к Manyplug?');
     expect(html).toContain('claude.ai');
     expect(html).toContain('Известное ИИ-приложение');
     expect(html).toContain('оставаться подключённым');

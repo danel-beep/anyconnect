@@ -1,5 +1,5 @@
 /**
- * The seam for payments. AnyConnect does not take payments yet; when it does, a provider (Stripe,
+ * The seam for payments. Manyplug does not take payments yet; when it does, a provider (Stripe,
  * ЮKassa, Paddle...) implements this interface and is wired in `createServices`. Everything else is
  * already built around it: the pricing and billing pages call `checkout` / `portal` when a provider
  * is configured, `/billing/webhook/:provider` hands events to `handleWebhook`, and the provider

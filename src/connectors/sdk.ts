@@ -165,7 +165,7 @@ export function requireOAuth(ctx: { oauth?: OAuthAccess | undefined }): OAuthAcc
   return ctx.oauth;
 }
 
-const RAW_RESULT = Symbol.for('anyconnect.rawToolResult');
+const RAW_RESULT = Symbol.for('manyplug.rawToolResult');
 
 export type ContentBlock =
   | { type: 'text'; text: string }

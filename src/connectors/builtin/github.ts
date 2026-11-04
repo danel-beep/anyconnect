@@ -261,7 +261,7 @@ const ui: ConnectorUi = {
               text: 'Нажмите «Подключить» и войдите в GitHub.',
             },
             {
-              text: 'Нажмите Authorize: AnyConnect получит доступ к репозиториям, задачам, pull request’ам и уведомлениям.',
+              text: 'Нажмите Authorize: Manyplug получит доступ к репозиториям, задачам, pull request’ам и уведомлениям.',
             },
             {
               text: 'Для репозиториев организации может понадобиться одобрение владельца: GitHub покажет кнопку Request рядом с организацией.',
@@ -279,7 +279,7 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Назовите его AnyConnect, выберите срок действия и в Repository access — репозитории, с которыми будет работать ИИ.',
+              text: 'Назовите его Manyplug, выберите срок действия и в Repository access — репозитории, с которыми будет работать ИИ.',
             },
             {
               text: 'В Permissions поставьте Issues и Pull requests на Read and write, Contents — на Read-only.',
@@ -352,7 +352,7 @@ const ui: ConnectorUi = {
               text: 'Click Connect and sign in to GitHub.',
             },
             {
-              text: 'Click Authorize: AnyConnect gets access to your repositories, issues, pull requests and notifications.',
+              text: 'Click Authorize: Manyplug gets access to your repositories, issues, pull requests and notifications.',
             },
             {
               text: 'Organisation repositories may need an owner’s approval: GitHub shows a Request button next to the organisation.',
@@ -370,7 +370,7 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Name it AnyConnect, choose an expiry and, under Repository access, the repositories the AI may use.',
+              text: 'Name it Manyplug, choose an expiry and, under Repository access, the repositories the AI may use.',
             },
             {
               text: 'Under Permissions, set Issues and Pull requests to Read and write, and Contents to Read-only.',
