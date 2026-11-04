@@ -18,5 +18,5 @@
     "sourceMap": true,
     "noEmit": true
   },
-  "include": ["src", "test", "*.config.ts"]
+  "include": ["src", "test", "eval", "*.config.ts"]
 }

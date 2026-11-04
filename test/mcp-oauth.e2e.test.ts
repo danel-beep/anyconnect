@@ -116,12 +116,18 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
 
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
-    expect(names).toEqual(['anyconnect_list_accounts', 'demo_account_info', 'demo_echo', 'demo_fail']);
+    expect(names).toEqual([
+      'anyconnect_call_tools',
+      'anyconnect_list_accounts',
+      'demo_account_info',
+      'demo_echo',
+      'demo_fail',
+    ]);
 
     const echo = tools.find((t) => t.name === 'demo_echo')!;
     const accountProperty = (echo.inputSchema.properties as Record<string, { enum?: string[] }>).account;
-    expect(accountProperty?.enum).toEqual(['main', 'second']);
-    expect(echo.inputSchema.required).toContain('account');
+    expect(accountProperty?.enum).toEqual(['main', 'second', 'all']);
+    expect(echo.inputSchema.required).not.toContain('account');
     expect(echo.annotations?.readOnlyHint).toBe(true);
 
     const result = await client.callTool({
@@ -148,10 +154,11 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
 
   it('routes calls per account and reports tool errors without failing the protocol', async () => {
     const client = await connectWithOAuth(hub, new MemoryOAuthProvider());
-    // Several accounts are connected, so the account argument is required by the tool schema.
-    const missing = await client.callTool({ name: 'demo_echo', arguments: { message: 'x' } });
-    expect(missing.isError).toBe(true);
-    expect(JSON.stringify(missing.content)).toContain('account');
+    // Without an account, a read tool runs on every account at once and tags the results.
+    const everywhere = await client.callTool({ name: 'demo_echo', arguments: { message: 'x' } });
+    expect(everywhere.isError).toBeFalsy();
+    const results = (everywhere.structuredContent as { results: Array<{ account: string }> }).results;
+    expect(results.map((r) => r.account)).toEqual(['main', 'second']);
 
     const failing = await client.callTool({
       name: 'demo_fail',
@@ -173,6 +180,8 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       'demo_account_info:ok',
       'demo_account_info:ok',
       'demo_fail:error',
+      'demo_echo:ok',
+      'demo_echo:ok',
     ]);
     expect(calls.every((c) => c.accountId && c.principalType === 'oauth' && c.clientId)).toBe(true);
   });

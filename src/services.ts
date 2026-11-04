@@ -133,6 +133,7 @@ export function createServices(
     toolTimeoutMs: config.toolTimeoutMs,
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
+    toolListTokenBudget: config.tools.listTokenBudget,
     ...(overrides.stages ? { stages: overrides.stages } : {}),
     ...(overrides.catalogFilter ? { catalogFilter: overrides.catalogFilter } : {}),
   });

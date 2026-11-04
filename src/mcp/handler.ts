@@ -55,7 +55,7 @@ export function createHubMcpHandler(deps: { hub: Hub; logger: Logger; version: s
         },
         { instructions: catalog.instructions },
       );
-      for (const tool of catalog.tools) {
+      for (const tool of catalog.listed) {
         server.registerTool(
           tool.name,
           {

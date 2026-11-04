@@ -51,6 +51,13 @@ export interface WorkspaceSettings {
    * - `per_account`: one tool per account and action (most explicit, more tools)
    */
   toolExposure?: 'grouped' | 'per_account';
+  /**
+   * What `tools/list` shows:
+   * - `auto` (default): every tool while they fit the token budget, otherwise discovery
+   * - `direct`: every tool
+   * - `discovery`: meta tools to search and call the rest, plus the most useful tools
+   */
+  toolListing?: 'auto' | 'direct' | 'discovery';
 }
 
 export const workspaces = pgTable('workspaces', {

@@ -1,93 +1,55 @@
 import { createHash } from 'node:crypto';
+import { CAPABILITIES, type CapabilityDefinition } from '../connectors/capabilities.js';
 import { ACCOUNT_ARGUMENT, FIELDS_ARGUMENT } from '../connectors/registry.js';
 import {
   type ActionDefinition,
+  actionCapabilities,
   actionIdempotent,
   actionRisk,
   type ConnectorDefinition,
   type JsonSchema,
-  type RiskLevel,
   toJsonSchema,
 } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
-import type { WorkspaceSettings } from '../db/schema.js';
+import { BUILTIN_TOOLS } from './builtin-tools.js';
+import type {
+  CapabilityImplementation,
+  Catalog,
+  CatalogAccount,
+  CatalogAllow,
+  CatalogService,
+  CatalogTool,
+  ClientProfile,
+  ExposureMode,
+  ListingMode,
+  ListingSetting,
+  ToolAnnotations,
+} from './catalog-types.js';
+import { chooseListing } from './discovery.js';
+
+export { BUILTIN_PREFIX } from './builtin-tools.js';
+export type * from './catalog-types.js';
 
 /**
- * The catalog is what an AI client sees: the list of MCP tools built from the workspace's
- * connectors and accounts. It is a pure function of (connectors, accounts, settings), so the
- * exposure strategy can evolve (e.g. a "discovery" mode with search/call meta-tools for very large
- * catalogs) without touching connectors or the MCP transport.
+ * The catalog is what an AI client sees: the MCP tools built from the workspace's connectors and
+ * accounts. It is a pure function of its inputs, so the exposure strategy can evolve without
+ * touching connectors or the MCP transport. Three layers:
+ *
+ * 1. service tools — one per connector action (`gmail_search`, with an `account` argument), or one
+ *    per account and action in `per_account` mode;
+ * 2. unified tools — one per shared capability implemented by two or more services
+ *    (`messages_search` over Telegram, WhatsApp and every mailbox);
+ * 3. listing — every tool while they fit the client's token budget, otherwise *discovery*: a few
+ *    meta tools (search / describe / call) plus the most useful tools (see `discovery.ts`).
  */
-
-export type ExposureMode = NonNullable<WorkspaceSettings['toolExposure']>;
-
-export interface CatalogAccount {
-  id: string;
-  name: string;
-  label: string;
-  description: string | null;
-  identity: string | null;
-}
-
-export interface ToolAnnotations {
-  title?: string;
-  readOnlyHint?: boolean;
-  destructiveHint?: boolean;
-  idempotentHint?: boolean;
-  openWorldHint?: boolean;
-}
-
-export type BuiltinToolId = 'list_accounts';
-
-export type ToolTarget =
-  | { kind: 'builtin'; id: BuiltinToolId }
-  | {
-      kind: 'action';
-      connectorId: string;
-      action: string;
-      /** Accounts this tool can act on. */
-      accounts: CatalogAccount[];
-      /** Whether the tool takes an `account` argument (grouped mode). */
-      accountArgument: boolean;
-    };
-
-export interface CatalogTool {
-  name: string;
-  title: string;
-  description: string;
-  inputSchema: JsonSchema;
-  annotations: ToolAnnotations;
-  target: ToolTarget;
-  /** Risk of the underlying action(s); `read` for hub tools. */
-  risk: RiskLevel;
-}
-
-/**
- * Decides whether an account may use an action at all (policy, personas). Applied before anything
- * else, so a denied account disappears from the `account` enum and an action without allowed
- * accounts disappears from the catalog.
- */
-export type CatalogAllow = (
-  connector: ConnectorDefinition,
-  action: ActionDefinition,
-  account: AccountRow,
-) => boolean;
-
-export interface CatalogService {
-  connector: ConnectorDefinition;
-  accounts: AccountRow[];
-}
-
-export interface Catalog {
-  mode: ExposureMode;
-  tools: CatalogTool[];
-  services: CatalogService[];
-  instructions: string;
-}
 
 /** Tool names must match ^[a-zA-Z0-9_-]{1,64}$ to work in every major AI client. */
 export const MAX_TOOL_NAME = 64;
-export const BUILTIN_PREFIX = 'anyconnect_';
+/** Enums longer than this are left out of schemas (the description still names the values). */
+const MAX_ENUM = 40;
+/** The `account` value that runs a read tool on every account at once. */
+export const ALL_ACCOUNTS = 'all';
+export const DEFAULT_PROFILE: ClientProfile = { tokenBudget: 3000 };
 
 export function makeToolName(parts: string[], uniqueSeed: string): string {
   const name = parts
@@ -99,7 +61,7 @@ export function makeToolName(parts: string[], uniqueSeed: string): string {
   return `${name.slice(0, MAX_TOOL_NAME - 7)}_${hash}`;
 }
 
-function toCatalogAccount(row: AccountRow): CatalogAccount {
+export function toCatalogAccount(row: AccountRow): CatalogAccount {
   return {
     id: row.id,
     name: row.name,
@@ -109,9 +71,16 @@ function toCatalogAccount(row: AccountRow): CatalogAccount {
   };
 }
 
+/** Full description, for instructions and errors: `"work" — Work mail (me@x; use for clients)`. */
 export function describeAccount(account: CatalogAccount): string {
   const details = [account.identity, account.description].filter(Boolean).join('; ');
   return `"${account.name}" — ${account.label}${details ? ` (${details})` : ''}`;
+}
+
+/** Compact form for tool schemas, where it is repeated per tool: `work (Work mail, me@x)`. */
+function shortAccount(key: string, account: CatalogAccount): string {
+  const details = [account.label, account.identity].filter(Boolean).join(', ');
+  return `${key} (${details})`;
 }
 
 /**
@@ -153,54 +122,77 @@ function withFieldsArgument(schema: JsonSchema, action: ActionDefinition): JsonS
   };
 }
 
-function withAccountArgument(schema: JsonSchema, accounts: CatalogAccount[], connector: ConnectorDefinition) {
+function withAccountProperty(schema: JsonSchema, property: Record<string, unknown>, required: boolean) {
   const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
-  const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
-  const single = accounts.length === 1;
-  const accountProperty = {
-    type: 'string',
-    enum: accounts.map((a) => a.name),
-    description: single
-      ? `${connector.name} account to use. Only one is connected: ${describeAccount(accounts[0]!)}.`
-      : `Which ${connector.name} account to use: ${accounts.map(describeAccount).join('; ')}.`,
-  };
+  const requiredList = Array.isArray(schema.required) ? (schema.required as string[]) : [];
   return {
     ...schema,
     type: 'object',
-    properties: { [ACCOUNT_ARGUMENT]: accountProperty, ...properties },
-    required: single ? required : [ACCOUNT_ARGUMENT, ...required],
+    properties: { [ACCOUNT_ARGUMENT]: property, ...properties },
+    ...(required || requiredList.length
+      ? { required: required ? [ACCOUNT_ARGUMENT, ...requiredList] : requiredList }
+      : {}),
   };
 }
 
-const LIST_ACCOUNTS_TOOL: CatalogTool = {
-  name: `${BUILTIN_PREFIX}list_accounts`,
-  title: 'List connected services and accounts',
-  description:
-    'Lists every service connected to the AnyConnect hub with its accounts (name, label, identity, status) and the tools available for each. Call it to find out what is connected or which account to use.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      service: { type: 'string', description: 'Only show this service (its id, e.g. "gmail").' },
-    },
-  },
-  annotations: {
-    title: 'List connected services and accounts',
-    readOnlyHint: true,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-  target: { kind: 'builtin', id: 'list_accounts' },
-  risk: 'read',
-};
+function enumOrNothing(values: string[]): { enum?: string[] } {
+  return values.length <= MAX_ENUM ? { enum: values } : {};
+}
 
-export function buildInstructions(services: CatalogService[], mode: ExposureMode): string {
+function accountArgument(schema: JsonSchema, accounts: CatalogAccount[], fanOut: boolean): JsonSchema {
+  const list = accounts.map((a) => shortAccount(`"${a.name}"`, a)).join('; ');
+  if (accounts.length === 1) {
+    return withAccountProperty(
+      schema,
+      {
+        type: 'string',
+        ...enumOrNothing([accounts[0]!.name]),
+        description: list,
+      },
+      false,
+    );
+  }
+  if (fanOut) {
+    return withAccountProperty(
+      schema,
+      {
+        type: 'string',
+        ...enumOrNothing([...accounts.map((a) => a.name), ALL_ACCOUNTS]),
+        description: `${list}. Default "${ALL_ACCOUNTS}": every account at once.`,
+      },
+      false,
+    );
+  }
+  return withAccountProperty(
+    schema,
+    {
+      type: 'string',
+      ...enumOrNothing(accounts.map((a) => a.name)),
+      description: list,
+    },
+    true,
+  );
+}
+
+export function buildInstructions(
+  services: CatalogService[],
+  mode: ExposureMode,
+  listing: ListingMode,
+): string {
   const lines = [
     'AnyConnect is a hub that connects the user’s services and accounts. Several accounts of the same service can be connected (for example two mailboxes or two Telegram accounts).',
     mode === 'grouped'
-      ? 'Service tools take an "account" argument that selects the account. If the user did not say which account to use and it matters, ask them.'
+      ? `Service tools take an "account" argument. Read tools accept "${ALL_ACCOUNTS}" (the default) to query every account at once. For actions that change something, use the account the user means; ask if it is unclear.`
       : 'Each tool is bound to one account; its name and description say which.',
-    `Call ${LIST_ACCOUNTS_TOOL.name} to see all connected services and accounts.`,
+    'Unified tools (messages_*, mail_*, calendar_*, files_*, tasks_*, contacts_*) work across all services that support them; prefer them for cross-service tasks.',
+    `Use ${BUILTIN_TOOLS.call_tools.name} to run independent calls in one step.`,
   ];
+  if (listing === 'discovery') {
+    lines.push(
+      `Only some tools are listed to save context. Find others with ${BUILTIN_TOOLS.search_tools.name} and run them with ${BUILTIN_TOOLS.call_tool.name}.`,
+    );
+  }
+  lines.push(`Call ${BUILTIN_TOOLS.list_accounts.name} for details of all connected accounts.`);
   const active = services.filter((s) => s.accounts.some((a) => a.enabled));
   if (active.length === 0) {
     lines.push('No services are connected yet. The user can add accounts in the AnyConnect web panel.');
@@ -215,11 +207,94 @@ export function buildInstructions(services: CatalogService[], mode: ExposureMode
   return lines.join('\n');
 }
 
+function eligibleAccounts(
+  connector: ConnectorDefinition,
+  action: ActionDefinition,
+  accounts: AccountRow[],
+  allow: CatalogAllow | undefined,
+): CatalogAccount[] {
+  return accounts
+    .filter((a) => a.enabled)
+    .filter((a) => !a.settings.disabledActions?.includes(action.name))
+    .filter((a) => !allow || allow(connector, action, a))
+    .map(toCatalogAccount);
+}
+
+export const capabilityToolName = (capabilityId: string) => capabilityId.replace('.', '_');
+export const accountKey = (connectorId: string, accountName: string) => `${connectorId}:${accountName}`;
+
+function capabilityTool(
+  capability: CapabilityDefinition,
+  implementations: CapabilityImplementation[],
+): CatalogTool {
+  const keys = implementations.flatMap((i) => i.accounts.map((a) => accountKey(i.connectorId, a.name)));
+  const base = toJsonSchema(capability.input);
+  const inputSchema =
+    capability.kind === 'list'
+      ? withAccountProperty(
+          base,
+          {
+            type: 'string',
+            ...enumOrNothing([ALL_ACCOUNTS, ...implementations.map((i) => i.connectorId), ...keys]),
+            description: `Default "${ALL_ACCOUNTS}"; or a service; or "service:account" (see the server instructions).`,
+          },
+          false,
+        )
+      : withAccountProperty(
+          base,
+          {
+            type: 'string',
+            ...enumOrNothing(keys),
+            description: '"service:account" to act from (see the server instructions).',
+          },
+          keys.length > 1,
+        );
+  const services = [...new Set(implementations.map((i) => i.connectorName))].join(', ');
+  return {
+    name: capabilityToolName(capability.id),
+    title: capability.title,
+    description: `${capability.description} Services: ${services}.`,
+    inputSchema,
+    annotations: annotationsFor(capability.title, {
+      risk: capability.risk,
+      hints: { idempotent: capability.risk === 'read' },
+    }),
+    target: { kind: 'capability', capabilityId: capability.id, implementations },
+    risk: capability.risk,
+  };
+}
+
+/** Unified tools for capabilities that at least two services implement (one service needs none). */
+function capabilityTools(services: CatalogService[], allow: CatalogAllow | undefined): CatalogTool[] {
+  const tools: CatalogTool[] = [];
+  for (const capability of Object.values(CAPABILITIES) as CapabilityDefinition[]) {
+    const implementations: CapabilityImplementation[] = [];
+    for (const { connector, accounts } of services) {
+      const action = connector.actions.find((a) => actionCapabilities(a).some((b) => b.id === capability.id));
+      if (!action) continue;
+      const eligible = eligibleAccounts(connector, action, accounts, allow);
+      if (eligible.length === 0) continue;
+      implementations.push({
+        connectorId: connector.id,
+        connectorName: connector.name,
+        action: action.name,
+        accounts: eligible,
+      });
+    }
+    if (implementations.length >= 2) tools.push(capabilityTool(capability, implementations));
+  }
+  return tools;
+}
+
 export function buildCatalog(input: {
   connectors: ConnectorDefinition[];
   accounts: AccountRow[];
   mode?: ExposureMode;
+  listing?: ListingSetting;
   allow?: CatalogAllow;
+  client?: ClientProfile;
+  /** Recent call counts per tool name: the most used tools stay listed in discovery mode. */
+  usage?: Record<string, number>;
 }): Catalog {
   const mode = input.mode ?? 'grouped';
   const byConnector = new Map(input.connectors.map((c) => [c.id, c]));
@@ -236,9 +311,10 @@ export function buildCatalog(input: {
   }
   services.sort((a, b) => a.connector.name.localeCompare(b.connector.name));
 
-  const tools: CatalogTool[] = [LIST_ACCOUNTS_TOOL];
-  const used = new Set(tools.map((t) => t.name));
-  const add = (tool: CatalogTool) => {
+  const builtins = Object.values(BUILTIN_TOOLS);
+  const used = new Set(builtins.map((t) => t.name));
+  const serviceTools: CatalogTool[] = [];
+  const add = (target: CatalogTool[], tool: CatalogTool) => {
     let name = tool.name;
     if (used.has(name)) {
       // Rare: e.g. account "a_b" + action "c" vs account "a" + action "b_c" in per-account mode.
@@ -246,52 +322,58 @@ export function buildCatalog(input: {
       name = `${name.slice(0, MAX_TOOL_NAME - 7)}_${hash}`;
     }
     used.add(name);
-    tools.push({ ...tool, name });
+    target.push({ ...tool, name });
   };
 
+  const unified: CatalogTool[] = [];
+  for (const tool of capabilityTools(services, input.allow)) add(unified, tool);
+
   for (const { connector, accounts } of services) {
-    const usable = accounts.filter((a) => a.enabled);
     for (const action of connector.actions) {
-      const eligible = usable
-        .filter((a) => !a.settings.disabledActions?.includes(action.name))
-        .filter((a) => !input.allow || input.allow(connector, action, a))
-        .map(toCatalogAccount);
+      const eligible = eligibleAccounts(connector, action, accounts, input.allow);
       if (eligible.length === 0) continue;
       const baseSchema = withFieldsArgument(action.inputSchema ?? toJsonSchema(action.input), action);
       const title = action.title ?? action.name;
       const risk = actionRisk(action);
       if (mode === 'grouped') {
-        add({
+        const fanOut = risk === 'read' && eligible.length > 1;
+        add(serviceTools, {
           name: makeToolName([connector.id, action.name], `${connector.id}:${action.name}`),
           title: `${connector.name}: ${title}`,
           description: `[${connector.name}] ${action.description}`,
-          inputSchema: withAccountArgument(baseSchema, eligible, connector),
+          inputSchema: accountArgument(baseSchema, eligible, fanOut),
           annotations: annotationsFor(`${connector.name}: ${title}`, action),
           risk,
+          service: connector.id,
+          keywords: `${connector.name} ${connector.description}`,
           target: {
             kind: 'action',
             connectorId: connector.id,
             action: action.name,
             accounts: eligible,
             accountArgument: true,
+            fanOut,
           },
         });
       } else {
         for (const account of eligible) {
           const fullTitle = `${connector.name} (${account.label}): ${title}`;
-          add({
+          add(serviceTools, {
             name: makeToolName([connector.id, account.name, action.name], `${account.id}:${action.name}`),
             title: fullTitle,
             description: `[${connector.name} — account ${describeAccount(account)}] ${action.description}`,
             inputSchema: { ...baseSchema, type: 'object' },
             annotations: annotationsFor(fullTitle, action),
             risk,
+            service: connector.id,
+            keywords: `${connector.name} ${connector.description}`,
             target: {
               kind: 'action',
               connectorId: connector.id,
               action: action.name,
               accounts: [account],
               accountArgument: false,
+              fanOut: false,
             },
           });
         }
@@ -299,5 +381,22 @@ export function buildCatalog(input: {
     }
   }
 
-  return { mode, tools, services, instructions: buildInstructions(services, mode) };
+  const tools = [...builtins, ...unified, ...serviceTools];
+  const { listing, listed, stats } = chooseListing({
+    builtins,
+    unified,
+    serviceTools,
+    setting: input.listing ?? 'auto',
+    profile: input.client ?? DEFAULT_PROFILE,
+    usage: input.usage ?? {},
+  });
+  return {
+    mode,
+    listing,
+    tools,
+    listed,
+    services,
+    instructions: buildInstructions(services, mode, listing),
+    stats: { ...stats, totalTools: tools.length },
+  };
 }

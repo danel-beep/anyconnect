@@ -99,7 +99,12 @@ export function apiRoutes() {
       c,
       z.object({
         name: z.string().trim().min(1).max(100).optional(),
-        settings: z.object({ toolExposure: z.enum(['grouped', 'per_account']).optional() }).optional(),
+        settings: z
+          .object({
+            toolExposure: z.enum(['grouped', 'per_account']).optional(),
+            toolListing: z.enum(['auto', 'direct', 'discovery']).optional(),
+          })
+          .optional(),
       }),
     );
     const current = await getWorkspace(s.db, p.workspaceId);
@@ -273,10 +278,14 @@ export function apiRoutes() {
   // --- Tools as the AI sees them -------------------------------------------
   api.get('/tools', async (c) => {
     const catalog = await c.get('services').hub.getCatalog(principal(c));
+    // `?all=1` also returns tools that discovery mode does not list (reachable via call_tool).
+    const tools = c.req.query('all') ? catalog.tools : catalog.listed;
     return c.json({
       exposure: catalog.mode,
+      listing: catalog.listing,
+      stats: catalog.stats,
       instructions: catalog.instructions,
-      tools: catalog.tools.map(({ name, title, description, inputSchema, annotations, risk }) => ({
+      tools: tools.map(({ name, title, description, inputSchema, annotations, risk }) => ({
         name,
         title,
         description,
