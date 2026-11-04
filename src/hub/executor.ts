@@ -16,7 +16,7 @@ import type { ExecResult } from './result.js';
  * fan-out, a unified capability tool or a `call_tools` batch — runs as one *unit* (one action on one
  * account) through the same ordered chain of stages:
  *
- *   audit → policy → confirm → limits → idempotency → untrusted → shape → invoke
+ *   audit → meter → quota → policy → risk → confirm → limits → idempotency → untrusted → shape → invoke
  *
  * Each stage is a middleware `(call, next) => result`: it may inspect the call, short-circuit with
  * its own result (a policy denial), call `next()` more than once (a retry) or post-process the
@@ -25,6 +25,10 @@ import type { ExecResult } from './result.js';
 export const STAGE_ORDER = [
   /** Records every unit in `tool_calls`, including denials (outermost, so it sees everything). */
   'audit',
+  /** Counts executed calls per workspace, AI account and action (plans and limits build on it). */
+  'meter',
+  /** Plan limits (actions per month); refused units never reach the service (billing layer). */
+  'quota',
   /** Who may do what: client × account × risk (implemented in the security layer). */
   'policy',
   /** Lets the action raise the risk of this particular call (`assessRisk`), e.g. a new recipient. */
@@ -74,8 +78,13 @@ export interface CallContext {
   tool: CatalogTool;
   connector: ConnectorDefinition;
   action: ActionDefinition;
-  account: CatalogAccount;
-  accountRow: AccountRow;
+  /**
+   * What the unit acts on: one account of a service, or the workspace itself (the hub's own setup
+   * tools, connector `manyplug`). Workspace units have no `account` / `accountRow`.
+   */
+  scope: 'account' | 'workspace';
+  account?: CatalogAccount;
+  accountRow?: AccountRow;
   /** The action input, already validated by the action's schema. */
   input: Record<string, unknown>;
   /** Hub-level options taken from reserved arguments. */
@@ -83,7 +92,10 @@ export interface CallContext {
   /** Declared risk, possibly raised by the `risk` stage; `confirm` and `audit` use the final value. */
   risk: RiskLevel;
   meta: CallMeta;
-  /** The connector context for this account (credentials decrypted on first use, then cached). */
+  /**
+   * The context the action runs with: for an account, the connector context (credentials decrypted
+   * on first use, then cached); for the workspace, the hub's setup context.
+   */
   context(): Promise<AccountContext<unknown, unknown>>;
   /** Aborted on client cancellation or when the deadline passes. */
   signal: AbortSignal;
@@ -93,11 +105,23 @@ export interface CallContext {
   audit: AuditRecord;
   /** Per-call scratch space for stages to hand data to later stages (e.g. policy → confirm). */
   locals: Record<string, unknown>;
+  /** Set by the executor once the call reaches the service (after every stage let it through). */
+  invoked?: boolean;
   interaction?: Interaction;
   /** Already approved by the user (e.g. a stored call approved in Telegram): `confirm` lets it pass. */
   preApproved?: boolean;
   /** Set when the unit is part of a bigger call (fan-out over accounts, capability tool, batch). */
   group?: { kind: 'fanout' | 'capability' | 'batch'; id: string };
+}
+
+/** Key for per-target state (rate limits, duplicate protection): the account, or the workspace. */
+export function unitKey(call: CallContext): string {
+  return call.account ? call.account.id : `workspace:${call.principal.workspaceId}`;
+}
+
+/** How the target is named in messages to the AI. */
+export function unitLabel(call: CallContext): string {
+  return call.account ? `account "${call.account.name}"` : 'this workspace';
 }
 
 export type Next = () => Promise<ExecResult>;
@@ -127,7 +151,10 @@ export class Executor {
     const stages = this.chain.filter((stage) => !skip.has(stage.name));
     const dispatch = (index: number): Promise<ExecResult> => {
       const stage = stages[index];
-      if (!stage) return this.invoke(call);
+      if (!stage) {
+        call.invoked = true;
+        return this.invoke(call);
+      }
       // A stage may call next() more than once (a retry); each call re-runs the inner stages.
       return stage.run(call, () => dispatch(index + 1));
     };

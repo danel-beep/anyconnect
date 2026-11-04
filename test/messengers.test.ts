@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Principal } from '../src/core/principal.js';
 import { messengerChats, messengerMessages, messengerOutbox } from '../src/db/schema.js';
-import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
+import { resetDatabase, startTestHub, type TestHub, unwrapUntrusted } from './helpers.js';
 
 const BOT_TOKEN = '123456789:AAEhBP0av18aaaaaaaaaaaaaaaaaaaaaaaa';
 const APP_SECRET = '0123456789abcdef0123456789abcdef';
@@ -79,7 +79,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   const json = (result: { content: { type: string; text?: string }[]; isError?: boolean }) => {
     const text = result.content[0]?.text ?? '';
     if (result.isError) throw new Error(text);
-    return JSON.parse(text);
+    return JSON.parse(unwrapUntrusted(text));
   };
 
   beforeAll(async () => {
@@ -90,11 +90,20 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   beforeEach(async () => {
     await hub?.close();
     apis.calls.length = 0;
-    hub = await startTestHub({ env: { ALLOW_PRIVATE_NETWORK: 'true' }, seed: false });
+    // Out-of-band confirmations answer at once instead of waiting for the user.
+    hub = await startTestHub({
+      env: { ALLOW_PRIVATE_NETWORK: 'true', CONFIRMATION_WAIT_SECONDS: '0' },
+      seed: false,
+    });
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
     const user = (await hub.services.db.query.users.findFirst())!;
     principal = { kind: 'session', userId: user.id, workspaceId: workspace.id, scopes: ['mcp', 'api'] };
     hub.services.messaging.start();
+    // Sending asks the user first by default; these tests are about delivery, so the user said
+    // "do not ask" for both services (the default is checked in its own test).
+    for (const connectorId of ['telegram', 'whatsapp']) {
+      await hub.services.policies.createRule(workspace.id, { connectorId, confirm: 'never' });
+    }
   });
 
   afterAll(async () => {
@@ -169,6 +178,9 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
         id: expect.stringMatching(/^cht_/),
       }),
     ]);
+    // What other people wrote reaches the AI marked as third-party data.
+    const marked = await call('telegram_search', { query: 'счета ноябрь' });
+    expect((marked.content[0] as { text: string }).text).toMatch(/^⟦untrusted \w+ source="Telegram · shop"⟧/);
     const found = json(await call('telegram_search', { query: 'счета ноябрь' }));
     expect(found.messages).toHaveLength(1);
     expect(found.messages[0]).toMatchObject({
@@ -194,6 +206,18 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       ...(await hub.services.db.select().from(messengerChats)),
     ]);
     for (const secret of ['счёт', 'Анна', 'Петрова', 'доставку', '"42"']) expect(raw).not.toContain(secret);
+  });
+
+  it('asks the user before sending, by default', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(9, 'Пришлите счёт'));
+    for (const rule of await hub.services.policies.listRules(principal.workspaceId)) {
+      await hub.services.policies.deleteRule(principal.workspaceId, rule.id);
+    }
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const held = await call('telegram_send', { chat: chat.id, text: 'Отправил' });
+    expect(JSON.stringify(held.content)).toContain('/confirm/');
+    expect(apis.calls.filter((c) => c.path === 'sendMessage')).toHaveLength(0);
   });
 
   it('follows new messages with a cursor', async () => {

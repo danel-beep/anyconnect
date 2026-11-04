@@ -106,6 +106,7 @@ export class ConnectService {
       if (input.name && (await this.deps.accounts.findByName(who.workspaceId, connector.id, input.name))) {
         throw badRequest(`An account named "${input.name}" already exists for ${connector.name}`);
       }
+      await this.deps.accounts.assertCanCreate(who.workspaceId);
     }
 
     const app = await this.deps.apps.pick(who.workspaceId, provider.id, input.appId);
@@ -113,7 +114,7 @@ export class ConnectService {
       throw new AppError(
         400,
         'oauth_app_missing',
-        `No OAuth app is configured for ${provider.name}. Register one at ${provider.appSetupUrl ?? 'the provider'} with the redirect URI ${this.deps.redirectUri} and add it in AnyConnect.`,
+        `No OAuth app is configured for ${provider.name}. Register one at ${provider.appSetupUrl ?? 'the provider'} with the redirect URI ${this.deps.redirectUri} and add it in Manyplug.`,
       );
     }
 

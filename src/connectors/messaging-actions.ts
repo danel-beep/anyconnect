@@ -5,7 +5,14 @@
  */
 import { z } from 'zod';
 import type { ChatView, MessageView, MessagingPort } from './messaging.js';
-import { type ActionDefinition, type ActionFactory, ConnectorError, rawResult } from './sdk.js';
+import {
+  type ActionDefinition,
+  type ActionFactory,
+  type ActionLocale,
+  ConnectorError,
+  type FieldLocale,
+  rawResult,
+} from './sdk.js';
 
 const limit = (max: number, fallback: number) =>
   z.number().int().min(1).max(max).default(fallback).describe(`How many items to return (max ${max})`);
@@ -79,37 +86,29 @@ const isChatId = (value: string) => /^cht_[0-9a-z]+$/i.test(value);
 /** Account config field shared by all messenger connectors. */
 export const pacingConfig = z
   .object({
-    perMinute: z.number().int().min(1).max(60).optional().describe('Сообщений в минуту'),
-    perHour: z.number().int().min(1).max(3_000).optional().describe('Сообщений в час'),
-    perDay: z.number().int().min(1).max(20_000).optional().describe('Сообщений в сутки'),
+    perMinute: z.number().int().min(1).max(60).optional().describe('Messages per minute'),
+    perHour: z.number().int().min(1).max(3_000).optional().describe('Messages per hour'),
+    perDay: z.number().int().min(1).max(20_000).optional().describe('Messages per day'),
     newContactsPerDay: z
       .number()
       .int()
       .min(0)
       .max(500)
       .optional()
-      .describe('Первых сообщений новым собеседникам в сутки'),
-    minGapMs: z
-      .number()
-      .int()
-      .min(0)
-      .max(600_000)
-      .optional()
-      .describe('Минимальная пауза между сообщениями, мс'),
-    maxGapMs: z
-      .number()
-      .int()
-      .min(0)
-      .max(600_000)
-      .optional()
-      .describe('Максимальная пауза между сообщениями, мс'),
-    typing: z.boolean().optional().describe('Показывать «печатает…» перед отправкой'),
+      .describe('First messages to new people per day'),
+    minGapMs: z.number().int().min(0).max(600_000).optional().describe('Shortest pause between messages, ms'),
+    maxGapMs: z.number().int().min(0).max(600_000).optional().describe('Longest pause between messages, ms'),
+    typing: z.boolean().optional().describe('Show "typing…" before sending'),
   })
-  .describe('Темп отправки (защита от бана)');
+  .describe('Sending pace (protects the account from bans)');
 
 /** Largest file returned inline to the AI. */
 const MAX_INLINE_BYTES = 4 * 1024 * 1024;
 
+/*
+ * Every tool here is `openWorld`: even the ones that answer from the hub's copy return what other
+ * people wrote, so the hub marks their results as third-party content (prompt injection defense).
+ */
 export function messengerActions<TConfig, TCredentials>(
   action: ActionFactory<TConfig, TCredentials>,
   port: MessagingPort,
@@ -127,7 +126,7 @@ export function messengerActions<TConfig, TCredentials>(
         limit: limit(100, 30),
         cursor: z.string().max(200).optional().describe('next_cursor from the previous call'),
       }),
-      hints: { readOnly: true, idempotent: true, openWorld: false },
+      hints: { readOnly: true, idempotent: true, openWorld: true },
       capability: {
         id: 'messages.list_chats',
         mapOutput: (result) => {
@@ -151,7 +150,7 @@ export function messengerActions<TConfig, TCredentials>(
     action({
       name: 'search',
       title: 'Search messages',
-      description: `Full-text search over ${serviceName} messages of the account (all chats or one), newest first. Matches word beginnings, so "встреч" finds "встреча" and "встречу". Filter by sender and dates.`,
+      description: `Full-text search over ${serviceName} messages of the account (all chats or one), newest first. Matches word beginnings, so "meet" finds "meeting" and "meets" (Russian word forms too). Filter by sender and dates.`,
       input: z.object({
         query: z.string().max(300).optional().describe('Words to find; all of them must occur'),
         chat: z.string().max(64).optional().describe('Chat id from list_chats to search in'),
@@ -161,7 +160,7 @@ export function messengerActions<TConfig, TCredentials>(
         limit: limit(100, 20),
         cursor: z.string().max(200).optional().describe('next_cursor from the previous call'),
       }),
-      hints: { readOnly: true, idempotent: true, openWorld: false },
+      hints: { readOnly: true, idempotent: true, openWorld: true },
       capability: {
         id: 'messages.search',
         mapOutput: (result) => {
@@ -207,7 +206,7 @@ export function messengerActions<TConfig, TCredentials>(
           .describe('next_cursor from the previous call (older messages)'),
         limit: limit(200, 30),
       }),
-      hints: { readOnly: true, idempotent: true, openWorld: false },
+      hints: { readOnly: true, idempotent: true, openWorld: true },
       capability: {
         id: 'messages.read_chat',
         mapOutput: (result) => {
@@ -251,7 +250,7 @@ export function messengerActions<TConfig, TCredentials>(
         include_own: z.boolean().default(false).describe('Also include messages sent by this account'),
         limit: limit(200, 50),
       }),
-      hints: { readOnly: true, openWorld: false },
+      hints: { readOnly: true, openWorld: true },
       run: async (input, ctx) => {
         const result = await port.forAccount(ctx.account.id).whatsNew({
           ...(input.cursor ? { cursor: input.cursor } : {}),
@@ -281,6 +280,8 @@ export function messengerActions<TConfig, TCredentials>(
         reply_to: z.string().max(64).optional().describe('Message id to reply to (same chat)'),
       }),
       hints: { readOnly: false, destructive: false, openWorld: true },
+      // Sending is what the user approves by default (same as mail and Slack); see assessRisk below.
+      risk: 'dangerous',
       capability: {
         id: 'messages.send',
         mapInput: ({ chat, ...rest }) =>
@@ -334,6 +335,7 @@ export function messengerActions<TConfig, TCredentials>(
       description: `Marks all messages of a ${serviceName} chat as read (the other side sees read receipts where the messenger shows them).`,
       input: z.object({ chat: z.string().max(64).describe('Chat id from list_chats') }),
       hints: { readOnly: false, idempotent: true, openWorld: true },
+      risk: 'write',
       run: async (input, ctx) => port.forAccount(ctx.account.id).markRead(input.chat),
     }),
     action({
@@ -365,4 +367,84 @@ export function messengerActions<TConfig, TCredentials>(
       },
     }),
   ];
+}
+
+/**
+ * Website texts of the standard messenger tools and of the `pacing` field, for a connector's
+ * `ui.locales` (people only: the AI keeps the English descriptions above).
+ */
+export function messengerUiTexts(
+  serviceName: string,
+): Record<'ru' | 'en', { actions: Record<string, ActionLocale>; pacing: FieldLocale }> {
+  return {
+    ru: {
+      actions: {
+        list_chats: {
+          title: 'Список чатов',
+          description: `Чаты ${serviceName}, сначала недавние, со счётчиком непрочитанного.`,
+        },
+        search: {
+          title: 'Поиск сообщений',
+          description: 'Поиск по всей переписке или одному чату, по словам, отправителю и датам.',
+        },
+        read_chat: { title: 'Чтение чата', description: 'Последние сообщения чата, можно листать назад.' },
+        whats_new: {
+          title: 'Что нового',
+          description: 'Новые сообщения с прошлой проверки, без повторов.',
+        },
+        send: {
+          title: 'Отправка сообщения',
+          description:
+            'Пишет в чат через очередь: пауза и «печатает…», как у человека, без дублей. Первое сообщение новому человеку — только с вашего согласия.',
+        },
+        mark_read: {
+          title: 'Отметить прочитанным',
+          description: 'Отмечает все сообщения чата прочитанными.',
+        },
+        get_attachment: {
+          title: 'Вложение',
+          description: 'Скачивает файл из сообщения: фото и голосовые ИИ может посмотреть и послушать.',
+        },
+      },
+      pacing: {
+        label: 'Темп отправки',
+        hint: 'Лимиты и паузы между сообщениями. Значения по умолчанию подходят почти всем.',
+      },
+    },
+    en: {
+      actions: {
+        list_chats: {
+          title: 'List chats',
+          description: `${serviceName} chats, most recent first, with unread counters.`,
+        },
+        search: {
+          title: 'Search messages',
+          description: 'Searches all chats or one chat by words, sender and dates.',
+        },
+        read_chat: {
+          title: 'Read a chat',
+          description: 'Latest messages of a chat; page back for older ones.',
+        },
+        whats_new: {
+          title: "What's new",
+          description: 'New messages since the last check, without repeats.',
+        },
+        send: {
+          title: 'Send a message',
+          description:
+            'Writes to a chat through a queue: human-like pauses and typing, never twice. A first message to someone new needs your OK.',
+        },
+        mark_read: { title: 'Mark as read', description: 'Marks every message of a chat as read.' },
+        get_attachment: {
+          title: 'Attachment',
+          description:
+            'Downloads a file from a message; the AI can look at photos and listen to voice messages.',
+        },
+      },
+      pacing: {
+        label: 'Sending pace',
+        hint: 'Limits and pauses between messages. The defaults suit almost everyone.',
+      },
+    },
+  };
 }

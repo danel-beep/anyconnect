@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -17,12 +20,12 @@ jobs:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: anyconnect_test
+          POSTGRES_DB: manyplug_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/anyconnect_test
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/manyplug_test
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -42,6 +45,15 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: manyplug
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
@@ -49,5 +61,22 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: manyplug:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The image only has production dependencies: start it for real so a runtime import that
+      # lives in devDependencies fails here, not on the first deploy.
+      - name: Image starts and answers /healthz
+        run: |
+          docker run -d --name hub --network host \
+            -e NODE_ENV=production -e PORT=3000 -e PUBLIC_URL=http://localhost:3000 \
+            -e DATABASE_URL=postgres://postgres:postgres@localhost:5432/manyplug \
+            -e ENCRYPTION_KEY="$(openssl rand -base64 32)" \
+            manyplug:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/healthz; then docker rm -f hub >/dev/null; exit 0; fi
+            sleep 2
+          done
+          docker logs hub
+          exit 1

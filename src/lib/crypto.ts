@@ -17,7 +17,7 @@ import {
  * Bearer secrets carry a recognizable prefix (helps secret scanners and debugging)
  * followed by 256 bits of randomness. Only their SHA-256 hash is stored.
  */
-export type TokenPrefix = 'ac_at' | 'ac_rt' | 'ac_pat' | 'ac_code' | 'ac_ses' | 'ac_cs';
+export type TokenPrefix = 'ac_at' | 'ac_rt' | 'ac_pat' | 'ac_code' | 'ac_ses' | 'ac_cs' | 'ac_pl';
 
 export function generateToken(prefix: TokenPrefix): string {
   return `${prefix}_${randomBytes(32).toString('base64url')}`;
@@ -92,6 +92,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
 // ---------------------------------------------------------------------------
 
 const ENVELOPE_VERSION = 'v1';
+// Key-derivation labels below keep the product's former name (AnyConnect): changing them would make
+// every stored credential undecryptable. They are identifiers, not branding.
 const DEV_KEY_MATERIAL = 'anyconnect-insecure-development-key-do-not-use-in-production';
 
 export function parseKey(raw: string): Buffer {
@@ -130,7 +132,7 @@ interface KeyEntry {
  * Every encryption is bound to a context string (AAD), e.g. the account id, so a ciphertext
  * copied to another row will not decrypt.
  */
-export class SecretBox {
+export class SecretBox implements KeyWrapper {
   private readonly primary: KeyEntry;
   private readonly keys = new Map<string, KeyEntry>();
   readonly usingDevelopmentKey: boolean;
@@ -200,8 +202,97 @@ export class SecretBox {
     return envelope.split('.')[1] !== this.primary.id;
   }
 
+  wrapKey(key: Buffer, context: string): string {
+    return this.encrypt(key.toString('base64'), context);
+  }
+
+  unwrapKey(wrapped: string, context: string): Buffer {
+    const key = Buffer.from(this.decrypt(wrapped, context), 'base64');
+    if (key.length !== DATA_KEY_BYTES) throw new Error('Corrupted data key');
+    return key;
+  }
+
+  needsRewrap(wrapped: string): boolean {
+    return this.needsRotation(wrapped);
+  }
+
   /** Derive an independent sub-key for another purpose (CSRF, signing, ...). */
   deriveKey(purpose: string): Buffer {
     return Buffer.from(hkdfSync('sha256', this.derivationRoot, Buffer.alloc(0), `anyconnect/${purpose}`, 32));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Envelope encryption: per-record data keys wrapped by the master key
+// ---------------------------------------------------------------------------
+
+const DATA_KEY_BYTES = 32;
+const DATA_ENVELOPE_VERSION = 'd1';
+
+/**
+ * Wraps (encrypts) data keys with a key-encryption key. Today the master key in the environment
+ * ({@link SecretBox}); a KMS/HSM-backed implementation can replace it without touching callers.
+ */
+export interface KeyWrapper {
+  wrapKey(key: Buffer, context: string): string;
+  unwrapKey(wrapped: string, context: string): Buffer;
+  /** True when the wrapped key should be re-wrapped with the current key-encryption key. */
+  needsRewrap(wrapped: string): boolean;
+}
+
+/**
+ * A data encryption key (DEK) that protects the secrets of one record (e.g. one account).
+ * Only the wrapped form is stored; rotating the master key re-wraps the DEKs and never touches
+ * the data itself, and deleting the wrapped DEK makes the record's ciphertexts unreadable.
+ *
+ * Envelope format: `d1.<iv>.<ciphertext+tag>` (base64url), AES-256-GCM with a context string as AAD.
+ */
+export class DataKey {
+  private constructor(private readonly key: Buffer) {}
+
+  static generate(): DataKey {
+    return new DataKey(randomBytes(DATA_KEY_BYTES));
+  }
+
+  static unwrap(wrapper: KeyWrapper, wrapped: string, context: string): DataKey {
+    return new DataKey(wrapper.unwrapKey(wrapped, context));
+  }
+
+  static isEnvelope(value: string): boolean {
+    return value.startsWith(`${DATA_ENVELOPE_VERSION}.`);
+  }
+
+  wrap(wrapper: KeyWrapper, context: string): string {
+    return wrapper.wrapKey(this.key, context);
+  }
+
+  encrypt(plaintext: string, context: string): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    cipher.setAAD(Buffer.from(context, 'utf8'));
+    const body = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final(), cipher.getAuthTag()]);
+    return [DATA_ENVELOPE_VERSION, iv.toString('base64url'), body.toString('base64url')].join('.');
+  }
+
+  decrypt(envelope: string, context: string): string {
+    const parts = envelope.split('.');
+    if (parts.length !== 3 || parts[0] !== DATA_ENVELOPE_VERSION)
+      throw new Error('Unsupported data envelope');
+    const body = Buffer.from(parts[2]!, 'base64url');
+    if (body.length < 16) throw new Error('Corrupted data envelope');
+    const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(parts[1]!, 'base64url'));
+    decipher.setAAD(Buffer.from(context, 'utf8'));
+    decipher.setAuthTag(body.subarray(body.length - 16));
+    return Buffer.concat([decipher.update(body.subarray(0, body.length - 16)), decipher.final()]).toString(
+      'utf8',
+    );
+  }
+
+  encryptJson(value: unknown, context: string): string {
+    return this.encrypt(JSON.stringify(value), context);
+  }
+
+  decryptJson<T = unknown>(envelope: string, context: string): T {
+    return JSON.parse(this.decrypt(envelope, context)) as T;
   }
 }

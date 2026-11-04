@@ -154,7 +154,7 @@ export const TASKS: EvalTask[] = [
   },
 ];
 
-/** Natural-language queries and the tool `anyconnect_search_tools` must rank in the top 3. */
+/** Natural-language queries and the tool `manyplug_search_tools` must rank in the top 3. */
 export const SEARCH_CASES: Array<[query: string, tool: string | string[]]> = [
   ['send an email', 'mail_send'],
   ['find emails from my boss', 'mail_search'],

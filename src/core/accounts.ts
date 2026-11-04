@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import {
@@ -10,11 +10,12 @@ import {
 } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { type AccountSettings, accounts } from '../db/schema.js';
-import type { SecretBox } from '../lib/crypto.js';
+import type { DataKey } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 import type { NetworkPolicy } from '../lib/network.js';
 import { slugify } from '../lib/slug.js';
+import type { AccountKeyring } from './account-keys.js';
 import type { TokenManager } from './oauth-tokens.js';
 
 export type AccountRow = typeof accounts.$inferSelect;
@@ -87,8 +88,6 @@ export const UpdateAccountInput = z.object({
 });
 export type UpdateAccountInput = z.infer<typeof UpdateAccountInput>;
 
-const credentialsContext = (accountId: string) => `account:${accountId}:credentials`;
-
 function parseWith<T extends z.ZodType>(schema: T, value: unknown, what: string): z.output<T> {
   const result = schema.safeParse(value ?? {});
   if (!result.success) {
@@ -113,15 +112,27 @@ function isUniqueViolation(error: unknown): boolean {
  * Manages connected accounts: validation against the connector's schemas, credential
  * encryption, and building the per-account context handed to connectors.
  */
+/** How many accounts a workspace may have (implemented by the billing layer). */
+export interface AccountLimits {
+  assertCanAddAccount(workspaceId: string): Promise<void>;
+}
+
 export class AccountService {
   constructor(
     private readonly db: Db,
     private readonly connectors: ConnectorResolver,
-    private readonly secrets: SecretBox,
+    private readonly keys: AccountKeyring,
     private readonly network: NetworkPolicy,
     /** OAuth tokens of OAuth-connected services (`ctx.oauth`). */
     private readonly tokens?: TokenManager,
+    /** Plan limits on the number of accounts (billing layer); without it any number is allowed. */
+    private readonly limits?: AccountLimits,
   ) {}
+
+  /** Throws when the workspace's plan does not allow one more account. */
+  async assertCanCreate(workspaceId: string): Promise<void> {
+    await this.limits?.assertCanAddAccount(workspaceId);
+  }
 
   async list(workspaceId: string): Promise<AccountRow[]> {
     return this.db
@@ -174,6 +185,7 @@ export class AccountService {
   async create(workspaceId: string, rawInput: CreateAccountInput): Promise<AccountRow> {
     const input = parseWith(CreateAccountInput, rawInput, 'account');
     const connector = await this.connector(workspaceId, input.connectorId);
+    await this.assertCanCreate(workspaceId);
     const name =
       input.name ?? (await this.uniqueName(workspaceId, connector.id, slugify(input.label) || connector.id));
     const config = parseWith(connector.config, input.config, 'config');
@@ -182,6 +194,7 @@ export class AccountService {
 
     const id = newId('acc');
     const hasCredentials = Object.keys(connector.credentials.shape).length > 0;
+    const { key, wrapped } = this.keys.createKey(id);
     try {
       const [row] = await this.db
         .insert(accounts)
@@ -193,8 +206,9 @@ export class AccountService {
           label: input.label,
           description: input.description ?? null,
           config,
+          dataKeyEncrypted: wrapped,
           credentialsEncrypted: hasCredentials
-            ? this.secrets.encryptJson(credentials, credentialsContext(id))
+            ? this.keys.encryptCredentials({ id }, key, credentials)
             : null,
           enabled: input.enabled ?? true,
           settings: disabledActions ? { disabledActions } : {},
@@ -229,13 +243,12 @@ export class AccountService {
     }
     if (input.credentials !== undefined) {
       const current = existing.credentialsEncrypted
-        ? this.secrets.decryptJson<Record<string, unknown>>(
-            existing.credentialsEncrypted,
-            credentialsContext(existing.id),
-          )
+        ? this.keys.decryptCredentials<Record<string, unknown>>(existing, existing.credentialsEncrypted)
         : {};
       const merged = parseWith(connector.credentials, { ...current, ...input.credentials }, 'credentials');
-      patch.credentialsEncrypted = this.secrets.encryptJson(merged, credentialsContext(existing.id));
+      const { key, dataKeyEncrypted } = this.dataKeyFor(existing);
+      patch.dataKeyEncrypted = dataKeyEncrypted;
+      patch.credentialsEncrypted = this.keys.encryptCredentials(existing, key, merged);
       // New credentials: give the account a fresh chance.
       patch.status = 'active';
       patch.statusMessage = null;
@@ -266,6 +279,72 @@ export class AccountService {
     if (deleted.length === 0) throw notFound('Account');
   }
 
+  /** The account's data key, creating one for accounts that predate envelope encryption. */
+  private dataKeyFor(row: AccountRow): { key: DataKey; dataKeyEncrypted: string } {
+    if (row.dataKeyEncrypted) {
+      return { key: this.keys.openKey(row), dataKeyEncrypted: row.dataKeyEncrypted };
+    }
+    const { key, wrapped } = this.keys.createKey(row.id);
+    return { key, dataKeyEncrypted: wrapped };
+  }
+
+  /**
+   * Brings every account to the current encryption scheme: gives legacy accounts their own data
+   * key (re-encrypting their credentials with it) and re-wraps data keys that were wrapped with a
+   * previous master key. Idempotent and safe to run concurrently on several instances: each row
+   * is only updated if it has not changed since it was read.
+   */
+  async upgradeEncryption(): Promise<{ upgraded: number; rewrapped: number; failed: number }> {
+    const result = { upgraded: 0, rewrapped: 0, failed: 0 };
+    const rows = await this.db.select().from(accounts);
+    for (const row of rows) {
+      try {
+        if (!row.dataKeyEncrypted || this.keys.isLegacy(row.credentialsEncrypted)) {
+          const { key, dataKeyEncrypted } = this.dataKeyFor(row);
+          const credentials = row.credentialsEncrypted
+            ? this.keys.encryptCredentials(
+                row,
+                key,
+                this.keys.decryptCredentials(row, row.credentialsEncrypted),
+              )
+            : null;
+          const updated = await this.db
+            .update(accounts)
+            .set({
+              dataKeyEncrypted,
+              credentialsEncrypted: credentials,
+              updatedAt: sql`${accounts.updatedAt}`,
+            })
+            .where(and(eq(accounts.id, row.id), this.unchanged(row)))
+            .returning({ id: accounts.id });
+          if (updated.length) result.upgraded++;
+        } else if (this.keys.needsRewrap(row)) {
+          const updated = await this.db
+            .update(accounts)
+            .set({ dataKeyEncrypted: this.keys.rewrap(row), updatedAt: sql`${accounts.updatedAt}` })
+            .where(and(eq(accounts.id, row.id), this.unchanged(row)))
+            .returning({ id: accounts.id });
+          if (updated.length) result.rewrapped++;
+        }
+      } catch {
+        // Unreadable with the configured keys (e.g. a missing previous key): leave it as is.
+        result.failed++;
+      }
+    }
+    return result;
+  }
+
+  private unchanged(row: AccountRow) {
+    return and(
+      row.dataKeyEncrypted === null
+        ? isNull(accounts.dataKeyEncrypted)
+        : eq(accounts.dataKeyEncrypted, row.dataKeyEncrypted),
+      row.credentialsEncrypted === null
+        ? isNull(accounts.credentialsEncrypted)
+        : eq(accounts.credentialsEncrypted, row.credentialsEncrypted),
+    );
+  }
+
   private validateDisabledActions(
     connector: ConnectorDefinition,
     names: string[] | undefined,
@@ -287,7 +366,7 @@ export class AccountService {
     let credentials: unknown = {};
     if (row.credentialsEncrypted) {
       try {
-        credentials = this.secrets.decryptJson(row.credentialsEncrypted, credentialsContext(row.id));
+        credentials = this.keys.decryptCredentials(row, row.credentialsEncrypted);
       } catch {
         throw new AppError(
           500,
@@ -308,10 +387,12 @@ export class AccountService {
       credentials,
       updateCredentials: async (next) => {
         const valid = parseWith(connector.credentials, next, 'credentials');
+        const { key, dataKeyEncrypted } = this.dataKeyFor(row);
         await this.db
           .update(accounts)
-          .set({ credentialsEncrypted: this.secrets.encryptJson(valid, credentialsContext(row.id)) })
+          .set({ dataKeyEncrypted, credentialsEncrypted: this.keys.encryptCredentials(row, key, valid) })
           .where(eq(accounts.id, row.id));
+        row.dataKeyEncrypted = dataKeyEncrypted;
       },
       signal: options.signal,
       logger: options.logger,

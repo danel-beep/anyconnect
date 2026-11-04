@@ -11,7 +11,14 @@ import { createGatewayRuntime } from '../src/gateway/runtime.js';
 import { LeaseLostError } from '../src/gateway/state.js';
 import { createLogger } from '../src/logger.js';
 import { createFakeLog, type FakeLog, fakeDriver, registryWithFakeChat } from './fake-messenger.js';
-import { resetDatabase, startTestHub, TEST_DATABASE_URL, TEST_KEY, type TestHub } from './helpers.js';
+import {
+  resetDatabase,
+  startTestHub,
+  TEST_DATABASE_URL,
+  TEST_KEY,
+  type TestHub,
+  unwrapUntrusted,
+} from './helpers.js';
 
 const TOKEN = 'gateway-test-token-0123456789abcdef';
 const logger = createLogger({ level: 'silent' });
@@ -92,7 +99,7 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
     const result = await hub.services.hub.callTool(principal, catalog, tool, args);
     const text = (result.content[0] as { text?: string } | undefined)?.text ?? '';
     if (result.isError) throw new Error(text);
-    return JSON.parse(text);
+    return JSON.parse(unwrapUntrusted(text));
   };
   const row = async (accountId: string) => (await hub.services.messaging.accounts.get(accountId))!;
 
@@ -112,6 +119,8 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
     const user = (await hub.services.db.query.users.findFirst())!;
     principal = { kind: 'session', userId: user.id, workspaceId: workspace.id, scopes: ['mcp', 'api'] };
+    // These tests are about delivery, not about the user's confirmation of each message.
+    await hub.services.policies.createRule(workspace.id, { connectorId: 'fakechat', confirm: 'never' });
   });
 
   afterEach(async () => {
@@ -237,9 +246,14 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
 
   it('recovers from one transient failure and stops at once on a ban', async () => {
     const account = await addLoggedInAccount();
+    const before = log.connects;
     gatewayA.driver.lives.get(account.id)!.drop(new SessionError('network', 'connection reset'));
-    await until(async () => (await row(account.id)).state === 'backoff', 'backoff');
-    await until(async () => (await row(account.id)).state === 'online', 'reconnect');
+    // The backoff is a few tens of milliseconds here, too short to observe reliably: wait for the
+    // reconnect itself, then check that the failure counter was reset.
+    await until(
+      async () => log.connects > before && (await row(account.id)).state === 'online',
+      'reconnect after a transient failure',
+    );
     expect((await row(account.id)).failures).toBe(0);
 
     const connects = log.connects;

@@ -117,7 +117,7 @@ export function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promi
       url,
       {
         method: options.method ?? 'GET',
-        headers: { 'user-agent': 'AnyConnect/1.0', ...options.headers },
+        headers: { 'user-agent': 'Manyplug/1.0', ...options.headers },
         timeout: timeoutMs,
         ...(allowPrivate ? {} : { lookup: guardedLookup as unknown as typeof dns.lookup }),
       },

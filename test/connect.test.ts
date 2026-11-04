@@ -236,6 +236,8 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     });
     const stored = await hub.services.database.pool.query('select * from account_oauth');
     expect(stored.rows[0].tokens_encrypted).not.toContain(provider.accessToken);
+    // Encrypted with the account's own data key, like its credentials.
+    expect(stored.rows[0].tokens_encrypted).toMatch(/^d1\./);
     expect(stored.rows[0].app_ref).toBe('env:fakeprov');
 
     const result = await callMe();
@@ -365,9 +367,16 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     });
     browser = new TestBrowser(hub.baseUrl);
     await browser.login();
-    const missing = await browser.request('/connect/fake');
+    // Without an app, a service that also takes a personal token shows the token form…
+    const form = await browser.request('/connect/fake');
+    expect(form.status).toBe(200);
+    expect(await form.text()).toContain('name="credentials.token"');
+    // …and asking for OAuth explains in plain words what is missing, pointing the admin to System.
+    const missing = await browser.request('/connect/fake?via=oauth');
     expect(missing.status).toBe(400);
-    expect(await missing.text()).toContain('No OAuth app is configured for FakeProvider');
+    const page = await missing.text();
+    expect(page).toContain('Fake здесь пока не подключить');
+    expect(page).toContain('href="/admin/system#apps"');
   });
 
   it('requires sign-in for the callback and rejects flows of other users', async () => {

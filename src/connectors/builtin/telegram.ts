@@ -7,7 +7,7 @@ import {
   type InboundMessage,
   type MessagingPort,
 } from '../messaging.js';
-import { messengerActions, pacingConfig } from '../messaging-actions.js';
+import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
 import { deliveryFetch, readJson, secretsEqual } from '../messaging-http.js';
 import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js';
 
@@ -15,11 +15,11 @@ const config = z.object({
   mode: z
     .enum(['bot'])
     .default('bot')
-    .describe('Как подключён аккаунт: bot — свой бот через Bot API (официально, без риска бана)'),
+    .describe('How the account is connected: bot = your own bot through the official Bot API'),
   botApiUrl: z
     .url({ protocol: /^https?$/ })
     .default('https://api.telegram.org')
-    .describe('Сервер Bot API (свой сервер нужен только для файлов больше 20 МБ)'),
+    .describe('Bot API server (your own one is only needed for files over 20 MB)'),
   pacing: pacingConfig.optional(),
 });
 
@@ -29,7 +29,7 @@ const credentials = z.object({
     .trim()
     .regex(/^\d{5,}:[A-Za-z0-9_-]{30,}$/, 'expected a token from @BotFather, e.g. 123456:ABC-...')
     .optional()
-    .describe('Токен бота от @BotFather (режим bot)'),
+    .describe('Bot token from @BotFather (bot mode)'),
 });
 
 type Config = z.output<typeof config>;
@@ -325,6 +325,81 @@ export function createTelegramConnector(port: MessagingPort) {
       });
       return { ok: true, identity: me.username ? `@${me.username}` : String(me.id) };
     },
+    ui: {
+      primaryFields: ['botToken'],
+      locales: {
+        ru: {
+          description:
+            'Ваш бот Telegram: чаты, поиск по переписке, ответы. Официальный Bot API, без риска для личного аккаунта.',
+          setup: {
+            form: {
+              summary: 'Токен бота от @BotFather. Около двух минут.',
+              steps: [
+                {
+                  text: 'Откройте @BotFather в Telegram и отправьте /newbot (или /mybots, если бот уже есть).',
+                  link: { label: 'Открыть @BotFather', url: 'https://t.me/BotFather' },
+                },
+                { text: 'Придумайте имя и адрес бота. BotFather пришлёт токен вида 123456:ABC-…' },
+                { text: 'Вставьте токен в форму. Хаб сам проверит его и подключит приём сообщений.' },
+              ],
+              tips: [
+                'Бот видит только чаты, где ему написали, и не может первым написать человеку.',
+                'Чтобы бот читал сообщения в группе, выключите у него Group Privacy в @BotFather.',
+              ],
+            },
+          },
+          prompts: [
+            'Что нового написали боту за сегодня?',
+            'Найди сообщения про доставку за эту неделю.',
+            'Ответь Анне, что счёт будет вечером.',
+          ],
+          fields: {
+            mode: { label: 'Как подключить', options: { bot: 'Бот (Bot API)' } },
+            botApiUrl: { label: 'Сервер Bot API', hint: 'Свой сервер нужен только для файлов больше 20 МБ.' },
+            botToken: { label: 'Токен бота', placeholder: '123456789:AA…' },
+            pacing: texts.ru.pacing,
+          },
+          actions: texts.ru.actions,
+        },
+        en: {
+          description: 'Your Telegram bot: chats, message search, replies. The official Bot API.',
+          setup: {
+            form: {
+              summary: 'A bot token from @BotFather. Takes about two minutes.',
+              steps: [
+                {
+                  text: 'Open @BotFather in Telegram and send /newbot (or /mybots if you already have a bot).',
+                  link: { label: 'Open @BotFather', url: 'https://t.me/BotFather' },
+                },
+                { text: 'Pick a name and a username. BotFather replies with a token like 123456:ABC-…' },
+                { text: 'Paste the token into the form. The hub checks it and starts receiving messages.' },
+              ],
+              tips: [
+                'A bot only sees chats where people wrote to it and cannot start a conversation.',
+                'To let the bot read group messages, turn off Group Privacy for it in @BotFather.',
+              ],
+            },
+          },
+          prompts: [
+            'What did people write to the bot today?',
+            'Find messages about delivery from this week.',
+            'Tell Anna the invoice comes tonight.',
+          ],
+          fields: {
+            mode: { label: 'How to connect', options: { bot: 'Bot (Bot API)' } },
+            botApiUrl: {
+              label: 'Bot API server',
+              hint: 'Your own server is only needed for files over 20 MB.',
+            },
+            botToken: { label: 'Bot token', placeholder: '123456789:AA…' },
+            pacing: texts.en.pacing,
+          },
+          actions: texts.en.actions,
+        },
+      },
+    },
     actions: (action) => messengerActions(action, port, { serviceName: 'Telegram' }),
   });
 }
+
+const texts = messengerUiTexts('Telegram');

@@ -14,7 +14,7 @@ import { z } from 'zod';
 import type { CapabilityId } from './capabilities.js';
 import type { MessengerSpec } from './messaging.js';
 
-export type { CapabilityId } from './capabilities.js';
+export type { CapabilityId, CapabilityInput, CapabilityOutput } from './capabilities.js';
 export * from './shape.js';
 
 export type JsonSchema = Record<string, unknown>;
@@ -166,7 +166,7 @@ export function requireOAuth(ctx: { oauth?: OAuthAccess | undefined }): OAuthAcc
   return ctx.oauth;
 }
 
-const RAW_RESULT = Symbol.for('anyconnect.rawToolResult');
+const RAW_RESULT = Symbol.for('manyplug.rawToolResult');
 
 export type ContentBlock =
   | { type: 'text'; text: string }
@@ -237,6 +237,11 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
   hints?: ActionHints;
   /** Default: `read` if `hints.readOnly`, `dangerous` if `hints.destructive`, otherwise `write`. */
   risk?: RiskLevel;
+  /**
+   * Always ask the user before running, whatever the access rules say (they cannot turn this off).
+   * For actions that could weaken protection or are hard to take back, e.g. removing an account.
+   */
+  requiresConfirmation?: boolean;
   undo?: UndoSpec;
   /** Shared interface operation(s) this action implements, e.g. `'mail.search'`. */
   capability?: CapabilityId | CapabilityBinding | Array<CapabilityId | CapabilityBinding>;
@@ -312,6 +317,110 @@ export interface OAuthProviderSpec {
   appSetupUrl?: string;
 }
 
+/**
+ * A language of the website, e.g. `ru` or `en`. Connector texts for the AI stay English; these are
+ * only for people (the connect form, the service page).
+ */
+export type UiLanguage = 'ru' | 'en' | (string & {});
+
+/** How one connect form field reads in one language. */
+export interface FieldLocale {
+  label: string;
+  /** Short help under the input. A locale entry replaces the field's texts as a whole, so no hint here means none. */
+  hint?: string;
+  /** Example value shown in an empty input; for a select, the label of the empty choice. */
+  placeholder?: string;
+  /** Labels of select values, e.g. `{ starttls: 'STARTTLS (порт 587)' }`; unlisted values show as is. */
+  options?: Record<string, string>;
+}
+
+/** How one action reads on the website in one language (the AI keeps `title`/`description`). */
+export interface ActionLocale {
+  title?: string;
+  description?: string;
+}
+
+/** A link in a setup step: the exact page the step talks about ("Open Todoist → Developer"). */
+export interface SetupLink {
+  label: string;
+  /** An https address on the service's own site. */
+  url: string;
+}
+
+/** One step of a setup guide, in the words of the service's own menus. */
+export interface SetupStep {
+  text: string;
+  link?: SetupLink;
+}
+
+/** Steps that apply to one value of a form field, e.g. the app password steps of one mail provider. */
+export interface SetupVariant {
+  /** E.g. "Gmail / Google Workspace". */
+  title: string;
+  steps: SetupStep[];
+}
+
+/**
+ * How a person connects an account, in one language: what they need, where to get it and what to
+ * pick there. The website shows it next to the connect form and on the service's page, so people
+ * do not have to search the service's help pages for an API key or an app password.
+ */
+export interface SetupGuide {
+  /** What is needed and how long it takes, e.g. "A Todoist API token. Takes about a minute." */
+  summary?: string;
+  steps: SetupStep[];
+  /** Steps per value of the field named in `ConnectorUi.setupVariants` (keys are its values). */
+  variants?: Record<string, SetupVariant>;
+  /** Heading above the variants, e.g. "App password: steps for your provider". */
+  variantsTitle?: string;
+  /** Short notes: which permissions to pick, how to revoke access, known limits. */
+  tips?: string[];
+}
+
+/** A connector's website texts in one language. */
+export interface ConnectorLocale<TFieldKey extends string = string> {
+  name?: string;
+  description?: string;
+  /** Connect form fields by key; `config` and `credentials` keys share one namespace. */
+  fields?: Partial<Record<TFieldKey, FieldLocale>>;
+  /** Actions by `name`. */
+  actions?: Record<string, ActionLocale>;
+  /**
+   * How to connect an account: `oauth` when the hub signs in on the service's page, `form` when
+   * the user pastes a key or an app password. A service with optional OAuth can describe both.
+   */
+  setup?: { oauth?: SetupGuide; form?: SetupGuide };
+  /**
+   * Requests people can try with the AI once an account is connected, e.g. "What did Anna send me
+   * this week?". Three to five, concrete, in the words people use.
+   */
+  prompts?: string[];
+}
+
+/**
+ * Presentation of a connector for people. Everything is optional: without it the website falls
+ * back to the English texts (schema `title`/`description`, action `title`/`description`).
+ */
+export interface ConnectorUi<TFieldKey extends string = string> {
+  /** Texts by language. When a language lacks a text, English is used, then the connector's own. */
+  locales?: Partial<Record<UiLanguage, ConnectorLocale<TFieldKey>>>;
+  /**
+   * Fields shown up front in the connect form. Required fields are always shown; every other field
+   * goes under "Advanced". Without it all fields are shown.
+   */
+  primaryFields?: TFieldKey[];
+  /**
+   * Which setup guide variant applies: the form field whose value names it (e.g. the mail
+   * provider), and optionally an email field whose domain picks it while that field is empty.
+   */
+  setupVariants?: {
+    field: TFieldKey;
+    emailField?: TFieldKey;
+    /** Email domains per variant, e.g. `{ gmail: ['gmail.com', 'googlemail.com'] }`. */
+    domains?: Record<string, string[]>;
+  };
+}
+
 export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> {
   /** Stable key: lowercase letters, digits, underscores; becomes the tool name prefix (`gmail_...`). */
   id: string;
@@ -335,7 +444,15 @@ export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> 
   test?(ctx: AccountContext<TConfig, TCredentials>): Promise<TestResult>;
   /** Present for chat services: how messages are delivered (see `messaging.ts`). */
   messenger?: MessengerSpec<TConfig, TCredentials>;
+  /** Website texts in other languages and the layout of the connect form. */
+  ui?: ConnectorUi;
 }
+
+/** Keys of the connect form fields of a connector (its `config` and `credentials` keys). */
+export type FieldKey<TConfig extends AnyObjectSchema, TCredentials extends AnyObjectSchema> = Extract<
+  keyof z.input<TConfig> | keyof z.input<TCredentials>,
+  string
+>;
 
 type ActionSpec<TInput extends AnyObjectSchema, TConfig, TCredentials> = Omit<
   ActionDefinition<TConfig, TCredentials>,
@@ -372,6 +489,8 @@ export interface ConnectorSpec<TConfig extends AnyObjectSchema, TCredentials ext
   ) => ActionDefinition<z.output<TConfig>, z.output<TCredentials>>[];
   test?(ctx: AccountContext<z.output<TConfig>, z.output<TCredentials>>): Promise<TestResult>;
   messenger?: MessengerSpec<z.output<TConfig>, z.output<TCredentials>>;
+  /** Website texts and form layout; field keys are checked against `config` and `credentials`. */
+  ui?: ConnectorUi<FieldKey<TConfig, TCredentials>>;
 }
 
 /**
@@ -417,8 +536,69 @@ export function defineConnector<
     rateLimit: spec.rateLimit,
     test: spec.test,
     messenger: spec.messenger,
+    ...(spec.ui ? { ui: spec.ui as ConnectorUi } : {}),
   };
   return definition as unknown as ConnectorDefinition;
+}
+
+/**
+ * Adds website texts to a connector made another way, e.g. an HTTP manifest. Prefer `ui` in
+ * {@link defineConnector}, where field keys are type-checked.
+ */
+export function withUi(connector: ConnectorDefinition, ui: ConnectorUi): ConnectorDefinition {
+  return { ...connector, ui };
+}
+
+/** The connector's texts for a language, then English: the order in which website texts are looked up. */
+export function uiLocales(
+  connector: Pick<ConnectorDefinition, 'ui'>,
+  language: UiLanguage,
+): ConnectorLocale[] {
+  const locales = connector.ui?.locales;
+  if (!locales) return [];
+  return [...new Set([language, 'en'])].flatMap((code) => locales[code] ?? []);
+}
+
+/** The service's name and description for people in a language (falls back to English, then to its own). */
+export function connectorText(
+  connector: Pick<ConnectorDefinition, 'ui' | 'name' | 'description'>,
+  language: UiLanguage,
+): { name: string; description: string } {
+  const locales = uiLocales(connector, language);
+  return {
+    name: locales.find((l) => l.name)?.name ?? connector.name,
+    description: locales.find((l) => l.description)?.description ?? connector.description,
+  };
+}
+
+/**
+ * The service's setup guide and example requests in a language (each falls back to English as a
+ * whole, so steps of two languages are never mixed).
+ */
+export function connectorGuide(
+  connector: Pick<ConnectorDefinition, 'ui'>,
+  language: UiLanguage,
+  via: 'oauth' | 'form',
+): { setup?: SetupGuide; prompts: string[] } {
+  const locales = uiLocales(connector, language);
+  const setup = locales.find((l) => l.setup?.[via])?.setup?.[via];
+  return {
+    ...(setup ? { setup } : {}),
+    prompts: locales.find((l) => l.prompts?.length)?.prompts ?? [],
+  };
+}
+
+/** An action's title and description for people in a language (falls back to English, then to the AI texts). */
+export function actionText(
+  connector: Pick<ConnectorDefinition, 'ui'>,
+  action: Pick<ActionDefinition, 'name' | 'title' | 'description'>,
+  language: UiLanguage,
+): { title: string; description: string } {
+  const entries = uiLocales(connector, language).flatMap((l) => l.actions?.[action.name] ?? []);
+  return {
+    title: entries.find((e) => e.title)?.title ?? action.title ?? action.name,
+    description: entries.find((e) => e.description)?.description ?? action.description,
+  };
 }
 
 /** The action's risk level, explicit or derived from its hints. */

@@ -33,8 +33,50 @@
     {
       "idx": 4,
       "version": "7",
-      "when": 1793754296221,
-      "tag": "0004_messengers",
+      "when": 1793753389577,
+      "tag": "0004_data_protection",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793755446845,
+      "tag": "0005_setup_and_usage",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793757645437,
+      "tag": "0006_site_accounts_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793760695882,
+      "tag": "0007_plan_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793805662921,
+      "tag": "0008_tool_calls_account_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793808432302,
+      "tag": "0009_channel_locale",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793813812371,
+      "tag": "0010_messengers",
       "breakpoints": true
     }
   ]

@@ -151,6 +151,11 @@ export class OAuthAppService {
     return this.resolve(workspaceId, `${ENV_PREFIX}${providerId}`);
   }
 
+  /** Whether the hub itself has an app for the provider (from env), whatever the workspace. */
+  hasHubApp(providerId: string): boolean {
+    return Boolean(this.envApps[providerId]);
+  }
+
   /** Loads an app by reference with its decrypted secret. Undefined when it no longer exists. */
   async resolve(workspaceId: string, ref: string): Promise<ResolvedOAuthApp | undefined> {
     if (ref.startsWith(ENV_PREFIX)) {

@@ -1,15 +1,81 @@
+import { accountEn, accountRu } from './i18n/account.js';
+import { appEn, appRu } from './i18n/app.js';
+import { authEn, authRu } from './i18n/auth.js';
+import { confirmEn, confirmRu } from './i18n/confirm.js';
+import { connectEn, connectRu } from './i18n/connect.js';
+import { problemsEn, problemsRu } from './i18n/problems.js';
+import { siteEn, siteRu } from './i18n/site.js';
+
 export type Locale = 'ru' | 'en';
 
-const en = {
-  'login.title': 'Sign in to AnyConnect',
-  'login.subtitle': 'Your hub for connecting services to AI assistants.',
+const coreEn = {
+  'login.title': 'Sign in to Manyplug',
+  'login.subtitle': 'One address to connect your services to AI assistants.',
   'login.email': 'Email',
   'login.password': 'Password',
   'login.submit': 'Sign in',
   'login.invalid': 'Wrong email or password.',
   'login.rateLimited': 'Too many attempts. Try again in a few minutes.',
   'login.noUsers': 'No users yet: set ADMIN_EMAIL and ADMIN_PASSWORD and restart the hub.',
-  'consent.title': 'Connect {client} to AnyConnect?',
+  'login.or': 'or',
+  'login.passkey': 'Sign in with a passkey',
+  'login.reauthTitle': 'Confirm it is you',
+  'login.reauthSubtitle': 'Changing security settings requires a recent sign-in. Sign in again to continue.',
+  'passkey.failed': 'The passkey did not work. Try again or use another way.',
+  'verify.title': 'Two-step verification',
+  'verify.subtitle': 'Your password is correct. Confirm the sign-in with your second factor.',
+  'verify.code': 'Code from the authenticator app or a recovery code',
+  'verify.recoveryOnly': 'Recovery code',
+  'verify.submit': 'Confirm',
+  'verify.invalid': 'Wrong or already used code.',
+  'verify.passkey': 'Confirm with a passkey',
+  'verify.restart': 'Start over',
+  'home.security': 'Security',
+  'security.title': 'Security',
+  'security.home': 'Home',
+  'security.sub': 'Two-step sign-in and passkeys for {email}.',
+  'security.reauthNeeded':
+    'To change these settings, confirm your sign-in first. It stays confirmed for 10 minutes.',
+  'security.reauth': 'Confirm sign-in',
+  'security.required':
+    'This hub requires a second factor. Set up an authenticator app or a passkey to continue.',
+  'security.continue': 'Continue',
+  'security.on': 'On',
+  'security.off': 'Off',
+  'security.totp': 'Authenticator app',
+  'security.totpHint': 'Six-digit codes from Google Authenticator, 1Password, Bitwarden and similar apps.',
+  'security.totpSetup': 'Set up',
+  'security.totpDisable': 'Turn off',
+  'security.totpScan':
+    'Scan the QR code with the app or enter the key manually, then type the code the app shows.',
+  'security.totpSecret': 'Key',
+  'security.totpLink': 'Open in an authenticator app',
+  'security.totpCode': 'Code from the app',
+  'security.totpConfirm': 'Turn on',
+  'security.totpInvalid': 'The code does not match. Check the time on your phone and try again.',
+  'security.recovery': 'Recovery codes',
+  'security.recoveryHint': 'Each code works once, in case you lose your authenticator app or passkey.',
+  'security.recoveryLeft': '{count} of 10 unused',
+  'security.recoveryNone': 'No unused codes left: create new ones.',
+  'security.recoveryRegenerate': 'Create new codes',
+  'security.recoveryNeedsFactor': 'Available once you set up an authenticator app or a passkey.',
+  'security.passkeys': 'Passkeys',
+  'security.passkeysHint':
+    'Sign in with Face ID, Touch ID, Windows Hello or a security key, without a password.',
+  'security.passkeysNone': 'No passkeys yet.',
+  'security.passkeyName': 'Name',
+  'security.passkeyAdd': 'Add a passkey',
+  'security.passkeyUnsupported': 'Adding a passkey needs a browser with JavaScript and passkey support.',
+  'security.passkeyRename': 'Rename',
+  'security.passkeyDelete': 'Delete',
+  'security.passkeyAdded': 'added',
+  'security.passkeySynced': 'synced',
+  'security.passkeyDefaultName': 'Passkey',
+  'codes.title': 'Save your recovery codes',
+  'codes.hint':
+    'Keep them somewhere safe, for example in a password manager. They are shown only once, and each code works once.',
+  'codes.done': 'I have saved them',
+  'consent.title': 'Connect {client} to Manyplug?',
   'consent.wants': '{client} asks for access to your hub.',
   'consent.access': 'It will be able to:',
   'consent.access.mcp':
@@ -27,16 +93,75 @@ const en = {
   'consent.approve': 'Allow',
   'consent.deny': 'Deny',
   'consent.revokeHint': 'You can revoke access at any time on the hub home page.',
+  'consent.persona': 'Persona',
+  'consent.personaHint': 'Through this address the app only sees the accounts of this persona.',
+  'consent.personaMissing': 'This address belongs to a persona that does not exist in your workspace.',
+  'consent.clientAs': 'Remember this app as',
+  'consent.clientNew': 'new app: {name}',
+  'consent.clientHint': 'Access rules of the chosen app apply to it.',
+  'confirm.title': 'Confirm an action',
+  'confirm.listTitle': 'Actions waiting for you',
+  'confirm.none': 'Nothing is waiting for confirmation.',
+  'confirm.tg.ask': '🔐 Confirm the action',
+  'confirm.tg.scheduled': '⏳ Runs in {seconds} s — you can still cancel',
+  'confirm.tg.linked': 'Done: confirmations from your Manyplug hub will arrive here.',
+  'confirm.tg.linkFailed': 'This link is invalid or expired. Open the hub and create a new one.',
+  'confirm.tg.unknown': 'Unknown or foreign request.',
+  'confirm.tg.tooLate': 'Already decided or expired.',
+  'confirm.client': 'App',
+  'confirm.service': 'Service',
+  'confirm.action': 'Action',
+  'confirm.reason': 'Why it needs you',
+  'confirm.arguments': 'Arguments (as the AI passed them)',
+  'confirm.open': 'Open in the hub',
+  'confirm.approve': '✅ Allow',
+  'confirm.deny': '❌ Deny',
+  'confirm.cancel': '↩️ Cancel',
+  'confirm.expires': 'Expires',
+  'confirm.runsAt': 'Runs at',
+  'confirm.status.awaiting_confirmation': 'Waiting for your confirmation',
+  'confirm.status.scheduled': 'Approved, waiting for the undo window',
+  'confirm.status.running': 'Running',
+  'confirm.status.succeeded': '✅ Done',
+  'confirm.status.failed': '⚠️ Failed',
+  'confirm.status.denied': '❌ Denied',
+  'confirm.status.cancelled': '↩️ Cancelled',
+  'confirm.status.expired': '⌛ Expired without an answer',
+  'risk.read': 'Reads',
+  'risk.write': 'Makes changes',
+  'risk.dangerous': 'Risky',
+  'home.telegram': 'Telegram for confirmations',
+  'home.telegramLinked': 'Linked: {label}',
+  'home.telegramNotLinked': 'Not linked: confirmations only via the web page.',
+  'home.telegramLink': 'Link Telegram',
+  'home.telegramOpen': 'Open this link in Telegram within 15 minutes:',
+  'home.telegramUnlink': 'Unlink',
+  'home.telegramDisabled': 'Confirmations in Telegram are not available yet. Confirm here, in the dashboard.',
+  'home.confirmations': 'Confirmations',
   'connect.doneTitle': 'Account connected',
   'connect.created': '{service} account “{label}” is connected.',
   'connect.reconnected': '{service} account “{label}” is reconnected.',
   'connect.identity': 'Signed in as {identity}.',
-  'connect.aiHint': 'AI apps connected to the hub see it on their next request.',
-  'connect.testFailed': 'The connection works, but the check failed: {message}',
+  'connect.aiHint': 'Your connected AI apps see it on their next request.',
+  'connect.testFailed': 'Open the account settings to fix it.',
+  'connect.formTitle': 'Connect {service}',
+  'connect.back': 'Back to services',
+  'connect.formLabelPlaceholder': 'For example, Work',
+  'connect.formReconnect': 'Leave a key or password empty to keep the one already saved.',
+  'connect.formLabel': 'Account name',
+  'connect.formAdvanced': 'Advanced settings',
+  'connect.formAuto': 'Automatic',
+  'connect.formYes': 'Yes',
+  'connect.formNo': 'No',
+  'connect.formSecrets': 'Keys and passwords are stored encrypted and are never shown to the AI.',
+  'connect.formSubmit': 'Connect',
+  'connect.formReconnectSubmit': 'Save',
+  'connect.formUseOAuth': 'Sign in with the provider instead',
+  'connect.formInvalid': 'Check the fields: {details}',
   'error.title': 'Something went wrong',
   'error.back': 'Back to home',
   'error.csrf': 'The form expired. Go back, reload the page and try again.',
-  'home.title': 'AnyConnect',
+  'home.title': 'Manyplug',
   'home.mcpUrl': 'MCP server URL',
   'home.mcpUrlHint': 'Paste this URL into your AI app. You will be asked to sign in here and approve access.',
   'home.howClaude': 'Claude: Settings → Connectors → Add custom connector → paste the URL.',
@@ -61,19 +186,90 @@ const en = {
   'home.manageHint': 'Accounts are managed through the REST API or CLI for now; the web panel comes next.',
 } as const;
 
-type Key = keyof typeof en;
+const en = {
+  ...coreEn,
+  ...siteEn,
+  ...appEn,
+  ...authEn,
+  ...connectEn,
+  ...accountEn,
+  ...confirmEn,
+  ...problemsEn,
+} as const;
 
-const ru: Record<Key, string> = {
-  'login.title': 'Вход в AnyConnect',
-  'login.subtitle': 'Ваш хаб для подключения сервисов к ИИ-ассистентам.',
-  'login.email': 'Email',
+export type Key = keyof typeof en;
+
+const coreRu: Record<keyof typeof coreEn, string> = {
+  'login.title': 'Вход в Manyplug',
+  'login.subtitle': 'Один адрес, чтобы подключить ваши сервисы к ИИ‑ассистентам.',
+  'login.email': 'Почта',
   'login.password': 'Пароль',
   'login.submit': 'Войти',
   'login.invalid': 'Неверный email или пароль.',
   'login.rateLimited': 'Слишком много попыток. Попробуйте через несколько минут.',
   'login.noUsers': 'Пользователей ещё нет: задайте ADMIN_EMAIL и ADMIN_PASSWORD и перезапустите хаб.',
-  'consent.title': 'Подключить {client} к AnyConnect?',
-  'consent.wants': '{client} запрашивает доступ к вашему хабу.',
+  'login.or': 'или',
+  'login.passkey': 'Войти с ключом доступа',
+  'login.reauthTitle': 'Подтвердите, что это вы',
+  'login.reauthSubtitle': 'Для изменения настроек безопасности нужен недавний вход. Войдите ещё раз.',
+  'passkey.failed': 'Passkey не сработал. Попробуйте ещё раз или выберите другой способ.',
+  'verify.title': 'Двухэтапная проверка',
+  'verify.subtitle': 'Пароль верный. Подтвердите вход вторым фактором.',
+  'verify.code': 'Код из приложения-аутентификатора или код восстановления',
+  'verify.recoveryOnly': 'Код восстановления',
+  'verify.submit': 'Подтвердить',
+  'verify.invalid': 'Неверный или уже использованный код.',
+  'verify.passkey': 'Подтвердить ключом доступа',
+  'verify.restart': 'Начать вход заново',
+  'home.security': 'Безопасность',
+  'security.title': 'Безопасность',
+  'security.home': 'На главную',
+  'security.sub': 'Двухэтапный вход и ключи доступа для {email}.',
+  'security.reauthNeeded':
+    'Чтобы изменить эти настройки, сначала подтвердите вход. Подтверждение действует 10 минут.',
+  'security.reauth': 'Подтвердить вход',
+  'security.required':
+    'Здесь обязателен второй фактор. Настройте приложение-аутентификатор или ключ доступа, чтобы продолжить.',
+  'security.continue': 'Продолжить',
+  'security.on': 'Включено',
+  'security.off': 'Выключено',
+  'security.totp': 'Приложение-аутентификатор',
+  'security.totpHint':
+    'Шестизначные коды из Google Authenticator, 1Password, Bitwarden и похожих приложений.',
+  'security.totpSetup': 'Настроить',
+  'security.totpDisable': 'Отключить',
+  'security.totpScan':
+    'Отсканируйте QR-код в приложении или введите ключ вручную, затем введите код, который покажет приложение.',
+  'security.totpSecret': 'Ключ',
+  'security.totpLink': 'Открыть в приложении-аутентификаторе',
+  'security.totpCode': 'Код из приложения',
+  'security.totpConfirm': 'Включить',
+  'security.totpInvalid': 'Код не подошёл. Проверьте время на телефоне и попробуйте ещё раз.',
+  'security.recovery': 'Коды восстановления',
+  'security.recoveryHint':
+    'Каждый код срабатывает один раз — на случай, если вы потеряете аутентификатор или ключ доступа.',
+  'security.recoveryLeft': 'Неиспользованных: {count} из 10',
+  'security.recoveryNone': 'Неиспользованных кодов не осталось — создайте новые.',
+  'security.recoveryRegenerate': 'Создать новые коды',
+  'security.recoveryNeedsFactor': 'Станут доступны после настройки аутентификатора или ключа доступа.',
+  'security.passkeys': 'Ключи доступа (passkey)',
+  'security.passkeysHint': 'Вход по Face ID, Touch ID, Windows Hello или аппаратному ключу — без пароля.',
+  'security.passkeysNone': 'Ключей доступа пока нет.',
+  'security.passkeyName': 'Название',
+  'security.passkeyAdd': 'Добавить ключ доступа',
+  'security.passkeyUnsupported':
+    'Чтобы добавить ключ доступа, нужен браузер с JavaScript и поддержкой passkey.',
+  'security.passkeyRename': 'Переименовать',
+  'security.passkeyDelete': 'Удалить',
+  'security.passkeyAdded': 'добавлен',
+  'security.passkeySynced': 'синхронизируется',
+  'security.passkeyDefaultName': 'Ключ доступа',
+  'codes.title': 'Сохраните коды восстановления',
+  'codes.hint':
+    'Храните их в надёжном месте, например в менеджере паролей. Коды показываются только один раз, каждый срабатывает один раз.',
+  'codes.done': 'Я сохранил коды',
+  'consent.title': 'Подключить {client} к Manyplug?',
+  'consent.wants': '{client} запрашивает доступ к вашему Manyplug.',
   'consent.access': 'Приложение сможет:',
   'consent.access.mcp':
     'видеть подключённые сервисы и аккаунты (активных: {count}) и вызывать их инструменты от вашего имени',
@@ -89,17 +285,76 @@ const ru: Record<Key, string> = {
   'consent.signedInAs': 'Вы вошли как {email}',
   'consent.approve': 'Разрешить',
   'consent.deny': 'Отклонить',
-  'consent.revokeHint': 'Доступ можно отозвать в любой момент на главной странице хаба.',
+  'consent.revokeHint': 'Доступ можно отозвать в любой момент в разделе «ИИ-приложения».',
+  'consent.persona': 'Персона',
+  'consent.personaHint': 'По этому адресу приложение видит только аккаунты этой персоны.',
+  'consent.personaMissing': 'Этот адрес принадлежит персоне, которой нет в вашем пространстве.',
+  'consent.clientAs': 'Запомнить приложение как',
+  'consent.clientNew': 'новое приложение: {name}',
+  'consent.clientHint': 'К нему применяются правила доступа выбранного приложения.',
+  'confirm.title': 'Подтвердите действие',
+  'confirm.listTitle': 'Действия, которые ждут вас',
+  'confirm.none': 'Нет действий, ожидающих подтверждения.',
+  'confirm.tg.ask': '🔐 Подтвердите действие',
+  'confirm.tg.scheduled': '⏳ Выполнится через {seconds} с — ещё можно отменить',
+  'confirm.tg.linked': 'Готово: подтверждения от Manyplug будут приходить сюда.',
+  'confirm.tg.linkFailed': 'Ссылка неверная или устарела. Откройте кабинет Manyplug и создайте новую.',
+  'confirm.tg.unknown': 'Неизвестный или чужой запрос.',
+  'confirm.tg.tooLate': 'Уже решено или истекло.',
+  'confirm.client': 'Приложение',
+  'confirm.service': 'Сервис',
+  'confirm.action': 'Действие',
+  'confirm.reason': 'Почему нужно ваше решение',
+  'confirm.arguments': 'Аргументы (как их передала нейронка)',
+  'confirm.open': 'Открыть в кабинете',
+  'confirm.approve': '✅ Разрешить',
+  'confirm.deny': '❌ Отклонить',
+  'confirm.cancel': '↩️ Отменить',
+  'confirm.expires': 'Истекает',
+  'confirm.runsAt': 'Выполнится',
+  'confirm.status.awaiting_confirmation': 'Ждёт вашего подтверждения',
+  'confirm.status.scheduled': 'Разрешено, ждёт окончания окна отмены',
+  'confirm.status.running': 'Выполняется',
+  'confirm.status.succeeded': '✅ Выполнено',
+  'confirm.status.failed': '⚠️ Ошибка',
+  'confirm.status.denied': '❌ Отклонено',
+  'confirm.status.cancelled': '↩️ Отменено',
+  'confirm.status.expired': '⌛ Истекло без ответа',
+  'risk.read': 'Читает',
+  'risk.write': 'Вносит изменения',
+  'risk.dangerous': 'Рискованное',
+  'home.telegram': 'Telegram для подтверждений',
+  'home.telegramLinked': 'Подключён: {label}',
+  'home.telegramNotLinked': 'Не подключён: подтверждения только через веб-страницу.',
+  'home.telegramLink': 'Подключить Telegram',
+  'home.telegramOpen': 'Откройте эту ссылку в Telegram в течение 15 минут:',
+  'home.telegramUnlink': 'Отключить',
+  'home.telegramDisabled': 'Подтверждения в Telegram пока недоступны. Подтверждайте здесь, в кабинете.',
+  'home.confirmations': 'Подтверждения',
   'connect.doneTitle': 'Аккаунт подключён',
   'connect.created': 'Аккаунт {service} «{label}» подключён.',
   'connect.reconnected': 'Аккаунт {service} «{label}» переподключён.',
   'connect.identity': 'Вход выполнен как {identity}.',
-  'connect.aiHint': 'Подключённые к хабу ИИ-приложения увидят его при следующем запросе.',
-  'connect.testFailed': 'Доступ получен, но проверка не прошла: {message}',
+  'connect.aiHint': 'Ваши ИИ-приложения увидят его при следующем запросе.',
+  'connect.testFailed': 'Исправить можно в настройках аккаунта.',
+  'connect.formTitle': 'Подключение: {service}',
+  'connect.back': 'К сервисам',
+  'connect.formLabelPlaceholder': 'Например, Работа',
+  'connect.formReconnect': 'Оставьте ключ или пароль пустым, чтобы сохранить прежний.',
+  'connect.formLabel': 'Название аккаунта',
+  'connect.formAdvanced': 'Дополнительные настройки',
+  'connect.formAuto': 'Автоматически',
+  'connect.formYes': 'Да',
+  'connect.formNo': 'Нет',
+  'connect.formSecrets': 'Ключи и пароли хранятся у нас в зашифрованном виде и никогда не показываются ИИ.',
+  'connect.formSubmit': 'Подключить',
+  'connect.formReconnectSubmit': 'Сохранить',
+  'connect.formUseOAuth': 'Войти через сервис вместо этого',
+  'connect.formInvalid': 'Проверьте поля: {details}',
   'error.title': 'Что-то пошло не так',
   'error.back': 'На главную',
   'error.csrf': 'Форма устарела. Вернитесь назад, обновите страницу и попробуйте ещё раз.',
-  'home.title': 'AnyConnect',
+  'home.title': 'Manyplug',
   'home.mcpUrl': 'Адрес MCP-сервера',
   'home.mcpUrlHint': 'Вставьте этот адрес в ИИ-приложение. Вас попросят войти здесь и разрешить доступ.',
   'home.howClaude': 'Claude: Настройки → Коннекторы → Добавить свой коннектор → вставьте адрес.',
@@ -114,8 +369,8 @@ const ru: Record<Key, string> = {
   'home.revoke': 'Отозвать',
   'home.lastUsed': 'последнее использование',
   'home.never': 'не использовалось',
-  'home.calls': 'Последние вызовы инструментов',
-  'home.noCalls': 'Вызовов пока нет.',
+  'home.calls': 'Последние действия',
+  'home.noCalls': 'Действий пока нет.',
   'home.signOut': 'Выйти',
   'home.service': 'Сервис',
   'home.account': 'Аккаунт',
@@ -124,31 +379,58 @@ const ru: Record<Key, string> = {
   'home.manageHint': 'Пока аккаунты управляются через REST API или CLI; веб-панель — следующий этап.',
 };
 
+const ru: Record<Key, string> = {
+  ...coreRu,
+  ...siteRu,
+  ...appRu,
+  ...authRu,
+  ...connectRu,
+  ...accountRu,
+  ...confirmRu,
+  ...problemsRu,
+};
+
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
 
 export type Translate = (key: Key, vars?: Record<string, string | number>) => string;
 
-export function pickLocale(acceptLanguage: string | undefined): Locale {
-  const preferred = (acceptLanguage ?? '')
-    .split(',')
-    .map((part) => {
-      const [tag, q] = part.trim().split(';q=');
-      return { lang: (tag ?? '').toLowerCase().split('-')[0] ?? '', q: q ? Number(q) : 1 };
-    })
-    .sort((a, b) => b.q - a.q);
-  for (const { lang } of preferred) {
-    if (lang === 'ru' || lang === 'uk' || lang === 'be' || lang === 'kk') return 'ru';
-    if (lang === 'en') return 'en';
-  }
-  return 'en';
+/**
+ * The site speaks English unless the visitor picks Russian with the language switch (or saved it
+ * in their settings): the audience is international, so the browser's language does not decide.
+ */
+export const DEFAULT_LOCALE: Locale = 'en';
+
+/**
+ * Plural forms in texts: `{n|день|дня|дней}` (Russian: one|few|many) or `{n|day|days}` (English:
+ * one|other) picks the word for the number in `vars.n`. The number itself is written as `{n}`.
+ */
+const PLURAL_ORDER: Record<Locale, Intl.LDMLPluralRule[]> = {
+  ru: ['one', 'few', 'many'],
+  en: ['one', 'other'],
+};
+const pluralRules: Record<Locale, Intl.PluralRules> = {
+  ru: new Intl.PluralRules('ru'),
+  en: new Intl.PluralRules('en'),
+};
+
+export function plural(locale: Locale, n: number, forms: string[]): string {
+  const category = pluralRules[locale].select(n);
+  const index = PLURAL_ORDER[locale].indexOf(category);
+  // Russian fractions ("other") read like "few": 1,5 дня.
+  return forms[index >= 0 ? index : locale === 'ru' ? 1 : forms.length - 1] ?? forms.at(-1) ?? '';
 }
 
 export function translator(locale: Locale): Translate {
   const dict = dictionaries[locale];
   return (key, vars) => {
     let text = dict[key] ?? en[key];
-    if (vars)
+    if (vars) {
+      text = text.replace(/\{(\w+)\|([^}]+)\}/g, (whole, name: string, forms: string) => {
+        const value = Number(vars[name]);
+        return Number.isFinite(value) ? plural(locale, value, forms.split('|')) : whole;
+      });
       for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
+    }
     return text;
   };
 }

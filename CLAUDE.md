@@ -1,9 +1,12 @@
-# AnyConnect — notes for coding agents
+# Manyplug — notes for coding agents
 
 Cloud MCP hub: AI clients (Claude, ChatGPT, Claude Code) connect once over OAuth and get tools for
 every connected service *account* (several accounts per service). TypeScript, Node 22+, Hono,
-Postgres + Drizzle, MCP SDK v2 (`@modelcontextprotocol/server`). The owner speaks Russian:
-user-facing docs and UI text are Russian-first (UI has RU/EN in `src/web/i18n.ts`); code and
+Postgres + Drizzle, MCP SDK v2 (`@modelcontextprotocol/server`). The owner speaks Russian,
+but the product targets an international, English-speaking audience: the website, dashboard and
+admin default to English and Russian is a second locale picked with the language switch (RU/EN in
+`src/web/i18n.ts`). Examples and visuals use international services and names. Repo docs
+(README, `docs/`) stay in Russian for the owner; code and
 comments are English.
 
 ## Principles
@@ -22,7 +25,7 @@ develop further. In practice:
 - `npm run dev` — run with reload (needs Postgres; `docker compose up -d db`)
 - `npm run check` — lint (Biome) + typecheck (TypeScript 7) + tests (Vitest)
 - `npm test` — integration tests need Postgres at `TEST_DATABASE_URL`
-  (default `postgres://postgres@localhost:5432/anyconnect_test`); files run sequentially
+  (default `postgres://postgres@localhost:5432/manyplug_test`); files run sequentially
 - `npm run db:generate` — create a migration after editing `src/db/schema.ts`; commit `drizzle/`
 - `npm run cli -- help` — admin CLI
 
@@ -41,11 +44,14 @@ develop further. In practice:
   content is always encrypted; external ids are stored only as keyed hashes.
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.
 - `src/hub/hub.ts` resolves calls; every connector call runs through the stage chain in
-  `src/hub/executor.ts` (audit → policy → risk → confirm → limits → idempotency → untrusted →
+  `src/hub/executor.ts` (audit → meter → policy → risk → confirm → limits → idempotency → untrusted →
   shape → invoke). New cross-cutting rules are new stages, not code in `hub.ts`.
   Connectors throw `ConnectorError` for user-safe errors.
 - `src/oauth/server.ts` is framework-free; HTTP lives in `src/routes/`.
 - Secrets only via env vars. Credentials are encrypted with `SecretBox` (AAD = account id).
   Tokens are stored as SHA-256 hashes. Never log arguments, tokens or credentials.
 - Imports use `.js` extensions (NodeNext). Validate external input with zod.
+- The product name lives in `src/brand.ts` (`BRAND.name` / `BRAND.slug`); use it in new strings and
+  identifiers. The product was called AnyConnect until Nov 2026: crypto key-derivation labels, the
+  migration lock and Render resource names keep that name on purpose (`LEGACY_SLUGS`).
 - Tests: `test/helpers.ts` starts a real hub on a random port; `TestBrowser` walks login/consent.

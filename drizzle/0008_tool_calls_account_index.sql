@@ -1,0 +1,1 @@
+CREATE INDEX "tool_calls_account_id_created_at_index" ON "tool_calls" USING btree ("account_id","created_at");

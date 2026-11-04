@@ -180,6 +180,7 @@ describe('HTTP manifest connectors', () => {
           label: 'Work',
           description: null,
           config: {},
+          dataKeyEncrypted: null,
           credentialsEncrypted: null,
           enabled: true,
           status: 'active',
@@ -487,7 +488,10 @@ describe('HTTP manifest connectors', () => {
     expect(remove!.risk).toBe('dangerous');
     expect(add!.capability).toEqual([{ id: 'tasks.create' }]);
 
-    const [binding] = search!.capability as { mapInput: Function; mapOutput: Function }[];
+    const [binding] = search!.capability as unknown as {
+      mapInput: (...args: unknown[]) => unknown;
+      mapOutput: (...args: unknown[]) => unknown;
+    }[];
     expect(binding!.mapInput({ query: 'milk', limit: 5, status: 'open' })).toEqual({ text: 'milk', max: 5 });
     const items = [{ gid: '7', name: 'Buy milk', extra: true }];
     const mapped = [{ id: '7', title: 'Buy milk', url: 'https://todo.example/t/7' }];

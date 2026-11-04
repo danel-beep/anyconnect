@@ -116,12 +116,21 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
 
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
+    // With one service everything fits the budget, setup tools included.
     expect(names).toEqual([
-      'anyconnect_call_tools',
-      'anyconnect_list_accounts',
       'demo_account_info',
       'demo_echo',
       'demo_fail',
+      'manyplug_add_service',
+      'manyplug_call_tools',
+      'manyplug_connect_account',
+      'manyplug_list_accounts',
+      'manyplug_remove_account',
+      'manyplug_remove_service',
+      'manyplug_services',
+      'manyplug_test_account',
+      'manyplug_update_account',
+      'manyplug_update_settings',
     ]);
 
     const echo = tools.find((t) => t.name === 'demo_echo')!;
@@ -137,7 +146,7 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
     expect(result.isError).toBeFalsy();
     expect(JSON.stringify(result.content)).toContain('Привет from account \\"Demo — second\\" (second): hi');
 
-    const listed = await client.callTool({ name: 'anyconnect_list_accounts', arguments: {} });
+    const listed = await client.callTool({ name: 'manyplug_list_accounts', arguments: {} });
     expect(JSON.stringify(listed.content)).toContain('second');
     await client.close();
   });
@@ -184,6 +193,24 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       'demo_echo:ok',
     ]);
     expect(calls.every((c) => c.accountId && c.principalType === 'oauth' && c.clientId)).toBe(true);
+
+    // Usage is counted per AI account when the client sends one (ChatGPT's `openai/subject`), hashed.
+    const chatgpt = await connectWithOAuth(hub, new MemoryOAuthProvider());
+    await chatgpt.callTool({
+      name: 'demo_account_info',
+      arguments: { account: 'main' },
+      _meta: { 'openai/subject': 'user-raw-id-42' },
+    });
+    await chatgpt.close();
+    const [latest] = await hub.services.hub.recentToolCalls(workspace.id, { limit: 1 });
+    expect(latest!.aiSubject).toMatch(/^openai:[0-9a-f]{32}$/);
+    expect(JSON.stringify(latest)).not.toContain('user-raw-id-42');
+    const usage = await hub.services.usage.list(workspace.id, '2000-01-01');
+    const byCaller = (caller: string) => usage.filter((r) => r.caller === caller);
+    expect(byCaller(latest!.aiSubject!)).toEqual([
+      expect.objectContaining({ connectorId: 'demo', action: 'account_info', calls: 1, errors: 0 }),
+    ]);
+    expect(usage.find((r) => r.action === 'fail')).toMatchObject({ calls: 1, errors: 1 });
   });
 
   it('identifies clients by a Client ID Metadata Document instead of registering them', async () => {
@@ -200,7 +227,12 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
             client_id: clientId,
             client_name: 'Metadata Client',
             redirect_uris: ['http://localhost/callback'],
-            grant_types: ['authorization_code', 'refresh_token'],
+            // Shaped like Claude's document: grants the hub does not support are ignored.
+            grant_types: [
+              'authorization_code',
+              'refresh_token',
+              'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            ],
             token_endpoint_auth_method: 'none',
           }),
         };
@@ -249,6 +281,32 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       body: '{}',
     });
     expect(mcp.status).toBe(401);
+  });
+
+  it('registers clients that list extra grant types, but not ones without the code flow', async () => {
+    const register = (grant_types: string[]) =>
+      fetch(`${hub.baseUrl}/oauth/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          redirect_uris: ['https://app.example/cb'],
+          token_endpoint_auth_method: 'none',
+          grant_types,
+        }),
+      });
+    const extra = await register([
+      'authorization_code',
+      'refresh_token',
+      'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    ]);
+    expect(extra.status).toBe(201);
+    expect(((await extra.json()) as { grant_types: string[] }).grant_types).toEqual([
+      'authorization_code',
+      'refresh_token',
+    ]);
+    const noCode = await register(['client_credentials']);
+    expect(noCode.status).toBe(400);
+    expect(((await noCode.json()) as { error: string }).error).toBe('invalid_client_metadata');
   });
 
   it('rejects a wrong PKCE verifier and a replayed authorization code', async () => {

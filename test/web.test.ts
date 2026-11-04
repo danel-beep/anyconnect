@@ -40,14 +40,14 @@ describe('web pages: login, consent and home', () => {
 
   it('signs in, shows the home page and signs out', async () => {
     const browser = new TestBrowser(hub.baseUrl);
-    expect((await browser.request('/')).headers.get('location')).toBe('/login');
+    expect((await browser.request('/app')).headers.get('location')).toBe('/login?next=%2Fapp');
     const wrong = await browser.login(ADMIN.email, 'nope');
     expect(wrong.status).toBe(400);
     expect(await wrong.text()).toContain('Неверный email или пароль');
 
     const ok = await browser.login();
     expect(ok.status).toBe(303);
-    const home = await browser.request('/');
+    const home = await browser.request('/app');
     const html = await home.text();
     expect(home.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
     expect(html).toContain(hub.mcpUrl);
@@ -55,7 +55,7 @@ describe('web pages: login, consent and home', () => {
 
     const hidden = TestBrowser.hiddenInputs(html);
     await browser.request('/logout', { form: { csrf: hidden.csrf! } });
-    expect((await browser.request('/')).status).toBe(302);
+    expect((await browser.request('/app')).status).toBe(302);
   });
 
   it('rejects forms without a valid CSRF token or from another origin', async () => {
@@ -107,7 +107,7 @@ describe('web pages: login, consent and home', () => {
     const page = await browser.request(url.toString());
     const html = await page.text();
     expect(page.status).toBe(200);
-    expect(html).toContain('Подключить Claude к AnyConnect?');
+    expect(html).toContain('Подключить Claude к Manyplug?');
     expect(html).toContain('claude.ai');
     expect(html).toContain('Известное ИИ-приложение');
     expect(html).toContain('оставаться подключённым');

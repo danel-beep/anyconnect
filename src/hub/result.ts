@@ -1,4 +1,19 @@
+import { randomBytes } from 'node:crypto';
 import { type ContentBlock, type ErrorKind, isRawResult } from '../connectors/sdk.js';
+
+/**
+ * A question the hub needs the user to answer before the call can continue (e.g. "Send this
+ * email?"). Transports that can ask in the chat (MCP elicitation) do so and retry the call with
+ * the answer in `Interaction.answers[key]` and `state` echoed back; others show `content`.
+ */
+export interface HubQuestion {
+  key: string;
+  message: string;
+  /** Flat JSON Schema of the answer form (MCP elicitation restricted schema). */
+  schema: { type: 'object'; properties: Record<string, Record<string, unknown>>; required?: string[] };
+  /** Opaque, integrity-protected state the transport echoes back with the answer. */
+  state: string;
+}
 
 /** Result in MCP CallToolResult shape (kept local so the hub core does not depend on the MCP SDK). */
 export interface ToolCallResult {
@@ -6,6 +21,8 @@ export interface ToolCallResult {
   content: ContentBlock[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
+  /** Set when the call waits for the user's answer in the chat; see {@link HubQuestion}. */
+  question?: HubQuestion;
 }
 
 export type ExecErrorKind = ErrorKind | 'timeout' | 'cancelled' | 'internal' | 'hub';
@@ -66,4 +83,44 @@ export function resultText(result: ToolCallResult): string {
 export function toTransport(result: ExecResult): ToolCallResult {
   const { data: _data, error: _error, ...rest } = result;
   return rest;
+}
+
+/** `_meta` key set on results that carry third-party content. */
+export const UNTRUSTED_META = 'manyplug/untrusted';
+
+export function isUntrusted(result: ToolCallResult): boolean {
+  return (result._meta as Record<string, unknown> | undefined)?.[UNTRUSTED_META] === true;
+}
+
+/**
+ * Wraps text that came from third parties (anything an open-world action returns: emails,
+ * messages, web pages) in markers with a random id, so a prompt injection inside the content cannot
+ * fake the end of the block. The hub's instructions tell the model to treat marked text as data.
+ * `data` stays untouched: it is the value other hub steps (merging, shaping) work on.
+ */
+export function markUntrusted<T extends ToolCallResult>(result: T, source: string): T {
+  if (result.isError || result.content.length === 0) return result;
+  const id = randomBytes(4).toString('hex');
+  const label = source.replace(/[⟦⟧\n]/g, ' ');
+  return {
+    ...result,
+    content: result.content.map((block) =>
+      block.type === 'text'
+        ? {
+            type: 'text' as const,
+            text: `⟦untrusted ${id} source="${label}"⟧\n${block.text}\n⟦/untrusted ${id}⟧`,
+          }
+        : block,
+    ),
+    _meta: { ...((result._meta as Record<string, unknown> | undefined) ?? {}), [UNTRUSTED_META]: true },
+  };
+}
+
+/** A result built from several unit results stays marked when any of them carried third-party content. */
+export function carryUntrusted<T extends ToolCallResult>(
+  result: T,
+  parts: ToolCallResult[],
+  source: string,
+): T {
+  return parts.some(isUntrusted) ? markUntrusted(result, source) : result;
 }

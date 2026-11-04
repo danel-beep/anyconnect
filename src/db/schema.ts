@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -39,10 +40,57 @@ export const users = pgTable('users', {
   email: text().notNull().unique(),
   name: text(),
   passwordHash: text(),
+  /** Hub-wide role: `admin` opens the admin panel (always behind a second factor). */
+  role: text().$type<UserRole>().notNull().default('user'),
+  /** `suspended` users cannot sign in; their AI apps and tokens are revoked when suspended. */
+  status: text().$type<UserStatus>().notNull().default('active'),
+  /** Why the account is suspended (shown to admins only). */
+  statusReason: text(),
+  /** Preferred interface language (`ru`, `en`); null = from the browser. */
+  locale: text(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   lastLoginAt: timestamp({ withTimezone: true }),
 });
+
+export type UserRole = 'user' | 'admin';
+export type UserStatus = 'active' | 'suspended';
+
+/** Sign-in identities at external providers ("Sign in with Google"), linked to a hub user. */
+export const userIdentities = pgTable(
+  'user_identities',
+  {
+    /** Login provider id, e.g. `google`. */
+    provider: text().notNull(),
+    /** The provider's stable user id (`sub`). */
+    subject: text().notNull(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Email the provider reported at the last sign-in. */
+    email: text(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.subject] }), index().on(t.userId)],
+);
+
+/** Sign-ins in progress at an external provider (single use, 10 minutes, bound to the browser). */
+export const loginStates = pgTable(
+  'login_states',
+  {
+    /** SHA-256 of the `state` parameter; the browser holds the same value in a cookie. */
+    stateHash: text().primaryKey(),
+    provider: text().notNull(),
+    /** Encrypted PKCE verifier and OpenID nonce (AAD = state hash). */
+    secretsEncrypted: text().notNull(),
+    /** Hub-relative path to return to afterwards. */
+    next: text().notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
+);
 
 export interface WorkspaceSettings {
   /**
@@ -58,6 +106,24 @@ export interface WorkspaceSettings {
    * - `discovery`: meta tools to search and call the rest, plus the most useful tools
    */
   toolListing?: 'auto' | 'direct' | 'discovery';
+  /** Workspace-wide defaults of the access policy (rules override them, see access_rules). */
+  security?: SecuritySettings;
+}
+
+/** How risky an action is: reads, changes, or destructive / irreversible operations. */
+export type RiskLevel = 'read' | 'write' | 'dangerous';
+/** The highest risk a client may use: `none` hides the account, `full` allows dangerous actions. */
+export type AccessLevel = 'none' | 'read' | 'write' | 'full';
+/** From which risk on a call needs the user's confirmation. */
+export type ConfirmLevel = 'never' | 'dangerous' | 'write' | 'always';
+
+export interface SecuritySettings {
+  /** Default: `full`. */
+  defaultAccess?: AccessLevel;
+  /** Default: `dangerous`. */
+  defaultConfirm?: ConfirmLevel;
+  /** Undo window for changing actions (seconds, 0 = run at once). Default: 0. */
+  undoWindowSeconds?: number;
 }
 
 export const workspaces = pgTable('workspaces', {
@@ -97,6 +163,13 @@ export const webSessions = pgTable(
     lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     ip: text(),
     userAgent: text(),
+    /**
+     * How the user proved who they are, RFC 8176 values: `pwd`, `otp`, `hwk` (passkey) plus
+     * `rec` for a recovery code. Lets features require a second factor or a passkey.
+     */
+    amr: text().array().notNull().default(sql`'{}'::text[]`),
+    /** When the user last signed in or re-confirmed (step-up). Null for sessions older than the column. */
+    authenticatedAt: timestamp({ withTimezone: true }),
   },
   (t) => [index().on(t.userId), index().on(t.expiresAt)],
 );
@@ -150,6 +223,10 @@ export const oauthGrants = pgTable(
     resource: text().notNull(),
     /** Snapshot of the client's display name at consent time. */
     clientName: text(),
+    /** The AI client this grant belongs to (stable across re-registrations of the same app). */
+    aiClientId: text().references(() => aiClients.id, { onDelete: 'set null' }),
+    /** Set when the grant is for a persona's MCP URL. Deleting the persona disconnects the grant. */
+    personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
     revokedAt: timestamp({ withTimezone: true }),
@@ -177,6 +254,9 @@ export const oauthAuthorizationCodes = pgTable('oauth_authorization_codes', {
   usedAt: timestamp({ withTimezone: true }),
   /** Grant created when the code was exchanged (revoked if the code is replayed). */
   grantId: text(),
+  /** Copied to the grant: see oauth_grants. */
+  aiClientId: text(),
+  personaId: text(),
 });
 
 export const oauthTokens = pgTable(
@@ -212,6 +292,10 @@ export const apiTokens = pgTable(
     /** First characters of the token, safe to display. */
     tokenPrefix: text().notNull(),
     scopes: text().array().notNull().default(sql`'{}'::text[]`),
+    /** The AI client (script, CLI) this token acts as; policies apply to it. */
+    aiClientId: text().references(() => aiClients.id, { onDelete: 'set null' }),
+    /** Restricts the token to one persona's MCP URL. */
+    personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
     expiresAt: timestamp({ withTimezone: true }),
@@ -256,7 +340,12 @@ export const accounts = pgTable(
     description: text(),
     /** Non-secret configuration (validated by the connector's config schema). */
     config: jsonb().$type<Record<string, unknown>>().notNull().default({}),
-    /** Secret credentials, encrypted with the SecretBox (AAD = account id). */
+    /**
+     * The account's own data key (DEK), wrapped by the master key. It encrypts the account's
+     * secrets (envelope encryption); rotating the master key only re-wraps this value.
+     */
+    dataKeyEncrypted: text(),
+    /** Secret credentials, encrypted with the account's data key (AAD = account id). */
     credentialsEncrypted: text(),
     enabled: boolean().notNull().default(true),
     status: text().$type<'active' | 'error' | 'needs_reauth'>().notNull().default('active'),
@@ -287,6 +376,8 @@ export const toolCalls = pgTable(
     principalType: text().$type<'oauth' | 'api_token' | 'session'>().notNull(),
     principalId: text(),
     clientId: text(),
+    /** Hashed end-user id at the AI provider, when the client sends one (see `Principal.aiSubject`). */
+    aiSubject: text(),
     status: text().$type<'ok' | 'error'>().notNull(),
     /**
      * Why the call ended the way it did when that is more than ok/error: `denied` (policy),
@@ -299,7 +390,301 @@ export const toolCalls = pgTable(
     durationMs: integer().notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index().on(t.workspaceId, t.createdAt)],
+  // The second index serves an account's own log (the account page, the activity filter).
+  (t) => [index().on(t.workspaceId, t.createdAt), index().on(t.accountId, t.createdAt)],
+);
+
+/**
+ * Usage counters for plans and limits: executed calls per workspace, day, caller (AI account when
+ * known, else the AI app connection; see `usageCaller`) and action. Only counted for now; plans and
+ * limits read them later. Kept apart from `tool_calls`, which is an audit log and may be pruned.
+ */
+export const usageCounters = pgTable(
+  'usage_counters',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** UTC day. */
+    day: date({ mode: 'string' }).notNull(),
+    caller: text().notNull(),
+    connectorId: text().notNull(),
+    action: text().notNull(),
+    calls: integer().notNull().default(0),
+    errors: integer().notNull().default(0),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.day, t.caller, t.connectorId, t.action] }),
+    index().on(t.caller, t.day),
+    // Hub-wide totals per day (admin panel).
+    index().on(t.day),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Data protection: AI clients, personas, access policy, confirmations
+// ---------------------------------------------------------------------------
+
+/**
+ * An AI client as the user thinks of it: "Claude", "ChatGPT", "Claude Code", "backup script".
+ * OAuth grants and personal tokens point to one, so a policy like "ChatGPT may only read" keeps
+ * applying when the app reconnects or re-registers itself.
+ */
+export const aiClients = pgTable(
+  'ai_clients',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    kind: text().$type<'oauth' | 'api_token'>().notNull(),
+    /** Stable identity used to recognise the same app again, e.g. `cimd:<url>` or `app:claude`. */
+    matchKey: text().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [uniqueIndex().on(t.workspaceId, t.matchKey)],
+);
+
+/**
+ * A persona is a named slice of the workspace ("Работа", "Личное") with its own MCP URL
+ * (`/mcp/<slug>`). An AI app connected to that URL only sees the persona's accounts.
+ */
+export const personas = pgTable(
+  'personas',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** URL segment, immutable (it is part of the OAuth resource the grants are bound to). */
+    slug: text().notNull(),
+    name: text().notNull(),
+    description: text(),
+    /** Accounts visible through this persona. */
+    accountIds: text().array().notNull().default(sql`'{}'::text[]`),
+    /** Upper bound for every client using the persona. */
+    maxAccess: text().$type<AccessLevel>().notNull().default('full'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.workspaceId, t.slug)],
+);
+
+/**
+ * Access policy: who (AI client and/or persona, empty = anyone) may do what (access level by risk,
+ * confirmation, undo window) on which accounts (an account, a whole service, or everything).
+ * For every field the most specific matching rule that sets it wins.
+ */
+export const accessRules = pgTable(
+  'access_rules',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    aiClientId: text().references(() => aiClients.id, { onDelete: 'cascade' }),
+    personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
+    connectorId: text(),
+    accountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
+    access: text().$type<AccessLevel>(),
+    confirm: text().$type<ConfirmLevel>(),
+    undoWindowSeconds: integer(),
+    note: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.workspaceId)],
+);
+
+export type PendingCallStatus =
+  | 'awaiting_confirmation'
+  | 'scheduled'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'denied'
+  | 'cancelled'
+  | 'expired';
+
+/** Who made a pending call, so it can be executed later exactly as that caller. */
+export interface PendingCallPrincipal {
+  kind: 'oauth' | 'api_token' | 'session';
+  userId: string;
+  scopes: string[];
+  clientId?: string;
+  credentialId?: string;
+  aiClientId?: string;
+  personaId?: string;
+}
+
+/**
+ * A tool call the hub holds back: waiting for the user's confirmation (in the chat, Telegram or the
+ * web page) or for its undo window. Arguments and results are encrypted; rows are short-lived.
+ */
+export const pendingCalls = pgTable(
+  'pending_calls',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    principal: jsonb().$type<PendingCallPrincipal>().notNull(),
+    toolName: text().notNull(),
+    connectorId: text().notNull(),
+    action: text().notNull(),
+    /** Null for a setup tool, which acts on the workspace. */
+    accountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
+    risk: text().$type<RiskLevel>().notNull(),
+    /** Why the call is risky, when the action explained it (e.g. "first message to a new contact"). */
+    reason: text(),
+    /** SecretBox, AAD = `pending:<id>:args`. */
+    argsEncrypted: text().notNull(),
+    /** SHA-256 of the canonical arguments: a retried call must match what was approved. */
+    argsHash: text().notNull(),
+    status: text().$type<PendingCallStatus>().notNull(),
+    /** Channels the confirmation was offered on, e.g. {elicitation} or {telegram,web}. */
+    channels: text().array().notNull().default(sql`'{}'::text[]`),
+    decidedVia: text(),
+    decidedAt: timestamp({ withTimezone: true }),
+    /** Undo window applied after approval (seconds). */
+    undoWindowSeconds: integer().notNull().default(0),
+    /** When an approved call runs (end of its undo window). */
+    executeAt: timestamp({ withTimezone: true }),
+    /** Unanswered confirmations expire. */
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    /** SecretBox, AAD = `pending:<id>:result`. */
+    resultEncrypted: text(),
+    /** When the caller received the final result (a repeated identical call then starts anew). */
+    consumedAt: timestamp({ withTimezone: true }),
+    /** Telegram message to update once the call is decided. */
+    telegramMessage: jsonb().$type<{ chatId: string; messageId: number }>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index().on(t.status, t.executeAt),
+    index().on(t.workspaceId, t.createdAt),
+    index().on(t.workspaceId, t.argsHash),
+  ],
+);
+
+/** Where the hub reaches its owner: today the Telegram chat used for confirmations and alerts. */
+export const notificationChannels = pgTable(
+  'notification_channels',
+  {
+    id: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text().$type<'telegram'>().notNull(),
+    /** Telegram chat id once linked. */
+    address: text(),
+    /** e.g. the Telegram @username, for display. */
+    label: text(),
+    /** Language of the page the chat was linked from; the user's saved language wins over it. */
+    locale: text(),
+    /** SHA-256 of the one-time code of a link in progress. */
+    linkCodeHash: text(),
+    linkExpiresAt: timestamp({ withTimezone: true }),
+    verifiedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.userId, t.kind), index().on(t.linkCodeHash)],
+);
+
+// ---------------------------------------------------------------------------
+// Second factors (TOTP, recovery codes, passkeys) and the sign-in steps around them
+// ---------------------------------------------------------------------------
+
+/** Authenticator-app secret. One per user; unconfirmed until the user enters a valid code. */
+export const userTotp = pgTable('user_totp', {
+  userId: text()
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Base32 secret encrypted with the SecretBox (AAD = `user:<id>:totp`). */
+  secretEncrypted: text().notNull(),
+  /** Null while enrollment is pending: the factor is not used for sign-in until confirmed. */
+  confirmedAt: timestamp({ withTimezone: true }),
+  /** Last accepted time step; codes from this or an earlier step are rejected (no replay). */
+  lastUsedStep: bigint({ mode: 'number' }),
+  createdAt: createdAt(),
+});
+
+/** Single-use recovery codes (SHA-256 of `<user id>:<normalized code>`; the codes are shown once). */
+export const userRecoveryCodes = pgTable(
+  'user_recovery_codes',
+  {
+    codeHash: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    usedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.userId)],
+);
+
+/** WebAuthn credentials (passkeys and security keys). */
+export const webauthnCredentials = pgTable(
+  'webauthn_credentials',
+  {
+    id: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Credential ID from the authenticator, base64url. */
+    credentialId: text().notNull().unique(),
+    /** COSE public key, base64url. */
+    publicKey: text().notNull(),
+    counter: bigint({ mode: 'number' }).notNull().default(0),
+    transports: text().array().notNull().default(sql`'{}'::text[]`),
+    deviceType: text().$type<'singleDevice' | 'multiDevice'>().notNull(),
+    backedUp: boolean().notNull().default(false),
+    /** Name the user gave it, e.g. "iPhone". */
+    name: text().notNull(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.userId)],
+);
+
+/** Outstanding WebAuthn challenges: short-lived and deleted when used. */
+export const webauthnChallenges = pgTable(
+  'webauthn_challenges',
+  {
+    /** SHA-256 of the challenge (base64url). */
+    challengeHash: text().primaryKey(),
+    challenge: text().notNull(),
+    purpose: text().$type<'registration' | 'authentication'>().notNull(),
+    /** The user the ceremony is for; null for sign-in with a discoverable passkey. */
+    userId: text().references(() => users.id, { onDelete: 'cascade' }),
+    /** SHA-256 of a browser-bound value (the CSRF cookie), so a challenge only works where it was issued. */
+    bindingHash: text().notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
+);
+
+/** Password accepted, second factor still due. The cookie holds a random token, the database its hash. */
+export const pendingLogins = pgTable(
+  'pending_logins',
+  {
+    tokenHash: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Methods already passed (`pwd`). */
+    amr: text().array().notNull().default(sql`'{}'::text[]`),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
 );
 
 // ---------------------------------------------------------------------------
@@ -601,4 +986,95 @@ export const messengerOutbox = pgTable(
     index().on(t.accountId, t.sentAt),
     index().on(t.accountId, t.contentKey, t.createdAt),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// Plans, limits and the admin panel
+// ---------------------------------------------------------------------------
+
+/**
+ * The plan a workspace is on. No row = the free plan. Payment providers (later) write here through
+ * the `BillingProvider` seam; admins can set a plan by hand (`provider = 'manual'`).
+ */
+export const subscriptions = pgTable('subscriptions', {
+  workspaceId: text()
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  /** Plan id from `src/billing/plans.ts`. */
+  planId: text().notNull(),
+  status: text().$type<SubscriptionStatus>().notNull().default('active'),
+  /** Who manages the subscription: `manual` (admin), later `stripe`, `yookassa`... */
+  provider: text().notNull().default('manual'),
+  /** The subscription id at the payment provider. */
+  externalId: text(),
+  /** When a paid period (or a manually granted plan) ends; null = open-ended. */
+  currentPeriodEnd: timestamp({ withTimezone: true }),
+  cancelAtPeriodEnd: boolean().notNull().default(false),
+  note: text(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled';
+
+/**
+ * Extra limits granted to a workspace on top of its plan (by an admin, a promo, support).
+ * While active, `amount` is added to the plan's limit of `metric`; null `amount` lifts the limit.
+ */
+export const limitGrants = pgTable(
+  'limit_grants',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** A metric from `src/billing/plans.ts` (`actions`, `accounts`...). */
+    metric: text().notNull(),
+    amount: integer(),
+    reason: text(),
+    grantedBy: text().references(() => users.id, { onDelete: 'set null' }),
+    expiresAt: timestamp({ withTimezone: true }),
+    revokedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.workspaceId)],
+);
+
+/**
+ * "I want this plan" from the dashboard while payments are manual (no `BillingProvider`). Admins
+ * see open requests in the panel; setting a plan for the workspace closes them.
+ */
+export const planRequests = pgTable(
+  'plan_requests',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text().references(() => users.id, { onDelete: 'set null' }),
+    planId: text().notNull(),
+    interval: text().$type<'month' | 'year'>().notNull().default('month'),
+    createdAt: createdAt(),
+    closedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.workspaceId), index().on(t.closedAt)],
+);
+
+/** What admins did in the admin panel. Kept when the admin or the target user is deleted. */
+export const adminAuditLog = pgTable(
+  'admin_audit_log',
+  {
+    id: text().primaryKey(),
+    actorUserId: text().references(() => users.id, { onDelete: 'set null' }),
+    actorEmail: text().notNull(),
+    /** `user.suspend`, `plan.set`, `limit.grant`... */
+    action: text().notNull(),
+    targetUserId: text(),
+    targetWorkspaceId: text(),
+    /** Argument-free summary of the change (plan ids, amounts, reasons). */
+    details: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    ip: text(),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.createdAt), index().on(t.targetUserId)],
 );

@@ -8,7 +8,7 @@ import type { OAuthServer } from '../oauth/server.js';
 import type { ApiTokenService } from './api-tokens.js';
 import type { Principal } from './principal.js';
 
-const PRINCIPAL = 'anyconnect.principal';
+const PRINCIPAL = 'manyplug.principal';
 
 /**
  * Accepts both kinds of bearer tokens the hub issues: OAuth access tokens (AI apps such as
@@ -19,9 +19,24 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
     private readonly oauth: OAuthServer,
     private readonly apiTokens: ApiTokenService,
     private readonly resource: string,
+    /** MCP URL of a persona; personal tokens bound to a persona only work there. */
+    private readonly personaResource: (workspaceId: string, personaId: string) => Promise<string | undefined>,
+    /**
+     * Whether the token's user may still act (not suspended). Suspending revokes tokens already;
+     * this keeps a token issued in a race with the suspension from working.
+     */
+    private readonly userActive: (userId: string) => Promise<boolean> = async () => true,
   ) {}
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
+    const info = await this.verify(token);
+    const principal = info.extra?.[PRINCIPAL] as Principal;
+    if (!(await this.userActive(principal.userId)))
+      throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired access token');
+    return info;
+  }
+
+  private async verify(token: string): Promise<AuthInfo> {
     const oauth = await this.oauth.verifyAccessToken(token);
     if (oauth) {
       const principal: Principal = {
@@ -31,6 +46,8 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
         scopes: oauth.scopes,
         clientId: oauth.clientId,
         credentialId: oauth.grantId,
+        ...(oauth.aiClientId ? { aiClientId: oauth.aiClientId } : {}),
+        ...(oauth.personaId ? { personaId: oauth.personaId } : {}),
       };
       return {
         token,
@@ -49,13 +66,19 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
         workspaceId: pat.workspaceId,
         scopes: pat.scopes,
         credentialId: pat.id,
+        ...(pat.aiClientId ? { aiClientId: pat.aiClientId } : {}),
+        ...(pat.personaId ? { personaId: pat.personaId } : {}),
       };
+      const resource = pat.personaId
+        ? await this.personaResource(pat.workspaceId, pat.personaId)
+        : this.resource;
+      if (!resource) throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired access token');
       return {
         token,
         clientId: `pat:${pat.id}`,
         scopes: pat.scopes,
         expiresAt: Math.floor(pat.effectiveExpiresAt.getTime() / 1000),
-        resource: new URL(this.resource),
+        resource: new URL(resource),
         extra: { [PRINCIPAL]: principal },
       };
     }

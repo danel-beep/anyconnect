@@ -72,10 +72,44 @@ describe('config', () => {
     const config = loadConfig({
       ...base,
       RENDER: 'true',
-      RENDER_EXTERNAL_URL: 'https://anyconnect.onrender.com',
+      RENDER_EXTERNAL_URL: 'https://manyplug.onrender.com',
     });
-    expect(config.publicUrl).toBe('https://anyconnect.onrender.com');
-    expect(config.trustProxy).toBe(true);
+    expect(config.publicUrl).toBe('https://manyplug.onrender.com');
+    expect(config.trustProxy).toEqual({ hops: 2 });
+  });
+
+  it('treats the Render URL and LEGACY_PUBLIC_URLS as former hosts once PUBLIC_URL is set', () => {
+    const config = loadConfig({
+      ...base,
+      RENDER: 'true',
+      RENDER_EXTERNAL_URL: 'https://manyplug.onrender.com',
+      PUBLIC_URL: 'https://manyplug.com',
+      LEGACY_PUBLIC_URLS: 'https://old.example.com/, https://manyplug.com',
+    });
+    expect(config.publicUrl).toBe('https://manyplug.com');
+    expect(config.legacyHosts).toEqual(['old.example.com', 'manyplug.onrender.com']);
+    expect(loadConfig({ ...base, RENDER_EXTERNAL_URL: 'https://a.onrender.com' }).legacyHosts).toEqual([]);
+    expect(() => loadConfig({ ...base, LEGACY_PUBLIC_URLS: 'https://x.example.com/path' })).toThrow(
+      /LEGACY_PUBLIC_URLS/,
+    );
+  });
+
+  it('shares one Google client between sign-in and connected services', () => {
+    const login = { LOGIN_GOOGLE_CLIENT_ID: 'login-id', LOGIN_GOOGLE_CLIENT_SECRET: 'login-secret' };
+    expect(loadConfig({ ...base, ...login }).oauthApps.google).toEqual({
+      clientId: 'login-id',
+      clientSecret: 'login-secret',
+    });
+    // A separate services app wins; a sign-in client without a secret is not used for services.
+    const both = loadConfig({
+      ...base,
+      ...login,
+      OAUTH_APP_GOOGLE_CLIENT_ID: 'svc-id',
+      OAUTH_APP_GOOGLE_CLIENT_SECRET: 'svc-secret',
+    });
+    expect(both.oauthApps.google?.clientId).toBe('svc-id');
+    expect(both.site.google?.clientId).toBe('login-id');
+    expect(loadConfig({ ...base, LOGIN_GOOGLE_CLIENT_ID: 'x' }).oauthApps.google).toBeUndefined();
   });
 
   it('rejects a public URL with a path', () => {

@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, lt, ne } from 'drizzle-orm';
+import { and, eq, isNotNull, lt, ne, notLike } from 'drizzle-orm';
 import { resolveProvider } from '../connectors/oauth/providers.js';
 import {
   type ConnectorDefinition,
@@ -9,14 +9,13 @@ import {
 } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { accountOauth, accounts } from '../db/schema.js';
-import type { SecretBox } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
+import { type AccountKeyMaterial, type AccountKeyring, oauthTokensContext } from './account-keys.js';
 import type { OAuthAppService } from './oauth-apps.js';
 import { OAuthProtocolError, refreshTokenSet, revokeTokenSet, type TokenSet } from './oauth-client.js';
 
 /** Refresh this long before expiry so a token never expires in the middle of a call. */
 const REFRESH_MARGIN_MS = 2 * 60_000;
-const tokensContext = (accountId: string) => `account:${accountId}:oauth`;
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
@@ -32,7 +31,8 @@ export class TokenManager {
   constructor(
     private readonly deps: {
       db: Db;
-      secrets: SecretBox;
+      /** Tokens are encrypted with the account's own data key (see `AccountKeyring`). */
+      keys: AccountKeyring;
       apps: OAuthAppService;
       fetch: FetchLike;
       logger: Logger;
@@ -44,10 +44,11 @@ export class TokenManager {
     input: { providerId: string; appRef: string; tokens: TokenSet },
     tx: Db | Tx = this.deps.db,
   ): Promise<void> {
+    const account = await this.keyMaterial(accountId, tx);
     const values = {
       providerId: input.providerId,
       appRef: input.appRef,
-      tokensEncrypted: this.deps.secrets.encryptJson(input.tokens, tokensContext(accountId)),
+      tokensEncrypted: this.deps.keys.encryptSecret(account, input.tokens, oauthTokensContext(accountId)),
       expiresAt: input.tokens.expiresAt ? new Date(input.tokens.expiresAt) : null,
       scopes: input.tokens.scopes,
       refreshedAt: new Date(),
@@ -62,22 +63,34 @@ export class TokenManager {
   async load(
     accountId: string,
   ): Promise<{ appRef: string; providerId: string; tokens: TokenSet } | undefined> {
-    const [row] = await this.deps.db
-      .select()
+    const [found] = await this.deps.db
+      .select({ row: accountOauth, dataKeyEncrypted: accounts.dataKeyEncrypted })
       .from(accountOauth)
+      .innerJoin(accounts, eq(accounts.id, accountOauth.accountId))
       .where(eq(accountOauth.accountId, accountId))
       .limit(1);
-    if (!row) return undefined;
+    if (!found) return undefined;
+    const { row, dataKeyEncrypted } = found;
     return {
       appRef: row.appRef,
       providerId: row.providerId,
-      tokens: this.decrypt(accountId, row.tokensEncrypted),
+      tokens: this.decrypt({ id: accountId, dataKeyEncrypted }, row.tokensEncrypted),
     };
   }
 
-  private decrypt(accountId: string, envelope: string): TokenSet {
+  private async keyMaterial(accountId: string, tx: Db | Tx = this.deps.db): Promise<AccountKeyMaterial> {
+    const [row] = await tx
+      .select({ id: accounts.id, dataKeyEncrypted: accounts.dataKeyEncrypted })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    if (!row) throw new ConnectorError('auth', 'The account was removed');
+    return row;
+  }
+
+  private decrypt(account: AccountKeyMaterial, envelope: string): TokenSet {
     try {
-      return this.deps.secrets.decryptJson<TokenSet>(envelope, tokensContext(accountId));
+      return this.deps.keys.decryptSecret<TokenSet>(account, envelope, oauthTokensContext(account.id));
     } catch {
       throw new ConnectorError('auth', 'The stored OAuth tokens cannot be decrypted; reconnect the account');
     }
@@ -159,7 +172,7 @@ export class TokenManager {
         .for('update')
         .limit(1);
       if (!row) throw new ConnectorError('auth', 'The account is not connected yet');
-      const current = this.decrypt(account.id, row.tokensEncrypted);
+      const current = this.decrypt(await this.keyMaterial(account.id, tx), row.tokensEncrypted);
       const fresh = current.expiresAt === undefined || current.expiresAt - Date.now() > REFRESH_MARGIN_MS;
       if (staleAccessToken !== undefined && current.accessToken !== staleAccessToken && fresh) return current;
 
@@ -219,6 +232,46 @@ export class TokenManager {
       'OAuth token refresh failed',
     );
     throw error;
+  }
+
+  /**
+   * Re-encrypts tokens stored before per-account keys (master-key envelopes) with their account's
+   * data key. Run after `AccountService.upgradeEncryption` gave every account a key; rows that
+   * changed meanwhile (a refresh) are skipped and already use the new scheme.
+   */
+  async upgradeEncryption(): Promise<{ upgraded: number; failed: number }> {
+    const result = { upgraded: 0, failed: 0 };
+    const rows = await this.deps.db
+      .select({ row: accountOauth, dataKeyEncrypted: accounts.dataKeyEncrypted })
+      .from(accountOauth)
+      .innerJoin(accounts, eq(accounts.id, accountOauth.accountId))
+      .where(and(isNotNull(accounts.dataKeyEncrypted), notLike(accountOauth.tokensEncrypted, 'd1.%')));
+    for (const { row, dataKeyEncrypted } of rows) {
+      const account = { id: row.accountId, dataKeyEncrypted };
+      try {
+        const tokens = this.deps.keys.decryptSecret(
+          account,
+          row.tokensEncrypted,
+          oauthTokensContext(account.id),
+        );
+        const updated = await this.deps.db
+          .update(accountOauth)
+          .set({
+            tokensEncrypted: this.deps.keys.encryptSecret(account, tokens, oauthTokensContext(account.id)),
+          })
+          .where(
+            and(
+              eq(accountOauth.accountId, row.accountId),
+              eq(accountOauth.tokensEncrypted, row.tokensEncrypted),
+            ),
+          )
+          .returning({ id: accountOauth.accountId });
+        if (updated.length) result.upgraded++;
+      } catch {
+        result.failed++;
+      }
+    }
+    return result;
   }
 
   /** Accounts whose access token expires before `before` and that can be refreshed. */

@@ -6,6 +6,7 @@ import { bootstrap } from '../src/bootstrap.js';
 import { loadConfig } from '../src/config.js';
 import type { BuiltinDeps } from '../src/connectors/index.js';
 import type { ConnectorRegistry } from '../src/connectors/registry.js';
+import type { OidcLoginProvider } from '../src/core/external-login.js';
 import { runMigrations } from '../src/db/migrate.js';
 import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
@@ -13,7 +14,7 @@ import { createLogger } from '../src/logger.js';
 import { createServices, type Services } from '../src/services.js';
 
 export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5432/anyconnect_test';
+  process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5432/manyplug_test';
 
 export const ADMIN = { email: 'owner@example.com', password: 'correct-horse-battery-staple' };
 export const TEST_KEY = Buffer.alloc(32, 7).toString('base64');
@@ -48,8 +49,11 @@ export async function resetDatabase(databaseUrl = TEST_DATABASE_URL): Promise<vo
 
 export async function truncateAll(services: Services): Promise<void> {
   await services.database.pool.query(`
-    TRUNCATE tool_calls, account_oauth, oauth_connect_states, oauth_apps, custom_connectors, accounts, api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants,
-             oauth_clients, web_sessions, workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
+    TRUNCATE tool_calls, account_oauth, oauth_connect_states, oauth_apps, custom_connectors, accounts,
+             api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants, oauth_clients, web_sessions,
+             pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
+             login_states, admin_audit_log, limit_grants, subscriptions, user_identities,
+             workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
 }
 
 export interface TestHub {
@@ -66,8 +70,12 @@ export async function startTestHub(
     connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     fetchDocument?: typeof safeFetch;
     seed?: boolean;
-    databaseUrl?: string;
     stages?: StageMap;
+    /** A fake Telegram Bot API (set TELEGRAM_BOT_TOKEN in `env` too). */
+    telegramFetch?: typeof fetch;
+    databaseUrl?: string;
+    /** External sign-in providers with fake endpoints ("Sign in with Google" tests). */
+    loginProviders?: OidcLoginProvider[];
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -100,6 +108,8 @@ export async function startTestHub(
     ...(options.connectors ? { connectors: options.connectors } : {}),
     ...(options.fetchDocument ? { fetchDocument: options.fetchDocument } : {}),
     ...(options.stages ? { stages: options.stages } : {}),
+    ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
+    ...(options.loginProviders ? { loginProviders: options.loginProviders } : {}),
   });
   await truncateAll(services);
   await bootstrap(services);
@@ -118,24 +128,30 @@ export async function startTestHub(
 
 /** Minimal browser: cookie jar, manual redirects, form posts with an Origin header. */
 export class TestBrowser {
-  private readonly cookies = new Map<string, string>();
+  /** Starts as a visitor who picked Russian with the language switch (tests assert Russian texts). */
+  private readonly cookies = new Map<string, string>([['ac_lang', 'ru']]);
 
   constructor(private readonly origin: string) {}
 
   async request(
     url: string,
-    init: { method?: string; form?: Record<string, string> } = {},
+    init: { method?: string; form?: Record<string, string>; json?: unknown } = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = { 'accept-language': 'ru' };
+    const headers: Record<string, string> = {};
     if (this.cookies.size) headers.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
     let body: string | undefined;
     if (init.form) {
       headers['content-type'] = 'application/x-www-form-urlencoded';
       headers.origin = this.origin;
       body = new URLSearchParams(init.form).toString();
+    } else if (init.json !== undefined) {
+      // What /assets/webauthn.js sends with fetch().
+      headers['content-type'] = 'application/json';
+      headers.origin = this.origin;
+      body = JSON.stringify(init.json);
     }
     const response = await fetch(new URL(url, this.origin), {
-      method: init.method ?? (init.form ? 'POST' : 'GET'),
+      method: init.method ?? (body !== undefined ? 'POST' : 'GET'),
       headers,
       body,
       redirect: 'manual',
@@ -149,6 +165,11 @@ export class TestBrowser {
       else this.cookies.set(name, value);
     }
     return response;
+  }
+
+  /** Value of a cookie, by its full name. */
+  cookie(name: string): string | undefined {
+    return this.cookies.get(name);
   }
 
   static hiddenInputs(html: string): Record<string, string> {
@@ -196,4 +217,9 @@ function decodeEntities(value: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&');
+}
+
+/** Tool results with third-party content arrive wrapped in ⟦untrusted⟧ markers; returns the inside. */
+export function unwrapUntrusted(text: string): string {
+  return text.replace(/^⟦untrusted (\w+) source="[^"]*"⟧\n([\s\S]*)\n⟦\/untrusted \1⟧$/, '$2');
 }

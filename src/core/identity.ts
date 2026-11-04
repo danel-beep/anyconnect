@@ -1,6 +1,6 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../db/client.js';
-import { users, workspaceMembers, workspaces } from '../db/schema.js';
+import { type UserRole, users, workspaceMembers, workspaces } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 import { newId } from '../lib/ids.js';
 
@@ -28,9 +28,10 @@ export async function getUser(db: DbExecutor, id: string): Promise<User | undefi
 /** Creates a user together with their personal workspace. */
 export async function createUser(
   db: Db,
-  input: { email: string; password: string; name?: string },
+  input: { email: string; password?: string; name?: string; role?: UserRole },
 ): Promise<{ user: User; workspace: Workspace }> {
-  const passwordHash = await hashPassword(input.password);
+  // Accounts created through an external sign-in (Google) have no password.
+  const passwordHash = input.password ? await hashPassword(input.password) : null;
   return db.transaction(async (tx) => {
     const [user] = await tx
       .insert(users)
@@ -39,6 +40,7 @@ export async function createUser(
         email: normalizeEmail(input.email),
         name: input.name ?? null,
         passwordHash,
+        role: input.role ?? 'user',
       })
       .returning();
     const [workspace] = await tx
@@ -114,9 +116,15 @@ export async function ensureAdmin(
 ): Promise<{ user: User; workspace: Workspace; created: boolean; passwordUpdated: boolean }> {
   const existing = await findUserByEmail(db, admin.email);
   if (!existing) {
-    const { user, workspace } = await createUser(db, { email: admin.email, password: admin.password });
+    const { user, workspace } = await createUser(db, {
+      email: admin.email,
+      password: admin.password,
+      role: 'admin',
+    });
     return { user, workspace, created: true, passwordUpdated: false };
   }
+  if (existing.role !== 'admin')
+    await db.update(users).set({ role: 'admin' }).where(eq(users.id, existing.id));
   let passwordUpdated = false;
   if (!existing.passwordHash || !(await verifyPassword(admin.password, existing.passwordHash))) {
     await setPassword(db, existing.id, admin.password);

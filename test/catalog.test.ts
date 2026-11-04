@@ -15,6 +15,7 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
     label: partial.name.toUpperCase(),
     description: null,
     config: {},
+    dataKeyEncrypted: null,
     credentialsEncrypted: null,
     enabled: true,
     status: 'active',
@@ -32,7 +33,7 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
 describe('tool catalog', () => {
   it('always exposes the hub tools, even with no accounts', () => {
     const catalog = buildCatalog({ connectors: [demo], accounts: [] });
-    expect(catalog.listed.map((t) => t.name)).toEqual(['anyconnect_list_accounts', 'anyconnect_call_tools']);
+    expect(catalog.listed.map((t) => t.name)).toEqual(['manyplug_list_accounts', 'manyplug_call_tools']);
     expect(catalog.listing).toBe('direct');
     expect(catalog.instructions).toContain('No services are connected');
   });
@@ -153,7 +154,7 @@ describe('connector registry', () => {
         actions: (action) => [action({ name: 'do_it', description: 'x', input, run: () => 'ok' })],
       });
     expect(() => new ConnectorRegistry().register(make('Bad-Id'))).toThrow(/Invalid connector id/);
-    expect(() => new ConnectorRegistry().register(make('anyconnect'))).toThrow(/reserved/);
+    expect(() => new ConnectorRegistry().register(make('manyplug'))).toThrow(/reserved/);
     expect(() => new ConnectorRegistry().register(make('ok', z.object({ account: z.string() })))).toThrow(
       /account/,
     );

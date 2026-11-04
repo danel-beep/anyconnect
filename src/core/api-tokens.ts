@@ -12,6 +12,8 @@ export interface ApiTokenView {
   name: string;
   tokenPrefix: string;
   scopes: string[];
+  aiClientId: string | null;
+  personaId: string | null;
   createdAt: string;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -23,6 +25,8 @@ export function toApiTokenView(row: ApiTokenRow): ApiTokenView {
     name: row.name,
     tokenPrefix: row.tokenPrefix,
     scopes: row.scopes,
+    aiClientId: row.aiClientId,
+    personaId: row.personaId,
     createdAt: row.createdAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     expiresAt: row.expiresAt?.toISOString() ?? null,
@@ -45,6 +49,10 @@ export class ApiTokenService {
     name: string;
     expiresInDays?: number;
     scopes?: string[];
+    /** The AI client this token acts as (policies apply to it). */
+    aiClientId?: string;
+    /** Bind the token to a persona's MCP URL. */
+    personaId?: string;
   }): Promise<{ token: string; row: ApiTokenRow }> {
     const token = generateToken('ac_pat');
     const [row] = await this.db
@@ -57,6 +65,8 @@ export class ApiTokenService {
         tokenHash: hashToken(token),
         tokenPrefix: `${token.slice(0, 11)}…`,
         scopes: input.scopes ?? ['mcp', 'api'],
+        aiClientId: input.aiClientId ?? null,
+        personaId: input.personaId ?? null,
         expiresAt: input.expiresInDays ? new Date(Date.now() + input.expiresInDays * 86_400_000) : null,
       })
       .returning();

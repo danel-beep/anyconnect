@@ -8,7 +8,7 @@ import {
   type InboundMessage,
   type MessagingPort,
 } from '../messaging.js';
-import { messengerActions, pacingConfig } from '../messaging-actions.js';
+import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
 import { deliveryFetch, readJson, secretsEqual } from '../messaging-http.js';
 import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js';
 
@@ -16,39 +16,39 @@ const config = z.object({
   mode: z
     .enum(['cloud'])
     .default('cloud')
-    .describe('Как подключён номер: cloud — официальный WhatsApp Cloud API (Meta), без риска бана'),
+    .describe('How the number is connected: cloud = the official WhatsApp Cloud API (Meta)'),
   phoneNumberId: z
     .string()
     .trim()
     .regex(/^\d{5,25}$/, 'digits only')
     .optional()
-    .describe('Phone number ID из Meta'),
+    .describe('Phone number ID from Meta'),
   wabaId: z
     .string()
     .trim()
     .regex(/^\d{5,25}$/, 'digits only')
     .optional()
-    .describe('WhatsApp Business Account ID: тогда хаб сам подпишет вебхук на этот аккаунт'),
+    .describe('WhatsApp Business Account ID: the hub then subscribes its webhook itself'),
   graphApiUrl: z
     .url({ protocol: /^https?$/ })
     .default('https://graph.facebook.com')
-    .describe('Адрес Graph API'),
+    .describe('Graph API address'),
   apiVersion: z
     .string()
     .regex(/^v\d+\.\d+$/)
     .default('v23.0')
-    .describe('Версия Graph API'),
+    .describe('Graph API version'),
   pacing: pacingConfig.optional(),
 });
 
 const credentials = z.object({
-  accessToken: z.string().trim().min(20).optional().describe('Постоянный токен системного пользователя Meta'),
+  accessToken: z.string().trim().min(20).optional().describe('Permanent access token of a Meta system user'),
   appSecret: z
     .string()
     .trim()
     .regex(/^[0-9a-f]{32}$/i, 'expected the 32-character App Secret')
     .optional()
-    .describe('App Secret приложения Meta (проверка подписи вебхуков)'),
+    .describe('App Secret of the Meta app (verifies webhook signatures)'),
 });
 
 type Config = z.output<typeof config>;
@@ -383,6 +383,102 @@ export function createWhatsAppConnector(port: MessagingPort) {
           : { message: `Set the webhook in Meta: URL ${hook.url}, verify token from the account page.` }),
       };
     },
+    ui: {
+      primaryFields: ['phoneNumberId', 'wabaId', 'accessToken', 'appSecret'],
+      locales: {
+        ru: {
+          description:
+            'Номер WhatsApp Business через официальный Cloud API от Meta: чаты, поиск, ответы клиентам.',
+          setup: {
+            form: {
+              summary: 'Приложение Meta с продуктом WhatsApp и постоянный токен. Около 15 минут.',
+              steps: [
+                {
+                  text: 'Создайте приложение типа Business и добавьте в него продукт WhatsApp.',
+                  link: { label: 'Открыть Meta for Developers', url: 'https://developers.facebook.com/apps' },
+                },
+                {
+                  text: 'В WhatsApp → API Setup скопируйте Phone number ID и WhatsApp Business Account ID.',
+                },
+                {
+                  text: 'В настройках компании создайте системного пользователя, выдайте ему права whatsapp_business_messaging и whatsapp_business_management и создайте постоянный токен.',
+                  link: { label: 'Открыть Business Settings', url: 'https://business.facebook.com/settings' },
+                },
+                { text: 'В приложении: Settings → Basic → App Secret. Вставьте все значения в форму.' },
+              ],
+              tips: [
+                'Вне 24 часов после последнего сообщения клиента WhatsApp разрешает писать только шаблонами.',
+                'Хаб сам подписывает вебхук, если указан WhatsApp Business Account ID.',
+              ],
+            },
+          },
+          prompts: [
+            'Какие клиенты написали в WhatsApp сегодня и ждут ответа?',
+            'Найди сообщения про возврат за неделю.',
+            'Ответь Ивану, что доставка будет завтра.',
+          ],
+          fields: {
+            mode: { label: 'Как подключить', options: { cloud: 'Cloud API (Meta)' } },
+            phoneNumberId: { label: 'Phone number ID' },
+            wabaId: { label: 'WhatsApp Business Account ID', hint: 'Тогда хаб сам подпишет вебхук.' },
+            graphApiUrl: { label: 'Адрес Graph API' },
+            apiVersion: { label: 'Версия Graph API' },
+            accessToken: { label: 'Постоянный токен' },
+            appSecret: { label: 'App Secret', hint: 'Нужен, чтобы проверять, что сообщения пришли от Meta.' },
+            pacing: texts.ru.pacing,
+          },
+          actions: texts.ru.actions,
+        },
+        en: {
+          description:
+            'A WhatsApp Business number through the official Cloud API by Meta: chats, search, replies.',
+          setup: {
+            form: {
+              summary: 'A Meta app with the WhatsApp product and a permanent token. About 15 minutes.',
+              steps: [
+                {
+                  text: 'Create a Business type app and add the WhatsApp product to it.',
+                  link: { label: 'Open Meta for Developers', url: 'https://developers.facebook.com/apps' },
+                },
+                {
+                  text: 'In WhatsApp → API Setup copy the Phone number ID and the WhatsApp Business Account ID.',
+                },
+                {
+                  text: 'In Business Settings create a system user, give it whatsapp_business_messaging and whatsapp_business_management and generate a permanent token.',
+                  link: { label: 'Open Business Settings', url: 'https://business.facebook.com/settings' },
+                },
+                { text: 'In the app: Settings → Basic → App Secret. Paste all values into the form.' },
+              ],
+              tips: [
+                'More than 24 hours after the customer last wrote, WhatsApp only allows template messages.',
+                'With the WhatsApp Business Account ID set, the hub subscribes the webhook itself.',
+              ],
+            },
+          },
+          prompts: [
+            'Which customers wrote on WhatsApp today and still wait for an answer?',
+            'Find messages about refunds from this week.',
+            'Tell Ivan the delivery comes tomorrow.',
+          ],
+          fields: {
+            mode: { label: 'How to connect', options: { cloud: 'Cloud API (Meta)' } },
+            phoneNumberId: { label: 'Phone number ID' },
+            wabaId: {
+              label: 'WhatsApp Business Account ID',
+              hint: 'The hub then subscribes the webhook itself.',
+            },
+            graphApiUrl: { label: 'Graph API address' },
+            apiVersion: { label: 'Graph API version' },
+            accessToken: { label: 'Permanent token' },
+            appSecret: { label: 'App Secret', hint: 'Used to check that messages really come from Meta.' },
+            pacing: texts.en.pacing,
+          },
+          actions: texts.en.actions,
+        },
+      },
+    },
     actions: (action) => messengerActions(action, port, { serviceName: 'WhatsApp' }),
   });
 }
+
+const texts = messengerUiTexts('WhatsApp');

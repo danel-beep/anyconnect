@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { type BuiltinDeps, createBuiltinRegistry } from '../connectors/index.js';
 import type { MessagingPort } from '../connectors/messaging.js';
 import type { ConnectorRegistry } from '../connectors/registry.js';
+import { AccountKeyring } from '../core/account-keys.js';
 import { AccountService } from '../core/accounts.js';
 import { createDatabase, type Database } from '../db/client.js';
 import { SecretBox } from '../lib/crypto.js';
@@ -50,7 +51,7 @@ export function createGatewayRuntime(
   const port: MessagingPort = { forAccount: (id) => messaging!.service.forAccount(id) };
   const builtin: BuiltinDeps = { messaging: port };
   const connectors = options.connectors ? options.connectors(builtin) : createBuiltinRegistry(builtin);
-  const accounts = new AccountService(db, connectors, secrets, network);
+  const accounts = new AccountService(db, connectors, new AccountKeyring(secrets, secrets), network);
   messaging = createMessaging({
     publicUrl: config.publicUrl,
     gatewayConfig: undefined,
