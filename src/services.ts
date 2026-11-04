@@ -19,9 +19,22 @@ import { createHubMcpHandler } from './mcp/handler.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { AiClientService } from './security/clients.js';
+import { type CallDescription, ConfirmationCenter } from './security/confirmations.js';
+import { NotificationChannels } from './security/notifications.js';
+import { PendingCallService, principalOf } from './security/pending-calls.js';
 import { PERSONA_SLUG, PersonaService } from './security/personas.js';
 import { PolicyService } from './security/policy-service.js';
+import { PendingCallRunner } from './security/runner.js';
+import {
+  confirmStage,
+  createCatalogFilter,
+  policyStage,
+  toStored,
+  untrustedStage,
+} from './security/stages.js';
+import { TelegramBot } from './security/telegram.js';
 import { VERSION } from './version.js';
+import { translator } from './web/i18n.js';
 import { SessionService } from './web/sessions.js';
 
 /** Everything the app needs, wired once. Tests build the same graph with overrides. */
@@ -44,6 +57,16 @@ export interface Services {
   aiClients: AiClientService;
   personas: PersonaService;
   policies: PolicyService;
+  /** Calls held back for the user's confirmation or an undo window. */
+  pendingCalls: PendingCallService;
+  notificationChannels: NotificationChannels;
+  confirmations: ConfirmationCenter;
+  /** Runs approved calls when their undo window ends (started by the server, not by tests). */
+  pendingRunner: PendingCallRunner;
+  /** The hub's own Telegram bot, when TELEGRAM_BOT_TOKEN is set. */
+  telegramBot: TelegramBot | undefined;
+  /** Secret Telegram must send with webhook updates (derived from the master key). */
+  telegramWebhookSecret: string;
   sessions: SessionService;
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
@@ -62,6 +85,8 @@ export function createServices(
     /** Executor stages to add or replace (security layer: policy, confirm, untrusted). */
     stages?: StageMap;
     catalogFilter?: HubDeps['catalogFilter'];
+    /** Tests: talk to a fake Telegram Bot API. */
+    telegramFetch?: typeof fetch;
   } = {},
 ): Services {
   const logger =
@@ -78,6 +103,61 @@ export function createServices(
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
+
+  // Security layer: who may do what, confirmations, undo windows.
+  const personas = new PersonaService(db, config.mcpUrl);
+  const aiClients = new AiClientService(db);
+  const policies = new PolicyService(db);
+  const pendingCalls = new PendingCallService(db, secrets, { confirmationTtlMs: config.confirmations.ttlMs });
+  const notificationChannels = new NotificationChannels(db);
+  const telegramBot = config.telegram.botToken
+    ? new TelegramBot(config.telegram.botToken, {
+        apiUrl: config.telegram.apiUrl,
+        logger,
+        ...(overrides.telegramFetch ? { fetch: overrides.telegramFetch } : {}),
+      })
+    : undefined;
+  const describeCall = async (
+    row: Parameters<ConfirmationCenter['describe']>[0],
+  ): Promise<CallDescription> => {
+    const [connector, account, client] = await Promise.all([
+      connectors.get(row.workspaceId, row.connectorId),
+      accounts.get(row.workspaceId, row.accountId).catch(() => undefined),
+      row.principal.aiClientId
+        ? aiClients.get(row.workspaceId, row.principal.aiClientId).catch(() => undefined)
+        : undefined,
+    ]);
+    const action = connector?.actions.find((a) => a.name === row.action);
+    return {
+      service: connector?.name ?? row.connectorId,
+      action: action?.title ?? row.action,
+      account: account ? `${account.label} (${account.name})` : row.accountId,
+      client: client?.name ?? (row.principal.kind === 'api_token' ? 'API token' : 'AI app'),
+      risk: row.risk,
+      reason: row.reason ?? undefined,
+    };
+  };
+  const confirmations = new ConfirmationCenter({
+    pending: pendingCalls,
+    channels: notificationChannels,
+    bot: telegramBot,
+    publicUrl: config.publicUrl,
+    describe: describeCall,
+    t: translator('ru'),
+    logger,
+  });
+  const securityStages: StageMap = {
+    policy: policyStage(policies),
+    confirm: confirmStage({
+      policies,
+      pending: pendingCalls,
+      center: confirmations,
+      stateKey: secrets.deriveKey('confirm-state'),
+      waitMs: config.confirmations.waitMs,
+    }),
+    untrusted: untrustedStage,
+  };
+
   const hub = new Hub({
     db,
     connectors,
@@ -88,8 +168,15 @@ export function createServices(
     toolTimeoutMs: config.toolTimeoutMs,
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
-    ...(overrides.stages ? { stages: overrides.stages } : {}),
-    ...(overrides.catalogFilter ? { catalogFilter: overrides.catalogFilter } : {}),
+    stages: { ...securityStages, ...overrides.stages },
+    catalogFilter: overrides.catalogFilter ?? createCatalogFilter(policies),
+  });
+  const pendingRunner = new PendingCallRunner({
+    pending: pendingCalls,
+    center: confirmations,
+    run: async (row, args) => toStored(await hub.runApproved(principalOf(row), row, args)),
+    logger,
+    intervalMs: config.confirmations.runnerIntervalMs,
   });
   const clients = new ClientRegistry(db, {
     dynamicRegistration: config.oauth.dynamicRegistration,
@@ -108,9 +195,6 @@ export function createServices(
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
   });
-  const personas = new PersonaService(db, config.mcpUrl);
-  const aiClients = new AiClientService(db);
-  const policies = new PolicyService(db);
   const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl, async (workspaceId, personaId) => {
     const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
     return persona && personas.urlFor(persona.slug);
@@ -136,11 +220,18 @@ export function createServices(
     aiClients,
     personas,
     policies,
+    pendingCalls,
+    notificationChannels,
+    confirmations,
+    pendingRunner,
+    telegramBot,
+    telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
     rateLimiter,
     idempotency,
     mcp,
     async close() {
+      await pendingRunner.stop();
       rateLimiter.close();
       await mcp.close();
       await network.close();

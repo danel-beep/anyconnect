@@ -28,7 +28,10 @@ export class PendingCallRunner {
     if (this.timer) return;
     this.timer = setInterval(() => void this.tick(), this.deps.intervalMs);
     this.maintenance = setInterval(
-      () => void this.deps.pending.maintain().catch((err) => this.deps.logger.warn({ err }, 'pending maintenance')),
+      () =>
+        void this.deps.pending
+          .maintain()
+          .catch((err) => this.deps.logger.warn({ err }, 'pending maintenance')),
       60_000,
     );
     this.timer.unref();
@@ -68,9 +71,14 @@ export class PendingCallRunner {
           result = await run(row, pending.args(row));
         } catch (error) {
           logger.error({ err: error, pendingCall: row.id }, 'pending call failed');
-          result = { content: [{ type: 'text', text: 'Internal error while running the call.' }], isError: true };
+          result = {
+            content: [{ type: 'text', text: 'Internal error while running the call.' }],
+            isError: true,
+          };
         }
-        await pending.complete(row.id, result).catch((err) => logger.error({ err }, 'could not store result'));
+        await pending
+          .complete(row.id, result)
+          .catch((err) => logger.error({ err }, 'could not store result'));
         await center.refresh(row.id);
       }),
     );

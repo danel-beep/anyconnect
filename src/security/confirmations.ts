@@ -61,6 +61,11 @@ export class ConfirmationCenter {
     return this.deps.bot !== undefined;
   }
 
+  /** Human description of a call (service, action, account, AI client). */
+  describe(row: PendingCallRow): Promise<CallDescription> {
+    return this.deps.describe(row);
+  }
+
   confirmUrl(id: string): string {
     return `${this.deps.publicUrl}/confirm/${id}`;
   }
@@ -79,7 +84,10 @@ export class ConfirmationCenter {
         ? t('confirm.tg.ask')
         : row.status === 'scheduled'
           ? t('confirm.tg.scheduled', {
-              seconds: Math.max(0, Math.round(((row.executeAt?.getTime() ?? Date.now()) - Date.now()) / 1000)),
+              seconds: Math.max(
+                0,
+                Math.round(((row.executeAt?.getTime() ?? Date.now()) - Date.now()) / 1000),
+              ),
             })
           : t(`confirm.status.${row.status}` as const);
     const args = this.deps.pending.args(row);
@@ -143,7 +151,9 @@ export class ConfirmationCenter {
   async decide(id: string, decision: 'approve' | 'deny' | 'cancel', via: string) {
     const { pending } = this.deps;
     const row =
-      decision === 'cancel' ? await pending.cancel(id, via) : await pending.decide(id, decision === 'approve', via);
+      decision === 'cancel'
+        ? await pending.cancel(id, via)
+        : await pending.decide(id, decision === 'approve', via);
     if (row) await this.refresh(id);
     return row;
   }
@@ -173,7 +183,9 @@ export class ConfirmationCenter {
     if (!callback?.data) return;
     const match = CALLBACK.exec(callback.data);
     const answer = (message: string) =>
-      bot.answerCallback(callback.id, message).catch((error) => logger.debug({ err: error }, 'answer failed'));
+      bot
+        .answerCallback(callback.id, message)
+        .catch((error) => logger.debug({ err: error }, 'answer failed'));
     if (!match) return void (await answer(t('confirm.tg.unknown')));
     const [, id, op] = match as unknown as [string, string, 'a' | 'd' | 'c'];
     const row = await pending.get(id);
@@ -181,7 +193,11 @@ export class ConfirmationCenter {
     const chat = row ? await channels.telegramChat(row.principal.userId) : undefined;
     const from = String(callback.message?.chat.id ?? callback.from.id);
     if (!row || !chat || chat !== from) return void (await answer(t('confirm.tg.unknown')));
-    const decided = await this.decide(id, op === 'a' ? 'approve' : op === 'd' ? 'deny' : 'cancel', 'telegram');
+    const decided = await this.decide(
+      id,
+      op === 'a' ? 'approve' : op === 'd' ? 'deny' : 'cancel',
+      'telegram',
+    );
     await answer(decided ? t(`confirm.status.${decided.status}` as const) : t('confirm.tg.tooLate'));
     if (!decided) await this.refresh(id);
   }

@@ -33,7 +33,11 @@ export class NotificationChannels {
   }
 
   /** Completes linking from the bot's `/start <code>`. Returns the user id, or undefined. */
-  async completeTelegramLink(code: string, chatId: string, label: string | null): Promise<string | undefined> {
+  async completeTelegramLink(
+    code: string,
+    chatId: string,
+    label: string | null,
+  ): Promise<string | undefined> {
     const [row] = await this.db
       .update(notificationChannels)
       .set({ address: chatId, label, verifiedAt: new Date(), linkCodeHash: null, linkExpiresAt: null })

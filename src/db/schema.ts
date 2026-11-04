@@ -464,12 +464,18 @@ export const pendingCalls = pgTable(
     expiresAt: timestamp({ withTimezone: true }).notNull(),
     /** SecretBox, AAD = `pending:<id>:result`. */
     resultEncrypted: text(),
+    /** When the caller received the final result (a repeated identical call then starts anew). */
+    consumedAt: timestamp({ withTimezone: true }),
     /** Telegram message to update once the call is decided. */
     telegramMessage: jsonb().$type<{ chatId: string; messageId: number }>(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index().on(t.status, t.executeAt), index().on(t.workspaceId, t.createdAt)],
+  (t) => [
+    index().on(t.status, t.executeAt),
+    index().on(t.workspaceId, t.createdAt),
+    index().on(t.workspaceId, t.argsHash),
+  ],
 );
 
 /** Where the hub reaches its owner: today the Telegram chat used for confirmations and alerts. */

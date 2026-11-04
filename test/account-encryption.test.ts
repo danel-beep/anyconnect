@@ -96,7 +96,12 @@ describe('per-account envelope encryption', () => {
       credentials: { secret: 'rotate-me' },
     });
     const rotatedBox = new SecretBox(generateKey(), [TEST_KEY]);
-    const rotated = new AccountService(s.db, s.connectors, new AccountKeyring(rotatedBox, rotatedBox));
+    const rotated = new AccountService(
+      s.db,
+      s.connectors,
+      new AccountKeyring(rotatedBox, rotatedBox),
+      s.network,
+    );
     const result = await rotated.upgradeEncryption();
     expect(result.rewrapped).toBeGreaterThanOrEqual(1);
     expect(result.failed).toBe(0);
@@ -116,7 +121,7 @@ describe('per-account envelope encryption', () => {
   it('reports accounts that cannot be decrypted instead of failing startup', async () => {
     const s = hub.services;
     const stranger = new SecretBox(generateKey());
-    const service = new AccountService(s.db, s.connectors, new AccountKeyring(stranger, stranger));
+    const service = new AccountService(s.db, s.connectors, new AccountKeyring(stranger, stranger), s.network);
     const result = await service.upgradeEncryption();
     expect(result.failed).toBeGreaterThan(0);
   });

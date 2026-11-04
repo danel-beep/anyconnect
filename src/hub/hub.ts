@@ -136,6 +136,49 @@ export class Hub {
     return toTransport(result);
   }
 
+  /**
+   * Runs a call the user already approved out of band (Telegram, web page) as its original caller.
+   * The call goes through the whole chain again: if the caller lost access meanwhile, it is denied;
+   * `preApproved` only lets it pass the confirmation stage.
+   */
+  async runApproved(
+    principal: Principal,
+    target: { toolName: string; connectorId: string; action: string; accountId: string },
+    args: Record<string, unknown>,
+  ): Promise<ExecResult> {
+    try {
+      const catalog = await this.getCatalog(principal);
+      const candidates = catalog.tools.filter(
+        (t) =>
+          t.target.kind === 'action' &&
+          t.target.connectorId === target.connectorId &&
+          t.target.action === target.action &&
+          t.target.accounts.some((a) => a.id === target.accountId),
+      );
+      const tool = candidates.find((t) => t.name === target.toolName) ?? candidates[0];
+      if (tool?.target.kind !== 'action') {
+        return errorResult(
+          'This action is no longer available for the account, so nothing was done.',
+          'permission',
+        );
+      }
+      const account = tool.target.accounts.find((a) => a.id === target.accountId)!;
+      const rawArgs = tool.target.accountArgument ? { ...args, [ACCOUNT_ARGUMENT]: account.name } : args;
+      const prepared = await this.prepare(
+        principal,
+        catalog,
+        tool,
+        rawArgs,
+        new AbortController().signal,
+        undefined,
+      );
+      if ('error' in prepared) return prepared.error;
+      return await this.executor.execute({ ...prepared.call, preApproved: true });
+    } catch (error) {
+      return this.toErrorResult(error, target.toolName);
+    }
+  }
+
   private runBuiltin(catalog: Catalog, args: Record<string, unknown>): ExecResult {
     const filter = typeof args.service === 'string' ? args.service.trim().toLowerCase() : undefined;
     const services = catalog.services

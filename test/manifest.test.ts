@@ -180,6 +180,7 @@ describe('HTTP manifest connectors', () => {
           label: 'Work',
           description: null,
           config: {},
+          dataKeyEncrypted: null,
           credentialsEncrypted: null,
           enabled: true,
           status: 'active',

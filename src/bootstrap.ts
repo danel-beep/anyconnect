@@ -22,6 +22,7 @@ export async function bootstrap(services: Services): Promise<void> {
       'some account secrets cannot be decrypted with the configured keys (check ENCRYPTION_KEYS_PREVIOUS)',
     );
   }
+  await setupTelegram(services);
   const linked = await services.aiClients.backfill();
   if (linked.grants || linked.tokens) logger.info(linked, 'existing AI apps linked to AI clients');
   if (!config.admin) {
@@ -50,5 +51,23 @@ export async function bootstrap(services: Services): Promise<void> {
       credentials: { secret: 'demo-secret-second' },
     });
     logger.info('demo accounts created');
+  }
+}
+
+/** Points the hub's Telegram bot at our webhook (Telegram only delivers to https URLs). */
+async function setupTelegram(services: Services): Promise<void> {
+  const { telegramBot: bot, config, logger } = services;
+  if (!bot) return;
+  if (!config.publicUrl.startsWith('https://')) {
+    logger.warn(
+      'TELEGRAM_BOT_TOKEN is set but PUBLIC_URL is not https: Telegram confirmations are disabled.',
+    );
+    return;
+  }
+  try {
+    await bot.setWebhook(`${config.publicUrl}/telegram/webhook`, services.telegramWebhookSecret);
+    logger.info({ bot: await bot.getUsername() }, 'telegram bot connected');
+  } catch (error) {
+    logger.error({ err: error }, 'telegram webhook setup failed; confirmations still work on the web page');
   }
 }

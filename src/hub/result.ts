@@ -1,11 +1,27 @@
 import { type ContentBlock, type ErrorKind, isRawResult } from '../connectors/sdk.js';
 
+/**
+ * A question the hub needs the user to answer before the call can continue (e.g. "Send this
+ * email?"). Transports that can ask in the chat (MCP elicitation) do so and retry the call with
+ * the answer in `Interaction.answers[key]` and `state` echoed back; others show `content`.
+ */
+export interface HubQuestion {
+  key: string;
+  message: string;
+  /** Flat JSON Schema of the answer form (MCP elicitation restricted schema). */
+  schema: { type: 'object'; properties: Record<string, Record<string, unknown>>; required?: string[] };
+  /** Opaque, integrity-protected state the transport echoes back with the answer. */
+  state: string;
+}
+
 /** Result in MCP CallToolResult shape (kept local so the hub core does not depend on the MCP SDK). */
 export interface ToolCallResult {
   [key: string]: unknown;
   content: ContentBlock[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
+  /** Set when the call waits for the user's answer in the chat; see {@link HubQuestion}. */
+  question?: HubQuestion;
 }
 
 export type ExecErrorKind = ErrorKind | 'timeout' | 'cancelled' | 'internal' | 'hub';

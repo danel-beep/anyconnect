@@ -1,8 +1,13 @@
 import { createHash } from 'node:crypto';
-import { and, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
 import type { Principal } from '../core/principal.js';
 import type { Db } from '../db/client.js';
-import { type PendingCallPrincipal, type PendingCallStatus, pendingCalls, type RiskLevel } from '../db/schema.js';
+import {
+  type PendingCallPrincipal,
+  type PendingCallStatus,
+  pendingCalls,
+  type RiskLevel,
+} from '../db/schema.js';
 import type { SecretBox } from '../lib/crypto.js';
 import { notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
@@ -137,6 +142,11 @@ export class PendingCallService {
     return this.insert(input, 'scheduled', new Date(Date.now() + input.undoWindowSeconds * 1000));
   }
 
+  /** The hash a call with this input is stored under (to match a retry to its held-back call). */
+  hashOf(input: Pick<PendingCallInput, 'toolName' | 'accountId' | 'args'>): string {
+    return argumentsHash(input.toolName, input.accountId, input.args);
+  }
+
   async get(id: string): Promise<PendingCallRow | undefined> {
     const [row] = await this.db.select().from(pendingCalls).where(eq(pendingCalls.id, id)).limit(1);
     return row;
@@ -155,8 +165,42 @@ export class PendingCallService {
   belongsTo(row: PendingCallRow, principal: Principal): boolean {
     if (row.workspaceId !== principal.workspaceId) return false;
     if (principal.kind === 'session') return true;
-    if (row.principal.aiClientId || principal.aiClientId) return row.principal.aiClientId === principal.aiClientId;
+    if (row.principal.aiClientId || principal.aiClientId)
+      return row.principal.aiClientId === principal.aiClientId;
     return row.principal.credentialId === principal.credentialId;
+  }
+
+  /**
+   * The latest not yet consumed call of this caller with exactly these arguments, so repeating a
+   * held-back call returns its status or result instead of asking the user again.
+   */
+  async findRepeat(principal: Principal, toolName: string, accountId: string, args: unknown) {
+    const rows = await this.db
+      .select()
+      .from(pendingCalls)
+      .where(
+        and(
+          eq(pendingCalls.workspaceId, principal.workspaceId),
+          eq(pendingCalls.argsHash, argumentsHash(toolName, accountId, args)),
+          isNull(pendingCalls.consumedAt),
+          gt(pendingCalls.createdAt, new Date(Date.now() - this.options.confirmationTtlMs)),
+        ),
+      )
+      .orderBy(desc(pendingCalls.createdAt))
+      .limit(5);
+    return rows.find((row) => this.belongsTo(row, principal));
+  }
+
+  /** Marks the final result as delivered to the caller. */
+  async consume(id: string): Promise<void> {
+    await this.db
+      .update(pendingCalls)
+      .set({ consumedAt: new Date() })
+      .where(and(eq(pendingCalls.id, id), isNull(pendingCalls.consumedAt)));
+  }
+
+  isFinal(row: PendingCallRow): boolean {
+    return FINAL.includes(row.status);
   }
 
   async listOpen(workspaceId: string): Promise<PendingCallRow[]> {
@@ -264,7 +308,11 @@ export class PendingCallService {
   }
 
   /** Waits until the call leaves `awaiting_confirmation`/`scheduled`/`running`, or the timeout. */
-  async waitForOutcome(id: string, timeoutMs: number, signal?: AbortSignal): Promise<PendingCallRow | undefined> {
+  async waitForOutcome(
+    id: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<PendingCallRow | undefined> {
     const deadline = Date.now() + timeoutMs;
     let row = await this.get(id);
     while (row && !FINAL.includes(row.status) && Date.now() < deadline && !signal?.aborted) {
@@ -280,7 +328,9 @@ export class PendingCallService {
     await this.db
       .update(pendingCalls)
       .set({ status: 'expired' })
-      .where(and(eq(pendingCalls.status, 'awaiting_confirmation'), lt(pendingCalls.expiresAt, new Date(now))));
+      .where(
+        and(eq(pendingCalls.status, 'awaiting_confirmation'), lt(pendingCalls.expiresAt, new Date(now))),
+      );
     // A crash while running leaves the outcome unknown: never retry automatically (it may have
     // been sent already), report it as failed instead.
     await this.db
@@ -289,7 +339,9 @@ export class PendingCallService {
         status: 'failed',
         resultEncrypted: null,
       })
-      .where(and(eq(pendingCalls.status, 'running'), lt(pendingCalls.updatedAt, new Date(now - 15 * 60_000))));
+      .where(
+        and(eq(pendingCalls.status, 'running'), lt(pendingCalls.updatedAt, new Date(now - 15 * 60_000))),
+      );
     await this.db
       .delete(pendingCalls)
       .where(and(inArray(pendingCalls.status, FINAL), lt(pendingCalls.updatedAt, new Date(now - DAY))));

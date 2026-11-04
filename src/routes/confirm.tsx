@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { getDefaultWorkspace } from '../core/identity.js';
 import { safeEqual } from '../lib/crypto.js';
+import { previewArguments } from '../security/confirmations.js';
 import type { PendingCallRow } from '../security/pending-calls.js';
-import { type PendingCallView, ConfirmListPage, ConfirmPage } from '../web/confirm-pages.js';
+import { ConfirmListPage, ConfirmPage, type PendingCallView } from '../web/confirm-pages.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
 import { type AppContext, type AppEnv, bodyParams, currentUser } from './context.js';
@@ -11,7 +12,7 @@ export const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
 export async function pendingCallView(c: AppContext, row: PendingCallRow): Promise<PendingCallView> {
   const s = c.get('services');
-  const d = await s.describeCall(row);
+  const d = await s.confirmations.describe(row);
   return {
     id: row.id,
     status: row.status,
@@ -21,7 +22,7 @@ export async function pendingCallView(c: AppContext, row: PendingCallRow): Promi
     action: d.action,
     risk: row.risk,
     reason: row.reason ?? undefined,
-    arguments: s.previewArguments(s.pendingCalls.args(row)),
+    arguments: previewArguments(s.pendingCalls.args(row)),
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     executeAt: row.executeAt,

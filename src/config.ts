@@ -59,6 +59,13 @@ const EnvSchema = z.object({
   TOOL_RESULT_MAX_TOKENS: z.coerce.number().int().min(200).default(2000),
   /** How long a successful write is remembered to suppress accidental duplicates (0 disables). */
   IDEMPOTENCY_WINDOW_SECONDS: z.coerce.number().int().min(0).default(300),
+  /** The hub's own Telegram bot (from @BotFather) for confirmations; optional. */
+  TELEGRAM_BOT_TOKEN: optionalString,
+  TELEGRAM_API_URL: z.string().url().default('https://api.telegram.org'),
+  /** How long a call that needs confirmation waits for the answer before returning "pending". */
+  CONFIRMATION_WAIT_SECONDS: z.coerce.number().int().min(0).max(110).default(40),
+  /** How long the user has to answer a confirmation. */
+  CONFIRMATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -92,6 +99,13 @@ export interface AppConfig {
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
   tools: { maxResultTokens: number; idempotencyWindowMs: number };
+  confirmations: {
+    waitMs: number;
+    ttlMs: number;
+    /** How often approved calls are checked for the end of their undo window. */
+    runnerIntervalMs: number;
+  };
+  telegram: { botToken: string | undefined; apiUrl: string };
 }
 
 export class ConfigError extends Error {
@@ -188,5 +202,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
     },
+    confirmations: {
+      waitMs: env.CONFIRMATION_WAIT_SECONDS * 1000,
+      ttlMs: env.CONFIRMATION_TTL_MINUTES * 60_000,
+      runnerIntervalMs: 2000,
+    },
+    telegram: { botToken: env.TELEGRAM_BOT_TOKEN, apiUrl: env.TELEGRAM_API_URL.replace(/\/+$/, '') },
   };
 }
