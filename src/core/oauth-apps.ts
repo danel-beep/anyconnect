@@ -67,9 +67,9 @@ export class OAuthAppService {
   ) {}
 
   /** The hub-wide app for an OAuth connector, only when the connector is one of the hub's own. */
-  private envAppFor(connector: ConnectorDefinition, provider: OAuthProviderSpec) {
-    const app = this.envApps[provider.id];
-    return app && this.isHubConnector(connector) ? app : undefined;
+  private envAppFor(connector: ConnectorDefinition, providerId: string) {
+    if (!this.isHubConnector(connector) || !Object.hasOwn(this.envApps, providerId)) return undefined;
+    return this.envApps[providerId];
   }
 
   /** Provider ids that have a hub-wide app configured. */
@@ -183,7 +183,7 @@ export class OAuthAppService {
 
   /** Whether the hub itself has an app for the connector (from env), whatever the workspace. */
   hasHubApp(connector: ConnectorDefinition): boolean {
-    return Boolean(this.envAppFor(connector, providerOf(connector)));
+    return Boolean(this.envAppFor(connector, providerOf(connector).id));
   }
 
   /**
@@ -200,7 +200,8 @@ export class OAuthAppService {
     if (ref.startsWith(ENV_PREFIX)) {
       const providerId = ref.slice(ENV_PREFIX.length);
       if (providerId !== provider.id) return undefined;
-      const app = this.envAppFor(connector, provider);
+      // Looked up by the reference itself (checked against the connector's provider above).
+      const app = this.envAppFor(connector, providerId);
       return app ? { ref, providerId, clientId: app.clientId, clientSecret: app.clientSecret } : undefined;
     }
     const [row] = await this.db
