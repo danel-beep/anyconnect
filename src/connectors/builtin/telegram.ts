@@ -283,10 +283,19 @@ export function botUpdateToMessages(update: TgUpdate, botId: string): InboundMes
   ];
 }
 
+/** Bot API methods that send a file by URL (Telegram fetches it, up to 5 MB photos and 20 MB others). */
+const FILE_METHODS = {
+  photo: { method: 'sendPhoto', field: 'photo' },
+  video: { method: 'sendVideo', field: 'video' },
+  audio: { method: 'sendAudio', field: 'audio' },
+  document: { method: 'sendDocument', field: 'document' },
+} as const;
+
 const botTransport: DirectTransport<Config, Credentials> = {
   kind: 'direct',
   // The Bot API has no idempotency key: an interrupted send is reported as uncertain, never repeated.
   idempotentSend: false,
+  files: true,
 
   async send(job, ctx) {
     const { chatId, businessConnectionId } = parseChatId(job.chat.externalId);
@@ -302,10 +311,13 @@ const botTransport: DirectTransport<Config, Credentials> = {
       });
       return undefined;
     }
-    const result = await callBot<{ message_id: number; date: number }>(ctx, 'sendMessage', {
+    const file = job.file ? FILE_METHODS[job.file.kind] : undefined;
+    const result = await callBot<{ message_id: number; date: number }>(ctx, file?.method ?? 'sendMessage', {
       chat_id: chatId,
       ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
-      text: job.text,
+      ...(file && job.file
+        ? { [file.field]: job.file.url, ...(job.text ? { caption: job.text } : {}) }
+        : { text: job.text }),
       ...(job.replyToExternalId
         ? {
             reply_parameters: {

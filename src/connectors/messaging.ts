@@ -124,6 +124,17 @@ export interface TemplateMessage {
   parameters?: { name?: string; value: string }[];
 }
 
+/** A file the messenger fetches itself from a public https URL (the hub never downloads it). */
+export interface OutboundFile {
+  url: string;
+  kind: 'photo' | 'video' | 'audio' | 'document';
+  /** File name shown to the recipient, where the messenger allows one. */
+  name?: string;
+}
+
+/** Longest text that can travel with a file (Telegram and WhatsApp caption limit). */
+export const MAX_CAPTION_LENGTH = 1024;
+
 export interface OutboundJob {
   /** Hub job id, stable across retries: transports derive their own idempotency ids from it. */
   id: string;
@@ -134,6 +145,8 @@ export interface OutboundJob {
   replyToExternalId?: string;
   /** Send this template instead of free text; `text` then holds its rendered body for the hub's copy. */
   template?: TemplateMessage;
+  /** Send this file, with `text` as its caption. */
+  file?: OutboundFile;
   /** For `mark_read`: read everything up to this message (absent = the whole chat). */
   upToExternalId?: string;
 }
@@ -184,6 +197,8 @@ export interface DirectTransport<TConfig = unknown, TCredentials = unknown> {
   idempotentSend: boolean;
   /** The transport can send {@link OutboundJob.template}. */
   templates?: boolean;
+  /** The transport can send {@link OutboundJob.file}. */
+  files?: boolean;
   send(job: OutboundJob, ctx: AccountContext<TConfig, TCredentials>): Promise<SentReceipt | undefined>;
   download?(
     attachment: { externalId: string; locator?: unknown },
@@ -308,6 +323,8 @@ export interface SendRequest {
   replyTo?: string;
   /** Send a pre-approved template; `text` is its rendered body, kept in the hub's copy of the chat. */
   template?: TemplateMessage;
+  /** Send a file by URL; `text` becomes its caption (may be empty). */
+  file?: OutboundFile;
   /** How long to wait for delivery before returning `queued`. */
   waitMs?: number;
 }

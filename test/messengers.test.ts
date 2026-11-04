@@ -66,6 +66,8 @@ async function startFakeApis() {
       case 'readBusinessMessage':
         return c.json({ ok: true, result: true });
       case 'sendMessage':
+      case 'sendPhoto':
+      case 'sendDocument':
         return c.json({
           ok: true,
           result: { message_id: nextMessageId++, date: Math.floor(Date.now() / 1000) },
@@ -439,6 +441,52 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(blocked.content[0]).toMatchObject({ text: expect.stringContaining('bot was blocked') });
   });
 
+  it('sends files by link, with the text as caption', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(7, 'Пришлите фото товара'));
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+
+    const photo = json(
+      await call('telegram_send', {
+        chat: chat.id,
+        text: 'Вот он',
+        file_url: 'https://cdn.example.com/items/lamp.JPG?v=2',
+      }),
+    );
+    expect(photo.status).toBe('sent');
+    expect(apis.calls.find((c) => c.path === 'sendPhoto')?.body).toMatchObject({
+      chat_id: '42',
+      photo: 'https://cdn.example.com/items/lamp.JPG?v=2',
+      caption: 'Вот он',
+    });
+    json(
+      await call('telegram_send', {
+        chat: chat.id,
+        file_url: 'https://cdn.example.com/docs/price%20list.pdf',
+      }),
+    );
+    const doc = apis.calls.find((c) => c.path === 'sendDocument')?.body;
+    expect(doc).toEqual({ chat_id: '42', document: 'https://cdn.example.com/docs/price%20list.pdf' });
+
+    // The hub's copy shows what was sent.
+    const read = json(await call('telegram_read_chat', { chat: chat.id }));
+    expect(read.messages.at(-1).attachments).toEqual([
+      expect.objectContaining({ kind: 'document', name: 'price list.pdf' }),
+    ]);
+
+    // Only https links, captions within the messenger's limit, and something to send.
+    expect(
+      (await call('telegram_send', { chat: chat.id, file_url: 'http://example.com/a.pdf' })).isError,
+    ).toBe(true);
+    const long = await call('telegram_send', {
+      chat: chat.id,
+      text: 'x'.repeat(1100),
+      file_url: 'https://example.com/a.pdf',
+    });
+    expect((long.content[0] as { text: string }).text).toContain('at most 1024');
+    expect((await call('telegram_send', { chat: chat.id })).isError).toBe(true);
+  });
+
   it('waits out Telegram flood limits instead of failing', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(3, 'Привет'));
@@ -557,6 +605,28 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       await new Promise((resolve) => setTimeout(resolve, 300));
       const read = apis.calls.find((c) => c.body?.status === 'read');
       expect(read?.body.message_id).toBe('wamid.A');
+    });
+
+    it('sends documents with a file name', async () => {
+      await addNumber();
+      const sent = json(
+        await call('whatsapp_send', {
+          to: '+15550123',
+          text: 'Your invoice',
+          file_url: 'https://files.example.com/inv/123',
+          file_kind: 'document',
+          file_name: 'Invoice 123.pdf',
+        }),
+      );
+      expect(sent.status).toBe('sent');
+      expect(apis.calls.find((c) => c.body?.type === 'document')?.body).toMatchObject({
+        to: '15550123',
+        document: {
+          link: 'https://files.example.com/inv/123',
+          caption: 'Your invoice',
+          filename: 'Invoice 123.pdf',
+        },
+      });
     });
 
     it('starts a conversation by phone number as a new contact', async () => {
