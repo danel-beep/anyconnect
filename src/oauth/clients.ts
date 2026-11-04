@@ -27,6 +27,7 @@ export class OAuthProtocolError extends Error {
 }
 
 export const SUPPORTED_AUTH_METHODS = ['none', 'client_secret_basic', 'client_secret_post'] as const;
+export const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'] as const;
 
 const str = (max: number) => z.string().max(max);
 const ClientMetadataInput = z.object({
@@ -64,10 +65,17 @@ function parseClientMetadata(body: unknown, defaults: { authMethod: string }): S
       `token_endpoint_auth_method must be one of: ${SUPPORTED_AUTH_METHODS.join(', ')}`,
     );
   }
-  const grantTypes = m.grant_types ?? ['authorization_code', 'refresh_token'];
-  const unsupportedGrant = grantTypes.find((g) => g !== 'authorization_code' && g !== 'refresh_token');
-  if (unsupportedGrant) {
-    throw new OAuthProtocolError('invalid_client_metadata', `Unsupported grant type: ${unsupportedGrant}`);
+  // Clients list every grant they can use anywhere (Claude's metadata document adds jwt-bearer), so
+  // keep the ones this hub supports and ignore the rest (RFC 7591 §3.2.1 lets the server trim
+  // metadata); a client that cannot use the authorization code flow has no way in.
+  const grantTypes = (m.grant_types ?? ['authorization_code', 'refresh_token']).filter((g) =>
+    (SUPPORTED_GRANT_TYPES as readonly string[]).includes(g),
+  );
+  if (!grantTypes.includes('authorization_code')) {
+    throw new OAuthProtocolError(
+      'invalid_client_metadata',
+      'grant_types must include "authorization_code"; the hub supports only the authorization code flow',
+    );
   }
   const responseTypes = m.response_types ?? ['code'];
   if (responseTypes.some((r) => r !== 'code')) {

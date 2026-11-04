@@ -227,7 +227,12 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
             client_id: clientId,
             client_name: 'Metadata Client',
             redirect_uris: ['http://localhost/callback'],
-            grant_types: ['authorization_code', 'refresh_token'],
+            // Shaped like Claude's document: grants the hub does not support are ignored.
+            grant_types: [
+              'authorization_code',
+              'refresh_token',
+              'urn:ietf:params:oauth:grant-type:jwt-bearer',
+            ],
             token_endpoint_auth_method: 'none',
           }),
         };
@@ -276,6 +281,32 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       body: '{}',
     });
     expect(mcp.status).toBe(401);
+  });
+
+  it('registers clients that list extra grant types, but not ones without the code flow', async () => {
+    const register = (grant_types: string[]) =>
+      fetch(`${hub.baseUrl}/oauth/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          redirect_uris: ['https://app.example/cb'],
+          token_endpoint_auth_method: 'none',
+          grant_types,
+        }),
+      });
+    const extra = await register([
+      'authorization_code',
+      'refresh_token',
+      'urn:ietf:params:oauth:grant-type:jwt-bearer',
+    ]);
+    expect(extra.status).toBe(201);
+    expect(((await extra.json()) as { grant_types: string[] }).grant_types).toEqual([
+      'authorization_code',
+      'refresh_token',
+    ]);
+    const noCode = await register(['client_credentials']);
+    expect(noCode.status).toBe(400);
+    expect(((await noCode.json()) as { error: string }).error).toBe('invalid_client_metadata');
   });
 
   it('rejects a wrong PKCE verifier and a replayed authorization code', async () => {
