@@ -55,6 +55,10 @@ const EnvSchema = z.object({
    * Off by default: in the cloud it would expose internal services to anyone who can add an account.
    */
   ALLOW_PRIVATE_NETWORK: bool(false),
+  /** Default size budget of one tool result, in tokens (larger results are trimmed with a note). */
+  TOOL_RESULT_MAX_TOKENS: z.coerce.number().int().min(200).default(2000),
+  /** How long a successful write is remembered to suppress accidental duplicates (0 disables). */
+  IDEMPOTENCY_WINDOW_SECONDS: z.coerce.number().int().min(0).default(300),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -87,6 +91,7 @@ export interface AppConfig {
   toolTimeoutMs: number;
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
+  tools: { maxResultTokens: number; idempotencyWindowMs: number };
 }
 
 export class ConfigError extends Error {
@@ -179,5 +184,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionTtlSeconds: env.SESSION_TTL_DAYS * 86_400,
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
+    tools: {
+      maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
+      idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
+    },
   };
 }
