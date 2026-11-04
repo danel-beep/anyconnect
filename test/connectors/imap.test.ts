@@ -5,8 +5,8 @@ import hoodiecrow, { type HoodiecrowServer } from 'hoodiecrow-imap';
 import { simpleParser } from 'mailparser';
 import { SMTPServer } from 'smtp-server';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { stripQuotedTail } from '../../src/connectors/builtin/email/message.js';
 import imap, { closeImapConnections, resolveSettings } from '../../src/connectors/builtin/imap/index.js';
-import { stripQuotedTail } from '../../src/connectors/builtin/imap/mailbox.js';
 import { decodePart, toSnippet } from '../../src/connectors/builtin/imap/mime.js';
 import { guessProvider } from '../../src/connectors/builtin/imap/presets.js';
 import { createNetworkPolicy } from '../../src/lib/network.js';
@@ -130,7 +130,7 @@ async function startServers(plugins: string[]) {
       stream.on('data', (c: Buffer) => chunks.push(c));
       stream.on('end', () => {
         received.push({
-          from: session.envelope.mailFrom && session.envelope.mailFrom.address,
+          from: session.envelope.mailFrom ? session.envelope.mailFrom.address : false,
           to: session.envelope.rcptTo.map((r) => r.address),
           raw: Buffer.concat(chunks),
         });

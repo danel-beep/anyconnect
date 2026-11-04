@@ -1,10 +1,18 @@
 import net from 'node:net';
 import type { ImapFlow } from 'imapflow';
-import { simpleParser } from 'mailparser';
-import addressparser from 'nodemailer/lib/addressparser/index.js';
 import type Mail from 'nodemailer/lib/mailer/index.js';
 import { z } from 'zod';
 import { type AccountContext, ConnectorError, defineConnector } from '../../sdk.js';
+import {
+  Addresses,
+  buildForward,
+  buildReply,
+  composeMessage,
+  envelopeRecipients,
+  parseRaw,
+  ReadOptions,
+  readResult,
+} from '../email/message.js';
 import { type ImapLogin, ImapPool, type ResolveHost, toConnectorError } from './connection.js';
 import {
   decodeId,
@@ -12,16 +20,14 @@ import {
   FOLDER_ROLES,
   fetchMessage,
   fetchRaw,
-  formatAddress,
   groupIds,
   resolveFolder,
   roleOf,
   searchFolder,
-  stripQuotedTail,
   toSearchObject,
 } from './mailbox.js';
 import { guessProvider, PROVIDER_IDS, PROVIDERS, type Security, type ServerSettings } from './presets.js';
-import { composeMessage, sendRaw } from './smtp.js';
+import { sendRaw } from './smtp.js';
 
 const security = z.enum(['tls', 'starttls']);
 
@@ -157,11 +163,7 @@ const sender = (ctx: Ctx) =>
 async function deliver(ctx: Ctx, mail: Mail.Options): Promise<Record<string, unknown>> {
   const settings = resolveSettings(ctx.config);
   const raw = await composeMessage({ ...mail, from: sender(ctx) });
-  const recipients = [mail.to, mail.cc, mail.bcc]
-    .flatMap((list) => (Array.isArray(list) ? list : list ? [list] : []))
-    .flatMap((a) => (typeof a === 'string' ? addressparser(a, { flatten: true }) : [a]))
-    .flatMap((a) => ('address' in a && a.address ? [a.address] : []));
-  const envelope = { from: ctx.config.email, to: recipients };
+  const envelope = { from: ctx.config.email, to: envelopeRecipients(mail) };
   const result = await sendRaw(
     {
       server: settings.smtp,
@@ -195,23 +197,12 @@ async function deliver(ctx: Ctx, mail: Mail.Options): Promise<Record<string, unk
 }
 
 const MessageId = z.string().min(3).max(500).describe('Message id from imap_search, e.g. "INBOX:4521"');
-const Addresses = z
-  .array(z.string().trim().min(3).max(320))
-  .max(50)
-  .describe('Addresses: "a@b.com" or "Name <a@b.com>"');
 const Folder = z
   .string()
   .trim()
   .min(1)
   .max(500)
   .describe(`Folder role (${FOLDER_ROLES.join(', ')}) or a folder path from imap_list_folders`);
-
-const reSubject = (prefix: 'Re' | 'Fwd', subject: string | undefined) => {
-  const s = subject?.trim() || '';
-  return new RegExp(`^${prefix}:`, 'i').test(s) ? s : `${prefix}: ${s}`.trim();
-};
-
-const sameAddress = (a: string | undefined, b: string) => a?.toLowerCase() === b.toLowerCase();
 
 export default defineConnector({
   id: 'imap',
@@ -296,14 +287,7 @@ export default defineConnector({
         'Returns one message as plain text (HTML converted, quoted history removed by default) with headers and the attachment list.',
       input: z.object({
         id: MessageId,
-        maxChars: z
-          .number()
-          .int()
-          .min(500)
-          .max(100_000)
-          .default(6000)
-          .describe('Cut the body after this many characters'),
-        includeQuoted: z.boolean().default(false).describe('Keep the quoted previous messages at the end'),
+        ...ReadOptions,
         markRead: z.boolean().default(false).describe('Also mark the message as read'),
       }),
       hints: { readOnly: true, idempotent: true },
@@ -311,12 +295,6 @@ export default defineConnector({
         withImap(ctx, async (client) => {
           const { folder, uid } = decodeId(id);
           const { parsed, flags } = await fetchMessage(client, folder, uid);
-          let text = (parsed.text ?? '').trim();
-          let quotedRemoved = false;
-          if (!includeQuoted) ({ text, removed: quotedRemoved } = stripQuotedTail(text));
-          const totalChars = text.length;
-          const truncated = totalChars > maxChars;
-          if (truncated) text = `${text.slice(0, maxChars)}…`;
           if (markRead && !flags.has('\\Seen')) {
             const lock = await client.getMailboxLock(folder);
             try {
@@ -325,35 +303,12 @@ export default defineConnector({
               lock.release();
             }
           }
-          const list = (value: typeof parsed.to) =>
-            (Array.isArray(value) ? value : value ? [value] : [])
-              .flatMap((group) => group.value)
-              .map(formatAddress);
-          const to = list(parsed.to);
-          const cc = list(parsed.cc);
-          const replyTo = list(parsed.replyTo);
-          return {
+          return readResult(parsed, {
             id,
-            ...(parsed.date ? { date: parsed.date.toISOString().replace(/\.\d{3}Z$/, 'Z') } : {}),
-            from: list(parsed.from)[0] ?? '',
-            ...(to.length ? { to } : {}),
-            ...(cc.length ? { cc } : {}),
-            ...(replyTo.length && replyTo[0] !== list(parsed.from)[0] ? { replyTo } : {}),
-            subject: parsed.subject ?? '(no subject)',
-            ...(flags.has('\\Seen') || markRead ? {} : { unread: true }),
-            text,
-            ...(truncated ? { truncated: true, totalChars } : {}),
-            ...(quotedRemoved ? { quotedHistoryRemoved: true } : {}),
-            ...(parsed.attachments.length
-              ? {
-                  attachments: parsed.attachments.map((a) => ({
-                    filename: a.filename ?? 'attachment',
-                    contentType: a.contentType,
-                    size: a.size,
-                  })),
-                }
-              : {}),
-          };
+            maxChars,
+            includeQuoted,
+            unread: !flags.has('\\Seen') && !markRead,
+          });
         }),
     }),
     action({
@@ -385,44 +340,8 @@ export default defineConnector({
       run: async ({ id, body, replyAll, cc }, ctx) => {
         const { folder, uid } = decodeId(id);
         const original = await withImap(ctx, (client) => fetchMessage(client, folder, uid));
-        const p = original.parsed;
-        const addresses = (value: typeof p.to) =>
-          (Array.isArray(value) ? value : value ? [value] : [])
-            .flatMap((g) => g.value)
-            .filter((a) => a.address);
-        const me = ctx.config.email;
-        const primary = addresses(p.replyTo).length ? addresses(p.replyTo) : addresses(p.from);
-        const to = primary.filter((a) => !sameAddress(a.address, me)).map(formatAddress);
-        const others = replyAll
-          ? [...addresses(p.to), ...addresses(p.cc)]
-              .filter(
-                (a) =>
-                  !sameAddress(a.address, me) && !primary.some((x) => sameAddress(x.address, a.address!)),
-              )
-              .map(formatAddress)
-          : [];
-        const ccList = [...others, ...(cc ?? [])];
-        if (!to.length) {
-          // Replying to own message: answer the original recipients.
-          to.push(
-            ...addresses(p.to)
-              .filter((a) => !sameAddress(a.address, me))
-              .map(formatAddress),
-          );
-        }
-        if (!to.length) throw new ConnectorError('invalid_input', 'The message has no one to reply to.');
-        const references = [
-          ...(Array.isArray(p.references) ? p.references : p.references ? [p.references] : []),
-          ...(p.messageId ? [p.messageId] : []),
-        ];
-        const result = await deliver(ctx, {
-          to,
-          ...(ccList.length ? { cc: ccList } : {}),
-          subject: reSubject('Re', p.subject),
-          text: body,
-          ...(p.messageId ? { inReplyTo: p.messageId } : {}),
-          ...(references.length ? { references } : {}),
-        });
+        const reply = buildReply(original.parsed, { me: ctx.config.email, body, replyAll, cc });
+        const result = await deliver(ctx, reply);
         await withImap(ctx, async (client) => {
           const lock = await client.getMailboxLock(folder);
           try {
@@ -431,7 +350,7 @@ export default defineConnector({
             lock.release();
           }
         }).catch(() => {});
-        return { ...result, to, ...(ccList.length ? { cc: ccList } : {}) };
+        return { ...result, to: reply.to, ...(reply.cc ? { cc: reply.cc } : {}) };
       },
     }),
     action({
@@ -448,24 +367,8 @@ export default defineConnector({
       run: async ({ id, to, body }, ctx) => {
         const { folder, uid } = decodeId(id);
         const raw = await withImap(ctx, (client) => fetchRaw(client, folder, uid));
-        const parsed = await simpleParser(raw, {
-          skipHtmlToText: true,
-          skipTextToHtml: true,
-          skipImageLinks: true,
-        });
-        return deliver(ctx, {
-          to,
-          subject: reSubject('Fwd', parsed.subject),
-          text: body,
-          attachments: [
-            {
-              filename: `${(parsed.subject || 'message').replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80)}.eml`,
-              content: raw,
-              contentType: 'message/rfc822',
-              contentDisposition: 'attachment',
-            },
-          ],
-        });
+        const parsed = await parseRaw(raw);
+        return deliver(ctx, buildForward(raw, parsed.subject, { to, body }));
       },
     }),
     action({

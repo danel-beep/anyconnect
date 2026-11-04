@@ -5,8 +5,9 @@ import type {
   MessageAddressObject,
   SearchObject,
 } from 'imapflow';
-import { type ParsedMail, simpleParser } from 'mailparser';
+import type { ParsedMail } from 'mailparser';
 import { ConnectorError } from '../../sdk.js';
+import { formatAddress, isoDate, parseRaw } from '../email/message.js';
 import {
   decodePart,
   findTextPart,
@@ -116,20 +117,11 @@ export function groupIds(ids: string[]): Map<string, number[]> {
   return groups;
 }
 
-export const formatAddress = (a: MessageAddressObject | { name?: string; address?: string }): string =>
-  a.name && a.address ? `${a.name} <${a.address}>` : (a.address ?? a.name ?? '');
-
 const formatAddresses = (list: MessageAddressObject[] | undefined, max = 5): string[] | undefined => {
   if (!list?.length) return undefined;
   const shown = list.slice(0, max).map(formatAddress);
   if (list.length > max) shown.push(`+${list.length - max} more`);
   return shown;
-};
-
-const isoDate = (value: Date | string | undefined): string | undefined => {
-  if (!value) return undefined;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 };
 
 export interface SearchFilters {
@@ -324,11 +316,7 @@ export async function fetchMessage(client: ImapFlow, folder: string, uid: number
         Buffer.from(`Content-Type: ${type}; charset=utf-8\r\n\r\n${body}`),
       ]);
     }
-    const parsed = await simpleParser(source, {
-      skipImageLinks: true,
-      skipTextToHtml: true,
-      skipTextLinks: true,
-    });
+    const parsed = await parseRaw(source);
     return { parsed, flags: meta.flags ?? new Set(), size: meta.size ?? source.length };
   } finally {
     lock.release();
@@ -350,18 +338,4 @@ export async function fetchRaw(client: ImapFlow, folder: string, uid: number): P
   } finally {
     lock.release();
   }
-}
-
-/** Removes the quoted history at the end of a reply ("> ..." lines and the "On ... wrote:" line). */
-export function stripQuotedTail(text: string): { text: string; removed: boolean } {
-  const lines = text.replace(/\r\n/g, '\n').split('\n');
-  let end = lines.length;
-  while (end > 0 && lines[end - 1]!.trim() === '') end--;
-  let cut = end;
-  while (cut > 0 && (lines[cut - 1]!.trimStart().startsWith('>') || lines[cut - 1]!.trim() === '')) cut--;
-  if (cut === end) return { text, removed: false };
-  const intro = lines[cut - 1];
-  if (intro && /(wrote|написал[аи]?|пишет|schrieb|a écrit|escribió):?\s*$/i.test(intro.trim())) cut--;
-  if (cut <= 0) return { text, removed: false };
-  return { text: lines.slice(0, cut).join('\n').trimEnd(), removed: true };
 }

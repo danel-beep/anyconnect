@@ -211,6 +211,23 @@ const block = (type: string, content: string, extra: Record<string, unknown> = {
   [type]: { rich_text: text(content), ...extra },
 });
 
+const LINE_RULES: [RegExp, (m: RegExpMatchArray) => unknown][] = [
+  [/^(#{1,3})\s+(.*)$/, (m) => block(`heading_${m[1]!.length}`, m[2]!)],
+  [/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/, (m) => block('to_do', m[2]!, { checked: m[1] !== ' ' })],
+  [/^-{3,}\s*$/, () => ({ object: 'block', type: 'divider', divider: {} })],
+  [/^\s*[-*]\s+(.*)$/, (m) => block('bulleted_list_item', m[1]!)],
+  [/^\s*\d+[.)]\s+(.*)$/, (m) => block('numbered_list_item', m[1]!)],
+  [/^>\s?(.*)$/, (m) => block('quote', m[1]!)],
+];
+
+function lineToBlock(line: string): unknown {
+  for (const [pattern, build] of LINE_RULES) {
+    const match = line.match(pattern);
+    if (match) return build(match);
+  }
+  return block('paragraph', line);
+}
+
 /** Simple Markdown (headings, lists, to-dos, quotes, code fences, dividers, paragraphs) → blocks. */
 export function markdownToBlocks(markdown: string): unknown[] {
   const blocks: unknown[] = [];
@@ -225,15 +242,7 @@ export function markdownToBlocks(markdown: string): unknown[] {
       continue;
     }
     if (!line.trim()) continue;
-    let m: RegExpMatchArray | null;
-    if ((m = line.match(/^(#{1,3})\s+(.*)$/))) blocks.push(block(`heading_${m[1]!.length}`, m[2]!));
-    else if ((m = line.match(/^\s*[-*]\s+\[([ xX])\]\s+(.*)$/)))
-      blocks.push(block('to_do', m[2]!, { checked: m[1] !== ' ' }));
-    else if ((m = line.match(/^\s*[-*]\s+(.*)$/))) blocks.push(block('bulleted_list_item', m[1]!));
-    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) blocks.push(block('numbered_list_item', m[1]!));
-    else if ((m = line.match(/^>\s?(.*)$/))) blocks.push(block('quote', m[1]!));
-    else if (/^-{3,}\s*$/.test(line)) blocks.push({ object: 'block', type: 'divider', divider: {} });
-    else blocks.push(block('paragraph', line));
+    blocks.push(lineToBlock(line));
   }
   return blocks;
 }
