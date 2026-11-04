@@ -2,6 +2,7 @@ import type { McpHttpHandler } from '@modelcontextprotocol/server';
 import type { AppConfig } from './config.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
+import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
@@ -17,6 +18,9 @@ import { createLogger, type Logger } from './logger.js';
 import { createHubMcpHandler } from './mcp/handler.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
+import { AiClientService } from './security/clients.js';
+import { PERSONA_SLUG, PersonaService } from './security/personas.js';
+import { PolicyService } from './security/policy-service.js';
 import { VERSION } from './version.js';
 import { SessionService } from './web/sessions.js';
 
@@ -37,6 +41,9 @@ export interface Services {
   clients: ClientRegistry;
   oauth: OAuthServer;
   verifier: HubTokenVerifier;
+  aiClients: AiClientService;
+  personas: PersonaService;
+  policies: PolicyService;
   sessions: SessionService;
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
@@ -67,7 +74,7 @@ export function createServices(
   const network = createNetworkPolicy({
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
-  const accounts = new AccountService(db, connectors, secrets, network);
+  const accounts = new AccountService(db, connectors, new AccountKeyring(secrets, secrets), network);
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
@@ -96,11 +103,18 @@ export function createServices(
     clients,
     issuer: config.publicUrl,
     resource: config.mcpUrl,
+    subResource: PERSONA_SLUG,
     accessTokenTtlSeconds: config.oauth.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
   });
-  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl);
+  const personas = new PersonaService(db, config.mcpUrl);
+  const aiClients = new AiClientService(db);
+  const policies = new PolicyService(db);
+  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl, async (workspaceId, personaId) => {
+    const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
+    return persona && personas.urlFor(persona.slug);
+  });
   const sessions = new SessionService(db, config.sessionTtlSeconds);
   const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
 
@@ -119,6 +133,9 @@ export function createServices(
     clients,
     oauth,
     verifier,
+    aiClients,
+    personas,
+    policies,
     sessions,
     rateLimiter,
     idempotency,

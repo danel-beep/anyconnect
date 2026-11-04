@@ -1,7 +1,7 @@
 import type { Child, FC } from 'hono/jsx';
 import type { Translate } from './i18n.js';
 
-const Layout: FC<{ title: string; narrow?: boolean; lang: string; children?: Child }> = ({
+export const Layout: FC<{ title: string; narrow?: boolean; lang: string; children?: Child }> = ({
   title,
   narrow,
   lang,
@@ -78,6 +78,10 @@ export interface ConsentView {
   loopback: boolean;
   workspaceName: string;
   activeAccounts: number;
+  /** Set when the app connects to a persona's MCP URL. */
+  persona?: { name: string; slug: string };
+  /** Which AI client entity the app will be linked to (policies apply to it). */
+  clientChoice: { selected: string; options: { value: string; label: string }[] };
   email: string;
   csrf: string;
   hidden: Record<string, string>;
@@ -110,6 +114,12 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
         <li>{t('consent.access.mcp', { count: view.activeAccounts })}</li>
         <li>{t('consent.access.offline')}</li>
       </ul>
+      {view.persona ? (
+        <p class="small">
+          {t('consent.persona')}: <strong>{view.persona.name}</strong> ({view.persona.slug}) ·{' '}
+          {t('consent.personaHint')}
+        </p>
+      ) : null}
       <p class="small muted">
         {t('consent.workspace')}: {view.workspaceName} · {t('consent.signedInAs', { email: view.email })}
       </p>
@@ -118,6 +128,15 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
         {Object.entries(view.hidden).map(([name, value]) => (
           <input type="hidden" name={name} value={value} />
         ))}
+        <label for="ai_client">{t('consent.clientAs')}</label>
+        <select id="ai_client" name="ai_client">
+          {view.clientChoice.options.map((option) => (
+            <option value={option.value} selected={option.value === view.clientChoice.selected}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p class="small muted">{t('consent.clientHint')}</p>
         <div class="actions">
           <button type="submit" name="decision" value="deny">
             {t('consent.deny')}

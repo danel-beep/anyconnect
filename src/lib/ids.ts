@@ -42,4 +42,9 @@ export type IdPrefix =
   | 'acc' // connected service account
   | 'cli' // OAuth client (dynamic registration)
   | 'grt' // OAuth grant (an AI client connected to a workspace)
-  | 'pat'; // personal access token
+  | 'pat' // personal access token
+  | 'app' // AI client as the user sees it (Claude, ChatGPT, a script), the subject of policies
+  | 'prs' // persona: a named slice of the workspace with its own MCP URL
+  | 'rul' // access rule (client × persona × account × risk)
+  | 'pcl' // pending call: waiting for confirmation or for its undo window
+  | 'ntf'; // notification channel (e.g. the owner's Telegram chat)

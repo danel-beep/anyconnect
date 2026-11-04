@@ -14,7 +14,7 @@ p{margin:0 0 12px}
 .muted{color:var(--muted)}
 .small{font-size:13px}
 label{display:block;font-weight:600;margin:12px 0 4px}
-input[type=email],input[type=password],input[type=text]{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+input[type=email],input[type=password],input[type=text],select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
 input[readonly]{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}
 button{font:inherit;font-weight:600;border-radius:8px;padding:10px 16px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
@@ -40,4 +40,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
 header.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
 .brand{font-weight:800;font-size:18px;letter-spacing:-.01em}
 form.inline{display:inline}
+pre.args{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
+.item{border-top:1px solid var(--border);padding-top:16px;margin-top:16px}
+.item:first-of-type{border-top:0;padding-top:0;margin-top:0}
 `;

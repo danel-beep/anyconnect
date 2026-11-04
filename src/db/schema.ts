@@ -51,6 +51,24 @@ export interface WorkspaceSettings {
    * - `per_account`: one tool per account and action (most explicit, more tools)
    */
   toolExposure?: 'grouped' | 'per_account';
+  /** Workspace-wide defaults of the access policy (rules override them, see access_rules). */
+  security?: SecuritySettings;
+}
+
+/** How risky an action is: reads, changes, or destructive / irreversible operations. */
+export type RiskLevel = 'read' | 'write' | 'dangerous';
+/** The highest risk a client may use: `none` hides the account, `full` allows dangerous actions. */
+export type AccessLevel = 'none' | 'read' | 'write' | 'full';
+/** From which risk on a call needs the user's confirmation. */
+export type ConfirmLevel = 'never' | 'dangerous' | 'write' | 'always';
+
+export interface SecuritySettings {
+  /** Default: `full`. */
+  defaultAccess?: AccessLevel;
+  /** Default: `dangerous`. */
+  defaultConfirm?: ConfirmLevel;
+  /** Undo window for changing actions (seconds, 0 = run at once). Default: 0. */
+  undoWindowSeconds?: number;
 }
 
 export const workspaces = pgTable('workspaces', {
@@ -143,6 +161,10 @@ export const oauthGrants = pgTable(
     resource: text().notNull(),
     /** Snapshot of the client's display name at consent time. */
     clientName: text(),
+    /** The AI client this grant belongs to (stable across re-registrations of the same app). */
+    aiClientId: text().references(() => aiClients.id, { onDelete: 'set null' }),
+    /** Set when the grant is for a persona's MCP URL. Deleting the persona disconnects the grant. */
+    personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
     revokedAt: timestamp({ withTimezone: true }),
@@ -170,6 +192,9 @@ export const oauthAuthorizationCodes = pgTable('oauth_authorization_codes', {
   usedAt: timestamp({ withTimezone: true }),
   /** Grant created when the code was exchanged (revoked if the code is replayed). */
   grantId: text(),
+  /** Copied to the grant: see oauth_grants. */
+  aiClientId: text(),
+  personaId: text(),
 });
 
 export const oauthTokens = pgTable(
@@ -205,6 +230,10 @@ export const apiTokens = pgTable(
     /** First characters of the token, safe to display. */
     tokenPrefix: text().notNull(),
     scopes: text().array().notNull().default(sql`'{}'::text[]`),
+    /** The AI client (script, CLI) this token acts as; policies apply to it. */
+    aiClientId: text().references(() => aiClients.id, { onDelete: 'set null' }),
+    /** Restricts the token to one persona's MCP URL. */
+    personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
     expiresAt: timestamp({ withTimezone: true }),
@@ -249,7 +278,12 @@ export const accounts = pgTable(
     description: text(),
     /** Non-secret configuration (validated by the connector's config schema). */
     config: jsonb().$type<Record<string, unknown>>().notNull().default({}),
-    /** Secret credentials, encrypted with the SecretBox (AAD = account id). */
+    /**
+     * The account's own data key (DEK), wrapped by the master key. It encrypts the account's
+     * secrets (envelope encryption); rotating the master key only re-wraps this value.
+     */
+    dataKeyEncrypted: text(),
+    /** Secret credentials, encrypted with the account's data key (AAD = account id). */
     credentialsEncrypted: text(),
     enabled: boolean().notNull().default(true),
     status: text().$type<'active' | 'error' | 'needs_reauth'>().notNull().default('active'),
@@ -291,4 +325,172 @@ export const toolCalls = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index().on(t.workspaceId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Data protection: AI clients, personas, access policy, confirmations
+// ---------------------------------------------------------------------------
+
+/**
+ * An AI client as the user thinks of it: "Claude", "ChatGPT", "Claude Code", "backup script".
+ * OAuth grants and personal tokens point to one, so a policy like "ChatGPT may only read" keeps
+ * applying when the app reconnects or re-registers itself.
+ */
+export const aiClients = pgTable(
+  'ai_clients',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    kind: text().$type<'oauth' | 'api_token'>().notNull(),
+    /** Stable identity used to recognise the same app again, e.g. `cimd:<url>` or `app:claude`. */
+    matchKey: text().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [uniqueIndex().on(t.workspaceId, t.matchKey)],
+);
+
+/**
+ * A persona is a named slice of the workspace ("Работа", "Личное") with its own MCP URL
+ * (`/mcp/<slug>`). An AI app connected to that URL only sees the persona's accounts.
+ */
+export const personas = pgTable(
+  'personas',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** URL segment, immutable (it is part of the OAuth resource the grants are bound to). */
+    slug: text().notNull(),
+    name: text().notNull(),
+    description: text(),
+    /** Accounts visible through this persona. */
+    accountIds: text().array().notNull().default(sql`'{}'::text[]`),
+    /** Upper bound for every client using the persona. */
+    maxAccess: text().$type<AccessLevel>().notNull().default('full'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.workspaceId, t.slug)],
+);
+
+/**
+ * Access policy: who (AI client and/or persona, empty = anyone) may do what (access level by risk,
+ * confirmation, undo window) on which accounts (an account, a whole service, or everything).
+ * For every field the most specific matching rule that sets it wins.
+ */
+export const accessRules = pgTable(
+  'access_rules',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    aiClientId: text().references(() => aiClients.id, { onDelete: 'cascade' }),
+    personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
+    connectorId: text(),
+    accountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
+    access: text().$type<AccessLevel>(),
+    confirm: text().$type<ConfirmLevel>(),
+    undoWindowSeconds: integer(),
+    note: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.workspaceId)],
+);
+
+export type PendingCallStatus =
+  | 'awaiting_confirmation'
+  | 'scheduled'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'denied'
+  | 'cancelled'
+  | 'expired';
+
+/** Who made a pending call, so it can be executed later exactly as that caller. */
+export interface PendingCallPrincipal {
+  kind: 'oauth' | 'api_token' | 'session';
+  userId: string;
+  scopes: string[];
+  clientId?: string;
+  credentialId?: string;
+  aiClientId?: string;
+  personaId?: string;
+}
+
+/**
+ * A tool call the hub holds back: waiting for the user's confirmation (in the chat, Telegram or the
+ * web page) or for its undo window. Arguments and results are encrypted; rows are short-lived.
+ */
+export const pendingCalls = pgTable(
+  'pending_calls',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    principal: jsonb().$type<PendingCallPrincipal>().notNull(),
+    toolName: text().notNull(),
+    connectorId: text().notNull(),
+    action: text().notNull(),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    risk: text().$type<RiskLevel>().notNull(),
+    /** Why the call is risky, when the action explained it (e.g. "first message to a new contact"). */
+    reason: text(),
+    /** SecretBox, AAD = `pending:<id>:args`. */
+    argsEncrypted: text().notNull(),
+    /** SHA-256 of the canonical arguments: a retried call must match what was approved. */
+    argsHash: text().notNull(),
+    status: text().$type<PendingCallStatus>().notNull(),
+    /** Channels the confirmation was offered on, e.g. {elicitation} or {telegram,web}. */
+    channels: text().array().notNull().default(sql`'{}'::text[]`),
+    decidedVia: text(),
+    decidedAt: timestamp({ withTimezone: true }),
+    /** Undo window applied after approval (seconds). */
+    undoWindowSeconds: integer().notNull().default(0),
+    /** When an approved call runs (end of its undo window). */
+    executeAt: timestamp({ withTimezone: true }),
+    /** Unanswered confirmations expire. */
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    /** SecretBox, AAD = `pending:<id>:result`. */
+    resultEncrypted: text(),
+    /** Telegram message to update once the call is decided. */
+    telegramMessage: jsonb().$type<{ chatId: string; messageId: number }>(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.status, t.executeAt), index().on(t.workspaceId, t.createdAt)],
+);
+
+/** Where the hub reaches its owner: today the Telegram chat used for confirmations and alerts. */
+export const notificationChannels = pgTable(
+  'notification_channels',
+  {
+    id: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text().$type<'telegram'>().notNull(),
+    /** Telegram chat id once linked. */
+    address: text(),
+    /** e.g. the Telegram @username, for display. */
+    label: text(),
+    /** SHA-256 of the one-time code of a link in progress. */
+    linkCodeHash: text(),
+    linkExpiresAt: timestamp({ withTimezone: true }),
+    verifiedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.userId, t.kind), index().on(t.linkCodeHash)],
 );

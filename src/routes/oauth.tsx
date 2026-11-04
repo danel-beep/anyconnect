@@ -3,6 +3,7 @@ import { authenticate, getDefaultWorkspace } from '../core/identity.js';
 import { OAuthProtocolError } from '../oauth/clients.js';
 import { isLoopbackRedirect, knownClientName } from '../oauth/redirect.js';
 import type { AuthorizationRequest } from '../oauth/server.js';
+import { suggestClientIdentity } from '../security/clients.js';
 import {
   clearCookie,
   clientIp,
@@ -68,13 +69,47 @@ function displayName(request: AuthorizationRequest): { clientName: string; verif
   return verifiedDomain ? { clientName, verifiedDomain } : { clientName };
 }
 
+/** The persona of the requested MCP URL, `null` for the root URL, `undefined` if it does not exist. */
+async function personaOf(c: AppContext, workspaceId: string, resource: string) {
+  const s = c.get('services');
+  const slug = s.personas.slugOfResource(resource);
+  if (!slug) return null;
+  return s.personas.bySlug(workspaceId, slug);
+}
+
+const NEW_CLIENT = 'new';
+
+async function clientChoice(c: AppContext, workspaceId: string, request: AuthorizationRequest) {
+  const s = c.get('services');
+  const identity = suggestClientIdentity(request.client, request.redirectUri);
+  const [existing, all] = await Promise.all([
+    s.aiClients.findByKey(workspaceId, identity.matchKey),
+    s.aiClients.list(workspaceId),
+  ]);
+  const t = c.get('t');
+  const options = [
+    ...(existing ? [] : [{ value: NEW_CLIENT, label: t('consent.clientNew', { name: identity.name }) }]),
+    ...all.map((client) => ({ value: client.id, label: client.name })),
+  ];
+  return { identity, selected: existing?.id ?? NEW_CLIENT, options };
+}
+
 async function renderConsent(c: AppContext, request: AuthorizationRequest, params: Record<string, string>) {
   const s = c.get('services');
   const user = (await currentUser(c))!;
   const workspace = await getDefaultWorkspace(s.db, user.id);
   if (!workspace)
     return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message="No workspace" />, 500);
-  const accounts = await s.accounts.list(workspace.id);
+  const persona = await personaOf(c, workspace.id, request.resource);
+  if (persona === undefined)
+    return c.html(
+      <ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('consent.personaMissing')} />,
+      404,
+    );
+  const visible = (await s.accounts.list(workspace.id)).filter(
+    (a) => a.enabled && (!persona || persona.accountIds.includes(a.id)),
+  );
+  const choice = await clientChoice(c, workspace.id, request);
   const redirect = new URL(request.redirectUri);
   const redirectHost = redirect.host || `${redirect.protocol}//`;
   const { clientName, verifiedDomain } = displayName(request);
@@ -91,7 +126,9 @@ async function renderConsent(c: AppContext, request: AuthorizationRequest, param
         ...(knownApp && redirect.protocol === 'https:' ? { knownApp } : {}),
         loopback: isLoopbackRedirect(request.redirectUri),
         workspaceName: workspace.name,
-        activeAccounts: accounts.filter((a) => a.enabled).length,
+        activeAccounts: visible.length,
+        ...(persona ? { persona: { name: persona.name, slug: persona.slug } } : {}),
+        clientChoice: { selected: choice.selected, options: choice.options },
         email: user.email,
         csrf: csrfToken(c, { secure: s.config.secureCookies }),
         hidden: params,
@@ -113,6 +150,12 @@ export function oauthRoutes() {
   app.get('/.well-known/oauth-protected-resource/mcp', (c) =>
     c.json(c.get('services').oauth.protectedResourceMetadata()),
   );
+  app.get('/.well-known/oauth-protected-resource/mcp/:persona', (c) => {
+    const s = c.get('services');
+    const resource = s.oauth.canonicalResource(`${s.config.mcpUrl}/${c.req.param('persona')}`);
+    if (!resource) return c.json({ error: 'not_found' }, 404);
+    return c.json(s.oauth.protectedResourceMetadata(resource));
+  });
 
   // --- Client registration, token, revocation (machine endpoints) ----------
   app.use('/oauth/register', publicCors());
@@ -201,8 +244,26 @@ export function oauthRoutes() {
     const workspace = await getDefaultWorkspace(s.db, user.id);
     if (!workspace)
       return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message="No workspace" />, 500);
-    const location = await s.oauth.approve(validation.request, user.id, workspace.id);
-    s.logger.info({ clientId: validation.request.client.id, userId: user.id }, 'oauth access approved');
+    const persona = await personaOf(c, workspace.id, validation.request.resource);
+    if (persona === undefined)
+      return c.html(
+        <ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('consent.personaMissing')} />,
+        404,
+      );
+    // Link the app to an AI client entity: the one the user picked, or the suggested identity.
+    const { identity } = await clientChoice(c, workspace.id, validation.request);
+    const picked = form.ai_client && form.ai_client !== NEW_CLIENT ? form.ai_client : undefined;
+    const aiClient = picked
+      ? await s.aiClients.get(workspace.id, picked)
+      : await s.aiClients.ensure(workspace.id, { ...identity, kind: 'oauth' });
+    const location = await s.oauth.approve(validation.request, user.id, workspace.id, {
+      aiClientId: aiClient.id,
+      ...(persona ? { personaId: persona.id } : {}),
+    });
+    s.logger.info(
+      { clientId: validation.request.client.id, userId: user.id, aiClientId: aiClient.id },
+      'oauth access approved',
+    );
     return c.redirect(location, 303);
   });
 

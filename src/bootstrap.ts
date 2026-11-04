@@ -12,6 +12,18 @@ export async function bootstrap(services: Services): Promise<void> {
   if (services.secrets.usingDevelopmentKey) {
     logger.warn('ENCRYPTION_KEY is not set: using an insecure development key. Never do this in production.');
   }
+  const encryption = await accounts.upgradeEncryption();
+  if (encryption.upgraded || encryption.rewrapped) {
+    logger.info(encryption, 'account encryption upgraded');
+  }
+  if (encryption.failed) {
+    logger.error(
+      { failed: encryption.failed },
+      'some account secrets cannot be decrypted with the configured keys (check ENCRYPTION_KEYS_PREVIOUS)',
+    );
+  }
+  const linked = await services.aiClients.backfill();
+  if (linked.grants || linked.tokens) logger.info(linked, 'existing AI apps linked to AI clients');
   if (!config.admin) {
     logger.warn('ADMIN_EMAIL / ADMIN_PASSWORD are not set: nobody can sign in until they are.');
     return;

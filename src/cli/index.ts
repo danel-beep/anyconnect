@@ -14,6 +14,8 @@ const HELP = `AnyConnect admin CLI
 Usage: npm run cli -- <command> [options]
 
   keys:generate                          Print a new ENCRYPTION_KEY
+  keys:rotate                            Re-wrap account data keys with the current ENCRYPTION_KEY
+                                         (run after moving the old key to ENCRYPTION_KEYS_PREVIOUS)
   db:migrate                             Apply database migrations
   users:create --email E --password P    Create a user with a personal workspace
   users:password --email E --password P  Set a user's password
@@ -84,6 +86,14 @@ async function main() {
         await runMigrations(services.database.pool);
         console.log('Migrations applied.');
         break;
+      case 'keys:rotate': {
+        const result = await services.accounts.upgradeEncryption();
+        console.log(
+          `Accounts upgraded to their own data key: ${result.upgraded}; data keys re-wrapped: ${result.rewrapped}; unreadable: ${result.failed}.`,
+        );
+        if (result.failed) process.exitCode = 1;
+        break;
+      }
       case 'users:create': {
         if (!values.email || !values.password) throw new Error('--email and --password are required');
         const { user, workspace } = await createUser(services.db, {

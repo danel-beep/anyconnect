@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { generateKey, hashPassword, parseKey, SecretBox, verifyPassword } from '../src/lib/crypto.js';
+import {
+  DataKey,
+  generateKey,
+  hashPassword,
+  parseKey,
+  SecretBox,
+  verifyPassword,
+} from '../src/lib/crypto.js';
 
 describe('SecretBox', () => {
   const key = generateKey();
@@ -48,6 +55,45 @@ describe('SecretBox', () => {
   it('derives distinct purpose keys', () => {
     const box = new SecretBox(key);
     expect(box.deriveKey('csrf').equals(box.deriveKey('signing'))).toBe(false);
+  });
+});
+
+describe('DataKey (envelope encryption)', () => {
+  const key = generateKey();
+
+  it('encrypts with a per-record key that is stored only wrapped by the master key', () => {
+    const box = new SecretBox(key);
+    const dek = DataKey.generate();
+    const wrapped = dek.wrap(box, 'account:1:dek');
+    expect(wrapped).toMatch(/^v1\./);
+    const envelope = dek.encryptJson({ token: 'super-secret' }, 'account:1:credentials');
+    expect(envelope).toMatch(/^d1\.[\w-]+\.[\w-]+$/);
+    expect(DataKey.isEnvelope(envelope)).toBe(true);
+    expect(envelope).not.toContain('super-secret');
+    const reopened = DataKey.unwrap(box, wrapped, 'account:1:dek');
+    expect(reopened.decryptJson(envelope, 'account:1:credentials')).toEqual({ token: 'super-secret' });
+  });
+
+  it('binds wrapped keys and ciphertexts to their record', () => {
+    const box = new SecretBox(key);
+    const dek = DataKey.generate();
+    const wrapped = dek.wrap(box, 'account:1:dek');
+    expect(() => DataKey.unwrap(box, wrapped, 'account:2:dek')).toThrow();
+    const envelope = dek.encrypt('x', 'account:1:credentials');
+    expect(() => dek.decrypt(envelope, 'account:2:credentials')).toThrow();
+    expect(() => DataKey.generate().decrypt(envelope, 'account:1:credentials')).toThrow();
+  });
+
+  it('survives master key rotation by re-wrapping only the data key', () => {
+    const oldBox = new SecretBox(key);
+    const dek = DataKey.generate();
+    const wrapped = dek.wrap(oldBox, 'ctx');
+    const envelope = dek.encrypt('payload', 'data');
+    const rotated = new SecretBox(generateKey(), [key]);
+    expect(rotated.needsRewrap(wrapped)).toBe(true);
+    const rewrapped = DataKey.unwrap(rotated, wrapped, 'ctx').wrap(rotated, 'ctx');
+    expect(rotated.needsRewrap(rewrapped)).toBe(false);
+    expect(DataKey.unwrap(rotated, rewrapped, 'ctx').decrypt(envelope, 'data')).toBe('payload');
   });
 });
 
