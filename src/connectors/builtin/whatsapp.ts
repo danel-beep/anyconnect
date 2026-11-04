@@ -245,9 +245,6 @@ const MEDIA_TYPES = { photo: 'image', video: 'video', audio: 'audio', document: 
 function messageContent(job: OutboundJob) {
   if (job.file) {
     const type = MEDIA_TYPES[job.file.kind];
-    // WhatsApp plays audio without a caption: the text would be lost silently.
-    if (type === 'audio' && job.text)
-      throw new DeliveryError('rejected', 'WhatsApp audio cannot carry text: send the text separately.');
     return {
       type,
       [type]: {
@@ -502,6 +499,7 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
   idempotentSend: false,
   templates: true,
   files: true,
+  captionless: ['audio'],
 
   async send(job, ctx) {
     if (job.kind === 'mark_read') {

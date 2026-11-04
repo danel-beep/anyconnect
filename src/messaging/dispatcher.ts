@@ -145,17 +145,21 @@ export class Dispatcher {
               sentAt: receipt.sentAt,
               text: job.text ?? '',
               ...(job.replyToExternalId ? { replyToExternalId: job.replyToExternalId } : {}),
-              ...(job.file
-                ? {
-                    attachments: [
-                      {
-                        externalId: `${receipt.externalId}:file`,
-                        kind: job.file.kind,
-                        name: job.file.name ?? fileNameOf(job.file.url),
-                      },
-                    ],
-                  }
-                : {}),
+              ...(receipt.attachments?.length
+                ? { attachments: receipt.attachments }
+                : job.file
+                  ? {
+                      attachments: [
+                        {
+                          externalId: `${receipt.externalId}:file`,
+                          kind: job.file.kind,
+                          ...(job.file.name ? { name: job.file.name } : {}),
+                          // Not kept by the messenger in a form the hub can fetch: get_attachment says so.
+                          locator: { sentLink: job.file.url },
+                        },
+                      ],
+                    }
+                  : {}),
             },
           ]);
           messageId =
@@ -240,13 +244,4 @@ export class Dispatcher {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** The last path segment of a file URL, for the hub's copy of a sent file. */
-function fileNameOf(url: string): string {
-  try {
-    return decodeURIComponent(new URL(url).pathname.split('/').at(-1) ?? '') || 'file';
-  } catch {
-    return 'file';
-  }
 }

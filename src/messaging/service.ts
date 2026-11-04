@@ -130,6 +130,20 @@ export class MessagingService implements MessagingPort {
         if (request.file && (resolved.transport.kind !== 'direct' || !resolved.transport.files)) {
           throw new ConnectorError('invalid_input', 'This account cannot send files yet.');
         }
+        if (request.file && request.template) {
+          throw new ConnectorError('invalid_input', 'Send a template or a file, not both.');
+        }
+        if (
+          request.file &&
+          request.text &&
+          resolved.transport.kind === 'direct' &&
+          resolved.transport.captionless?.includes(request.file.kind)
+        ) {
+          throw new ConnectorError(
+            'invalid_input',
+            `This messenger sends ${request.file.kind} without text: send the text as a separate message.`,
+          );
+        }
         if (request.file && request.text.length > MAX_CAPTION_LENGTH) {
           throw new ConnectorError(
             'invalid_input',
@@ -204,6 +218,13 @@ export class MessagingService implements MessagingPort {
         const index = Number(/^a(\d+)$/.exec(attachmentId)?.[1] ?? Number.NaN);
         const attachment = message?.body.attachments[index];
         if (!message || !attachment) throw new ConnectorError('not_found', 'Attachment not found.');
+        const sentLink = (attachment.locator as { sentLink?: string } | undefined)?.sentLink;
+        if (sentLink) {
+          throw new ConnectorError(
+            'not_found',
+            `This file was sent by link and the hub keeps no copy of it: ${sentLink}`,
+          );
+        }
         const resolved = await requireResolved();
         if (resolved.transport.kind === 'session') {
           const chat = await requireChat(message.chatId);

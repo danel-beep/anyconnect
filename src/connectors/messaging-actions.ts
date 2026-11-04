@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import type { ChatView, MessageView, MessagingPort } from './messaging.js';
+import { fileNameFromUrl } from './messaging-http.js';
 import {
   type ActionDefinition,
   type ActionFactory,
@@ -335,7 +336,7 @@ export function messengerActions<TConfig, TCredentials>(
                 file: {
                   url: input.file_url,
                   kind: input.file_kind ?? fileKindOf(input.file_url),
-                  ...(input.file_name ? { name: input.file_name } : {}),
+                  name: input.file_name ?? fileNameFromUrl(input.file_url),
                 },
               }
             : {}),
@@ -475,15 +476,14 @@ export function messengerUiTexts(
   };
 }
 
-/** Guesses how to send a file from its URL's extension. */
+/**
+ * Guesses how to send a file from its link's extension. Only formats both Telegram and WhatsApp
+ * show as photo, video or audio get those kinds; everything else goes as a document.
+ */
 export function fileKindOf(url: string): 'photo' | 'video' | 'audio' | 'document' {
-  let path = url;
-  try {
-    path = new URL(url).pathname;
-  } catch {}
-  const ext = /\.([a-z0-9]{1,5})$/i.exec(path)?.[1]?.toLowerCase();
-  if (ext && ['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'photo';
-  if (ext && ['mp4', 'mov', '3gp'].includes(ext)) return 'video';
-  if (ext && ['mp3', 'm4a', 'ogg', 'aac', 'amr', 'opus'].includes(ext)) return 'audio';
+  const ext = /\.([a-z0-9]{1,5})$/i.exec(new URL(url).pathname)?.[1]?.toLowerCase();
+  if (ext && ['jpg', 'jpeg', 'png'].includes(ext)) return 'photo';
+  if (ext && ['mp4', '3gp'].includes(ext)) return 'video';
+  if (ext && ['mp3', 'm4a', 'ogg', 'opus', 'aac', 'amr'].includes(ext)) return 'audio';
   return 'document';
 }

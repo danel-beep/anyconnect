@@ -155,6 +155,8 @@ export interface SentReceipt {
   /** The messenger's id of the message that was sent. */
   externalId: string;
   sentAt: Date;
+  /** The sent file as the messenger stored it, so it can be downloaded again later. */
+  attachments?: InboundAttachment[];
 }
 
 export type DeliveryErrorKind =
@@ -199,6 +201,8 @@ export interface DirectTransport<TConfig = unknown, TCredentials = unknown> {
   templates?: boolean;
   /** The transport can send {@link OutboundJob.file}. */
   files?: boolean;
+  /** File kinds this messenger sends without a caption (the text would be lost). */
+  captionless?: OutboundFile['kind'][];
   send(job: OutboundJob, ctx: AccountContext<TConfig, TCredentials>): Promise<SentReceipt | undefined>;
   download?(
     attachment: { externalId: string; locator?: unknown },

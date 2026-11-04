@@ -48,8 +48,21 @@ async function startFakeApis() {
   let nextMessageId = 500;
   let failNext: { status: number; body: unknown } | undefined;
   const app = new Hono();
+  // Files the hub downloads to upload them to Telegram itself.
+  app.get('/files/:name', (c) =>
+    c.body(new TextEncoder().encode(`contents of ${c.req.param('name')}`), 200, {
+      'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }),
+  );
+  app.get('/huge', (c) => c.body(new Uint8Array(21 * 1_048_576), 200));
   app.post('/:token/:method', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    let body: any;
+    if (c.req.header('content-type')?.startsWith('multipart/form-data')) {
+      body = {};
+      for (const [key, value] of (await c.req.formData()).entries()) {
+        body[key] = typeof value === 'string' ? value : { filename: value.name, text: await value.text() };
+      }
+    } else body = await c.req.json().catch(() => ({}));
     calls.push({ path: `${c.req.param('method')}`, body });
     if (c.req.param('token') !== `bot${BOT_TOKEN}`) {
       return c.json({ ok: false, error_code: 401, description: 'Unauthorized' }, 401);
@@ -67,10 +80,25 @@ async function startFakeApis() {
         return c.json({ ok: true, result: true });
       case 'sendMessage':
       case 'sendPhoto':
+      case 'sendVoice':
       case 'sendDocument':
         return c.json({
           ok: true,
-          result: { message_id: nextMessageId++, date: Math.floor(Date.now() / 1000) },
+          result: {
+            message_id: nextMessageId++,
+            date: Math.floor(Date.now() / 1000),
+            chat: { id: 42, type: 'private' },
+            // Uploaded documents come back as Telegram stores them.
+            ...(typeof body.document === 'object'
+              ? {
+                  document: {
+                    file_id: 'DOC-FILE-ID',
+                    file_unique_id: 'DOC-U',
+                    file_name: body.document.filename,
+                  },
+                }
+              : {}),
+          },
         });
       default:
         return c.json({ ok: false, error_code: 404, description: 'Not Found' }, 404);
@@ -485,6 +513,54 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     });
     expect((long.content[0] as { text: string }).text).toContain('at most 1024');
     expect((await call('telegram_send', { chat: chat.id })).isError).toBe(true);
+
+    // A file sent by link has no copy in the hub: get_attachment says where it came from.
+    const pdf = read.messages.at(-1);
+    const missing = await call('telegram_get_attachment', { message: pdf.id, attachment: 'a0' });
+    expect((missing.content[0] as { text: string }).text).toContain('price%20list.pdf');
+  });
+
+  it('uploads files Telegram cannot fetch by link, with their own name', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(8, 'Send the contract'));
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const port = hub.services.messaging.service.forAccount(account.id);
+    const sent = await port.send({
+      chatId: chat.id,
+      text: 'Here it is',
+      file: { url: `${apis.url}/files/contract.docx`, kind: 'document', name: 'Contract v2.docx' },
+    });
+    expect(sent.status).toBe('sent');
+    const upload = apis.calls.filter((c) => c.path === 'sendDocument').at(-1)?.body;
+    expect(upload).toMatchObject({
+      chat_id: '42',
+      caption: 'Here it is',
+      document: { filename: 'Contract v2.docx', text: 'contents of contract.docx' },
+    });
+    // The stored copy points at Telegram's file, like a received one.
+    const [message] = await hub.services.db
+      .select()
+      .from(messengerMessages)
+      .where(eq(messengerMessages.direction, 'out'));
+    const stored = await hub.services.messaging.store.getMessage(account.id, message!.id);
+    expect(stored?.body.attachments[0]).toMatchObject({
+      kind: 'document',
+      locator: { fileId: 'DOC-FILE-ID' },
+    });
+
+    // Voice notes go as voice; oversized downloads fail cleanly instead of filling memory.
+    await port.send({
+      chatId: chat.id,
+      text: '',
+      file: { url: 'https://cdn.example.com/a.ogg', kind: 'audio' },
+    });
+    expect(apis.calls.find((c) => c.path === 'sendVoice')?.body.voice).toBe('https://cdn.example.com/a.ogg');
+    const huge = await port.send({
+      chatId: chat.id,
+      text: '',
+      file: { url: `${apis.url}/huge`, kind: 'document', name: 'big.bin' },
+    });
+    expect(huge).toMatchObject({ status: 'failed', error: expect.stringContaining('larger than 20 MB') });
   });
 
   it('waits out Telegram flood limits instead of failing', async () => {
@@ -627,6 +703,17 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
           filename: 'Invoice 123.pdf',
         },
       });
+    });
+
+    it('refuses audio with text before queueing it', async () => {
+      await addNumber();
+      const result = await call('whatsapp_send', {
+        to: '+15550123',
+        text: 'listen',
+        file_url: 'https://files.example.com/a.mp3',
+      });
+      expect((result.content[0] as { text: string }).text).toContain('without text');
+      expect(await hub.services.db.select().from(messengerOutbox)).toHaveLength(0);
     });
 
     it('starts a conversation by phone number as a new contact', async () => {
