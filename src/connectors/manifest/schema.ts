@@ -31,6 +31,7 @@ const ProviderSpec = z.object({
   scopeParam: z.string().optional(),
   baseScopes: z.array(z.string()).optional(),
   authorizeParams: z.record(z.string(), z.string()).optional(),
+  tokenParams: z.record(z.string(), z.string()).optional(),
   tokenPath: z.string().optional(),
   appSetupUrl: z.url().optional(),
 });

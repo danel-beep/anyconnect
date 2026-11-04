@@ -63,6 +63,8 @@ export class ConnectService {
       fetch: FetchLike;
       /** `https://<hub>/connect/callback`, registered once at every provider. */
       redirectUri: string;
+      /** Called after an account was connected (e.g. to list the tools of a remote MCP server). */
+      onConnected?: (account: AccountRow) => Promise<void>;
       logger: Logger;
     },
   ) {}
@@ -231,6 +233,7 @@ export class ConnectService {
       }
     }
     await this.deps.accounts.markStatus(account.id, 'active', null);
+    await this.deps.onConnected?.(account);
     const test = await this.deps.accounts.test(row.workspaceId, account.id, this.deps.logger);
     return {
       account: await this.deps.accounts.get(row.workspaceId, account.id),

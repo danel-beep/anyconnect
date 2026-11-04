@@ -43,4 +43,5 @@ export type IdPrefix =
   | 'cli' // OAuth client (dynamic registration)
   | 'grt' // OAuth grant (an AI client connected to a workspace)
   | 'pat' // personal access token
-  | 'oap'; // OAuth app of a service provider (bring your own app)
+  | 'oap' // OAuth app of a service provider (bring your own app)
+  | 'svc'; // user-defined service (remote MCP server, HTTP manifest)

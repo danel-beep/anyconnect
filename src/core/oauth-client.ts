@@ -136,7 +136,7 @@ async function tokenRequest(
   signal: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const headers: Record<string, string> = { accept: 'application/json' };
-  const body: Record<string, string> = { ...params };
+  const body: Record<string, string> = { ...provider.tokenParams, ...params };
   if ((provider.clientAuth ?? 'client_secret_post') === 'client_secret_basic' && app.clientSecret) {
     const encode = (v: string) => encodeURIComponent(v);
     headers.authorization = `Basic ${Buffer.from(`${encode(app.clientId)}:${encode(app.clientSecret)}`).toString('base64')}`;

@@ -374,3 +374,33 @@ export const oauthConnectStates = pgTable(
   },
   (t) => [index().on(t.expiresAt)],
 );
+
+// ---------------------------------------------------------------------------
+// Services defined by the user, without code
+// ---------------------------------------------------------------------------
+
+/**
+ * A service a user added to their workspace without code: a remote MCP server or an HTTP
+ * manifest. Resolved next to the built-in connectors (`WorkspaceConnectorResolver`).
+ */
+export const customConnectors = pgTable(
+  'custom_connectors',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Connector id (tool name prefix), unique in the workspace and never equal to a built-in one. */
+    connectorId: text().notNull(),
+    kind: text().$type<'mcp' | 'manifest'>().notNull(),
+    /** `RemoteMcpDefinition` or an HTTP manifest. */
+    definition: jsonb().$type<Record<string, unknown>>().notNull(),
+    /** Remote MCP servers: the cached tool list. */
+    tools: jsonb().$type<unknown[]>(),
+    toolsRefreshedAt: timestamp({ withTimezone: true }),
+    lastError: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex().on(t.workspaceId, t.connectorId)],
+);

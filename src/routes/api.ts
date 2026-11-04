@@ -151,6 +151,7 @@ export function apiRoutes() {
     const p = principal(c);
     const body = await json(c, z.record(z.string(), z.unknown()));
     const row = await s.accounts.create(p.workspaceId, body as never);
+    await s.customServices.afterAccountConnected(row);
     const test = await s.accounts.test(p.workspaceId, row.id, s.logger);
     const fresh = await s.accounts.get(p.workspaceId, row.id);
     return c.json({ account: toAccountView(fresh), test }, 201);
@@ -170,6 +171,27 @@ export function apiRoutes() {
 
   api.delete('/accounts/:id', async (c) => {
     await c.get('services').accounts.delete(principal(c).workspaceId, c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  // --- Services added without code (remote MCP servers, HTTP manifests) ---
+  api.get('/services', async (c) => {
+    return c.json(await c.get('services').customServices.list(principal(c).workspaceId));
+  });
+
+  api.post('/services', async (c) => {
+    const s = c.get('services');
+    const body = await json(c, z.record(z.string(), z.unknown()));
+    return c.json(await s.customServices.add(principal(c).workspaceId, body as never), 201);
+  });
+
+  api.post('/services/:id/refresh', async (c) => {
+    const s = c.get('services');
+    return c.json(await s.customServices.refreshTools(principal(c).workspaceId, c.req.param('id')));
+  });
+
+  api.delete('/services/:id', async (c) => {
+    await c.get('services').customServices.remove(principal(c).workspaceId, c.req.param('id'));
     return c.body(null, 204);
   });
 
