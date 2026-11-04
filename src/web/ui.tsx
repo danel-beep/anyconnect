@@ -49,7 +49,7 @@ const ICONS = {
   trash: 'M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3',
   pause: 'M8 5v14M16 5v14',
   play: 'M7 4v16l13-8L7 4Z',
-  book: 'M4 19.5V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2ZM4 19.5A2 2 0 0 0 6 21h14',
+  book: 'M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2ZM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7Z',
   chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   pen: 'M4 20h4L19 9l-4-4L4 16v4ZM14 6l4 4',
 } as const;

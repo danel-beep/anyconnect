@@ -438,7 +438,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
                         {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
                       </div>
                     </div>
-                    <div class="ops">
+                    <div class="ops inline">
                       <AccountStatus t={t} a={a} />
                     </div>
                   </div>
