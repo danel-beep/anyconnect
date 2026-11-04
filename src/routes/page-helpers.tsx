@@ -49,6 +49,7 @@ export function pageCtx(c: AppContext, user?: SessionUser): PageCtx {
     google: s.externalLogin.get('google') !== undefined,
     signupsOpen: s.config.site.signups === 'open',
     supportEmail: s.config.site.supportEmail,
+    verification: s.config.site.verification,
     billing: s.billing.enabled,
     csrf: csrfToken(c, cookieOpts(c)),
   };

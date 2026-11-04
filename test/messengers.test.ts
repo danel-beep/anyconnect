@@ -63,6 +63,7 @@ async function startFakeApis() {
       case 'getMe':
         return c.json({ ok: true, result: { id: 123456789, is_bot: true, username: 'shop_bot' } });
       case 'setWebhook':
+      case 'readBusinessMessage':
         return c.json({ ok: true, result: true });
       case 'sendMessage':
         return c.json({
@@ -279,6 +280,86 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       .where(eq(messengerMessages.id, row!.id));
     const read = json(await call('telegram_read_chat', { account: 'shop', chat: chat!.id }));
     expect(read.messages.map((m: { text: string }) => m.text)).toEqual(['Старая запись']);
+  });
+
+  it("handles the user's own chats through Telegram Business", async () => {
+    const account = await addBot();
+    expect(apis.calls.find((c) => c.path === 'setWebhook')?.body.allowed_updates).toContain(
+      'business_message',
+    );
+    const client = { id: 77, first_name: 'Maria', username: 'maria_k' };
+    const owner = { id: 900, first_name: 'Danel' };
+    const business = (
+      id: number,
+      from: { id: number; first_name: string },
+      text: string,
+      edited = false,
+    ) => ({
+      update_id: 1000 + id,
+      [edited ? 'edited_business_message' : 'business_message']: {
+        message_id: id,
+        business_connection_id: 'BC1',
+        date: Math.floor(Date.now() / 1000) - 30,
+        ...(edited ? { edit_date: Math.floor(Date.now() / 1000) } : {}),
+        chat: { id: 77, type: 'private', first_name: 'Maria', username: 'maria_k' },
+        from,
+        text,
+      },
+    });
+    await postTelegram(account.id, business(10, client, 'Can we move the call to Friday?'));
+    await postTelegram(account.id, business(11, owner, 'Let me check'));
+    await postTelegram(account.id, business(12, client, 'Thanks! Also, the contract draft'));
+    await postTelegram(
+      account.id,
+      business(12, client, 'Thanks! Also, the contract draft is attached', true),
+    );
+
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    expect(chat).toMatchObject({ title: 'Maria', username: 'maria_k', kind: 'direct' });
+    const read = json(await call('telegram_read_chat', { chat: chat.id }));
+    expect(read.messages.map((m: { direction: string; text: string }) => [m.direction, m.text])).toEqual([
+      ['in', 'Can we move the call to Friday?'],
+      ['out', 'Let me check'],
+      ['in', 'Thanks! Also, the contract draft is attached'],
+    ]);
+
+    // Replies go through the business connection, as the user.
+    const sent = json(
+      await call('telegram_send', { chat: chat.id, text: 'Friday works', reply_to: read.messages[2].id }),
+    );
+    expect(sent.status).toBe('sent');
+    const request = apis.calls.filter((c) => c.path === 'sendMessage').at(-1);
+    expect(request?.body).toMatchObject({
+      chat_id: '77',
+      business_connection_id: 'BC1',
+      text: 'Friday works',
+      reply_parameters: { message_id: 12 },
+    });
+
+    // Read receipts work in business chats.
+    await call('telegram_mark_read', { chat: chat.id });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await hub.services.messaging.dispatcher.tick();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(apis.calls.find((c) => c.path === 'readBusinessMessage')?.body).toEqual({
+      business_connection_id: 'BC1',
+      chat_id: 77,
+      message_id: 12,
+    });
+
+    // A message deleted on the phone loses its text in the hub's copy.
+    await postTelegram(account.id, {
+      update_id: 2000,
+      deleted_business_messages: {
+        business_connection_id: 'BC1',
+        chat: { id: 77, type: 'private', first_name: 'Maria' },
+        message_ids: [10],
+      },
+    });
+    const after = json(await call('telegram_read_chat', { chat: chat.id }));
+    expect(after.messages[0]).toMatchObject({ deleted: true });
+    expect(after.messages[0].text ?? '').toBe('');
+    expect(json(await call('telegram_search', { query: 'friday call' })).messages).toBeUndefined();
   });
 
   it('asks the user before sending, by default', async () => {
