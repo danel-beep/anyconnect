@@ -881,6 +881,8 @@ const AUDIT_ACTIONS: Record<string, Key> = {
   'user.reactivate': 'admin.action.user.reactivate',
   'user.sign_out': 'admin.action.user.sign_out',
   'user.delete': 'admin.action.user.delete',
+  'error.resolve': 'admin.action.error.resolve',
+  'error.reopen': 'admin.action.error.reopen',
 };
 
 /** One readable line for an admin log entry ("Free → Personal until Dec 31, 2026"). */
@@ -1020,11 +1022,40 @@ export interface OAuthAppView {
   formFallback: boolean;
 }
 
+/** One health check, as on /readyz and the status page. */
+export interface HealthCheckView {
+  name: string;
+  status: 'ok' | 'degraded' | 'down';
+  critical: boolean;
+  detail?: string | undefined;
+  ms: number;
+}
+
+/** A background job and its latest runs. */
+export interface JobView {
+  name: string;
+  description: string;
+  cron?: string | undefined;
+  lastSucceededAt: Date | null;
+  lastFailedAt: Date | null;
+  lastError: string | null;
+  lastDurationMs: number | null;
+  consecutiveFailures: number;
+  runs: number;
+  failures: number;
+}
+
 export interface AdminSystemView {
   version: string;
   env: string;
   publicUrl: string;
   database: boolean;
+  /** Health checks of the hub itself (database, migrations, jobs, event loop…). */
+  health: HealthCheckView[];
+  jobs: JobView[];
+  /** Whether this process runs the job queue (JOBS_ENABLED). */
+  jobsHere: boolean;
+  errors: { open: number; recent: number };
   checks: SystemCheck[];
   /** The address to register in every provider's OAuth app. */
   redirectUri: string;
@@ -1032,13 +1063,14 @@ export interface AdminSystemView {
 }
 
 const LEVEL_DOT = { ok: 'ok', warn: 'warn', off: 'off' } as const;
+const HEALTH_DOT = { ok: 'ok', degraded: 'warn', down: 'bad' } as const;
 
 export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSystemView }> = ({
   ctx,
   shell,
   view,
 }) => {
-  const { t } = ctx;
+  const { t, lang } = ctx;
   return (
     <AppShell ctx={ctx} shell={shell} section="admin-system" title={t('admin.nav.system')}>
       <PageHead title={t('admin.nav.system')} sub={t('admin.system.sub')} />
@@ -1052,6 +1084,95 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
           <span class="label">{t('admin.system.db')}</span>
           <div class="value">{view.database ? 'OK' : '—'}</div>
           <div class="sub">PostgreSQL</div>
+        </div>
+        <a class="stat" href="/admin/errors">
+          <span class="label">{t('admin.nav.errors')}</span>
+          <div class="value">{fmtNumber(lang, view.errors.open)}</div>
+          <div class="sub">{t('admin.system.errorsRecent', { n: view.errors.recent })}</div>
+        </a>
+      </div>
+      <div class="card flush" id="health">
+        <div class="card-head pad">
+          <div>
+            <h2>{t('admin.system.health')}</h2>
+            <p class="small muted">{t('admin.system.healthSub')}</p>
+          </div>
+        </div>
+        <ul class="plain pad-x">
+          {view.health.map((h) => (
+            <li>
+              <span class="check-label">
+                <span class={`dot ${HEALTH_DOT[h.status]}`} />
+                <strong>{t(`admin.health.${h.name}` as 'admin.health.database')}</strong>
+                {h.critical ? <span class="small muted">{t('admin.system.critical')}</span> : null}
+              </span>
+              <span class="small muted">
+                {t(`admin.health.status.${h.status}`)}
+                {h.detail ? ` · ${h.detail}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="card flush" id="jobs">
+        <div class="card-head pad">
+          <div>
+            <h2>{t('admin.system.jobs')}</h2>
+            <p class="small muted">
+              {view.jobsHere ? t('admin.system.jobsHere') : t('admin.system.jobsElsewhere')}
+            </p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="jobs-table">
+            <thead>
+              <tr>
+                <th>{t('admin.jobs.job')}</th>
+                <th>{t('admin.jobs.lastOk')}</th>
+                <th>{t('admin.jobs.lastFail')}</th>
+                <th class="right">{t('admin.jobs.runs')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.jobs.map((j) => (
+                <tr>
+                  <td>
+                    <code class="small">{j.name}</code>
+                    <div class="tiny muted">
+                      {j.description}
+                      {j.cron ? ` · ${j.cron} UTC` : ''}
+                    </div>
+                  </td>
+                  <td class="small nowrap">
+                    {j.lastSucceededAt ? fmtAgo(lang, j.lastSucceededAt) : '—'}
+                    {j.lastDurationMs !== null && j.lastSucceededAt ? (
+                      <div class="tiny muted">{`${fmtNumber(lang, j.lastDurationMs)} ms`}</div>
+                    ) : null}
+                  </td>
+                  <td class="small">
+                    {j.lastFailedAt ? (
+                      <>
+                        <span class={j.consecutiveFailures > 0 ? 'badge bad' : 'muted'}>
+                          {fmtAgo(lang, j.lastFailedAt)}
+                        </span>
+                        {j.consecutiveFailures > 0 && j.lastError ? (
+                          <div class="tiny muted">{j.lastError}</div>
+                        ) : null}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td class="small right nowrap">
+                    {fmtNumber(lang, j.runs)}
+                    {j.failures ? (
+                      <div class="tiny muted">{t('admin.jobs.failures', { n: j.failures })}</div>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
       <div class="card flush">
@@ -1110,6 +1231,118 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
           ))}
         </ul>
       </div>
+    </AppShell>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Errors (the hub's own error tracker)
+// ---------------------------------------------------------------------------
+
+export interface AdminErrorRow {
+  id: string;
+  source: string;
+  type: string;
+  message: string;
+  stack: string | null;
+  context: Record<string, unknown>;
+  count: number;
+  lastRef: string | null;
+  lastRequestId: string | null;
+  release: string | null;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  resolvedAt: Date | null;
+}
+
+export interface AdminErrorsView {
+  status: 'open' | 'resolved';
+  rows: AdminErrorRow[];
+  /** Whether errors are also sent to Sentry (SENTRY_DSN). */
+  sentry: boolean;
+  retentionDays: number;
+}
+
+/** Where the error happened, in a few words: `GET /app/services`, `gmail_search`, job name. */
+function errorWhere(row: AdminErrorRow): string {
+  const c = row.context;
+  if (typeof c.path === 'string') return `${typeof c.method === 'string' ? `${c.method} ` : ''}${c.path}`;
+  if (typeof c.tool === 'string') return c.tool;
+  if (typeof c.job === 'string') return c.job;
+  if (typeof c.kind === 'string') return c.kind;
+  return '—';
+}
+
+export const AdminErrorsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminErrorsView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
+  const { t, lang } = ctx;
+  const csrf = { csrf: ctx.csrf };
+  return (
+    <AppShell ctx={ctx} shell={shell} section="admin-errors" title={t('admin.nav.errors')}>
+      <PageHead title={t('admin.nav.errors')} sub={t('admin.errors.sub', { days: view.retentionDays })} />
+      <div class="row filter-links">
+        <a class="btn sm" href="/admin/errors" aria-current={view.status === 'open' ? 'page' : undefined}>
+          {t('admin.errors.open')}
+        </a>
+        <a
+          class="btn sm"
+          href="/admin/errors?status=resolved"
+          aria-current={view.status === 'resolved' ? 'page' : undefined}
+        >
+          {t('admin.errors.resolved')}
+        </a>
+        <span class="small muted">
+          {view.sentry ? t('admin.errors.sentryOn') : t('admin.errors.sentryOff')}
+        </span>
+      </div>
+      {view.rows.length === 0 ? (
+        <div class="card">
+          <p class="muted">
+            {view.status === 'open' ? t('admin.errors.noneOpen') : t('admin.errors.noneResolved')}
+          </p>
+        </div>
+      ) : (
+        <div class="card flush">
+          <ul class="plain error-list">
+            {view.rows.map((r) => (
+              <li class="pad" id={r.id}>
+                <div class="error-head">
+                  <div>
+                    <strong>{r.type}</strong> <span class="badge">{r.source}</span>{' '}
+                    <code class="small">{errorWhere(r)}</code>
+                    <p class="error-message">{r.message}</p>
+                    <p class="small muted">
+                      {t('admin.errors.seen', {
+                        n: r.count,
+                        last: fmtAgo(lang, r.lastSeenAt),
+                        first: fmtDate(lang, r.firstSeenAt, true),
+                      })}
+                      {r.lastRef ? ` · ref ${r.lastRef}` : ''}
+                      {r.lastRequestId ? ` · ${t('admin.errors.request')} ${r.lastRequestId}` : ''}
+                      {r.release ? ` · ${r.release}` : ''}
+                    </p>
+                  </div>
+                  <form method="post" action={`/admin/errors/${r.id}/${r.resolvedAt ? 'reopen' : 'resolve'}`}>
+                    <Hidden values={csrf} />
+                    <button type="submit" class="sm">
+                      {r.resolvedAt ? t('admin.errors.reopen') : t('admin.errors.resolve')}
+                    </button>
+                  </form>
+                </div>
+                {r.stack ? (
+                  <details class="problem-raw">
+                    <summary>{t('admin.errors.stack')}</summary>
+                    <code>{r.stack}</code>
+                  </details>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </AppShell>
   );
 };

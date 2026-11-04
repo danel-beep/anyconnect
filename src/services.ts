@@ -45,6 +45,7 @@ import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
+import { createOps, type Ops, watchJobs } from './ops/index.js';
 import { WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
@@ -71,6 +72,8 @@ export interface Services {
   config: AppConfig;
   version: string;
   logger: Logger;
+  /** Error tracking, health checks, job run history. */
+  ops: Ops;
   database: Database;
   db: Db;
   secrets: SecretBox;
@@ -157,6 +160,8 @@ export function createServices(
     billingFetch?: typeof fetch;
     /** Tests: external sign-in providers with fake endpoints. */
     loginProviders?: OidcLoginProvider[];
+    /** Tests: a fake Sentry. */
+    sentryFetch?: typeof fetch;
   } = {},
 ): Services {
   const logger =
@@ -164,6 +169,13 @@ export function createServices(
     createLogger({ level: config.logLevel, pretty: !config.isProduction && process.stdout.isTTY === true });
   const database = createDatabase(config.database.url, { poolMax: config.database.poolMax });
   const db = database.db;
+  const ops = createOps({
+    config,
+    version: VERSION,
+    logger,
+    database,
+    ...(overrides.sentryFetch ? { sentryFetch: overrides.sentryFetch } : {}),
+  });
   const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
   const customStore = new CustomConnectorStore(db, logger);
   // Built-in connectors get ports to hub subsystems that are built after them (they need the registry).
@@ -229,7 +241,12 @@ export function createServices(
     logger,
   });
   const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
-  const jobs = new JobQueue({ connectionString: config.database.url, logger });
+  const jobs = new JobQueue({
+    connectionString: config.database.url,
+    logger,
+    monitor: ops.jobRuns,
+    onError: (error, job) => ops.errors.capture(error, { source: 'job', context: { job } }),
+  });
   for (const job of builtinJobs({ health, customServices })) jobs.register(job);
   messaging = createMessaging({
     publicUrl: config.publicUrl,
@@ -242,6 +259,7 @@ export function createServices(
     builtin,
     logger,
   });
+  watchJobs(ops, jobs);
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
@@ -327,6 +345,7 @@ export function createServices(
     },
     rateLimiter,
     idempotency,
+    errors: ops.errors,
     toolTimeoutMs: config.toolTimeoutMs,
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
@@ -399,6 +418,7 @@ export function createServices(
     config,
     version: VERSION,
     logger,
+    ops,
     database,
     db,
     secrets,
@@ -449,6 +469,7 @@ export function createServices(
       await mcp.close();
       await visitorMcp?.close();
       await network.close();
+      await ops.close();
       await database.close();
     },
   };

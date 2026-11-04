@@ -1120,3 +1120,54 @@ export const adminAuditLog = pgTable(
   },
   (t) => [index().on(t.createdAt), index().on(t.targetUserId)],
 );
+
+// ---------------------------------------------------------------------------
+// Operations: error tracking, background job runs
+// ---------------------------------------------------------------------------
+
+/**
+ * Unexpected errors grouped by fingerprint (the hub's own error tracker, see `src/ops/errors.ts`).
+ * Only scrubbed text is stored: messages and stacks pass through `scrubSecrets`, and contexts never
+ * hold tool arguments, tokens or credentials.
+ */
+export const errorGroups = pgTable(
+  'error_groups',
+  {
+    id: text().primaryKey(),
+    /** Hash of source, error type, normalized message and the first own stack frame. */
+    fingerprint: text().notNull().unique(),
+    /** Where it happened: `http`, `tool`, `job`, `process`, `maintenance`... */
+    source: text().notNull(),
+    /** Error class name (`TypeError`). */
+    type: text().notNull(),
+    message: text().notNull(),
+    stack: text(),
+    /** The latest occurrence's context: path, method, tool, connector, job (no arguments). */
+    context: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    count: integer().notNull().default(1),
+    /** Reference of the latest occurrence, as shown to users ("ref …") and in the logs. */
+    lastRef: text(),
+    lastRequestId: text(),
+    release: text(),
+    firstSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Set when an admin marks it fixed; a new occurrence reopens the group. */
+    resolvedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.lastSeenAt), index().on(t.resolvedAt)],
+);
+
+/** The latest run of each background job, so a job that silently stopped is visible. */
+export const jobRuns = pgTable('job_runs', {
+  name: text().primaryKey(),
+  lastStartedAt: timestamp({ withTimezone: true }),
+  lastSucceededAt: timestamp({ withTimezone: true }),
+  lastFailedAt: timestamp({ withTimezone: true }),
+  /** Scrubbed message of the latest failure. */
+  lastError: text(),
+  lastDurationMs: integer(),
+  /** Failures since the last success. */
+  consecutiveFailures: integer().notNull().default(0),
+  runs: bigint({ mode: 'number' }).notNull().default(0),
+  failures: bigint({ mode: 'number' }).notNull().default(0),
+});
