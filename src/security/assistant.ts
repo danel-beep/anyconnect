@@ -1,6 +1,51 @@
+import type { AppInfo, WorkspaceApps } from '../hub/app-tools.js';
 import type { ProfileInfo, WorkspaceProfiles } from '../hub/profile-tools.js';
 import { badRequest, notFound } from '../lib/errors.js';
+import type { AiApp, AiAppService } from './apps.js';
 import { PERSONA_SLUG, type PersonaRow, type PersonaService } from './personas.js';
+
+/** The AI app tools' view of apps (`manyplug_apps` and friends): profiles by name. */
+export class WorkspaceAppTools implements WorkspaceApps {
+  constructor(
+    private readonly apps: AiAppService,
+    private readonly personas: PersonaService,
+  ) {}
+
+  private async info(workspaceId: string, apps: AiApp[]): Promise<AppInfo[]> {
+    const names = new Map((await this.personas.list(workspaceId)).map((p) => [p.id, p.name]));
+    return apps.map((a) => ({
+      id: a.id,
+      name: a.name,
+      kind: a.kind,
+      lastUsedAt: a.lastUsedAt,
+      connections: a.connections.map((c) => ({
+        kind: c.kind,
+        profile: c.personaId ? (names.get(c.personaId) ?? null) : null,
+        createdAt: c.createdAt,
+        lastUsedAt: c.lastUsedAt,
+        expiresAt: c.expiresAt,
+      })),
+    }));
+  }
+
+  async list(workspaceId: string): Promise<AppInfo[]> {
+    return this.info(workspaceId, await this.apps.list(workspaceId));
+  }
+
+  async find(workspaceId: string, ref: string): Promise<AppInfo> {
+    const [app] = await this.info(workspaceId, [await this.apps.find(workspaceId, ref)]);
+    return app!;
+  }
+
+  async rename(workspaceId: string, id: string, name: string): Promise<AppInfo> {
+    const [app] = await this.info(workspaceId, [await this.apps.rename(workspaceId, id, name)]);
+    return app!;
+  }
+
+  disconnect(workspaceId: string, id: string): Promise<{ signIns: number; tokens: number }> {
+    return this.apps.disconnect(workspaceId, id);
+  }
+}
 
 /**
  * The access profile tools' view of personas (`manyplug_access_profiles` and friends): profiles

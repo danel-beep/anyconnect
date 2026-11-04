@@ -21,6 +21,7 @@ import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
 import type { ErrorReporter } from '../ops/errors.js';
+import type { WorkspaceApps } from './app-tools.js';
 import type { WorkspaceBilling } from './billing-tools.js';
 import { BUILTIN_TOOLS, MAX_BATCH_CALLS } from './builtin-tools.js';
 import {
@@ -102,6 +103,7 @@ export interface HubDeps {
     admin: WorkspaceAdmin;
     billing?: WorkspaceBilling;
     profiles?: WorkspaceProfiles;
+    apps?: WorkspaceApps;
   };
   /**
    * Directory rules enforced for clients of known AI apps (ids from `client-policies.ts`, config
@@ -771,6 +773,7 @@ export class Hub {
       admin: setup.admin,
       ...(setup.billing ? { billing: setup.billing } : {}),
       ...(setup.profiles ? { profiles: setup.profiles } : {}),
+      ...(setup.apps ? { apps: setup.apps } : {}),
       signal,
     };
     const call: CallContext = {
