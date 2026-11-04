@@ -38,11 +38,14 @@ ChatGPT / Claude / Claude Code / Cursor
 - Страницы входа и согласия (RU/EN), главная страница с адресом MCP и списком подключений,
   REST API `/api/v1`, CLI, личные токены для клиентов со статическими заголовками.
 - Встроенный тестовый сервис **Demo** с двумя аккаунтами, чтобы сразу проверить подключение.
+- **Готовые сервисы**: почта IMAP/SMTP (Яндекс, Mail.ru, Gmail, iCloud, любой сервер), Gmail,
+  Outlook (почта и календарь), Google Calendar, Google Drive, Slack, Notion, GitHub, Todoist, Stripe
+  и любой HTTP API. Как подключить каждый: [docs/SERVICES.md](docs/SERVICES.md).
 - Docker, Render Blueprint, CI (lint, типы, 46 тестов включая сквозной OAuth через официальный
   MCP-клиент, сборка Docker).
 
-Дальше по плану: почта (Gmail OAuth + IMAP/SMTP) и Telegram → веб-панель → подключение любого
-API без программирования (по OpenAPI).
+Дальше по плану: Telegram и WhatsApp → веб-панель → подключение любого API без программирования
+(по OpenAPI).
 
 ## Быстрый старт локально
 
