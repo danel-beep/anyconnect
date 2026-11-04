@@ -179,6 +179,81 @@ export default defineConnector({
     }>('users/me');
     return { ok: true, identity: data.bot?.workspace_name ?? data.name ?? 'Notion' };
   },
+  ui: {
+    locales: {
+      ru: {
+        description:
+          'Страницы и базы данных Notion: поиск, чтение страниц в Markdown, выборки из баз, создание и изменение.',
+        fields: {
+          token: {
+            label: 'Секрет интеграции (ntn_…)',
+            hint: 'Нужен, только если не входить через Notion. Создайте внутреннюю интеграцию на notion.so/profile/integrations и откройте ей доступ к нужным страницам.',
+          },
+        },
+        actions: {
+          search: {
+            title: 'Поиск',
+            description: 'Находит страницы и базы данных по названию, сначала недавно изменённые.',
+          },
+          read_page: {
+            title: 'Чтение страницы',
+            description: 'Показывает страницу: название, свойства и содержимое в Markdown.',
+          },
+          query_database: {
+            title: 'Выборка из базы',
+            description: 'Строки базы данных со свойствами. Можно отфильтровать и отсортировать.',
+          },
+          create_page: {
+            title: 'Новая страница',
+            description:
+              'Создаёт страницу внутри другой страницы или строку в базе данных, с содержимым в Markdown.',
+          },
+          update_page: {
+            title: 'Изменение страницы',
+            description: 'Меняет свойства страницы или строки базы либо переносит её в корзину.',
+          },
+          append_content: {
+            title: 'Дополнение страницы',
+            description: 'Дописывает содержимое в Markdown в конец страницы.',
+          },
+        },
+      },
+      en: {
+        fields: {
+          token: {
+            label: 'Integration secret (ntn_…)',
+            hint: 'Only if you do not sign in with Notion. Create an internal integration at notion.so/profile/integrations and give it access to the pages you need.',
+          },
+        },
+        actions: {
+          search: {
+            title: 'Search',
+            description: 'Finds pages and databases by title, recently edited first.',
+          },
+          read_page: {
+            title: 'Read a page',
+            description: 'Shows a page: its title, properties and content as Markdown.',
+          },
+          query_database: {
+            title: 'Query a database',
+            description: 'Rows of a database with their properties, optionally filtered and sorted.',
+          },
+          create_page: {
+            title: 'Create a page',
+            description: 'Creates a page under another page, or a row in a database, with Markdown content.',
+          },
+          update_page: {
+            title: 'Update a page',
+            description: 'Changes properties of a page or database row, or moves it to the trash.',
+          },
+          append_content: {
+            title: 'Add to a page',
+            description: 'Adds Markdown content to the end of a page.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'search',

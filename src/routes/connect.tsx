@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import type { ConnectorDefinition } from '../connectors/sdk.js';
+import { type ConnectorDefinition, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
-import { connectFormFields, type FormField, readConnectForm } from '../core/connect-form.js';
+import { connectFormFields, type FormField, fieldForIssue, readConnectForm } from '../core/connect-form.js';
 import { hubClientMetadata } from '../core/custom-services.js';
 import { getDefaultWorkspace } from '../core/identity.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
@@ -55,13 +55,13 @@ export function connectRoutes() {
         t={c.get('t')}
         lang={c.get('locale')}
         view={{
-          service: connector?.name ?? result.account.connectorId,
+          service: connector ? connectorText(connector, c.get('locale')).name : result.account.connectorId,
           label: result.account.label,
           created: result.created,
           identity,
           problem:
             result.account.status === 'active' ? undefined : (result.account.statusMessage ?? undefined),
-          returnTo: safeNextPath(result.returnTo ?? '/'),
+          returnTo: safeNextPath(result.returnTo, '/app/services'),
         }}
       />,
     );
@@ -127,30 +127,32 @@ export function connectRoutes() {
       return c.html(<ErrorPage t={t} lang={c.get('locale')} message={t('error.csrf')} />, 403);
     }
 
-    const fields = connectFormFields(connector);
+    const fields = connectFormFields(connector, c.get('locale'));
     const values = readConnectForm(fields, form);
     const reconnect = form.account
       ? await s.accounts.get(workspace.id, form.account).catch(() => undefined)
       : undefined;
     if (form.account && reconnect?.connectorId !== connector.id) throw notFound('Account');
-    const retry = (error: string) =>
+    const retry = ({ message, invalid }: FormProblem) =>
       renderForm(
         c,
         connector,
         {
           oauth: Boolean(connector.oauth),
           hidden: hiddenFrom((key) => form[key] || undefined),
-          error,
+          error: message,
+          invalid,
           values: visibleValues(fields, form),
           ...(reconnect ? { reconnect } : {}),
           ...(form.label ? { label: form.label } : {}),
         },
         400,
       );
-    const problems = Object.entries(values.problems);
-    if (problems.length > 0) {
-      return retry(t('connect.formInvalid', { details: problems.map(([k, v]) => `${k}: ${v}`).join('; ') }));
-    }
+    const problems = Object.entries(values.problems).map(([name, message]) => ({
+      field: fields.find((f) => f.name === name),
+      message,
+    }));
+    if (problems.length > 0) return retry(fieldProblems(t, problems));
 
     let account: AccountRow;
     try {
@@ -161,13 +163,18 @@ export function connectRoutes() {
           })
         : await s.accounts.create(workspace.id, {
             connectorId: connector.id,
-            label: form.label?.trim() || connector.name,
+            // A blank name becomes the mailbox address when there is one, so two mailboxes differ.
+            label:
+              form.label?.trim() ||
+              (typeof values.config.email === 'string' ? values.config.email : undefined) ||
+              (typeof form.email === 'string' && form.email.trim() ? form.email.trim() : undefined) ||
+              connector.name,
             ...(form.name ? { name: form.name } : {}),
             config: values.config,
             credentials: values.credentials,
           });
     } catch (error) {
-      if (error instanceof AppError && error.status < 500) return retry(formError(t, error));
+      if (error instanceof AppError && error.status < 500) return retry(formError(t, fields, error));
       throw error;
     }
     const test = await s.accounts.test(workspace.id, account.id, s.logger);
@@ -177,12 +184,12 @@ export function connectRoutes() {
         t={t}
         lang={c.get('locale')}
         view={{
-          service: connector.name,
+          service: connectorText(connector, c.get('locale')).name,
           label: account.label,
           created: !reconnect,
           identity: test.identity,
           problem: test.ok ? undefined : (test.message ?? undefined),
-          returnTo: safeNextPath(form.returnTo ?? '/'),
+          returnTo: safeNextPath(form.returnTo, '/app/services'),
         }}
       />,
     );
@@ -211,13 +218,38 @@ function visibleValues(fields: FormField[], form: Record<string, string>): Recor
   return values;
 }
 
-function formError(t: Translate, error: AppError): string {
-  const details = Array.isArray(error.details)
-    ? (error.details as Array<{ path?: string; message?: string }>)
-        .map((d) => (d.path ? `${d.path}: ${d.message}` : d.message))
-        .join('; ')
-    : '';
-  return details ? t('connect.formInvalid', { details }) : error.message;
+/** An error to show above the submit button, and the inputs it is about. */
+interface FormProblem {
+  message: string;
+  /** Input names of the fields at fault (their "Advanced" block opens). */
+  invalid: string[];
+}
+
+/** Names fields by their label as the user sees it, e.g. "Адрес сервера IMAP: required ...". */
+function fieldProblems(
+  t: Translate,
+  problems: Array<{ field?: FormField | undefined; path?: string | undefined; message?: string | undefined }>,
+): FormProblem {
+  const details = problems
+    .map(({ field, path, message }) => {
+      const name = field?.label ?? path;
+      return name ? `${name}: ${message ?? ''}` : (message ?? '');
+    })
+    .join('; ');
+  return {
+    message: t('connect.formInvalid', { details }),
+    invalid: problems.flatMap(({ field }) => (field ? [field.name] : [])),
+  };
+}
+
+function formError(t: Translate, fields: FormField[], error: AppError): FormProblem {
+  if (!Array.isArray(error.details) || error.details.length === 0)
+    return { message: error.message, invalid: [] };
+  const issues = error.details as Array<{ path?: string; message?: string }>;
+  return fieldProblems(
+    t,
+    issues.map((issue) => ({ ...issue, field: fieldForIssue(fields, issue.path) })),
+  );
 }
 
 function renderForm(
@@ -229,13 +261,16 @@ function renderForm(
     reconnect?: AccountRow;
     label?: string;
     error?: string;
+    invalid?: string[];
     values?: Record<string, string>;
   },
   status: 200 | 400 = 200,
 ) {
   const s = c.get('services');
   const csrf = csrfToken(c, { secure: s.config.secureCookies });
-  const fields = connectFormFields(connector);
+  const locale = c.get('locale');
+  const fields = connectFormFields(connector, locale);
+  const text = connectorText(connector, locale);
   const stored: Record<string, string> = {};
   if (options.reconnect) {
     for (const [key, value] of Object.entries(options.reconnect.config)) {
@@ -246,15 +281,16 @@ function renderForm(
   for (const [key, value] of Object.entries(options.hidden)) oauthUrl.searchParams.set(key, value);
   const view: ConnectFormView = {
     connectorId: connector.id,
-    service: connector.name,
-    description: connector.description,
+    service: text.name,
+    description: text.description,
     fields,
     hidden: options.hidden,
     values: { ...stored, ...options.values },
     ...(options.reconnect ? { reconnecting: options.reconnect.label } : {}),
     ...(options.label ? { label: options.label } : {}),
     ...(options.error ? { error: options.error } : {}),
+    ...(options.invalid?.length ? { invalid: options.invalid } : {}),
     ...(options.oauth ? { oauthUrl: oauthUrl.pathname + oauthUrl.search } : {}),
   };
-  return c.html(<ConnectFormPage t={c.get('t')} lang={c.get('locale')} csrf={csrf} view={view} />, status);
+  return c.html(<ConnectFormPage t={c.get('t')} lang={locale} csrf={csrf} view={view} />, status);
 }

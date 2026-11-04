@@ -1,28 +1,42 @@
 import type { Child, FC } from 'hono/jsx';
-import type { Translate } from './i18n.js';
+import { useContext } from 'hono/jsx';
+import { Doc } from './document.js';
+import { PageFrame } from './frame.js';
+import { type Translate, translator } from './i18n.js';
+import { Brand, GoogleG, Icon, Prefs } from './ui.js';
 
-/** Page shell (exported for other page modules). `script` adds /assets/webauthn.js (passkeys); pages work without it. */
+/**
+ * Shell of the hub's own pages (sign-in, consent, connect forms, confirmations). Inside the
+ * dashboard a route can supply a frame (`PageFrame`), and the same page renders inside the
+ * dashboard's sidebar layout instead of the centered card layout.
+ */
 export const Layout: FC<{
   title: string;
+  /** Narrow centered card (sign-in, consent). Otherwise a wider column. */
   narrow?: boolean;
   lang: string;
+  /** Adds /assets/webauthn.js (passkeys); pages work without it. */
   script?: boolean;
   children?: Child;
-}> = ({ title, narrow, lang, script, children }) => (
-  <html lang={lang}>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <meta name="referrer" content="no-referrer" />
-      <title>{title}</title>
-      <link rel="stylesheet" href="/assets/app.css" />
-      {script ? <script src="/assets/webauthn.js" defer /> : null}
-    </head>
-    <body>
-      <main class={narrow ? 'narrow' : undefined}>{children}</main>
-    </body>
-  </html>
-);
+}> = ({ title, narrow, lang, script, children }) => {
+  const frame = useContext(PageFrame);
+  if (frame) return <>{frame({ title, passkeys: Boolean(script), children })}</>;
+  const t = translator(lang === 'ru' ? 'ru' : 'en');
+  return (
+    <Doc title={`${title} · AnyConnect`} lang={lang} noindex passkeys={script} bodyClass="auth">
+      <div class="auth-top">
+        <Brand />
+        <Prefs t={t} lang={lang} />
+      </div>
+      <main id="main" class={narrow ? undefined : 'wide'}>
+        {children}
+      </main>
+      <footer class="auth-foot">
+        <a href="/privacy">{t('site.footer.privacy')}</a> · <a href="/terms">{t('site.footer.terms')}</a>
+      </footer>
+    </Doc>
+  );
+};
 
 /**
  * A passkey ceremony button, revealed by /assets/webauthn.js when the browser supports passkeys
@@ -48,64 +62,162 @@ export const PasskeyForm: FC<{
   </form>
 );
 
+export type LoginMode = 'login' | 'signup' | 'reauth';
+
 export const LoginPage: FC<{
   t: Translate;
   lang: string;
   csrf: string;
   next: string;
+  /** login, signup (same Google button, other wording) or reauth (confirm a session again). */
+  mode?: LoginMode;
+  /** "Continue with Google" is configured. */
+  google?: boolean;
+  signupsOpen?: boolean;
   email?: string;
   error?: string;
-  /** Re-confirming an existing session before a security change. */
+  /** Show the email + password form open (after a password error, or when Google is off). */
+  passwordOpen?: boolean;
+  /** Opened by an AI app's OAuth request: say why the user is here. */
+  fromApp?: boolean;
+  /** Back-compat with callers that only know about re-authentication. */
   reauth?: boolean;
-}> = ({ t, lang, csrf, next, email, error, reauth }) => (
-  <Layout title={reauth ? t('login.reauthTitle') : t('login.title')} narrow lang={lang} script>
-    <div class="card">
-      <h1>{reauth ? t('login.reauthTitle') : t('login.title')}</h1>
-      <p class="muted">{reauth ? t('login.reauthSubtitle') : t('login.subtitle')}</p>
-      <form method="post" action="/login">
-        <input type="hidden" name="csrf" value={csrf} />
-        <input type="hidden" name="next" value={next} />
-        <label for="email">{t('login.email')}</label>
-        <input id="email" type="email" name="email" autocomplete="username" required value={email ?? ''} />
-        <label for="password">{t('login.password')}</label>
-        <input id="password" type="password" name="password" autocomplete="current-password" required />
-        {error ? <p class="error">{error}</p> : null}
-        <div class="actions">
-          <button class="primary" type="submit">
-            {t('login.submit')}
-          </button>
-        </div>
-      </form>
-      <PasskeyForm
-        mode="authenticate"
-        options="/login/passkey/options"
-        action="/login/passkey"
-        error={t('passkey.failed')}
-        hidden={{ csrf, next, flow: 'passwordless' }}
-      >
-        <p class="divider small muted">{t('login.or')}</p>
-        <div class="actions">
-          <button type="submit">{t('login.passkey')}</button>
-        </div>
-      </PasskeyForm>
-    </div>
-  </Layout>
-);
-
-export const ErrorPage: FC<{ t: Translate; lang: string; message: string; detail?: string }> = ({
+}> = ({
   t,
   lang,
-  message,
-  detail,
-}) => (
-  <Layout title={t('error.title')} narrow lang={lang}>
+  csrf,
+  next,
+  mode: modeProp,
+  google,
+  signupsOpen,
+  email,
+  error,
+  passwordOpen,
+  fromApp,
+  reauth,
+}) => {
+  const mode: LoginMode = modeProp ?? (reauth ? 'reauth' : 'login');
+  const title =
+    mode === 'reauth' ? t('login.reauthTitle') : mode === 'signup' ? t('signup.title') : t('login.title');
+  const subtitle =
+    mode === 'reauth'
+      ? t('login.reauthSubtitle')
+      : mode === 'signup'
+        ? t('signup.subtitle')
+        : t('login.subtitle');
+  const googleHref = `/auth/google?next=${encodeURIComponent(next)}${mode === 'reauth' ? '&reauth=1' : ''}`;
+  const showPassword = passwordOpen || !google || Boolean(error && !google);
+  // With sign-ups closed the sign-up page only says so; existing users sign in on /login.
+  const signupClosed = mode === 'signup' && !signupsOpen;
+  const passwordForm = (
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf" value={csrf} />
+      <input type="hidden" name="next" value={next} />
+      {mode === 'reauth' ? <input type="hidden" name="reauth" value="1" /> : null}
+      <label for="email">{t('login.email')}</label>
+      <input id="email" type="email" name="email" autocomplete="username" required value={email ?? ''} />
+      <label for="password">{t('login.password')}</label>
+      <input id="password" type="password" name="password" autocomplete="current-password" required />
+      <div class="actions">
+        <button class={google ? 'block' : 'primary block'} type="submit">
+          {t('login.submit')}
+        </button>
+      </div>
+    </form>
+  );
+  return (
+    <Layout title={title} narrow lang={lang} script>
+      <div class="card">
+        <h1>{title}</h1>
+        {signupClosed ? null : <p class="muted">{subtitle}</p>}
+        {fromApp && mode !== 'reauth' ? (
+          <div class="notice info small">
+            <Icon name="zap" /> {t('login.fromApp')}
+          </div>
+        ) : null}
+        {error ? (
+          <p class="error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {google && !signupClosed ? (
+          <>
+            <a class="btn block primary btn-google" href={googleHref}>
+              <GoogleG /> {t('login.google')}
+            </a>
+            {mode === 'signup' ? (
+              <p class="small muted center">
+                {t('signup.termsA')} <a href="/terms">{t('signup.termsLink')}</a> {t('signup.and')}{' '}
+                <a href="/privacy">{t('signup.privacyLink')}</a>.
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {signupClosed ? <div class="notice small">{t('signup.closed')}</div> : null}
+        {mode === 'signup' && !signupClosed && !google ? (
+          <div class="notice small">{t('signup.noGoogle')}</div>
+        ) : null}
+        {mode !== 'signup' ? (
+          <>
+            {google ? (
+              <details class="more-ways" open={showPassword}>
+                <summary>{t('login.withEmail')}</summary>
+                {passwordForm}
+              </details>
+            ) : (
+              passwordForm
+            )}
+            <PasskeyForm
+              mode="authenticate"
+              options="/login/passkey/options"
+              action="/login/passkey"
+              error={t('passkey.failed')}
+              hidden={{ csrf, next, flow: 'passwordless' }}
+            >
+              <div class="actions">
+                <button class="block ghost" type="submit">
+                  <Icon name="key" /> {t('login.passkey')}
+                </button>
+              </div>
+            </PasskeyForm>
+          </>
+        ) : null}
+      </div>
+      {mode === 'login' && google && signupsOpen ? (
+        <p class="center small muted switch-auth">
+          {t('login.noAccount')}{' '}
+          <a href={`/signup?next=${encodeURIComponent(next)}`}>{t('login.signupLink')}</a>
+        </p>
+      ) : null}
+      {mode === 'signup' ? (
+        <p class="center small muted switch-auth">
+          {t('signup.haveAccount')}{' '}
+          <a href={`/login?next=${encodeURIComponent(next)}`}>{t('signup.signInLink')}</a>
+        </p>
+      ) : null}
+    </Layout>
+  );
+};
+
+export const ErrorPage: FC<{
+  t: Translate;
+  lang: string;
+  message: string;
+  detail?: string;
+  title?: string;
+  /** Where the main button leads (default: home). */
+  back?: { href: string; label: string };
+}> = ({ t, lang, message, detail, title, back }) => (
+  <Layout title={title ?? t('error.title')} narrow lang={lang}>
     <div class="card">
-      <h1>{t('error.title')}</h1>
+      <h1>{title ?? t('error.title')}</h1>
       <p>{message}</p>
       {detail ? <p class="muted small">{detail}</p> : null}
-      <p>
-        <a href="/">{t('error.back')}</a>
-      </p>
+      <div class="actions start">
+        <a class="btn primary" href={back?.href ?? '/'}>
+          {back?.label ?? t('error.back')}
+        </a>
+      </div>
     </div>
   </Layout>
 );
@@ -192,143 +304,7 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
   </Layout>
 );
 
-export interface HomeView {
-  email: string;
-  mcpUrl: string;
-  csrf: string;
-  accounts: {
-    connector: string;
-    name: string;
-    label: string;
-    status: string;
-    enabled: boolean;
-    identity: string | null;
-  }[];
-  grants: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null }[];
-  calls: { toolName: string; status: string; createdAt: Date; durationMs: number }[];
-}
-
 export const fmt = (date: Date) => date.toISOString().replace('T', ' ').slice(0, 16);
-
-export const HomePage: FC<{ t: Translate; lang: string; view: HomeView }> = ({ t, lang, view }) => (
-  <Layout title={t('home.title')} lang={lang}>
-    <header class="top">
-      <span class="brand">AnyConnect</span>
-      <form class="inline" method="post" action="/logout">
-        <input type="hidden" name="csrf" value={view.csrf} />
-        <span class="small muted">{view.email} · </span>
-        <a class="small" href="/confirm">
-          {t('home.confirmations')}
-        </a>
-        <span class="small muted"> · </span>
-        <a class="small" href="/security">
-          {t('home.security')}
-        </a>
-        <span class="small muted"> · </span>
-        <button class="link" type="submit">
-          {t('home.signOut')}
-        </button>
-      </form>
-    </header>
-    <div class="card">
-      <h2>{t('home.mcpUrl')}</h2>
-      <input type="text" readonly value={view.mcpUrl} aria-label={t('home.mcpUrl')} />
-      <p class="small muted">{t('home.mcpUrlHint')}</p>
-      <ul class="bullets small">
-        <li>{t('home.howClaude')}</li>
-        <li>{t('home.howChatgpt')}</li>
-        <li>{t('home.howOther')}</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h2>{t('home.accounts')}</h2>
-      {view.accounts.length === 0 ? (
-        <p class="muted">{t('home.noAccounts')}</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>{t('home.service')}</th>
-              <th>{t('home.account')}</th>
-              <th>{t('home.status')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.accounts.map((a) => (
-              <tr>
-                <td>
-                  <code>{a.connector}</code>
-                </td>
-                <td>
-                  {a.label} <span class="muted">({a.name})</span>
-                  {a.identity ? <div class="small muted">{a.identity}</div> : null}
-                </td>
-                <td>
-                  {a.enabled ? (
-                    <span class={`badge ${a.status === 'active' ? 'ok' : 'bad'}`}>{a.status}</span>
-                  ) : (
-                    <span class="badge">{t('home.disabled')}</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <p class="small muted">{t('home.manageHint')}</p>
-    </div>
-    <div class="card">
-      <h2>{t('home.apps')}</h2>
-      {view.grants.length === 0 ? (
-        <p class="muted">{t('home.noApps')}</p>
-      ) : (
-        <ul class="plain">
-          {view.grants.map((g) => (
-            <li>
-              <span>
-                <strong>{g.name}</strong>
-                <span class="small muted">
-                  {' '}
-                  · {fmt(g.createdAt)} · {t('home.lastUsed')}:{' '}
-                  {g.lastUsedAt ? fmt(g.lastUsedAt) : t('home.never')}
-                </span>
-              </span>
-              <form class="inline" method="post" action={`/grants/${g.id}/revoke`}>
-                <input type="hidden" name="csrf" value={view.csrf} />
-                <button class="danger" type="submit">
-                  {t('home.revoke')}
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-    <div class="card">
-      <h2>{t('home.calls')}</h2>
-      {view.calls.length === 0 ? (
-        <p class="muted">{t('home.noCalls')}</p>
-      ) : (
-        <table>
-          <tbody>
-            {view.calls.map((call) => (
-              <tr>
-                <td class="small muted">{fmt(call.createdAt)}</td>
-                <td>
-                  <code>{call.toolName}</code>
-                </td>
-                <td>
-                  <span class={`badge ${call.status === 'ok' ? 'ok' : 'bad'}`}>{call.status}</span>
-                </td>
-                <td class="small muted">{call.durationMs} ms</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  </Layout>
-);
 
 export interface ConnectedView {
   service: string;
@@ -343,6 +319,9 @@ export interface ConnectedView {
 export const ConnectedPage: FC<{ t: Translate; lang: string; view: ConnectedView }> = ({ t, lang, view }) => (
   <Layout title={t('connect.doneTitle')} narrow lang={lang}>
     <div class="card">
+      <div class={`result-icon ${view.problem ? 'warn' : 'ok'}`}>
+        <Icon name={view.problem ? 'alert' : 'check'} />
+      </div>
       <h1>{t('connect.doneTitle')}</h1>
       <p>
         {t(view.created ? 'connect.created' : 'connect.reconnected', {
@@ -350,12 +329,17 @@ export const ConnectedPage: FC<{ t: Translate; lang: string; view: ConnectedView
           label: view.label,
         })}
       </p>
-      {view.identity ? <p>{t('connect.identity', { identity: view.identity })}</p> : null}
-      {view.problem ? <p class="muted">{t('connect.testFailed', { message: view.problem })}</p> : null}
+      {view.identity ? <p class="muted">{t('connect.identity', { identity: view.identity })}</p> : null}
+      {view.problem ? <div class="notice">{t('connect.testFailed', { message: view.problem })}</div> : null}
       <p class="muted small">{t('connect.aiHint')}</p>
-      <p>
-        <a href={view.returnTo}>{t('error.back')}</a>
-      </p>
+      <div class="actions start">
+        <a class="btn primary" href={view.returnTo}>
+          {t('connect.continue')}
+        </a>
+        <a class="btn ghost" href="/app/services">
+          {t('connect.addMore')}
+        </a>
+      </div>
     </div>
   </Layout>
 );

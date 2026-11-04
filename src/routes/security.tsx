@@ -8,6 +8,7 @@ import { ErrorPage } from '../web/pages.js';
 import { RecoveryCodesPage, SecurityPage } from '../web/security-pages.js';
 import type { WebSession } from '../web/sessions.js';
 import { type AppContext, type AppEnv, bodyParams, currentSession, loginUrl } from './context.js';
+import { renderInApp } from './page-helpers.js';
 
 type Session = WebSession & { token: string };
 
@@ -41,7 +42,10 @@ async function renderSecurity(
     recent ? s.secondFactors.totp.pendingEnrollment(session.user) : undefined,
   ]);
   const hasFactor = hasSecondFactor(summary);
-  return c.html(
+  return renderInApp(
+    c,
+    session.user,
+    'security',
     <SecurityPage
       t={c.get('t')}
       lang={c.get('locale')}
@@ -155,7 +159,10 @@ export function securityRoutes() {
     s.logger.info({ userId }, 'authenticator app enabled');
     if ((await s.secondFactors.recoveryCodes.remaining(userId)) === 0) {
       const codes = await s.secondFactors.recoveryCodes.regenerate(userId);
-      return c.html(
+      return renderInApp(
+        c,
+        session.user,
+        'security',
         <RecoveryCodesPage t={t} lang={c.get('locale')} codes={codes} continueTo={securityUrl(next)} />,
       );
     }
@@ -180,7 +187,10 @@ export function securityRoutes() {
     if (!(await s.secondFactors.hasAny(userId))) return c.redirect(securityUrl(guard.next), 303);
     const codes = await s.secondFactors.recoveryCodes.regenerate(userId);
     s.logger.info({ userId }, 'recovery codes regenerated');
-    return c.html(
+    return renderInApp(
+      c,
+      guard.session.user,
+      'security',
       <RecoveryCodesPage
         t={c.get('t')}
         lang={c.get('locale')}

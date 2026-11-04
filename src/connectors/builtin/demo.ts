@@ -22,6 +22,61 @@ export default defineConnector({
   async test(ctx) {
     return { ok: true, identity: `demo:${ctx.account.name}` };
   },
+  ui: {
+    locales: {
+      ru: {
+        name: 'Демо',
+        description:
+          'Тестовый сервис AnyConnect: помогает убедиться, что хаб и работа с несколькими аккаунтами настроены верно.',
+        fields: {
+          greeting: { label: 'Приветствие', hint: 'С него начинаются ответы этого аккаунта' },
+          secret: {
+            label: 'Секрет',
+            hint: 'Любое значение. Хранится зашифрованным и целиком не показывается.',
+          },
+        },
+        actions: {
+          echo: {
+            title: 'Эхо',
+            description:
+              'Возвращает сообщение с приветствием выбранного аккаунта. Подходит для проверки хаба.',
+          },
+          account_info: {
+            title: 'Об аккаунте',
+            description:
+              'Показывает, какой аккаунт обработал вызов, и отпечаток его секрета: видно, что ключи расшифровываются для каждого аккаунта отдельно.',
+          },
+          fail: {
+            title: 'Имитация ошибки',
+            description:
+              'Всегда завершается ошибкой выбранного вида. Нужна только для проверки обработки ошибок.',
+          },
+        },
+      },
+      en: {
+        fields: {
+          greeting: { label: 'Greeting', hint: 'Replies from this account start with it' },
+          secret: { label: 'Secret', hint: 'Any value. Stored encrypted and never shown in full.' },
+        },
+        actions: {
+          echo: {
+            title: 'Echo',
+            description:
+              'Returns the message with the greeting of the chosen account. Handy for testing the hub.',
+          },
+          account_info: {
+            title: 'Account info',
+            description:
+              'Shows which account handled the call and a fingerprint of its secret, proving that keys are decrypted per account.',
+          },
+          fail: {
+            title: 'Simulate an error',
+            description: 'Always fails with the chosen kind of error. Only for testing error handling.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'echo',

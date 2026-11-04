@@ -4,10 +4,20 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { safeEqual } from '../lib/crypto.js';
 
-export function clientIp(c: Context, trustProxy: boolean): string {
-  if (trustProxy) {
-    const forwarded = c.req.header('x-forwarded-for');
-    if (forwarded) return forwarded.split(',')[0]!.trim();
+/**
+ * The client's IP. Behind `hops` proxies that each append the address they saw to X-Forwarded-For,
+ * the client is the entry `hops` places from the right; anything further left came from the client
+ * and is ignored (it can be forged). A platform header (`header`) wins when it is present.
+ */
+export function clientIp(c: Context, trust: { hops: number; header?: string }): string {
+  if (trust.hops > 0) {
+    const platform = trust.header ? c.req.header(trust.header)?.trim() : undefined;
+    if (platform) return platform;
+    const forwarded = (c.req.header('x-forwarded-for') ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (forwarded.length) return forwarded[Math.max(0, forwarded.length - trust.hops)]!;
   }
   try {
     return getConnInfo(c).remote.address ?? 'unknown';
@@ -96,7 +106,7 @@ export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler 
       // No form-action: Chrome applies it to the redirect after the consent form, which must reach the AI app.
       // Scripts only from our own files (/assets/webauthn.js), which call back to our own endpoints.
       'Content-Security-Policy':
-        "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'",
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
@@ -129,9 +139,23 @@ export function publicCors(): MiddlewareHandler {
   };
 }
 
-/** Only allow redirects to local paths after login. */
-export function safeNextPath(next: unknown): string {
-  if (typeof next !== 'string' || !next.startsWith('/') || next.startsWith('//') || next.includes('\\'))
-    return '/';
-  return next;
+/**
+ * Only allow redirects to paths on this site. Browsers drop tabs and newlines from URLs and treat
+ * `\` like `/`, so `/\t/evil.com` or `/\evil.com` would leave the site: control characters and
+ * backslashes are refused, and the result is re-read as a URL that must stay on the same origin.
+ */
+export function safeNextPath(next: unknown, fallback = '/'): string {
+  if (typeof next !== 'string' || next.length > 2000 || !next.startsWith('/') || next.startsWith('//'))
+    return fallback;
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing control characters is the point
+  if (/[\u0000-\u001f\u007f\\]/.test(next)) return fallback;
+  const base = 'https://local.invalid';
+  let url: URL;
+  try {
+    url = new URL(next, base);
+  } catch {
+    return fallback;
+  }
+  if (url.origin !== base) return fallback;
+  return url.pathname + url.search + url.hash;
 }

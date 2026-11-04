@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import { FIELDS_ARGUMENT } from '../connectors/registry.js';
 import { actionRisk } from '../connectors/sdk.js';
 import type { Principal } from '../core/principal.js';

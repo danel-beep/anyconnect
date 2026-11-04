@@ -115,6 +115,59 @@ export default defineConnector({
     });
     return { ok: true, ...(data.user?.emailAddress ? { identity: data.user.emailAddress } : {}) };
   },
+  ui: {
+    locales: {
+      ru: {
+        name: 'Google Диск',
+        description:
+          'Google Диск: поиск файлов, чтение документов, таблиц, презентаций и текстовых файлов, создание, переименование, перемещение и удаление.',
+        actions: {
+          search: {
+            title: 'Поиск файлов',
+            description:
+              'Находит файлы по словам в тексте, названию, папке или типу. Без запроса показывает недавно изменённые.',
+          },
+          read: {
+            title: 'Чтение файла',
+            description:
+              'Возвращает текст Google Документа, Таблицы, Презентации или текстового файла. Длинный текст обрезается.',
+          },
+          create: {
+            title: 'Новый файл',
+            description: 'Создаёт Google Документ из текста, текстовый файл или папку.',
+          },
+          update: {
+            title: 'Переименование, перемещение, корзина',
+            description:
+              'Переименовывает файл, переносит его в другую папку или в корзину, откуда его можно вернуть в течение 30 дней.',
+          },
+        },
+      },
+      en: {
+        actions: {
+          search: {
+            title: 'Search files',
+            description:
+              'Finds files by words in their text, name, folder or type. Without a query, recently modified first.',
+          },
+          read: {
+            title: 'Read a file',
+            description:
+              'Returns the text of a Google Doc, Sheet, Slides deck or text file. Long text is cut.',
+          },
+          create: {
+            title: 'Create a file',
+            description: 'Creates a Google Doc from text, a plain text file or a folder.',
+          },
+          update: {
+            title: 'Rename, move or trash',
+            description:
+              'Renames a file, moves it to another folder, or moves it to the trash (restorable for 30 days).',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'search',

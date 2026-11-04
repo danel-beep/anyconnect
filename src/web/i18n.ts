@@ -1,8 +1,12 @@
+import { appEn, appRu } from './i18n/app.js';
+import { authEn, authRu } from './i18n/auth.js';
+import { siteEn, siteRu } from './i18n/site.js';
+
 export type Locale = 'ru' | 'en';
 
-const en = {
+const coreEn = {
   'login.title': 'Sign in to AnyConnect',
-  'login.subtitle': 'Your hub for connecting services to AI assistants.',
+  'login.subtitle': 'One address to connect your services to AI assistants.',
   'login.email': 'Email',
   'login.password': 'Password',
   'login.submit': 'Sign in',
@@ -127,7 +131,7 @@ const en = {
   'home.telegramLink': 'Link Telegram',
   'home.telegramOpen': 'Open this link in Telegram within 15 minutes:',
   'home.telegramUnlink': 'Unlink',
-  'home.telegramDisabled': 'The hub has no Telegram bot (TELEGRAM_BOT_TOKEN is not set).',
+  'home.telegramDisabled': 'Confirmations in Telegram are not available yet. Confirm here, in the dashboard.',
   'home.confirmations': 'Confirmations',
   'connect.doneTitle': 'Account connected',
   'connect.created': '{service} account “{label}” is connected.',
@@ -136,8 +140,14 @@ const en = {
   'connect.aiHint': 'AI apps connected to the hub see it on their next request.',
   'connect.testFailed': 'The connection works, but the check failed: {message}',
   'connect.formTitle': 'Connect {service}',
+  'connect.back': 'Back to services',
+  'connect.formLabelPlaceholder': 'For example, Work',
   'connect.formReconnect': 'Reconnecting “{label}”. Leave a secret empty to keep the stored one.',
   'connect.formLabel': 'Account name for you and the AI (e.g. “Work”)',
+  'connect.formAdvanced': 'Advanced settings',
+  'connect.formAuto': 'Automatic',
+  'connect.formYes': 'Yes',
+  'connect.formNo': 'No',
   'connect.formSecrets': 'Keys and passwords are encrypted on the hub and never shown to the AI.',
   'connect.formSubmit': 'Connect',
   'connect.formReconnectSubmit': 'Save',
@@ -171,19 +181,21 @@ const en = {
   'home.manageHint': 'Accounts are managed through the REST API or CLI for now; the web panel comes next.',
 } as const;
 
-type Key = keyof typeof en;
+const en = { ...coreEn, ...siteEn, ...appEn, ...authEn } as const;
 
-const ru: Record<Key, string> = {
+export type Key = keyof typeof en;
+
+const coreRu: Record<keyof typeof coreEn, string> = {
   'login.title': 'Вход в AnyConnect',
-  'login.subtitle': 'Ваш хаб для подключения сервисов к ИИ-ассистентам.',
-  'login.email': 'Email',
+  'login.subtitle': 'Один адрес, чтобы подключить ваши сервисы к ИИ‑ассистентам.',
+  'login.email': 'Почта',
   'login.password': 'Пароль',
   'login.submit': 'Войти',
   'login.invalid': 'Неверный email или пароль.',
   'login.rateLimited': 'Слишком много попыток. Попробуйте через несколько минут.',
   'login.noUsers': 'Пользователей ещё нет: задайте ADMIN_EMAIL и ADMIN_PASSWORD и перезапустите хаб.',
   'login.or': 'или',
-  'login.passkey': 'Войти с passkey',
+  'login.passkey': 'Войти с ключом доступа',
   'login.reauthTitle': 'Подтвердите, что это вы',
   'login.reauthSubtitle': 'Для изменения настроек безопасности нужен недавний вход. Войдите ещё раз.',
   'passkey.failed': 'Passkey не сработал. Попробуйте ещё раз или выберите другой способ.',
@@ -193,7 +205,7 @@ const ru: Record<Key, string> = {
   'verify.recoveryOnly': 'Код восстановления',
   'verify.submit': 'Подтвердить',
   'verify.invalid': 'Неверный или уже использованный код.',
-  'verify.passkey': 'Подтвердить с passkey',
+  'verify.passkey': 'Подтвердить ключом доступа',
   'verify.restart': 'Начать вход заново',
   'home.security': 'Безопасность',
   'security.title': 'Безопасность',
@@ -201,7 +213,7 @@ const ru: Record<Key, string> = {
   'security.reauthNeeded': 'Чтобы изменить эти настройки, сначала подтвердите вход (нужно раз в 10 минут).',
   'security.reauth': 'Подтвердить вход',
   'security.required':
-    'На этом хабе обязателен второй фактор. Настройте приложение-аутентификатор или passkey, чтобы продолжить.',
+    'Здесь обязателен второй фактор. Настройте приложение-аутентификатор или ключ доступа, чтобы продолжить.',
   'security.continue': 'Продолжить',
   'security.on': 'Включено',
   'security.off': 'Выключено',
@@ -219,28 +231,29 @@ const ru: Record<Key, string> = {
   'security.totpInvalid': 'Код не подошёл. Проверьте время на телефоне и попробуйте ещё раз.',
   'security.recovery': 'Коды восстановления',
   'security.recoveryHint':
-    'Каждый код срабатывает один раз — на случай, если вы потеряете аутентификатор или passkey.',
+    'Каждый код срабатывает один раз — на случай, если вы потеряете аутентификатор или ключ доступа.',
   'security.recoveryLeft': 'Неиспользованных: {count} из 10',
   'security.recoveryNone': 'Неиспользованных кодов не осталось — создайте новые.',
   'security.recoveryRegenerate': 'Создать новые коды',
-  'security.recoveryNeedsFactor': 'Станут доступны после настройки аутентификатора или passkey.',
-  'security.passkeys': 'Passkey',
+  'security.recoveryNeedsFactor': 'Станут доступны после настройки аутентификатора или ключа доступа.',
+  'security.passkeys': 'Ключи доступа (passkey)',
   'security.passkeysHint': 'Вход по Face ID, Touch ID, Windows Hello или аппаратному ключу — без пароля.',
-  'security.passkeysNone': 'Passkey пока нет.',
+  'security.passkeysNone': 'Ключей доступа пока нет.',
   'security.passkeyName': 'Название',
-  'security.passkeyAdd': 'Добавить passkey',
-  'security.passkeyUnsupported': 'Чтобы добавить passkey, нужен браузер с JavaScript и поддержкой passkey.',
+  'security.passkeyAdd': 'Добавить ключ доступа',
+  'security.passkeyUnsupported':
+    'Чтобы добавить ключ доступа, нужен браузер с JavaScript и поддержкой passkey.',
   'security.passkeyRename': 'Переименовать',
   'security.passkeyDelete': 'Удалить',
   'security.passkeyAdded': 'добавлен',
   'security.passkeySynced': 'синхронизируется',
-  'security.passkeyDefaultName': 'Passkey',
+  'security.passkeyDefaultName': 'Ключ доступа',
   'codes.title': 'Сохраните коды восстановления',
   'codes.hint':
     'Храните их в надёжном месте, например в менеджере паролей. Коды показываются только один раз, каждый срабатывает один раз.',
   'codes.done': 'Я сохранил коды',
   'consent.title': 'Подключить {client} к AnyConnect?',
-  'consent.wants': '{client} запрашивает доступ к вашему хабу.',
+  'consent.wants': '{client} запрашивает доступ к вашему AnyConnect.',
   'consent.access': 'Приложение сможет:',
   'consent.access.mcp':
     'видеть подключённые сервисы и аккаунты (активных: {count}) и вызывать их инструменты от вашего имени',
@@ -256,7 +269,7 @@ const ru: Record<Key, string> = {
   'consent.signedInAs': 'Вы вошли как {email}',
   'consent.approve': 'Разрешить',
   'consent.deny': 'Отклонить',
-  'consent.revokeHint': 'Доступ можно отозвать в любой момент на главной странице хаба.',
+  'consent.revokeHint': 'Доступ можно отозвать в любой момент в разделе «ИИ-приложения».',
   'consent.persona': 'Персона',
   'consent.personaHint': 'По этому адресу приложение видит только аккаунты этой персоны.',
   'consent.personaMissing': 'Этот адрес принадлежит персоне, которой нет в вашем пространстве.',
@@ -268,8 +281,8 @@ const ru: Record<Key, string> = {
   'confirm.none': 'Нет действий, ожидающих подтверждения.',
   'confirm.tg.ask': '🔐 Подтвердите действие',
   'confirm.tg.scheduled': '⏳ Выполнится через {seconds} с — ещё можно отменить',
-  'confirm.tg.linked': 'Готово: подтверждения от вашего хаба AnyConnect будут приходить сюда.',
-  'confirm.tg.linkFailed': 'Ссылка неверная или устарела. Откройте хаб и создайте новую.',
+  'confirm.tg.linked': 'Готово: подтверждения от AnyConnect будут приходить сюда.',
+  'confirm.tg.linkFailed': 'Ссылка неверная или устарела. Откройте кабинет AnyConnect и создайте новую.',
   'confirm.tg.unknown': 'Неизвестный или чужой запрос.',
   'confirm.tg.tooLate': 'Уже решено или истекло.',
   'confirm.client': 'Приложение',
@@ -277,7 +290,7 @@ const ru: Record<Key, string> = {
   'confirm.action': 'Действие',
   'confirm.reason': 'Почему нужно ваше решение',
   'confirm.arguments': 'Аргументы (как их передала нейронка)',
-  'confirm.open': 'Открыть в хабе',
+  'confirm.open': 'Открыть в кабинете',
   'confirm.approve': '✅ Разрешить',
   'confirm.deny': '❌ Отклонить',
   'confirm.cancel': '↩️ Отменить',
@@ -300,18 +313,24 @@ const ru: Record<Key, string> = {
   'home.telegramLink': 'Подключить Telegram',
   'home.telegramOpen': 'Откройте эту ссылку в Telegram в течение 15 минут:',
   'home.telegramUnlink': 'Отключить',
-  'home.telegramDisabled': 'У хаба нет Telegram-бота (не задан TELEGRAM_BOT_TOKEN).',
+  'home.telegramDisabled': 'Подтверждения в Telegram пока недоступны. Подтверждайте здесь, в кабинете.',
   'home.confirmations': 'Подтверждения',
   'connect.doneTitle': 'Аккаунт подключён',
   'connect.created': 'Аккаунт {service} «{label}» подключён.',
   'connect.reconnected': 'Аккаунт {service} «{label}» переподключён.',
   'connect.identity': 'Вход выполнен как {identity}.',
-  'connect.aiHint': 'Подключённые к хабу ИИ-приложения увидят его при следующем запросе.',
+  'connect.aiHint': 'Подключённые ИИ-приложения увидят его при следующем запросе.',
   'connect.testFailed': 'Доступ получен, но проверка не прошла: {message}',
-  'connect.formTitle': 'Подключить {service}',
+  'connect.formTitle': 'Подключение: {service}',
+  'connect.back': 'К сервисам',
+  'connect.formLabelPlaceholder': 'Например, Работа',
   'connect.formReconnect': 'Переподключение «{label}». Пустое поле ключа оставит сохранённый.',
   'connect.formLabel': 'Название аккаунта для вас и ИИ (например, «Работа»)',
-  'connect.formSecrets': 'Ключи и пароли шифруются в хабе и никогда не показываются ИИ.',
+  'connect.formAdvanced': 'Дополнительные настройки',
+  'connect.formAuto': 'Автоматически',
+  'connect.formYes': 'Да',
+  'connect.formNo': 'Нет',
+  'connect.formSecrets': 'Ключи и пароли хранятся у нас в зашифрованном виде и никогда не показываются ИИ.',
   'connect.formSubmit': 'Подключить',
   'connect.formReconnectSubmit': 'Сохранить',
   'connect.formUseOAuth': 'Войти через сервис вместо этого',
@@ -334,8 +353,8 @@ const ru: Record<Key, string> = {
   'home.revoke': 'Отозвать',
   'home.lastUsed': 'последнее использование',
   'home.never': 'не использовалось',
-  'home.calls': 'Последние вызовы инструментов',
-  'home.noCalls': 'Вызовов пока нет.',
+  'home.calls': 'Последние действия',
+  'home.noCalls': 'Действий пока нет.',
   'home.signOut': 'Выйти',
   'home.service': 'Сервис',
   'home.account': 'Аккаунт',
@@ -343,6 +362,8 @@ const ru: Record<Key, string> = {
   'home.disabled': 'выключен',
   'home.manageHint': 'Пока аккаунты управляются через REST API или CLI; веб-панель — следующий этап.',
 };
+
+const ru: Record<Key, string> = { ...coreRu, ...siteRu, ...appRu, ...authRu };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
 
@@ -363,12 +384,37 @@ export function pickLocale(acceptLanguage: string | undefined): Locale {
   return 'en';
 }
 
+/**
+ * Plural forms in texts: `{n|день|дня|дней}` (Russian: one|few|many) or `{n|day|days}` (English:
+ * one|other) picks the word for the number in `vars.n`. The number itself is written as `{n}`.
+ */
+const PLURAL_ORDER: Record<Locale, Intl.LDMLPluralRule[]> = {
+  ru: ['one', 'few', 'many'],
+  en: ['one', 'other'],
+};
+const pluralRules: Record<Locale, Intl.PluralRules> = {
+  ru: new Intl.PluralRules('ru'),
+  en: new Intl.PluralRules('en'),
+};
+
+export function plural(locale: Locale, n: number, forms: string[]): string {
+  const category = pluralRules[locale].select(n);
+  const index = PLURAL_ORDER[locale].indexOf(category);
+  // Russian fractions ("other") read like "few": 1,5 дня.
+  return forms[index >= 0 ? index : locale === 'ru' ? 1 : forms.length - 1] ?? forms.at(-1) ?? '';
+}
+
 export function translator(locale: Locale): Translate {
   const dict = dictionaries[locale];
   return (key, vars) => {
     let text = dict[key] ?? en[key];
-    if (vars)
+    if (vars) {
+      text = text.replace(/\{(\w+)\|([^}]+)\}/g, (whole, name: string, forms: string) => {
+        const value = Number(vars[name]);
+        return Number.isFinite(value) ? plural(locale, value, forms.split('|')) : whole;
+      });
       for (const [name, value] of Object.entries(vars)) text = text.replaceAll(`{${name}}`, String(value));
+    }
     return text;
   };
 }

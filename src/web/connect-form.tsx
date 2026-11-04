@@ -16,39 +16,64 @@ export interface ConnectFormView {
   values?: Record<string, string>;
   label?: string;
   error?: string;
+  /** Input names of fields the error is about. */
+  invalid?: string[];
   /** Shown when the service also supports OAuth. */
   oauthUrl?: string;
 }
 
-const Field: FC<{ field: FormField; value?: string; reconnecting: boolean }> = ({
-  field,
-  value,
-  reconnecting,
-}) => {
+/** Whether the value differs from what the field starts with (then its "Advanced" block opens). */
+function isCustomValue(field: FormField, value: string | undefined): boolean {
+  if (value === undefined || value === '') return false;
+  if (field.kind === 'boolean') return (value === 'true') !== (field.defaultValue === 'true');
+  return value !== (field.defaultValue ?? '');
+}
+
+const Field: FC<{
+  t: Translate;
+  field: FormField;
+  value?: string;
+  reconnecting: boolean;
+  invalid: boolean;
+}> = ({ t, field, value, reconnecting, invalid }) => {
   const id = `f-${field.name.replace('.', '-')}`;
   // On a reconnect an empty secret keeps the stored one, so it is never required there.
   const required = field.required && !(reconnecting && field.group === 'credentials');
   const shown = value ?? field.defaultValue ?? '';
+  const hintId = field.description ? `${id}-hint` : undefined;
+  const common = {
+    id,
+    name: field.name,
+    'aria-describedby': hintId,
+    'aria-invalid': invalid ? 'true' : undefined,
+  };
   let input: unknown;
   switch (field.kind) {
     case 'select':
       input = (
-        <select id={id} name={field.name} required={required}>
-          {field.required ? null : <option value="">—</option>}
+        <select {...common} required={required}>
+          {field.required ? null : (
+            <option value="">
+              {field.placeholder ?? (field.valueType === 'boolean' ? t('connect.formAuto') : '—')}
+            </option>
+          )}
           {field.options!.map((option) => (
-            <option value={option} selected={option === shown}>
-              {option}
+            <option value={option.value} selected={option.value === shown}>
+              {option.label ||
+                (field.valueType === 'boolean'
+                  ? t(option.value === 'true' ? 'connect.formYes' : 'connect.formNo')
+                  : option.value)}
             </option>
           ))}
         </select>
       );
       break;
     case 'boolean':
-      input = <input id={id} type="checkbox" name={field.name} checked={shown === 'true'} />;
+      input = <input {...common} type="checkbox" checked={shown === 'true'} />;
       break;
     case 'json':
       input = (
-        <textarea id={id} name={field.name} rows={3} required={required}>
+        <textarea {...common} rows={3} required={required} placeholder={field.placeholder}>
           {shown}
         </textarea>
       );
@@ -56,21 +81,36 @@ const Field: FC<{ field: FormField; value?: string; reconnecting: boolean }> = (
     case 'secret':
       input = (
         <input
-          id={id}
+          {...common}
           type="password"
-          name={field.name}
           autocomplete="off"
           spellcheck={false}
           required={required}
+          placeholder={field.placeholder}
         />
       );
       break;
     case 'number':
-      input = <input id={id} type="number" name={field.name} value={shown} required={required} step="any" />;
+      input = (
+        <input
+          {...common}
+          type="number"
+          value={shown}
+          required={required}
+          step="any"
+          placeholder={field.placeholder}
+        />
+      );
       break;
     default:
       input = (
-        <input id={id} type={field.inputType ?? 'text'} name={field.name} value={shown} required={required} />
+        <input
+          {...common}
+          type={field.inputType ?? 'text'}
+          value={shown}
+          required={required}
+          placeholder={field.placeholder}
+        />
       );
   }
   return (
@@ -80,7 +120,11 @@ const Field: FC<{ field: FormField; value?: string; reconnecting: boolean }> = (
         {required ? ' *' : ''}
       </label>
       {input}
-      {field.description ? <p class="muted small">{field.description}</p> : null}
+      {field.description ? (
+        <p id={hintId} class="muted small">
+          {field.description}
+        </p>
+      ) : null}
     </div>
   );
 };
@@ -91,46 +135,68 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
   lang,
   csrf,
   view,
-}) => (
-  <Layout title={t('connect.formTitle', { service: view.service })} narrow lang={lang}>
-    <div class="card">
-      <h1>{t('connect.formTitle', { service: view.service })}</h1>
-      <p class="muted">{view.description}</p>
-      {view.reconnecting ? <p>{t('connect.formReconnect', { label: view.reconnecting })}</p> : null}
-      <form method="post" action={`/connect/${encodeURIComponent(view.connectorId)}`} autocomplete="off">
-        <input type="hidden" name="csrf" value={csrf} />
-        {Object.entries(view.hidden).map(([name, value]) => (
-          <input type="hidden" name={name} value={value} />
-        ))}
-        {view.reconnecting ? null : (
-          <div>
-            <label for="f-label">{t('connect.formLabel')}</label>
-            <input
-              id="f-label"
-              type="text"
-              name="label"
-              value={view.label ?? view.service}
-              required
-              maxlength={100}
-            />
+}) => {
+  const invalid = new Set(view.invalid);
+  const field = (f: FormField) => (
+    <Field
+      t={t}
+      field={f}
+      value={view.values?.[f.name]}
+      reconnecting={Boolean(view.reconnecting)}
+      invalid={invalid.has(f.name)}
+    />
+  );
+  const advanced = view.fields.filter((f) => f.advanced);
+  // Open the block when it holds something the user set or got wrong, so nothing is hidden from them.
+  const openAdvanced = advanced.some((f) => invalid.has(f.name) || isCustomValue(f, view.values?.[f.name]));
+  return (
+    <Layout title={t('connect.formTitle', { service: view.service })} narrow lang={lang}>
+      <p class="back-link">
+        <a href="/app/services">← {t('connect.back')}</a>
+      </p>
+      <div class="card">
+        <h1>{t('connect.formTitle', { service: view.service })}</h1>
+        <p class="muted">{view.description}</p>
+        {view.reconnecting ? <p>{t('connect.formReconnect', { label: view.reconnecting })}</p> : null}
+        <form method="post" action={`/connect/${encodeURIComponent(view.connectorId)}`} autocomplete="off">
+          <input type="hidden" name="csrf" value={csrf} />
+          {Object.entries(view.hidden).map(([name, value]) => (
+            <input type="hidden" name={name} value={value} />
+          ))}
+          {view.reconnecting ? null : (
+            <div>
+              <label for="f-label">{t('connect.formLabel')}</label>
+              <input
+                id="f-label"
+                type="text"
+                name="label"
+                value={view.label ?? ''}
+                placeholder={t('connect.formLabelPlaceholder')}
+                maxlength={100}
+              />
+            </div>
+          )}
+          {view.fields.filter((f) => !f.advanced).map(field)}
+          {advanced.length > 0 ? (
+            <details class="connect-advanced" open={openAdvanced}>
+              <summary>{t('connect.formAdvanced')}</summary>
+              <section>{advanced.map(field)}</section>
+            </details>
+          ) : null}
+          <p class="muted small">{t('connect.formSecrets')}</p>
+          {view.error ? <p class="error">{view.error}</p> : null}
+          <div class="actions">
+            <button class="primary" type="submit">
+              {t(view.reconnecting ? 'connect.formReconnectSubmit' : 'connect.formSubmit')}
+            </button>
           </div>
-        )}
-        {view.fields.map((field) => (
-          <Field field={field} value={view.values?.[field.name]} reconnecting={Boolean(view.reconnecting)} />
-        ))}
-        <p class="muted small">{t('connect.formSecrets')}</p>
-        {view.error ? <p class="error">{view.error}</p> : null}
-        <div class="actions">
-          <button class="primary" type="submit">
-            {t(view.reconnecting ? 'connect.formReconnectSubmit' : 'connect.formSubmit')}
-          </button>
-        </div>
-      </form>
-      {view.oauthUrl ? (
-        <p class="small">
-          <a href={view.oauthUrl}>{t('connect.formUseOAuth')}</a>
-        </p>
-      ) : null}
-    </div>
-  </Layout>
-);
+        </form>
+        {view.oauthUrl ? (
+          <p class="small">
+            <a href={view.oauthUrl}>{t('connect.formUseOAuth')}</a>
+          </p>
+        ) : null}
+      </div>
+    </Layout>
+  );
+};

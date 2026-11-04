@@ -111,13 +111,12 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
   );
   return (
     <Layout title={t('security.title')} lang={lang} script>
-      <header class="top">
-        <span class="brand">AnyConnect</span>
-        <span class="small muted">
-          {view.email} · <a href="/">{t('security.home')}</a>
-        </span>
-      </header>
-      <h1>{t('security.title')}</h1>
+      <div class="page-head">
+        <div>
+          <h1>{t('security.title')}</h1>
+          <p>{view.email}</p>
+        </div>
+      </div>
       {view.required ? <div class="warning">{t('security.required')}</div> : null}
       {view.next && view.hasFactor ? (
         <p>
@@ -243,7 +242,7 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
             maxlength={64}
             placeholder={t('security.passkeyDefaultName')}
           />
-          <div class="actions">
+          <div class="actions start">
             <button class="primary" type="submit">
               {t('security.passkeyAdd')}
             </button>

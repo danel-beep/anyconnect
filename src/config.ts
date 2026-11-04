@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IpAllowlist } from './lib/ip-allowlist.js';
 
 /**
  * All runtime configuration comes from environment variables (12-factor).
@@ -40,8 +41,14 @@ const EnvSchema = z.object({
   ADMIN_EMAIL: optionalString,
   ADMIN_PASSWORD: optionalString,
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  /** Trust X-Forwarded-* headers (set automatically on Render). */
+  /**
+   * Proxies in front of the hub: `true`/a number of proxies that append to X-Forwarded-For (the
+   * client IP is taken that many entries from the right, so a client cannot forge it), `false` for
+   * none. Defaults to 2 on Render (Cloudflare + Render's load balancer).
+   */
   TRUST_PROXY: optionalString,
+  /** A header the platform itself sets to the client IP (e.g. `cf-connecting-ip`); wins over X-Forwarded-For. */
+  CLIENT_IP_HEADER: optionalString,
   MIGRATE_ON_START: bool(true),
   SEED_DEMO_ACCOUNTS: bool(true),
   OAUTH_DYNAMIC_REGISTRATION: bool(true),
@@ -61,6 +68,19 @@ const EnvSchema = z.object({
    * detect sign-in by a 401 on the first request would otherwise treat the hub as needing none.
    */
   MCP_ANONYMOUS: bool(false),
+  /** Who may create an account on the website: `open` (anyone with Google) or `closed` (existing users only). */
+  SIGNUPS: z.enum(['open', 'closed']).default('open'),
+  /** "Sign in with Google" OAuth client; falls back to OAUTH_APP_GOOGLE_CLIENT_ID / _SECRET. */
+  LOGIN_GOOGLE_CLIENT_ID: optionalString,
+  LOGIN_GOOGLE_CLIENT_SECRET: optionalString,
+  /** Emails (comma separated) that become hub admins when they sign in, besides ADMIN_EMAIL. */
+  ADMIN_EMAILS: optionalString,
+  /** Only these IPs / CIDR ranges (comma separated) may open the admin panel; empty = any. */
+  ADMIN_ALLOWED_IPS: optionalString,
+  /** The admin panel needs a sign-in (with a second factor) at most this many hours ago. */
+  ADMIN_SESSION_HOURS: z.coerce.number().int().min(1).max(720).default(8),
+  /** Contact address shown on the website and in the legal pages. */
+  SUPPORT_EMAIL: optionalString,
   /** Requests per minute one IP address may make to /mcp without signing in. */
   MCP_ANONYMOUS_RATE_LIMIT: z.coerce.number().int().min(1).default(30),
   /** Default size budget of one tool result, in tokens (larger results are trimmed with a note). */
@@ -95,7 +115,8 @@ export interface AppConfig {
   mcpUrl: string;
   /** Whether cookies must be Secure (https public URL). */
   secureCookies: boolean;
-  trustProxy: boolean;
+  /** How to find the client IP behind proxies (`hops: 0` = use the socket address). */
+  trustProxy: TrustProxy;
   database: { url: string; poolMax: number };
   encryption: { key: string | undefined; previousKeys: string[] };
   admin: { email: string; password: string } | undefined;
@@ -129,6 +150,17 @@ export interface AppConfig {
     /** Expected origin of WebAuthn ceremonies = the public URL. */
     origin: string;
   };
+  /** Website accounts: self sign-up, external sign-in providers, admins. */
+  site: {
+    signups: 'open' | 'closed';
+    /** Lower-cased emails promoted to admin at sign-in (ADMIN_EMAIL is always one). */
+    adminEmails: string[];
+    adminAllowedIps: string[];
+    adminSessionMaxAgeMs: number;
+    supportEmail: string | undefined;
+    /** "Sign in with Google": absent when no Google OAuth client is configured. */
+    google: { clientId: string; clientSecret: string | undefined } | undefined;
+  };
   /** /mcp before signing in (see MCP_ANONYMOUS). */
   anonymousMcp: { enabled: boolean; perMinute: number };
   /**
@@ -151,6 +183,14 @@ export function readOAuthApps(source: NodeJS.ProcessEnv): AppConfig['oauthApps']
     apps[match[1]!.toLowerCase()] = { clientId: value.trim(), clientSecret: secret || undefined };
   }
   return apps;
+}
+
+/** The "Sign in with Google" client: its own variables, else the hub's Google OAuth app. */
+function googleLogin(env: Env, source: NodeJS.ProcessEnv): AppConfig['site']['google'] {
+  if (env.LOGIN_GOOGLE_CLIENT_ID)
+    return { clientId: env.LOGIN_GOOGLE_CLIENT_ID, clientSecret: env.LOGIN_GOOGLE_CLIENT_SECRET };
+  const hub = readOAuthApps(source).google;
+  return hub ? { clientId: hub.clientId, clientSecret: hub.clientSecret } : undefined;
 }
 
 export class ConfigError extends Error {
@@ -205,10 +245,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new ConfigError('ADMIN_PASSWORD must be at least 12 characters in production');
   }
 
-  const trustProxy =
-    env.TRUST_PROXY !== undefined
-      ? ['1', 'true', 'yes', 'on'].includes(env.TRUST_PROXY.toLowerCase())
-      : Boolean(source.RENDER) || Boolean(env.RENDER_EXTERNAL_URL);
+  const onRender = Boolean(source.RENDER) || Boolean(env.RENDER_EXTERNAL_URL);
+  const trustProxy: TrustProxy = {
+    hops: proxyHops(env.TRUST_PROXY, onRender ? 2 : 0),
+    ...(env.CLIENT_IP_HEADER ? { header: env.CLIENT_IP_HEADER.trim().toLowerCase() } : {}),
+  };
 
   return {
     env: env.NODE_ENV,
@@ -244,6 +285,20 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
     anonymousMcp: { enabled: env.MCP_ANONYMOUS, perMinute: env.MCP_ANONYMOUS_RATE_LIMIT },
+    site: {
+      signups: env.SIGNUPS,
+      adminEmails: [
+        ...new Set(
+          [env.ADMIN_EMAIL, ...(env.ADMIN_EMAILS ?? '').split(',')]
+            .map((e) => e?.trim().toLowerCase())
+            .filter((e): e is string => Boolean(e)),
+        ),
+      ],
+      adminAllowedIps: adminAllowedIps(env.ADMIN_ALLOWED_IPS),
+      adminSessionMaxAgeMs: env.ADMIN_SESSION_HOURS * 3_600_000,
+      supportEmail: env.SUPPORT_EMAIL,
+      google: googleLogin(env, source),
+    },
     tools: {
       maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
@@ -264,4 +319,36 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     oauthApps: readOAuthApps(source),
     jobs: { enabled: env.JOBS_ENABLED },
   };
+}
+
+/** ADMIN_ALLOWED_IPS as a list, checked up front (a typo must not silently open or close the panel). */
+function adminAllowedIps(value: string | undefined): string[] {
+  const entries = (value ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  try {
+    new IpAllowlist(entries);
+  } catch (error) {
+    throw new Error(`ADMIN_ALLOWED_IPS: ${(error as Error).message}`);
+  }
+  return entries;
+}
+
+export interface TrustProxy {
+  /** Proxies that append to X-Forwarded-For; 0 = trust no forwarded header. */
+  hops: number;
+  /** A header set by the platform with the client IP. */
+  header?: string;
+}
+
+function proxyHops(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const v = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(v)) return 1;
+  if (['0', 'false', 'no', 'off', ''].includes(v)) return 0;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > 10)
+    throw new ConfigError('TRUST_PROXY must be true, false or the number of proxies (0–10)');
+  return n;
 }

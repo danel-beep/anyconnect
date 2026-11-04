@@ -21,9 +21,22 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
     private readonly resource: string,
     /** MCP URL of a persona; personal tokens bound to a persona only work there. */
     private readonly personaResource: (workspaceId: string, personaId: string) => Promise<string | undefined>,
+    /**
+     * Whether the token's user may still act (not suspended). Suspending revokes tokens already;
+     * this keeps a token issued in a race with the suspension from working.
+     */
+    private readonly userActive: (userId: string) => Promise<boolean> = async () => true,
   ) {}
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
+    const info = await this.verify(token);
+    const principal = info.extra?.[PRINCIPAL] as Principal;
+    if (!(await this.userActive(principal.userId)))
+      throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired access token');
+    return info;
+  }
+
+  private async verify(token: string): Promise<AuthInfo> {
     const oauth = await this.oauth.verifyAccessToken(token);
     if (oauth) {
       const principal: Principal = {

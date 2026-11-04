@@ -3,8 +3,9 @@ import { resolveProvider } from '../connectors/oauth/providers.js';
 import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registry.js';
 import type { ConnectorDefinition, ConnectorLogger, TestResult } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
-import { type WorkspaceSettings, workspaces } from '../db/schema.js';
+import { type SecuritySettings, type WorkspaceSettings, workspaces } from '../db/schema.js';
 import { badRequest, notFound } from '../lib/errors.js';
+import { DEFAULT_SECURITY } from '../security/policy.js';
 import type { AccountRow, AccountService, UpdateAccountInput } from './accounts.js';
 import type { AddServiceInput, CustomServiceManager, ServiceView } from './custom-services.js';
 import { getWorkspace } from './identity.js';
@@ -36,6 +37,8 @@ export interface ServiceEntry {
   /** OAuth services without an OAuth app configured cannot be connected yet. */
   ready: boolean;
   problem?: string;
+  /** The environment variable the hub owner sets to make a not-ready OAuth service available. */
+  setupVar?: string;
   /** Added by this workspace (remote MCP server or HTTP manifest), not built in. */
   custom: boolean;
   accounts: number;
@@ -98,13 +101,16 @@ export class WorkspaceAdmin {
       }
       const method = this.connectMethod(connector);
       const problem = method === 'oauth' ? await this.oauthProblem(workspaceId, connector) : undefined;
+      const setupVar = problem
+        ? `OAUTH_APP_${resolveProvider(connector.oauth!).id.toUpperCase()}_CLIENT_ID`
+        : undefined;
       entries.push({
         service: connector.id,
         name: connector.name,
         description: connector.description,
         connect: method,
         ready: !problem,
-        ...(problem ? { problem } : {}),
+        ...(problem ? { problem, setupVar } : {}),
         custom: customIds.has(connector.id),
         accounts: accounts.filter((a) => a.connectorId === connector.id).length,
       });
@@ -172,6 +178,7 @@ export class WorkspaceAdmin {
       if (input.name && (await this.deps.accounts.findByName(workspaceId, connector.id, input.name))) {
         throw badRequest(`${connector.name} already has an account named "${input.name}".`);
       }
+      await this.deps.accounts.assertCanCreate(workspaceId);
       if (input.label) url.searchParams.set('label', input.label);
       if (input.name) url.searchParams.set('name', input.name);
     }
@@ -239,6 +246,24 @@ export class WorkspaceAdmin {
     const workspace = await getWorkspace(this.deps.db, workspaceId);
     if (!workspace) throw notFound('Workspace');
     return workspace.settings;
+  }
+
+  /** Default access and confirmation level for the workspace (`DEFAULT_SECURITY` fills the gaps). */
+  async security(workspaceId: string): Promise<Required<SecuritySettings>> {
+    return { ...DEFAULT_SECURITY, ...(await this.settings(workspaceId)).security };
+  }
+
+  async updateSecurity(workspaceId: string, change: SecuritySettings): Promise<Required<SecuritySettings>> {
+    const current = await this.settings(workspaceId);
+    const security = {
+      ...current.security,
+      ...Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined)),
+    };
+    await this.deps.db
+      .update(workspaces)
+      .set({ settings: { ...current, security } })
+      .where(eq(workspaces.id, workspaceId));
+    return { ...DEFAULT_SECURITY, ...security };
   }
 
   async updateSettings(

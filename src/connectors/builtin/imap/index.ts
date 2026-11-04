@@ -222,6 +222,220 @@ export default defineConnector({
     const count = status ? (status.messages ?? 0) : 0;
     return { ok: true, identity: ctx.config.email, message: `INBOX: ${count} messages` };
   },
+  ui: {
+    primaryFields: ['email', 'password', 'provider'],
+    locales: {
+      ru: {
+        name: 'Почта (IMAP/SMTP)',
+        description:
+          'Любой почтовый ящик по IMAP/SMTP: Gmail, Яндекс Почта, Mail.ru, iCloud, Outlook, Fastmail, корпоративная почта. Поиск, чтение, отправка, ответы, пересылка, папки и отметки.',
+        fields: {
+          email: { label: 'Адрес почты', placeholder: 'me@yandex.ru' },
+          provider: {
+            label: 'Почтовый сервис',
+            hint: 'Обычно определяется по адресу. Для своего сервера выберите «Другой сервер» и укажите серверы IMAP и SMTP в разделе «Дополнительно».',
+            placeholder: 'Определить по адресу',
+            options: {
+              gmail: 'Gmail / Google Workspace',
+              yandex: 'Яндекс Почта',
+              mailru: 'Mail.ru',
+              icloud: 'iCloud',
+              outlook: 'Outlook.com / Microsoft 365',
+              fastmail: 'Fastmail',
+              custom: 'Другой сервер',
+            },
+          },
+          fromName: {
+            label: 'Имя отправителя',
+            hint: 'Его увидят получатели ваших писем',
+            placeholder: 'Анна Иванова',
+          },
+          username: { label: 'Логин', hint: 'Если он отличается от адреса почты' },
+          imapHost: {
+            label: 'Адрес сервера IMAP',
+            hint: 'Нужен для другого сервера или если настройки почтового сервиса не подходят',
+            placeholder: 'imap.example.com',
+          },
+          imapPort: {
+            label: 'Порт IMAP',
+            hint: 'Обычно 993 для SSL/TLS или 143 для STARTTLS',
+            placeholder: '993',
+          },
+          imapSecurity: {
+            label: 'Шифрование IMAP',
+            placeholder: 'Как у почтового сервиса',
+            options: { tls: 'SSL/TLS', starttls: 'STARTTLS' },
+          },
+          smtpHost: {
+            label: 'Адрес сервера SMTP',
+            hint: 'Нужен для другого сервера или если настройки почтового сервиса не подходят',
+            placeholder: 'smtp.example.com',
+          },
+          smtpPort: {
+            label: 'Порт SMTP',
+            hint: 'Обычно 465 для SSL/TLS или 587 для STARTTLS',
+            placeholder: '465',
+          },
+          smtpSecurity: {
+            label: 'Шифрование SMTP',
+            placeholder: 'Как у почтового сервиса',
+            options: { tls: 'SSL/TLS', starttls: 'STARTTLS' },
+          },
+          allowInvalidCertificate: {
+            label: 'Доверять самоподписанному сертификату',
+            hint: 'Только для своего почтового сервера или Proton Mail Bridge',
+          },
+          saveSentCopy: {
+            label: 'Сохранять копии отправленных писем',
+            hint: 'В папку «Отправленные». Gmail и Outlook делают это сами.',
+          },
+          password: {
+            label: 'Пароль приложения',
+            hint: 'Создаётся в настройках безопасности почты. Обычный пароль подойдёт, только если сервис это разрешает.',
+          },
+          smtpPassword: {
+            label: 'Пароль для SMTP',
+            hint: 'Только если для отправки писем нужен другой пароль',
+          },
+        },
+        actions: {
+          list_folders: {
+            title: 'Список папок',
+            description:
+              'Папки почты с их назначением (входящие, отправленные, корзина…), числом писем и непрочитанных.',
+          },
+          search: {
+            title: 'Поиск писем',
+            description:
+              'Ищет письма в папке, сначала новые. Показывает дату, отправителя, тему, начало текста и прочитано ли письмо.',
+          },
+          read: {
+            title: 'Чтение письма',
+            description:
+              'Открывает письмо как обычный текст, без цитат прошлой переписки, с заголовками и списком вложений.',
+          },
+          send: {
+            title: 'Отправка письма',
+            description: 'Отправляет новое письмо с этого ящика. Текст — без оформления.',
+          },
+          reply: {
+            title: 'Ответ на письмо',
+            description: 'Отвечает в той же цепочке писем. Можно ответить всем получателям.',
+          },
+          forward: {
+            title: 'Пересылка письма',
+            description: 'Пересылает письмо со всеми вложениями и, если нужно, с вашим комментарием.',
+          },
+          move: {
+            title: 'Перемещение писем',
+            description: 'Переносит письма в архив, корзину, спам или любую другую папку.',
+          },
+          mark: {
+            title: 'Отметки писем',
+            description: 'Отмечает письма прочитанными или непрочитанными, ставит и снимает флажок.',
+          },
+        },
+      },
+      en: {
+        fields: {
+          email: { label: 'Email address', placeholder: 'me@example.com' },
+          provider: {
+            label: 'Mail provider',
+            hint: 'Usually detected from the address. For your own server choose “Other server” and enter the IMAP and SMTP servers under “Advanced”.',
+            placeholder: 'Detect from the address',
+            options: {
+              gmail: 'Gmail / Google Workspace',
+              yandex: 'Yandex Mail',
+              mailru: 'Mail.ru',
+              icloud: 'iCloud',
+              outlook: 'Outlook.com / Microsoft 365',
+              fastmail: 'Fastmail',
+              custom: 'Other server',
+            },
+          },
+          fromName: {
+            label: 'Sender name',
+            hint: 'Recipients of your emails see it',
+            placeholder: 'Ann Smith',
+          },
+          username: { label: 'Username', hint: 'If it differs from the email address' },
+          imapHost: {
+            label: 'IMAP server',
+            hint: 'Needed for another server, or when the provider settings do not fit',
+            placeholder: 'imap.example.com',
+          },
+          imapPort: {
+            label: 'IMAP port',
+            hint: 'Usually 993 for SSL/TLS or 143 for STARTTLS',
+            placeholder: '993',
+          },
+          imapSecurity: {
+            label: 'IMAP encryption',
+            placeholder: 'As the provider sets it',
+            options: { tls: 'SSL/TLS', starttls: 'STARTTLS' },
+          },
+          smtpHost: {
+            label: 'SMTP server',
+            hint: 'Needed for another server, or when the provider settings do not fit',
+            placeholder: 'smtp.example.com',
+          },
+          smtpPort: {
+            label: 'SMTP port',
+            hint: 'Usually 465 for SSL/TLS or 587 for STARTTLS',
+            placeholder: '465',
+          },
+          smtpSecurity: {
+            label: 'SMTP encryption',
+            placeholder: 'As the provider sets it',
+            options: { tls: 'SSL/TLS', starttls: 'STARTTLS' },
+          },
+          allowInvalidCertificate: {
+            label: 'Trust a self-signed certificate',
+            hint: 'Only for your own mail server or Proton Mail Bridge',
+          },
+          saveSentCopy: {
+            label: 'Save copies of sent mail',
+            hint: 'To the Sent folder. Gmail and Outlook do this themselves.',
+          },
+          password: {
+            label: 'App password',
+            hint: 'Create one in your mailbox security settings. Your regular password works only if the provider allows it.',
+          },
+          smtpPassword: { label: 'SMTP password', hint: 'Only if sending mail needs a different password' },
+        },
+        actions: {
+          list_folders: {
+            title: 'List folders',
+            description: 'Mail folders with their role (inbox, sent, trash…) and message and unread counts.',
+          },
+          search: {
+            title: 'Search mail',
+            description:
+              'Finds messages in a folder, newest first, with date, sender, subject, a snippet and read status.',
+          },
+          read: {
+            title: 'Read a message',
+            description:
+              'Opens a message as plain text without the quoted history, with headers and attachments.',
+          },
+          send: { title: 'Send an email', description: 'Sends a new plain-text email from this mailbox.' },
+          reply: { title: 'Reply', description: 'Replies in the same thread, optionally to all recipients.' },
+          forward: {
+            title: 'Forward',
+            description: 'Forwards a message with all its attachments and an optional note.',
+          },
+          move: {
+            title: 'Move messages',
+            description: 'Moves messages to the archive, trash, junk or any other folder.',
+          },
+          mark: {
+            title: 'Mark messages',
+            description: 'Marks messages read or unread and flags or unflags them.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'list_folders',

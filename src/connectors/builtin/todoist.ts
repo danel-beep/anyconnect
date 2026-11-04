@@ -1,5 +1,6 @@
 import { defineManifestConnector } from '../manifest/compile.js';
 import type { CapabilityBinding, CapabilityOutput } from '../sdk.js';
+import { type ConnectorUi, withUi } from '../sdk.js';
 
 const TASK_FIELDS = [
   'id',
@@ -89,7 +90,7 @@ const createTask: CapabilityBinding = {
 };
 
 /** Todoist API v1. API token from Settings → Integrations → Developer, or OAuth. */
-export default defineManifestConnector(
+const manifest = defineManifestConnector(
   {
     id: 'todoist',
     name: 'Todoist',
@@ -214,3 +215,61 @@ export default defineManifestConnector(
     },
   },
 );
+
+/** How the service reads on the website; the AI keeps the English texts of the manifest. */
+const ui: ConnectorUi = {
+  locales: {
+    ru: {
+      description: 'Задачи и проекты Todoist: поиск, создание, изменение и выполнение задач.',
+      fields: {
+        token: {
+          label: 'Токен API',
+          hint: 'Нужен, только если не входить через Todoist. Найти его можно в Todoist: Настройки → Интеграции → Разработчик.',
+        },
+      },
+      actions: {
+        find_tasks: { title: 'Поиск задач', description: 'Находит открытые задачи по фильтру Todoist.' },
+        list_projects: { title: 'Список проектов', description: 'Проекты Todoist с их идентификаторами.' },
+        add_task: { title: 'Новая задача', description: 'Создаёт задачу.' },
+        update_task: {
+          title: 'Изменение задачи',
+          description: 'Меняет название, описание, срок, приоритет или метки задачи.',
+        },
+        complete_task: {
+          title: 'Выполнение задачи',
+          description: 'Отмечает задачу выполненной. Повторяющаяся задача переносится на следующую дату.',
+        },
+        reopen_task: { title: 'Возврат задачи', description: 'Снова открывает выполненную задачу.' },
+        delete_task: {
+          title: 'Удаление задачи',
+          description: 'Удаляет задачу без возможности восстановления.',
+        },
+      },
+    },
+    en: {
+      fields: {
+        token: {
+          label: 'API token',
+          hint: 'Only if you do not sign in with Todoist. Find it in Todoist: Settings → Integrations → Developer.',
+        },
+      },
+      actions: {
+        find_tasks: { title: 'Find tasks', description: 'Finds open tasks that match a Todoist filter.' },
+        list_projects: { title: 'List projects', description: 'Todoist projects with their ids.' },
+        add_task: { title: 'Add a task', description: 'Creates a task.' },
+        update_task: {
+          title: 'Update a task',
+          description: 'Changes the title, description, due date, priority or labels of a task.',
+        },
+        complete_task: {
+          title: 'Complete a task',
+          description: 'Marks a task as done. A recurring task moves to its next date.',
+        },
+        reopen_task: { title: 'Reopen a task', description: 'Reopens a completed task.' },
+        delete_task: { title: 'Delete a task', description: 'Deletes a task permanently.' },
+      },
+    },
+  },
+};
+
+export default withUi(manifest, ui);

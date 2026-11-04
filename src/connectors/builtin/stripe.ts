@@ -1,4 +1,5 @@
 import { defineManifestConnector } from '../manifest/compile.js';
+import { type ConnectorUi, withUi } from '../sdk.js';
 
 const searchInput = (example: string) => ({
   type: 'object' as const,
@@ -13,7 +14,7 @@ const searchInput = (example: string) => ({
  * Stripe API. A restricted key with read access (plus "Refunds: write" if refunds are wanted) is
  * the recommended credential: the AI then cannot do more than the key allows.
  */
-export default defineManifestConnector({
+const manifest = defineManifestConnector({
   id: 'stripe',
   name: 'Stripe',
   description: 'Stripe payments: balance, customers, payments, invoices, subscriptions, refunds.',
@@ -153,3 +154,58 @@ export default defineManifestConnector({
     },
   ],
 });
+
+/** How the service reads on the website; the AI keeps the English texts of the manifest. */
+const ui: ConnectorUi = {
+  locales: {
+    ru: {
+      description: 'Платежи Stripe: баланс, клиенты, платежи, счета, подписки и возвраты.',
+      fields: {
+        apiKey: {
+          label: 'Секретный ключ API',
+          hint: 'Лучше всего ограниченный ключ (rk_…) только с нужными правами. Ключи — на dashboard.stripe.com/apikeys.',
+          placeholder: 'rk_live_…',
+        },
+      },
+      actions: {
+        get_balance: { title: 'Баланс', description: 'Доступный и ожидающий баланс в каждой валюте.' },
+        search_customers: { title: 'Поиск клиентов', description: 'Находит клиентов.' },
+        search_payments: { title: 'Поиск платежей', description: 'Находит платежи (PaymentIntents).' },
+        search_invoices: { title: 'Поиск счетов', description: 'Находит счета.' },
+        list_subscriptions: {
+          title: 'Список подписок',
+          description: 'Подписки, сначала новые. Можно выбрать клиента или статус.',
+        },
+        create_refund: {
+          title: 'Возврат платежа',
+          description: 'Возвращает платёж целиком или частично. Деньги уходят с вашего счёта.',
+        },
+      },
+    },
+    en: {
+      fields: {
+        apiKey: {
+          label: 'Secret API key',
+          hint: 'A restricted key (rk_…) with only the rights you need is best. Keys are at dashboard.stripe.com/apikeys.',
+          placeholder: 'rk_live_…',
+        },
+      },
+      actions: {
+        get_balance: { title: 'Balance', description: 'Available and pending balance in each currency.' },
+        search_customers: { title: 'Search customers', description: 'Finds customers.' },
+        search_payments: { title: 'Search payments', description: 'Finds payments (PaymentIntents).' },
+        search_invoices: { title: 'Search invoices', description: 'Finds invoices.' },
+        list_subscriptions: {
+          title: 'List subscriptions',
+          description: 'Subscriptions, newest first, optionally of one customer or status.',
+        },
+        create_refund: {
+          title: 'Refund a payment',
+          description: 'Refunds a payment in full or in part. Money leaves your account.',
+        },
+      },
+    },
+  },
+};
+
+export default withUi(manifest, ui);

@@ -95,6 +95,26 @@ Claude Code откроет браузер для входа и согласия,
 4. После деплоя адрес будет вида `https://anyconnect-xxxx.onrender.com`. `PUBLIC_URL` указывать
    не нужно: хаб берёт `RENDER_EXTERNAL_URL`. Для своего домена задайте `PUBLIC_URL`.
 
+### Вход через Google
+
+1. [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → **Create
+   credentials → OAuth client ID → Web application**.
+2. **Authorized redirect URIs**: `https://<ваш адрес>/auth/google/callback` (вход на сайт) и
+   `https://<ваш адрес>/connect/callback` (подключение Gmail, Календаря, Диска).
+3. В Render задайте `LOGIN_GOOGLE_CLIENT_ID` и `LOGIN_GOOGLE_CLIENT_SECRET` (или
+   `OAUTH_APP_GOOGLE_CLIENT_ID` / `_SECRET`, если одно приложение и для входа, и для сервисов).
+4. `SUPPORT_EMAIL` — адрес для вопросов и запросов тарифа, его видно на сайте.
+
+Остальные настройки сайта (`SIGNUPS`, `ADMIN_EMAILS`, `ADMIN_ALLOWED_IPS`, `ADMIN_SESSION_HOURS`,
+`TRUST_PROXY`) описаны в `.env.example`.
+
+### Админка
+
+Владелец (`ADMIN_EMAIL`) — администратор. Откройте `/security`, включите приложение-аутентификатор
+или passkey, затем `/admin`: без второго фактора админка не откроется. Там пользователи, тарифы,
+добавки к лимитам, блокировка, запросы тарифов, журнал действий и проверка настроек сервера
+(«Система»).
+
 Бесплатный план Render засыпает через 15 минут простоя, а ИИ-клиенты не ждут холодный старт,
 поэтому в Blueprint стоит Starter. Хаб работает и на любой другой платформе с Docker и Postgres.
 

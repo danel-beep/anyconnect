@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, ne, sql } from 'drizzle-orm';
 import { type AuthMethod, parseAuthMethods } from '../core/auth-methods.js';
 import type { Db } from '../db/client.js';
 import { users, webSessions } from '../db/schema.js';
@@ -52,7 +52,14 @@ export class SessionService {
       })
       .from(webSessions)
       .innerJoin(users, eq(users.id, webSessions.userId))
-      .where(and(eq(webSessions.tokenHash, tokenHash), gt(webSessions.expiresAt, new Date())))
+      .where(
+        and(
+          eq(webSessions.tokenHash, tokenHash),
+          gt(webSessions.expiresAt, new Date()),
+          // A suspended user's sessions stop working at once, even before they are deleted.
+          eq(users.status, 'active'),
+        ),
+      )
       .limit(1);
     if (!row) return undefined;
     if (Date.now() - row.lastSeenAt.getTime() > 5 * 60_000) {
@@ -82,6 +89,30 @@ export class SessionService {
                  else array_append(${webSessions.amr}, ${method}::text) end`,
       })
       .where(eq(webSessions.tokenHash, hashToken(token)));
+  }
+
+  /** Other sessions of the user (e.g. after a security change: sign out everywhere else). */
+  async destroyOthers(userId: string, keepToken: string | undefined): Promise<number> {
+    const keep = keepToken ? hashToken(keepToken) : '';
+    const rows = await this.db
+      .delete(webSessions)
+      .where(and(eq(webSessions.userId, userId), ne(webSessions.tokenHash, keep)))
+      .returning({ id: webSessions.tokenHash });
+    return rows.length;
+  }
+
+  async list(userId: string) {
+    return this.db
+      .select({
+        tokenHash: webSessions.tokenHash,
+        createdAt: webSessions.createdAt,
+        lastSeenAt: webSessions.lastSeenAt,
+        ip: webSessions.ip,
+        userAgent: webSessions.userAgent,
+      })
+      .from(webSessions)
+      .where(and(eq(webSessions.userId, userId), gt(webSessions.expiresAt, new Date())))
+      .orderBy(desc(webSessions.lastSeenAt));
   }
 
   async destroy(token: string | undefined): Promise<void> {

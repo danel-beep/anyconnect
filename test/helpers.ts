@@ -5,6 +5,7 @@ import { createApp } from '../src/app.js';
 import { bootstrap } from '../src/bootstrap.js';
 import { loadConfig } from '../src/config.js';
 import type { ConnectorRegistry } from '../src/connectors/registry.js';
+import type { OidcLoginProvider } from '../src/core/external-login.js';
 import { runMigrations } from '../src/db/migrate.js';
 import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
@@ -50,6 +51,7 @@ export async function truncateAll(services: Services): Promise<void> {
     TRUNCATE tool_calls, account_oauth, oauth_connect_states, oauth_apps, custom_connectors, accounts,
              api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants, oauth_clients, web_sessions,
              pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
+             login_states, admin_audit_log, limit_grants, subscriptions, user_identities,
              workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
 }
 
@@ -71,6 +73,8 @@ export async function startTestHub(
     /** A fake Telegram Bot API (set TELEGRAM_BOT_TOKEN in `env` too). */
     telegramFetch?: typeof fetch;
     databaseUrl?: string;
+    /** External sign-in providers with fake endpoints ("Sign in with Google" tests). */
+    loginProviders?: OidcLoginProvider[];
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -104,6 +108,7 @@ export async function startTestHub(
     ...(options.fetchDocument ? { fetchDocument: options.fetchDocument } : {}),
     ...(options.stages ? { stages: options.stages } : {}),
     ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
+    ...(options.loginProviders ? { loginProviders: options.loginProviders } : {}),
   });
   await truncateAll(services);
   await bootstrap(services);

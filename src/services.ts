@@ -1,14 +1,19 @@
 import type { McpHttpHandler } from '@modelcontextprotocol/server';
+import { AdminService } from './admin/service.js';
+import { EntitlementService } from './billing/entitlements.js';
+import type { BillingProvider } from './billing/provider.js';
 import type { AppConfig } from './config.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
+import { ActivityService } from './core/activity.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
 import { ConnectService } from './core/connect.js';
 import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-connectors.js';
 import { CustomServiceManager } from './core/custom-services.js';
+import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
 import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
@@ -16,6 +21,7 @@ import { PasskeyService } from './core/passkeys.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
 import { TotpService } from './core/totp.js';
+import { activeUserCheck, UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
@@ -71,6 +77,10 @@ export interface Services {
   admin: WorkspaceAdmin;
   /** Usage counters per workspace, AI account and action. */
   usage: UsageMeter;
+  /** Plans, limits and grants (billing layer). */
+  entitlements: EntitlementService;
+  /** Payment provider; undefined until payments are connected (see `src/billing/provider.ts`). */
+  billing: BillingProvider | undefined;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -100,6 +110,14 @@ export interface Services {
   /** Secret Telegram must send with webhook updates (derived from the master key). */
   telegramWebhookSecret: string;
   sessions: SessionService;
+  /** Sign-up through external providers, roles, suspension, deletion. */
+  users: UserService;
+  /** The hub owner's admin panel: user directory, plans, extra limits, admin log. */
+  adminPanel: AdminService;
+  /** Counts over the audit log for the dashboard. */
+  activity: ActivityService;
+  /** "Sign in with Google" and other OpenID Connect providers. */
+  externalLogin: ExternalLoginService;
   /** Sign-ins waiting for a second factor. */
   pendingLogins: PendingLoginService;
   /** TOTP, recovery codes and passkeys. */
@@ -125,6 +143,10 @@ export function createServices(
     catalogFilter?: HubDeps['catalogFilter'];
     /** Tests: talk to a fake Telegram Bot API. */
     telegramFetch?: typeof fetch;
+    /** A payment provider (none is built in yet). */
+    billing?: BillingProvider;
+    /** Tests: external sign-in providers with fake endpoints. */
+    loginProviders?: OidcLoginProvider[];
   } = {},
 ): Services {
   const logger =
@@ -144,7 +166,9 @@ export function createServices(
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
-  const accounts = new AccountService(db, connectors, keyring, network, tokens);
+  const usage = new PgUsageMeter(db);
+  const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/app/billing` });
+  const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
   const customServices = new CustomServiceManager({
     db,
     store: customStore,
@@ -241,10 +265,10 @@ export function createServices(
     publicUrl: config.publicUrl,
     logger,
   });
-  const usage = new PgUsageMeter(db);
   const hub = new Hub({
     db,
     meter: usage,
+    quota: entitlements,
     connectors,
     accounts,
     logger,
@@ -282,11 +306,32 @@ export function createServices(
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
   });
-  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl, async (workspaceId, personaId) => {
-    const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
-    return persona && personas.urlFor(persona.slug);
-  });
+  const verifier = new HubTokenVerifier(
+    oauth,
+    apiTokens,
+    config.mcpUrl,
+    async (workspaceId, personaId) => {
+      const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
+      return persona && personas.urlFor(persona.slug);
+    },
+    activeUserCheck(db),
+  );
   const sessions = new SessionService(db, config.sessionTtlSeconds);
+  const users = new UserService({
+    db,
+    accounts,
+    oauth,
+    apiTokens,
+    adminEmails: config.site.adminEmails,
+    signups: config.site.signups,
+  });
+  const externalLogin = new ExternalLoginService(
+    { db, secrets, publicUrl: config.publicUrl, logger },
+    overrides.loginProviders ??
+      (config.site.google ? [new OidcLoginProvider(googleLoginSpec(config.site.google), network.fetch)] : []),
+  );
+  const adminPanel = new AdminService({ db, users, entitlements });
+  const activity = new ActivityService(db);
   const pendingLogins = new PendingLoginService(db);
   const secondFactors = new SecondFactorService(
     new TotpService(db, secrets, config.auth.rpName),
@@ -310,6 +355,8 @@ export function createServices(
     customServices,
     admin,
     usage,
+    entitlements,
+    billing: overrides.billing,
     accounts,
     oauthApps,
     tokens,
@@ -331,6 +378,10 @@ export function createServices(
     telegramBot,
     telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
+    users,
+    externalLogin,
+    adminPanel,
+    activity,
     pendingLogins,
     secondFactors,
     rateLimiter,

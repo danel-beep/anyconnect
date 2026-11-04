@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import demo from '../src/connectors/builtin/demo.js';
+import gmail from '../src/connectors/builtin/gmail.js';
+import imap from '../src/connectors/builtin/imap/index.js';
 import { ConnectorRegistry } from '../src/connectors/registry.js';
 import { defineConnector } from '../src/connectors/sdk.js';
 import { connectFormFields, readConnectForm } from '../src/core/connect-form.js';
@@ -37,7 +39,11 @@ describe('connect form for services without OAuth', () => {
   beforeAll(async () => {
     await resetDatabase();
     hub = await startTestHub({
-      connectors: new ConnectorRegistry().register(demo).register(tokenOrOAuth),
+      connectors: new ConnectorRegistry()
+        .register(demo)
+        .register(tokenOrOAuth)
+        .register(imap)
+        .register(gmail),
       seed: false,
     });
     workspaceId = (await hub.services.db.query.workspaces.findFirst())!.id;
@@ -51,10 +57,10 @@ describe('connect form for services without OAuth', () => {
 
   it('builds fields from the connector schemas', () => {
     const fields = connectFormFields(tokenOrOAuth);
-    expect(fields.map((f) => [f.name, f.kind, f.required])).toEqual([
-      ['config.region', 'select', false],
-      ['config.retries', 'number', false],
-      ['credentials.token', 'secret', false],
+    expect(fields.map((f) => [f.name, f.kind, f.required, f.advanced])).toEqual([
+      ['config.region', 'select', false, false],
+      ['config.retries', 'number', false, false],
+      ['credentials.token', 'secret', false, false],
     ]);
     expect(readConnectForm(fields, { 'config.retries': 'x', 'credentials.token': ' t ' })).toEqual({
       config: {},
@@ -132,6 +138,10 @@ describe('connect form for services without OAuth', () => {
   it('offers the form for optional OAuth when the hub has no app', async () => {
     const { html, hidden } = await openForm('/connect/tracker?label=Team');
     expect(html).toContain('name="config.region"');
+    // Without `ui` the form is built from the schemas alone: all fields up front, values as is.
+    expect(html).toContain('Data region');
+    expect(html).toContain('<option value="eu" selected="">eu</option>');
+    expect(html).not.toContain('<details');
     expect(html).not.toContain('Войти через сервис');
     const done = await browser.request('/connect/tracker', {
       form: { ...hidden, label: 'Team', 'config.region': 'us', 'credentials.token': 'tok' },
@@ -139,6 +149,73 @@ describe('connect form for services without OAuth', () => {
     expect(done.status).toBe(200);
     const [row] = (await hub.services.accounts.list(workspaceId)).filter((a) => a.connectorId === 'tracker');
     expect(row).toMatchObject({ label: 'Team', config: { region: 'us', retries: 1 } });
+  });
+
+  it('shows the mailbox form in Russian with server settings under "Advanced"', async () => {
+    const { html } = await openForm('/connect/imap?label=Почта');
+    expect(html).toContain('Подключение: Почта (IMAP/SMTP)');
+    expect(html).toContain('>Адрес почты *</label>');
+    expect(html).toContain('>Пароль приложения *</label>');
+    expect(html).toContain('<option value="">Определить по адресу</option>');
+    expect(html).toContain('<option value="yandex">Яндекс Почта</option>');
+    expect(html).not.toContain('Imap Host');
+    const [up, advanced = ''] = html.split('<details class="connect-advanced"');
+    expect(up).toContain('name="config.email"');
+    expect(up).toContain('name="config.provider"');
+    expect(up).toContain('name="credentials.password"');
+    expect(advanced).toMatch(/^>\s*<summary>Дополнительные настройки<\/summary>/);
+    // An optional yes/no without a default is a three-way choice, so the provider preset can decide.
+    expect(advanced).toContain('<option value="">Автоматически</option><option value="true">Да</option>');
+    for (const name of [
+      'config.imapHost',
+      'config.smtpPort',
+      'config.fromName',
+      'credentials.smtpPassword',
+    ]) {
+      expect(up).not.toContain(`name="${name}"`);
+      expect(advanced).toContain(`name="${name}"`);
+    }
+    expect(advanced).toContain('<option value="starttls">STARTTLS</option>');
+
+    const english = new TestBrowser(hub.baseUrl);
+    await english.login();
+    await english.request('/prefs/lang?to=en&next=%2F');
+    const en = await (await english.request('/connect/imap')).text();
+    expect(en).toContain('>App password *</label>');
+    expect(en).toContain('<summary>Advanced settings</summary>');
+  });
+
+  it('names the field at fault by its label and opens "Advanced" for it', async () => {
+    const { hidden } = await openForm('/connect/imap');
+    const res = await browser.request('/connect/imap', {
+      form: {
+        ...hidden,
+        label: 'Своя почта',
+        'config.email': 'me@example.org',
+        'config.provider': 'custom',
+        'config.smtpHost': 'smtp.example.org',
+        'credentials.password': 'pw',
+      },
+    });
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain('Проверьте поля: Адрес сервера IMAP:');
+    expect(html).toContain('<details class="connect-advanced" open="">');
+    expect(html).toMatch(/name="config.imapHost"[^>]*aria-invalid="true"/);
+    expect(html).toContain('value="smtp.example.org"');
+  });
+
+  it('describes actions on the service page in the page language', async () => {
+    const ru = await (await browser.request('/services/gmail')).text();
+    expect(ru).toContain('Поиск писем');
+    expect(ru).toContain('Переносит письма в корзину.');
+    expect(ru).not.toContain('Finds messages, newest first');
+    expect(ru).toContain('<code>gmail_search</code>');
+
+    const english = new TestBrowser(hub.baseUrl);
+    await english.request('/prefs/lang?to=en&next=%2F');
+    const en = await (await english.request('/services/gmail')).text();
+    expect(en).toContain('Labels, archive and marks');
   });
 
   it('refuses a post without the form token', async () => {

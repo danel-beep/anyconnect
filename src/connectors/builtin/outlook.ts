@@ -330,6 +330,155 @@ export default defineConnector({
     const identity = data.mail || data.userPrincipalName;
     return { ok: true, ...(identity ? { identity } : {}) };
   },
+  ui: {
+    locales: {
+      ru: {
+        description:
+          'Почта и календарь Outlook и Microsoft 365: поиск, чтение, отправка, ответы, пересылка, папки и события.',
+        fields: {
+          timeZone: {
+            label: 'Часовой пояс',
+            hint: 'Для времени событий в календаре, например Europe/Moscow',
+            placeholder: 'Europe/Moscow',
+          },
+        },
+        actions: {
+          search: {
+            title: 'Поиск писем',
+            description:
+              'Находит письма, сначала новые: отправитель, тема, начало текста. По умолчанию — во входящих.',
+          },
+          read: {
+            title: 'Чтение письма',
+            description:
+              'Открывает письмо как обычный текст, без цитат прошлой переписки, со списком вложений.',
+          },
+          send: {
+            title: 'Отправка письма',
+            description:
+              'Отправляет письмо обычным текстом, в том числе ответом в переписке. Копия остаётся в «Отправленных».',
+          },
+          reply: {
+            title: 'Ответ на письмо',
+            description: 'Отвечает в той же переписке, исходное письмо цитируется ниже. Можно ответить всем.',
+          },
+          forward: {
+            title: 'Пересылка письма',
+            description: 'Пересылает письмо с вложениями и, если нужно, с вашим комментарием.',
+          },
+          create_draft: {
+            title: 'Черновик',
+            description:
+              'Сохраняет черновик, в том числе ответ на письмо, в «Черновиках», чтобы вы проверили его сами.',
+          },
+          move: {
+            title: 'Перемещение писем',
+            description: 'Переносит письма в архив, корзину, спам, входящие или другую папку.',
+          },
+          mark: {
+            title: 'Прочитано и флажки',
+            description: 'Отмечает письма прочитанными или непрочитанными, ставит и снимает флажок.',
+          },
+          list_folders: {
+            title: 'Список папок',
+            description: 'Папки почты с числом всех и непрочитанных писем.',
+          },
+          list_calendars: { title: 'Список календарей', description: 'Календари аккаунта.' },
+          list_events: {
+            title: 'События',
+            description: 'События за период в порядке начала, повторяющиеся — каждое отдельно.',
+          },
+          get_event: {
+            title: 'Событие',
+            description: 'Одно событие с описанием, участниками и их ответами.',
+          },
+          create_event: {
+            title: 'Новое событие',
+            description: 'Создаёт событие и рассылает приглашения участникам.',
+          },
+          update_event: {
+            title: 'Изменение события',
+            description: 'Меняет только то, что указано. Участники получат обновление.',
+          },
+          delete_event: {
+            title: 'Удаление или отмена события',
+            description:
+              'Удаляет событие. Встречу, которую вы организовали, можно отменить с письмом участникам.',
+          },
+        },
+      },
+      en: {
+        fields: {
+          timeZone: {
+            label: 'Time zone',
+            hint: 'For calendar event times, e.g. Europe/Moscow',
+            placeholder: 'Europe/Moscow',
+          },
+        },
+        actions: {
+          search: {
+            title: 'Search mail',
+            description:
+              'Finds messages, newest first, with sender, subject and a preview. Inbox by default.',
+          },
+          read: {
+            title: 'Read a message',
+            description: 'Opens a message as plain text without the quoted history, with its attachments.',
+          },
+          send: {
+            title: 'Send an email',
+            description:
+              'Sends a plain-text email, optionally as a reply in a conversation. A copy stays in Sent Items.',
+          },
+          reply: {
+            title: 'Reply',
+            description:
+              'Replies in the same conversation with the original quoted below, optionally to everyone.',
+          },
+          forward: {
+            title: 'Forward',
+            description: 'Forwards a message with its attachments and an optional note.',
+          },
+          create_draft: {
+            title: 'Create a draft',
+            description: 'Saves a draft, a reply to a message too, in Drafts for you to review.',
+          },
+          move: {
+            title: 'Move messages',
+            description: 'Moves messages to the archive, trash, junk, inbox or another folder.',
+          },
+          mark: {
+            title: 'Read and flags',
+            description: 'Marks messages read or unread and flags or unflags them.',
+          },
+          list_folders: { title: 'List folders', description: 'Mail folders with total and unread counts.' },
+          list_calendars: { title: 'List calendars', description: 'Calendars of the account.' },
+          list_events: {
+            title: 'Events',
+            description:
+              'Events in a time range by start time, each occurrence of a recurring one separately.',
+          },
+          get_event: {
+            title: 'Event',
+            description: 'One event with its description, attendees and their responses.',
+          },
+          create_event: {
+            title: 'Create an event',
+            description: 'Creates an event and sends invitations to attendees.',
+          },
+          update_event: {
+            title: 'Update an event',
+            description: 'Changes only the given details. Attendees get an update.',
+          },
+          delete_event: {
+            title: 'Delete or cancel an event',
+            description:
+              'Deletes an event. A meeting you organize can be cancelled with a note to attendees.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'search',

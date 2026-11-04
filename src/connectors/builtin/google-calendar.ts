@@ -1,5 +1,6 @@
 import { defineManifestConnector } from '../manifest/compile.js';
 import type { CapabilityBinding, CapabilityOutput } from '../sdk.js';
+import { type ConnectorUi, withUi } from '../sdk.js';
 
 const calendarId = {
   type: 'string',
@@ -118,7 +119,7 @@ const createEvent: CapabilityBinding = {
 };
 
 /** Google Calendar API v3 over OAuth (the Google provider is shared with Gmail and Drive). */
-export default defineManifestConnector(
+const manifest = defineManifestConnector(
   {
     id: 'gcal',
     name: 'Google Calendar',
@@ -297,3 +298,77 @@ export default defineManifestConnector(
     },
   },
 );
+
+/** How the service reads on the website; the AI keeps the English texts of the manifest. */
+const ui: ConnectorUi = {
+  locales: {
+    ru: {
+      name: 'Google Календарь',
+      description: 'Google Календарь: события, занятость, создание, изменение и удаление встреч.',
+      actions: {
+        list_calendars: {
+          title: 'Список календарей',
+          description: 'Календари аккаунта и права доступа к ним.',
+        },
+        list_events: {
+          title: 'События',
+          description: 'События за период в порядке начала. Можно искать по тексту.',
+        },
+        get_event: { title: 'Событие', description: 'Одно событие с описанием, участниками и их ответами.' },
+        create_event: {
+          title: 'Новое событие',
+          description: 'Создаёт событие. Приглашения участникам уходят, только если об этом попросить.',
+        },
+        quick_add: {
+          title: 'Быстрое создание',
+          description:
+            'Создаёт событие по короткой фразе на английском, например «Lunch with Ann tomorrow 1pm».',
+        },
+        update_event: {
+          title: 'Изменение события',
+          description: 'Меняет только то, что указано: время, название, место или участников.',
+        },
+        delete_event: { title: 'Удаление события', description: 'Удаляет (отменяет) событие.' },
+        free_busy: {
+          title: 'Занятость',
+          description: 'Когда заняты один или несколько календарей за период — чтобы найти свободное время.',
+        },
+      },
+    },
+    en: {
+      actions: {
+        list_calendars: {
+          title: 'List calendars',
+          description: 'Calendars of the account and your access to them.',
+        },
+        list_events: {
+          title: 'Events',
+          description: 'Events in a time range, by start time. Optional text search.',
+        },
+        get_event: {
+          title: 'Event',
+          description: 'One event with its description, attendees and their responses.',
+        },
+        create_event: {
+          title: 'Create an event',
+          description: 'Creates an event. Attendees get invitations only when asked to.',
+        },
+        quick_add: {
+          title: 'Quick add',
+          description: 'Creates an event from a short English phrase, e.g. “Lunch with Ann tomorrow 1pm”.',
+        },
+        update_event: {
+          title: 'Update an event',
+          description: 'Changes only the given details: time, title, place or attendees.',
+        },
+        delete_event: { title: 'Delete an event', description: 'Deletes (cancels) an event.' },
+        free_busy: {
+          title: 'Free/busy',
+          description: 'When one or more calendars are busy in a time range, to find a free slot.',
+        },
+      },
+    },
+  },
+};
+
+export default withUi(manifest, ui);

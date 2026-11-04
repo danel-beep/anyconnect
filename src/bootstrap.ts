@@ -28,10 +28,15 @@ export async function bootstrap(services: Services): Promise<void> {
   const linked = await services.aiClients.backfill();
   if (linked.grants || linked.tokens) logger.info(linked, 'existing AI apps linked to AI clients');
   if (!config.admin) {
-    logger.warn('ADMIN_EMAIL / ADMIN_PASSWORD are not set: nobody can sign in until they are.');
+    if (!config.site.google)
+      logger.warn('Neither ADMIN_EMAIL / ADMIN_PASSWORD nor Google sign-in is set up: nobody can sign in.');
+    else if (config.site.adminEmails.length === 0)
+      logger.warn('ADMIN_EMAILS is not set: nobody gets the admin panel.');
     return;
   }
   const result = await ensureAdmin(db, config.admin);
+  // The hub owner is not limited by the plans meant for visitors.
+  await services.entitlements.ensurePlan(result.workspace.id, 'unlimited');
   if (result.created) logger.info({ email: result.user.email }, 'owner account created');
   if (result.passwordUpdated)
     logger.info({ email: result.user.email }, 'owner password updated from ADMIN_PASSWORD');

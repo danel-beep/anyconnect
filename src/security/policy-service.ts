@@ -2,7 +2,16 @@ import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Principal } from '../core/principal.js';
 import type { Db } from '../db/client.js';
-import { accessRules, accounts, aiClients, personas, type RiskLevel, workspaces } from '../db/schema.js';
+import {
+  type AccessLevel,
+  accessRules,
+  accounts,
+  aiClients,
+  type ConfirmLevel,
+  personas,
+  type RiskLevel,
+  workspaces,
+} from '../db/schema.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 import {
@@ -147,6 +156,38 @@ export class PolicyService {
       );
     }
     return result.data;
+  }
+
+  /**
+   * The dashboard's simple rules: one rule per AI app or per account (nothing else set). Both values
+   * null removes the rule, so the workspace defaults apply again.
+   */
+  async setScopedRule(
+    workspaceId: string,
+    scope: { aiClientId: string } | { accountId: string },
+    value: { access: AccessLevel | null; confirm: ConfirmLevel | null },
+  ): Promise<void> {
+    const aiClientId = 'aiClientId' in scope ? scope.aiClientId : null;
+    const accountId = 'accountId' in scope ? scope.accountId : null;
+    const existing = (await this.listRules(workspaceId)).find(
+      (r) =>
+        r.aiClientId === aiClientId &&
+        r.accountId === accountId &&
+        r.personaId === null &&
+        r.connectorId === null,
+    );
+    if (value.access === null && value.confirm === null) {
+      if (existing) await this.deleteRule(workspaceId, existing.id);
+      return;
+    }
+    const input = { aiClientId, accountId, access: value.access, confirm: value.confirm };
+    if (existing)
+      await this.updateRule(workspaceId, existing.id, {
+        ...input,
+        undoWindowSeconds: existing.undoWindowSeconds,
+        note: existing.note,
+      });
+    else await this.createRule(workspaceId, input);
   }
 
   async createRule(workspaceId: string, raw: AccessRuleInput): Promise<AccessRuleRow> {
