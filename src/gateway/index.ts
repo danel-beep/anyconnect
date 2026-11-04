@@ -58,9 +58,10 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  // Only the error's name and stack: thrown objects can carry config or query parameters.
-  console.error(
-    error instanceof Error ? (error.stack ?? `${error.name}: ${error.message}`) : 'gateway failed',
-  );
+  // Name and code only: a message thrown this early can quote config values or query parameters
+  // (CodeQL js/clear-text-logging). Config problems are reported in full above, with safe texts.
+  const name = error instanceof Error ? error.name : 'unknown error';
+  const code = (error as { code?: unknown } | null)?.code;
+  console.error(`messenger gateway failed to start: ${name}${typeof code === 'string' ? ` (${code})` : ''}`);
   process.exit(1);
 });
