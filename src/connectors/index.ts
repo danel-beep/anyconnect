@@ -6,6 +6,7 @@ import gdrive from './builtin/google-drive.js';
 import http from './builtin/http.js';
 import imap from './builtin/imap/index.js';
 import notion from './builtin/notion/index.js';
+import outlook from './builtin/outlook.js';
 import slack from './builtin/slack.js';
 import stripe from './builtin/stripe.js';
 import todoist from './builtin/todoist.js';
@@ -24,7 +25,8 @@ export function createBuiltinRegistry(): ConnectorRegistry {
     .register(notion)
     .register(gmail)
     .register(gcal)
-    .register(gdrive);
+    .register(gdrive)
+    .register(outlook);
 }
 
 export type { ConnectorResolver } from './registry.js';

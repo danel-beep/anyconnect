@@ -12,6 +12,7 @@ import {
   ReadOptions,
   readResult,
 } from './email/message.js';
+import { mapLimit } from './shared/concurrency.js';
 
 /**
  * Gmail API over OAuth (Google). Search uses Gmail's own query syntax, results come with snippets
@@ -61,21 +62,6 @@ function hasAttachments(message: GmailMessage): boolean {
   const visit = (parts: { filename?: string; parts?: unknown[] }[] | undefined): boolean =>
     (parts ?? []).some((p) => Boolean(p.filename) || visit(p.parts as never));
   return visit(message.payload?.parts);
-}
-
-/** Runs `fn` over items with limited parallelism, keeping the order. */
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) {
-        const index = next++;
-        results[index] = await fn(items[index]!);
-      }
-    }),
-  );
-  return results;
 }
 
 const SUMMARY_HEADERS = ['From', 'To', 'Subject', 'Date'];
