@@ -17,7 +17,7 @@ p{margin:0 0 12px}
 .muted{color:var(--muted)}
 .small{font-size:13px}
 label{display:block;font-weight:600;margin:12px 0 4px}
-input[type=email],input[type=password],input[type=text],select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+input[type=email],input[type=password],input[type=text],input[type=url],input[type=number],textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
 input[readonly]{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px}
 button{font:inherit;font-weight:600;border-radius:8px;padding:10px 16px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}

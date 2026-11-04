@@ -367,7 +367,12 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     });
     browser = new TestBrowser(hub.baseUrl);
     await browser.login();
-    const missing = await browser.request('/connect/fake');
+    // Without an app, a service that also takes a personal token shows the token form…
+    const form = await browser.request('/connect/fake');
+    expect(form.status).toBe(200);
+    expect(await form.text()).toContain('name="credentials.token"');
+    // …and asking for OAuth explains what is missing.
+    const missing = await browser.request('/connect/fake?via=oauth');
     expect(missing.status).toBe(400);
     expect(await missing.text()).toContain('No OAuth app is configured for FakeProvider');
   });

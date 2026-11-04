@@ -126,6 +126,17 @@ export class WorkspaceAdmin {
     return `No ${provider.name} OAuth app is configured on this hub yet (the hub owner sets OAUTH_APP_${provider.id.toUpperCase()}_CLIENT_ID).`;
   }
 
+  /**
+   * How the browser connects an account of the service now: the provider's sign-in when an OAuth
+   * app is available (or OAuth is the only way), otherwise the hub's form (API key, password).
+   */
+  async connectVia(workspaceId: string, connector: ConnectorDefinition): Promise<'oauth' | 'form'> {
+    if (!connector.oauth) return 'form';
+    const provider = resolveProvider(connector.oauth);
+    const app = await this.deps.apps.pick(workspaceId, provider.id).catch(() => undefined);
+    return app || !connector.oauth.optional ? 'oauth' : 'form';
+  }
+
   async addService(workspaceId: string, input: AddServiceInput): Promise<ServiceView> {
     return this.deps.customServices.add(workspaceId, input);
   }
@@ -146,10 +157,12 @@ export class WorkspaceAdmin {
   ): Promise<ConnectLink> {
     const connector = await this.deps.connectors.get(workspaceId, input.service);
     if (!connector) throw badRequest(`Unknown service "${input.service}". List them with the services tool.`);
-    const method = this.connectMethod(connector);
+    let method = this.connectMethod(connector);
     if (method === 'oauth') {
       const problem = await this.oauthProblem(workspaceId, connector);
       if (problem) throw badRequest(problem);
+      // Optional OAuth without an app: the link opens the form for a personal token.
+      if ((await this.connectVia(workspaceId, connector)) === 'form') method = 'form';
     }
     const url = new URL(`/connect/${encodeURIComponent(connector.id)}`, this.deps.publicUrl);
     if (input.reconnect) {
