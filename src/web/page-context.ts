@@ -14,6 +14,8 @@ export interface PageCtx {
   google: boolean;
   signupsOpen: boolean;
   supportEmail?: string | undefined;
+  /** Search console ownership tokens for the public pages' head. */
+  verification?: { google?: string | undefined; bing?: string | undefined } | undefined;
   /** A payment provider is connected (otherwise paid plans are assigned by the team). */
   billing: boolean;
   /** CSRF token for forms on the page (sign-out, actions). */
