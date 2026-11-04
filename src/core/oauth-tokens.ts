@@ -5,6 +5,7 @@ import {
   ConnectorError,
   type FetchLike,
   type OAuthAccess,
+  type OAuthProviderSpec,
 } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { accountOauth, accounts } from '../db/schema.js';
@@ -107,9 +108,10 @@ export class TokenManager {
     if (!connector.oauth) return undefined;
     const stored = await this.load(account.id);
     if (!stored) return undefined;
+    const provider = resolveProvider(connector.oauth);
     let tokens = stored.tokens;
     if (tokens.expiresAt !== undefined && tokens.expiresAt - Date.now() < REFRESH_MARGIN_MS) {
-      tokens = await this.refresh(account, connector, tokens.accessToken, signal);
+      tokens = await this.refresh(account, provider, tokens.accessToken, signal, connector);
     }
     const manager = this;
     return {
@@ -129,7 +131,7 @@ export class TokenManager {
         return tokens.extra;
       },
       async refresh() {
-        tokens = await manager.refresh(account, connector, tokens.accessToken, signal);
+        tokens = await manager.refresh(account, provider, tokens.accessToken, signal, connector);
         return tokens.accessToken;
       },
     };
@@ -142,13 +144,14 @@ export class TokenManager {
    */
   refresh(
     account: { id: string; workspaceId: string },
-    connector: ConnectorDefinition,
+    provider: OAuthProviderSpec,
     staleAccessToken: string | undefined,
     signal: AbortSignal,
+    connector: ConnectorDefinition,
   ): Promise<TokenSet> {
     const running = this.inflight.get(account.id);
     if (running) return running;
-    const promise = this.refreshLocked(account, connector, staleAccessToken, signal).finally(() =>
+    const promise = this.refreshLocked(account, provider, staleAccessToken, signal, connector).finally(() =>
       this.inflight.delete(account.id),
     );
     this.inflight.set(account.id, promise);
@@ -157,13 +160,11 @@ export class TokenManager {
 
   private async refreshLocked(
     account: { id: string; workspaceId: string },
-    connector: ConnectorDefinition,
+    provider: OAuthProviderSpec,
     staleAccessToken: string | undefined,
     signal: AbortSignal,
+    connector: ConnectorDefinition,
   ): Promise<TokenSet> {
-    if (!connector.oauth)
-      throw new ConnectorError('auth', `${connector.name} is not connected through OAuth`);
-    const provider = resolveProvider(connector.oauth);
     let failure: { error: ConnectorError; grantInvalid: boolean; message: string } | undefined;
     const result = await this.deps.db.transaction(async (tx) => {
       const [row] = await tx
@@ -200,7 +201,7 @@ export class TokenManager {
           ? {
               error: new ConnectorError(
                 'auth',
-                `${connector.name} no longer accepts this connection: ${message}`,
+                `${provider.name} no longer accepts this connection: ${message}`,
               ),
               grantInvalid: true,
               message,
@@ -208,7 +209,7 @@ export class TokenManager {
           : {
               error: new ConnectorError(
                 'upstream',
-                `Could not refresh the ${connector.name} token: ${message}`,
+                `Could not refresh the ${provider.name} token: ${message}`,
               ),
               grantInvalid: false,
               message,
@@ -301,11 +302,10 @@ export class TokenManager {
     if (!connector.oauth) return;
     const stored = await this.load(account.id).catch(() => undefined);
     if (!stored) return;
-    const provider = resolveProvider(connector.oauth);
     const app = await this.deps.apps.resolve(account.workspaceId, stored.appRef, connector);
     if (!app) return;
     await revokeTokenSet({
-      provider,
+      provider: resolveProvider(connector.oauth),
       app,
       tokens: stored.tokens,
       fetch: this.deps.fetch,

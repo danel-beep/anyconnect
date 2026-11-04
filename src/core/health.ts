@@ -1,4 +1,5 @@
 import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
+import { resolveProvider } from '../connectors/oauth/providers.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import type { Db } from '../db/client.js';
 import { accounts } from '../db/schema.js';
@@ -35,9 +36,10 @@ export class AccountHealthService {
       try {
         await this.deps.tokens.refresh(
           { id: item.accountId, workspaceId: item.workspaceId },
-          connector,
+          resolveProvider(connector.oauth),
           undefined,
           AbortSignal.timeout(20_000),
+          connector,
         );
         refreshed += 1;
       } catch {
