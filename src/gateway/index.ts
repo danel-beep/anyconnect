@@ -12,6 +12,9 @@ import { loadGatewayConfig } from './config.js';
 import { createDrivers } from './drivers/index.js';
 import { createGatewayRuntime } from './runtime.js';
 
+/** What the gateway was doing when startup failed (reported instead of the error's own text). */
+let step = 'reading the configuration';
+
 async function main() {
   let config: ReturnType<typeof loadGatewayConfig>;
   try {
@@ -29,10 +32,14 @@ async function main() {
   }).child({
     service: 'gateway',
   });
+  step = 'setting up';
   const runtime = createGatewayRuntime(config, { logger, drivers: createDrivers() });
   // The hub applies migrations too; both take the same advisory lock, so whoever starts first wins.
+  step = 'applying database migrations';
   await runMigrations(runtime.database.pool);
+  step = 'starting sessions and the outbox';
   await runtime.start();
+  step = 'starting the internal API';
 
   const app = gatewayApi({ host: runtime.host, token: config.token, logger, version: VERSION });
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
@@ -57,11 +64,9 @@ async function main() {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-main().catch((error: unknown) => {
-  // Name and code only: a message thrown this early can quote config values or query parameters
-  // (CodeQL js/clear-text-logging). Config problems are reported in full above, with safe texts.
-  const name = error instanceof Error ? error.name : 'unknown error';
-  const code = (error as { code?: unknown } | null)?.code;
-  console.error(`messenger gateway failed to start: ${name}${typeof code === 'string' ? ` (${code})` : ''}`);
+main().catch(() => {
+  // A fixed text: errors thrown this early (database, migrations) can quote query parameters,
+  // so their own messages are not printed. Configuration problems are reported in full above.
+  console.error(`messenger gateway failed while ${step}; check DATABASE_URL and ENCRYPTION_KEY`);
   process.exit(1);
 });
