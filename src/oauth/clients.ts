@@ -30,18 +30,24 @@ export const SUPPORTED_AUTH_METHODS = ['none', 'client_secret_basic', 'client_se
 export const SUPPORTED_GRANT_TYPES = ['authorization_code', 'refresh_token'] as const;
 
 const str = (max: number) => z.string().max(max);
+/**
+ * Descriptive fields are best effort: a null, a wrong type or an oversized value (say, a data: URL
+ * logo) drops the field instead of refusing the client, because AI clients differ in what they send.
+ * Fields that decide security (redirect URIs, auth method) stay strict.
+ */
+const lenient = <T extends z.ZodType>(schema: T) => schema.optional().catch(undefined);
 const ClientMetadataInput = z.object({
   redirect_uris: z.array(str(2000)).min(1).max(20),
-  client_name: str(200).optional(),
-  client_uri: str(2000).optional(),
-  logo_uri: str(2000).optional(),
-  grant_types: z.array(str(100)).max(10).optional(),
-  response_types: z.array(str(100)).max(10).optional(),
-  token_endpoint_auth_method: str(100).optional(),
-  scope: str(1000).optional(),
-  contacts: z.array(str(320)).max(10).optional(),
-  software_id: str(200).optional(),
-  software_version: str(100).optional(),
+  client_name: lenient(str(200)),
+  client_uri: lenient(str(2000)),
+  logo_uri: lenient(str(2000)),
+  grant_types: lenient(z.array(str(200)).max(20)),
+  response_types: lenient(z.array(str(100)).max(10)),
+  token_endpoint_auth_method: z.string().max(100).nullish(),
+  scope: lenient(str(1000)),
+  contacts: lenient(z.array(str(320)).max(10)),
+  software_id: lenient(str(200)),
+  software_version: lenient(str(100)),
 });
 
 function parseClientMetadata(body: unknown, defaults: { authMethod: string }): StoredClientMetadata {
@@ -77,8 +83,8 @@ function parseClientMetadata(body: unknown, defaults: { authMethod: string }): S
       'grant_types must include "authorization_code"; the hub supports only the authorization code flow',
     );
   }
-  const responseTypes = m.response_types ?? ['code'];
-  if (responseTypes.some((r) => r !== 'code')) {
+  const responseTypes = (m.response_types ?? ['code']).filter((r) => r === 'code');
+  if (responseTypes.length === 0) {
     throw new OAuthProtocolError('invalid_client_metadata', 'Only the "code" response type is supported');
   }
   return {
