@@ -391,7 +391,12 @@ export const toolCalls = pgTable(
     createdAt: createdAt(),
   },
   // The second index serves an account's own log (the account page, the activity filter).
-  (t) => [index().on(t.workspaceId, t.createdAt), index().on(t.accountId, t.createdAt)],
+  // The third serves hub-wide windows (status page, retention clean-up).
+  (t) => [
+    index().on(t.workspaceId, t.createdAt),
+    index().on(t.accountId, t.createdAt),
+    index().on(t.createdAt),
+  ],
 );
 
 /**
@@ -1171,3 +1176,50 @@ export const jobRuns = pgTable('job_runs', {
   runs: bigint({ mode: 'number' }).notNull().default(0),
   failures: bigint({ mode: 'number' }).notNull().default(0),
 });
+
+// ---------------------------------------------------------------------------
+// Status page: component states, daily uptime, incidents
+// ---------------------------------------------------------------------------
+
+/** Current state of each public component (see `src/ops/status.ts`), updated every minute. */
+export const statusComponents = pgTable('status_components', {
+  /** `web`, `mcp`, `database`, `jobs`, `connections`. */
+  component: text().primaryKey(),
+  status: text().$type<'ok' | 'degraded' | 'down'>().notNull(),
+  /** Internal detail for the admin panel (never shown on the public page). */
+  detail: text(),
+  /** When the component entered its current status. */
+  since: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  lastSampleAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Minutes per status, per component and UTC day: the 90-day bars and uptime percentages. */
+export const statusDays = pgTable(
+  'status_days',
+  {
+    component: text().notNull(),
+    day: date({ mode: 'string' }).notNull(),
+    okMinutes: integer().notNull().default(0),
+    degradedMinutes: integer().notNull().default(0),
+    downMinutes: integer().notNull().default(0),
+    /** Minutes without a sample: the hub (or its jobs) was not running. */
+    missingMinutes: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.component, t.day] })],
+);
+
+/** A period when a component was degraded or down (or not sampled at all). */
+export const statusIncidents = pgTable(
+  'status_incidents',
+  {
+    id: text().primaryKey(),
+    component: text().notNull(),
+    /** Worst status during the incident; `missing` = no samples (the hub was not running). */
+    status: text().$type<'degraded' | 'down' | 'missing'>().notNull(),
+    detail: text(),
+    startedAt: timestamp({ withTimezone: true }).notNull(),
+    /** Null while ongoing. */
+    endedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.startedAt), index().on(t.component, t.endedAt)],
+);

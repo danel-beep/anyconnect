@@ -45,7 +45,7 @@ import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
-import { createOps, type Ops, watchJobs } from './ops/index.js';
+import { createOps, type Ops, watchConnections, watchJobs } from './ops/index.js';
 import { AiAppService } from './security/apps.js';
 import { WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
@@ -250,7 +250,7 @@ export function createServices(
     monitor: ops.jobRuns,
     onError: (error, job) => ops.errors.capture(error, { source: 'job', context: { job } }),
   });
-  for (const job of builtinJobs({ health, customServices })) jobs.register(job);
+  for (const job of builtinJobs({ health, customServices, status: ops.status })) jobs.register(job);
   messaging = createMessaging({
     publicUrl: config.publicUrl,
     gatewayConfig: config.gateway,
@@ -263,6 +263,11 @@ export function createServices(
     logger,
   });
   watchJobs(ops, jobs);
+  watchConnections(
+    ops,
+    db,
+    () => new Map(connectors.builtin.all().map((c) => [c.id, connectorText(c, 'en').name] as const)),
+  );
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
