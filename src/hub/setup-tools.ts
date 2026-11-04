@@ -24,6 +24,7 @@ import { AppError, badRequest } from '../lib/errors.js';
 import { appActions, type WorkspaceApps } from './app-tools.js';
 import { billingActions, type WorkspaceBilling } from './billing-tools.js';
 import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
+import { securityActions, type UserSecurity } from './security-tools.js';
 
 /**
  * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
@@ -59,6 +60,8 @@ export interface SetupContext {
   profiles?: WorkspaceProfiles;
   /** AI apps (`app-tools.ts`); absent in hubs built without the security layer. */
   apps?: WorkspaceApps;
+  /** The user's sign-in security, read only (`security-tools.ts`). */
+  security?: UserSecurity;
   signal: AbortSignal;
 }
 
@@ -431,6 +434,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   ...billingActions(setupAction),
   // Rarely needed: listed after the rest while they fit, always found by search.
   ...appActions(setupAction),
+  ...securityActions(setupAction),
 ];
 
 /** The setup tools as a connector, so the catalog and the executor treat them like any other. */

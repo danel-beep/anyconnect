@@ -47,7 +47,7 @@ import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { createOps, type Ops, watchJobs } from './ops/index.js';
 import { AiAppService } from './security/apps.js';
-import { WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
+import { UserSecurityTools, WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
@@ -353,6 +353,18 @@ export function createServices(
       billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
       profiles: new WorkspaceProfileTools(personas),
       apps: new WorkspaceAppTools(aiApps, personas),
+      // Users, sessions and second factors are built further down; read only when the tool runs.
+      security: new UserSecurityTools({
+        secondFactors: (userId) => secondFactors.summary(userId),
+        signIn: async (userId) => {
+          const [user, identities] = await Promise.all([users.get(userId), users.identities(userId)]);
+          return { password: Boolean(user?.passwordHash), providers: identities.map((i) => i.provider) };
+        },
+        sessions: async (userId) => (await sessions.list(userId)).length,
+        telegram: telegramBot ? notificationChannels : undefined,
+        requireSecondFactor: config.auth.requireSecondFactor,
+        publicUrl: config.publicUrl,
+      }),
     },
     rateLimiter,
     idempotency,

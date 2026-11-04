@@ -117,7 +117,8 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     // With one service every service tool fits the budget, and the setup tools that still fit
-    // (renaming and disconnecting AI apps come last and are found by search).
+    // (renaming and disconnecting AI apps and the sign-in security status come last and are found
+    // by search).
     expect(names).toEqual([
       'demo_account_info',
       'demo_echo',

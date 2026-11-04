@@ -57,6 +57,7 @@ import {
   type ToolCallResult,
   toTransport,
 } from './result.js';
+import type { UserSecurity } from './security-tools.js';
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
@@ -102,6 +103,7 @@ export interface HubDeps {
     billing?: WorkspaceBilling;
     profiles?: WorkspaceProfiles;
     apps?: WorkspaceApps;
+    security?: UserSecurity;
   };
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
@@ -748,6 +750,7 @@ export class Hub {
       ...(setup.billing ? { billing: setup.billing } : {}),
       ...(setup.profiles ? { profiles: setup.profiles } : {}),
       ...(setup.apps ? { apps: setup.apps } : {}),
+      ...(setup.security ? { security: setup.security } : {}),
       signal,
     };
     const call: CallContext = {
