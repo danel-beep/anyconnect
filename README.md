@@ -152,7 +152,9 @@ Paddle или Stripe подключаются переменными `BILLING_PR
      домен (`PUBLIC_URL`) и добавить новые адреса возврата в клиент.
 
 Остальные настройки сайта (`SIGNUPS`, `ADMIN_EMAILS`, `ADMIN_ALLOWED_IPS`, `ADMIN_SESSION_HOURS`,
-`TRUST_PROXY`) описаны в `.env.example`.
+`TRUST_PROXY`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`) описаны в `.env.example`.
+Инструкции для ИИ-клиентов, страницы «сервис × клиент», FAQ, сравнения, sitemap, robots.txt и
+llms.txt описаны в [docs/SEO.md](docs/SEO.md).
 
 ### Админка
 
