@@ -159,6 +159,39 @@ const manifest = defineManifestConnector({
 const ui: ConnectorUi = {
   locales: {
     ru: {
+      setup: {
+        form: {
+          summary: 'Ограниченный ключ API из панели Stripe. Около двух минут.',
+          steps: [
+            {
+              text: 'Откройте Developers → API keys в панели Stripe.',
+              link: {
+                label: 'Открыть ключи API Stripe',
+                url: 'https://dashboard.stripe.com/apikeys',
+              },
+            },
+            {
+              text: 'Нажмите Create restricted key и назовите ключ AnyConnect.',
+            },
+            {
+              text: 'Поставьте Read для Balance, Customers, PaymentIntents, Invoices и Subscriptions. Refunds — Write, только если ИИ можно делать возвраты.',
+            },
+            {
+              text: 'Нажмите Create key, скопируйте ключ (rk_live_…) и вставьте в форму.',
+            },
+          ],
+          tips: [
+            'Хотите сначала попробовать без риска? Возьмите ключ тестового режима (rk_test_…).',
+            'Возвраты по умолчанию ждут вашего подтверждения (см. «Правила»).',
+          ],
+        },
+      },
+      prompts: [
+        'Сколько мы получили на этой неделе, по валютам?',
+        'Найди платежи от anna@example.com и покажи их статус.',
+        'Какие подписки отменили в этом месяце?',
+        'Верни половину последнего платежа от ACME. Сначала спроси меня.',
+      ],
       description: 'Платежи Stripe: баланс, клиенты, платежи, счета, подписки и возвраты.',
       fields: {
         apiKey: {
@@ -183,6 +216,39 @@ const ui: ConnectorUi = {
       },
     },
     en: {
+      setup: {
+        form: {
+          summary: 'A restricted API key from your Stripe dashboard. Takes about two minutes.',
+          steps: [
+            {
+              text: 'Open Developers → API keys in the Stripe dashboard.',
+              link: {
+                label: 'Open Stripe API keys',
+                url: 'https://dashboard.stripe.com/apikeys',
+              },
+            },
+            {
+              text: 'Click Create restricted key and name it AnyConnect.',
+            },
+            {
+              text: 'Set Read for Balance, Customers, PaymentIntents, Invoices and Subscriptions. Set Refunds to Write only if the AI may refund payments.',
+            },
+            {
+              text: 'Click Create key, copy it (rk_live_…) and paste it into the form.',
+            },
+          ],
+          tips: [
+            'Want to try it safely first? Use a test-mode key (rk_test_…).',
+            'Refunds wait for your confirmation by default (see Rules).',
+          ],
+        },
+      },
+      prompts: [
+        'How much did we take in this week, by currency?',
+        'Find payments from anna@example.com and show their status.',
+        'Which subscriptions were cancelled this month?',
+        'Refund half of the last payment from ACME. Ask me before doing it.',
+      ],
       fields: {
         apiKey: {
           label: 'Secret API key',

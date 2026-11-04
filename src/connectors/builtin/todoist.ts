@@ -220,11 +220,54 @@ const manifest = defineManifestConnector(
 const ui: ConnectorUi = {
   locales: {
     ru: {
+      setup: {
+        oauth: {
+          summary: 'Ваш аккаунт Todoist. Меньше минуты.',
+          steps: [
+            {
+              text: 'Нажмите «Подключить» и войдите в Todoist.',
+            },
+            {
+              text: 'Нажмите Agree: AnyConnect сможет читать, добавлять, менять и удалять задачи и проекты.',
+            },
+            {
+              text: 'Готово. Ещё один аккаунт Todoist? Подключите его так же.',
+            },
+          ],
+        },
+        form: {
+          summary: 'Токен API Todoist. Около минуты.',
+          steps: [
+            {
+              text: 'Откройте Todoist → «Настройки» → «Интеграции» → «Для разработчиков».',
+              link: {
+                label: 'Открыть Todoist → «Для разработчиков»',
+                url: 'https://app.todoist.com/app/settings/integrations/developer',
+              },
+            },
+            {
+              text: 'Нажмите «Скопировать токен API».',
+            },
+            {
+              text: 'Вставьте его в форму и нажмите «Подключить».',
+            },
+          ],
+          tips: [
+            'Токен открывает весь ваш Todoist. Чтобы закрыть доступ, выпустите новый токен на той же странице.',
+          ],
+        },
+      },
+      prompts: [
+        'Что у меня на сегодня и завтра?',
+        'Добавь в «Работу» задачу «Отправить договор ACME» на пятницу 10:00.',
+        'Какие просроченные задачи можно закрыть? Сначала покажи список.',
+        'Перенеси всё из «Личного» с меткой «потом» на следующий понедельник.',
+      ],
       description: 'Задачи и проекты Todoist: поиск, создание, изменение и выполнение задач.',
       fields: {
         token: {
           label: 'Токен API',
-          hint: 'Нужен, только если не входить через Todoist. Найти его можно в Todoist: Настройки → Интеграции → Разработчик.',
+          hint: 'Найти его можно в Todoist: Настройки → Интеграции → Разработчик.',
         },
       },
       actions: {
@@ -247,10 +290,51 @@ const ui: ConnectorUi = {
       },
     },
     en: {
+      setup: {
+        oauth: {
+          summary: 'Your Todoist account. Takes under a minute.',
+          steps: [
+            {
+              text: 'Click Connect and sign in to Todoist.',
+            },
+            {
+              text: 'Click Agree: AnyConnect may read, add, change and delete your tasks and projects.',
+            },
+            {
+              text: 'Done. Another Todoist account? Connect it the same way.',
+            },
+          ],
+        },
+        form: {
+          summary: 'Your Todoist API token. Takes about a minute.',
+          steps: [
+            {
+              text: 'Open Todoist → Settings → Integrations → Developer.',
+              link: {
+                label: 'Open Todoist → Developer',
+                url: 'https://app.todoist.com/app/settings/integrations/developer',
+              },
+            },
+            {
+              text: 'Click Copy API token.',
+            },
+            {
+              text: 'Paste it into the form and click Connect.',
+            },
+          ],
+          tips: ['The token opens your whole Todoist. To cut access, issue a new token on the same page.'],
+        },
+      },
+      prompts: [
+        'What is due today and tomorrow?',
+        'Add “Send the contract to ACME” to Work for Friday 10 am.',
+        'Which overdue tasks can I close? Show me the list first.',
+        'Move everything in Personal tagged “later” to next Monday.',
+      ],
       fields: {
         token: {
           label: 'API token',
-          hint: 'Only if you do not sign in with Todoist. Find it in Todoist: Settings → Integrations → Developer.',
+          hint: 'Find it in Todoist: Settings → Integrations → Developer.',
         },
       },
       actions: {

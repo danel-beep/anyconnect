@@ -64,6 +64,19 @@ input.addEventListener('input',function(){var q=input.value.trim().toLowerCase()
 $$('[data-filter-group]',box).forEach(function(g){g.hidden=$$('[data-search]',g).every(function(el){return el.hidden})});
 var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=!$$('[data-search]',box).every(function(el){return el.hidden})})});
 
+/* Filter forms apply as soon as a choice changes (the button stays for keyboards and no-JS) */
+$$('form[data-autosubmit]').forEach(function(f){f.addEventListener('change',function(){f.submit()})});
+
+/* Setup guide: opens the steps for the provider picked in the form, or the one the address points to */
+$$('[data-guide]').forEach(function(g){var domains={};try{domains=JSON.parse(g.getAttribute('data-guide-domains')||'{}')}catch(e){}
+var fieldName=g.getAttribute('data-guide-field'),mailName=g.getAttribute('data-guide-email');
+var pick=fieldName&&d.querySelector('[name="'+fieldName+'"]'),mail=mailName&&d.querySelector('[name="'+mailName+'"]'),last=null;
+function fromMail(){var v=(mail&&mail.value||'').trim().toLowerCase(),at=v.lastIndexOf('@');if(at<0)return '';var dom=v.slice(at+1);
+for(var k in domains){if(domains[k].indexOf(dom)>=0)return k}return /\\.[a-z]{2,}$/.test(dom)?'custom':''}
+function update(){var key=(pick&&pick.value)||fromMail();if(key===last)return;last=key;
+$$('[data-variant]',g).forEach(function(v){var on=v.getAttribute('data-variant')===key;v.open=on;if(on)v.setAttribute('data-matched','');else v.removeAttribute('data-matched');var b=v.querySelector('[data-variant-match]');if(b)b.hidden=!on})}
+if(pick)pick.addEventListener('change',update);if(mail)mail.addEventListener('input',update);update()});
+
 /* A page shown in answer to a form post (e.g. a new token) gets a clean address, so reloading it
    does not post the form again. */
 var clean=d.querySelector('[data-replace-url]');if(clean&&history.replaceState)history.replaceState(null,'',clean.getAttribute('data-replace-url'));

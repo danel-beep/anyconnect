@@ -339,6 +339,43 @@ export interface ActionLocale {
   description?: string;
 }
 
+/** A link in a setup step: the exact page the step talks about ("Open Todoist → Developer"). */
+export interface SetupLink {
+  label: string;
+  /** An https address on the service's own site. */
+  url: string;
+}
+
+/** One step of a setup guide, in the words of the service's own menus. */
+export interface SetupStep {
+  text: string;
+  link?: SetupLink;
+}
+
+/** Steps that apply to one value of a form field, e.g. the app password steps of one mail provider. */
+export interface SetupVariant {
+  /** E.g. "Gmail / Google Workspace". */
+  title: string;
+  steps: SetupStep[];
+}
+
+/**
+ * How a person connects an account, in one language: what they need, where to get it and what to
+ * pick there. The website shows it next to the connect form and on the service's page, so people
+ * do not have to search the service's help pages for an API key or an app password.
+ */
+export interface SetupGuide {
+  /** What is needed and how long it takes, e.g. "A Todoist API token. Takes about a minute." */
+  summary?: string;
+  steps: SetupStep[];
+  /** Steps per value of the field named in `ConnectorUi.setupVariants` (keys are its values). */
+  variants?: Record<string, SetupVariant>;
+  /** Heading above the variants, e.g. "App password: steps for your provider". */
+  variantsTitle?: string;
+  /** Short notes: which permissions to pick, how to revoke access, known limits. */
+  tips?: string[];
+}
+
 /** A connector's website texts in one language. */
 export interface ConnectorLocale<TFieldKey extends string = string> {
   name?: string;
@@ -347,6 +384,16 @@ export interface ConnectorLocale<TFieldKey extends string = string> {
   fields?: Partial<Record<TFieldKey, FieldLocale>>;
   /** Actions by `name`. */
   actions?: Record<string, ActionLocale>;
+  /**
+   * How to connect an account: `oauth` when the hub signs in on the service's page, `form` when
+   * the user pastes a key or an app password. A service with optional OAuth can describe both.
+   */
+  setup?: { oauth?: SetupGuide; form?: SetupGuide };
+  /**
+   * Requests people can try with the AI once an account is connected, e.g. "What did Anna send me
+   * this week?". Three to five, concrete, in the words people use.
+   */
+  prompts?: string[];
 }
 
 /**
@@ -361,6 +408,16 @@ export interface ConnectorUi<TFieldKey extends string = string> {
    * goes under "Advanced". Without it all fields are shown.
    */
   primaryFields?: TFieldKey[];
+  /**
+   * Which setup guide variant applies: the form field whose value names it (e.g. the mail
+   * provider), and optionally an email field whose domain picks it while that field is empty.
+   */
+  setupVariants?: {
+    field: TFieldKey;
+    emailField?: TFieldKey;
+    /** Email domains per variant, e.g. `{ gmail: ['gmail.com', 'googlemail.com'] }`. */
+    domains?: Record<string, string[]>;
+  };
 }
 
 export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> {
@@ -506,6 +563,23 @@ export function connectorText(
   return {
     name: locales.find((l) => l.name)?.name ?? connector.name,
     description: locales.find((l) => l.description)?.description ?? connector.description,
+  };
+}
+
+/**
+ * The service's setup guide and example requests in a language (each falls back to English as a
+ * whole, so steps of two languages are never mixed).
+ */
+export function connectorGuide(
+  connector: Pick<ConnectorDefinition, 'ui'>,
+  language: UiLanguage,
+  via: 'oauth' | 'form',
+): { setup?: SetupGuide; prompts: string[] } {
+  const locales = uiLocales(connector, language);
+  const setup = locales.find((l) => l.setup?.[via])?.setup?.[via];
+  return {
+    ...(setup ? { setup } : {}),
+    prompts: locales.find((l) => l.prompts?.length)?.prompts ?? [],
   };
 }
 

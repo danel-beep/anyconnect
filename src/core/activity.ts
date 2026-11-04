@@ -12,6 +12,13 @@ export interface ActivitySummary {
   errors: number;
 }
 
+/** Narrows the activity log; every field is optional and they combine with AND. */
+export interface ActivityFilter {
+  accountId?: string | undefined;
+  connectorId?: string | undefined;
+  status?: 'ok' | 'error' | undefined;
+}
+
 /**
  * What the AI did in a workspace, for the dashboard: counts by day and by service over the
  * audit log (`tool_calls`). Only metadata is stored there, never arguments or results.
@@ -60,14 +67,26 @@ export class ActivityService {
     };
   }
 
-  /** The newest calls, no older than `sinceDays` (the plan's history window) when given. */
-  /** Newest first; `before` continues a page after its last row (keyset paging). */
+  /**
+   * The newest calls first, no older than `sinceDays` (the plan's history window) when given;
+   * `before` continues a page after its last row (keyset paging). `filter` narrows the log to one
+   * account, one service or the failed calls.
+   */
   async recent(
     workspaceId: string,
-    opts: { limit: number; sinceDays?: number | null; before?: { at: Date; id: number } | undefined },
+    opts: {
+      limit: number;
+      sinceDays?: number | null;
+      before?: { at: Date; id: number } | undefined;
+      filter?: ActivityFilter | undefined;
+    },
     now = new Date(),
   ) {
     const conditions = [eq(toolCalls.workspaceId, workspaceId)];
+    const { accountId, connectorId, status } = opts.filter ?? {};
+    if (accountId) conditions.push(eq(toolCalls.accountId, accountId));
+    if (connectorId) conditions.push(eq(toolCalls.connectorId, connectorId));
+    if (status) conditions.push(eq(toolCalls.status, status));
     if (opts.sinceDays)
       conditions.push(gte(toolCalls.createdAt, new Date(now.getTime() - opts.sinceDays * DAY)));
     if (opts.before) {

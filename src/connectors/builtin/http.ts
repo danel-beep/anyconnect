@@ -169,6 +169,33 @@ export default defineConnector({
     primaryFields: ['baseUrl', 'auth', 'token'],
     locales: {
       ru: {
+        setup: {
+          form: {
+            summary: 'Адрес API и ключ, если он нужен. Держите документацию API под рукой.',
+            steps: [
+              {
+                text: 'Найдите базовый адрес в документации API, например https://api.example.com/v1. ИИ сможет обращаться только к адресам внутри него.',
+              },
+              {
+                text: 'Создайте ключ API в настройках сервиса (ищите разделы API, Developers или Integrations).',
+              },
+              {
+                text: 'Выберите способ передачи ключа, как сказано в документации (чаще всего токен Bearer), и вставьте ключ в форму.',
+              },
+              {
+                text: 'После подключения расскажите ИИ в чате об основных методах API или дайте ссылку на документацию.',
+              },
+            ],
+            tips: [
+              'Лучше ключ только на чтение. Изменяющие запросы (POST, PUT, DELETE) подчиняются вашим правилам подтверждения.',
+            ],
+          },
+        },
+        prompts: [
+          'Сделай GET /orders?status=open и выпиши номера заказов с суммами.',
+          'Проверь статус API и скажи, всё ли работает.',
+          'Создай через API клиента «ACME Ltd». Сначала покажи запрос.',
+        ],
         description: 'Любой REST/JSON API как аккаунт: адрес и ключ. Для сервисов без готового коннектора.',
         fields: {
           baseUrl: {
@@ -213,6 +240,33 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          form: {
+            summary: 'The API’s base address and a key, if it needs one. Keep the API docs at hand.',
+            steps: [
+              {
+                text: 'Find the base address in the API docs, for example https://api.example.com/v1. The AI can only call addresses below it.',
+              },
+              {
+                text: 'Create an API key in the service’s settings (look for API, Developers or Integrations).',
+              },
+              {
+                text: 'Pick how the docs say to send the key (most APIs use a Bearer token) and paste the key into the form.',
+              },
+              {
+                text: 'After connecting, describe the main endpoints to the AI in the chat, or paste a link to the docs.',
+              },
+            ],
+            tips: [
+              'Prefer a read-only key. Write requests (POST, PUT, DELETE) follow your confirmation rules.',
+            ],
+          },
+        },
+        prompts: [
+          'Get /orders?status=open and list order numbers with totals.',
+          'Check the API status endpoint and tell me if anything is down.',
+          'Create a customer “ACME Ltd” through the API. Show me the request first.',
+        ],
         fields: {
           baseUrl: {
             label: 'API base URL',

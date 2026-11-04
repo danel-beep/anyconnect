@@ -154,7 +154,7 @@ describe('connect form for services without OAuth', () => {
   it('shows the mailbox form in Russian with server settings under "Advanced"', async () => {
     const { html } = await openForm('/connect/imap?label=Почта');
     expect(html).toContain('Подключение: Почта (IMAP/SMTP)');
-    expect(html).toContain('>Адрес почты *</label>');
+    expect(html).toContain('>Адрес почты<span class="req" aria-hidden="true"> *</span></label>');
     expect(html).toContain('>Пароль приложения *</label>');
     expect(html).toContain('<option value="">Определить по адресу</option>');
     expect(html).toContain('<option value="yandex">Яндекс Почта</option>');
@@ -210,7 +210,7 @@ describe('connect form for services without OAuth', () => {
     expect(ru).toContain('Поиск писем');
     expect(ru).toContain('Переносит письма в корзину.');
     expect(ru).not.toContain('Finds messages, newest first');
-    expect(ru).toContain('<code>gmail_search</code>');
+    expect(ru).toContain('<code class="tool-id">gmail_search</code>');
 
     const english = new TestBrowser(hub.baseUrl);
     await english.request('/prefs/lang?to=en&next=%2F');

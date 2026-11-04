@@ -303,6 +303,32 @@ const manifest = defineManifestConnector(
 const ui: ConnectorUi = {
   locales: {
     ru: {
+      setup: {
+        oauth: {
+          summary: 'Ваш аккаунт Google. Меньше минуты.',
+          steps: [
+            {
+              text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными календарями.',
+            },
+            {
+              text: 'Google попросит разрешить AnyConnect смотреть и менять события в календарях. Нажмите «Продолжить».',
+            },
+            {
+              text: 'Готово: ИИ видит все календари этого аккаунта, в том числе общие.',
+            },
+          ],
+          tips: [
+            'Удаление событий по умолчанию ждёт вашего подтверждения (см. «Правила»).',
+            'Рабочий и личный календари в разных аккаунтах Google? Подключите оба.',
+          ],
+        },
+      },
+      prompts: [
+        'Что у меня в календаре на завтра?',
+        'Найди свободный час в четверг после обеда и поставь «Созвон с Алексом».',
+        'Перенеси сегодняшнюю встречу в 15:00 на пятницу на то же время.',
+        'Сколько часов встреч у меня было на прошлой неделе?',
+      ],
       name: 'Google Календарь',
       description: 'Google Календарь: события, занятость, создание, изменение и удаление встреч.',
       actions: {
@@ -336,6 +362,32 @@ const ui: ConnectorUi = {
       },
     },
     en: {
+      setup: {
+        oauth: {
+          summary: 'Your Google account. Takes under a minute.',
+          steps: [
+            {
+              text: 'Click Connect and choose the Google account whose calendars you want to add.',
+            },
+            {
+              text: 'Google asks to let AnyConnect see and edit events in your calendars. Click Continue.',
+            },
+            {
+              text: 'Done: the AI sees every calendar of that account, including shared ones.',
+            },
+          ],
+          tips: [
+            'Deleting events waits for your confirmation by default (see Rules).',
+            'Work and personal calendars in different Google accounts? Connect each account.',
+          ],
+        },
+      },
+      prompts: [
+        'What is on my calendar tomorrow?',
+        'Find a free hour on Thursday afternoon and book “Call with Alex”.',
+        'Move my 3 pm meeting today to Friday at the same time.',
+        'How many hours of meetings did I have last week?',
+      ],
       actions: {
         list_calendars: {
           title: 'List calendars',

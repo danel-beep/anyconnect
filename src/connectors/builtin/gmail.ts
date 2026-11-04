@@ -141,6 +141,32 @@ export default defineConnector({
   ui: {
     locales: {
       ru: {
+        setup: {
+          oauth: {
+            summary: 'Ваш аккаунт Google. Меньше минуты, AnyConnect не видит ваш пароль.',
+            steps: [
+              {
+                text: 'Нажмите «Подключить» и выберите нужный аккаунт Google.',
+              },
+              {
+                text: 'Google покажет, что AnyConnect сможет делать с почтой: читать, разбирать, писать черновики и отправлять. Нажмите «Продолжить».',
+              },
+              {
+                text: 'Вы вернётесь сюда, и ящик появится под своим адресом. Другие аккаунты Gmail добавляются так же.',
+              },
+            ],
+            tips: [
+              'Переименуйте аккаунты (например, «Работа» и «Личное»), чтобы говорить ИИ, какой из них нужен.',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите AnyConnect в аккаунте Google, раздел «Сторонние приложения и сервисы».',
+            ],
+          },
+        },
+        prompts: [
+          'Что пришло от Анны на этой неделе, на что я ещё не ответил?',
+          'Найди последний счёт от ACME в рабочей почте и коротко перескажи.',
+          'Набросай вежливый ответ на последнее письмо арендодателя. Не отправляй.',
+          'Перенеси вчерашние рассылки в личной почте в архив.',
+        ],
         description:
           'Gmail через Google API: поиск с синтаксисом Gmail, чтение, отправка, ответы, пересылка, ярлыки, архив и черновики.',
         actions: {
@@ -185,6 +211,32 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          oauth: {
+            summary: 'Your Google account. Takes under a minute, and AnyConnect never sees your password.',
+            steps: [
+              {
+                text: 'Click Connect and choose the Google account you want to add.',
+              },
+              {
+                text: 'Google lists what AnyConnect may do with your mail: read, organise, draft and send. Click Continue.',
+              },
+              {
+                text: 'You are back here and the mailbox appears under its address. Add more Gmail accounts the same way.',
+              },
+            ],
+            tips: [
+              'Rename accounts (for example Work and Personal) so you can tell the AI which one to use.',
+              'To cut access, delete the account here or remove AnyConnect in your Google Account under Third-party connections.',
+            ],
+          },
+        },
+        prompts: [
+          'What came in from Anna this week that I have not answered yet?',
+          'Find the latest invoice from ACME in my work mail and summarise it.',
+          'Draft a polite reply to the last email from my landlord. Do not send it.',
+          'Archive yesterday’s newsletters in my personal inbox.',
+        ],
         actions: {
           search: {
             title: 'Search mail',

@@ -68,16 +68,18 @@ export async function requireApp(c: AppContext, next: string): Promise<AppAuth |
   return { session, user: session.user, workspace: { id: workspace.id, name: workspace.name } };
 }
 
-/** Sidebar data: the plan name and how many calls wait for a confirmation. */
+/** Sidebar data: the plan name, calls waiting for a confirmation and accounts that need a fix. */
 export async function shellInfo(c: AppContext, workspaceId: string): Promise<ShellInfo> {
   const s = c.get('services');
-  const [subscription, open] = await Promise.all([
+  const [subscription, open, accounts] = await Promise.all([
     s.entitlements.subscription(workspaceId),
     s.pendingCalls.listOpen(workspaceId),
+    s.accounts.list(workspaceId),
   ]);
   return {
     planId: s.entitlements.planFor(subscription).id,
     pendingConfirmations: open.filter((row) => row.status === 'awaiting_confirmation').length,
+    brokenAccounts: accounts.filter((a) => a.enabled && a.status !== 'active').length,
   };
 }
 

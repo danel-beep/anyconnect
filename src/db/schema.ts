@@ -390,7 +390,8 @@ export const toolCalls = pgTable(
     durationMs: integer().notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index().on(t.workspaceId, t.createdAt)],
+  // The second index serves an account's own log (the account page, the activity filter).
+  (t) => [index().on(t.workspaceId, t.createdAt), index().on(t.accountId, t.createdAt)],
 );
 
 /**

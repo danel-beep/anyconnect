@@ -94,7 +94,7 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     expect(csp).toContain("default-src 'none'");
     expect(csp).not.toContain('unsafe-inline');
     const html = await login.text();
-    expect(html).toContain('<script src="/assets/webauthn.js"');
+    expect(html).toMatch(/<script src="\/assets\/webauthn\.js\?v=[0-9a-f]{12}"/);
     expect(html).toContain('Войти с ключом доступа');
     const script = await browser.request('/assets/webauthn.js');
     expect(script.headers.get('content-type')).toContain('text/javascript');

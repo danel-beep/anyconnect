@@ -1,3 +1,4 @@
+import { type ConnectorDefinition, connectorText, type UiLanguage } from '../connectors/sdk.js';
 import type { IconName } from './ui.js';
 
 /**
@@ -37,6 +38,11 @@ export interface ServiceMeta {
   glyph?: IconName;
   category: ServiceCategory;
   blurb: { ru: string; en: string };
+  /**
+   * Another way in while this service cannot be connected here (its sign-in app is not set up):
+   * a connector and form values to start it with, e.g. Gmail through IMAP with an app password.
+   */
+  alternative?: { connectorId: string; values?: Record<string, string> };
 }
 
 export const SERVICE_META: Record<string, ServiceMeta> = {
@@ -44,6 +50,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     icon: 'gmail',
     category: 'mail',
     blurb: { ru: 'Поиск, чтение, черновики и отправка писем.', en: 'Search, read, draft and send email.' },
+    alternative: { connectorId: 'imap', values: { 'config.provider': 'gmail' } },
   },
   outlook: {
     glyph: 'mail',
@@ -58,7 +65,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'mail',
     blurb: {
       ru: 'Любой ящик по IMAP/SMTP: Яндекс, Mail.ru, iCloud, корпоративная почта.',
-      en: 'Any IMAP/SMTP mailbox: Outlook, iCloud, Fastmail, company mail.',
+      en: 'Any IMAP/SMTP mailbox: iCloud, Fastmail or your company mail.',
     },
   },
   slack: {
@@ -142,6 +149,25 @@ export const HIDDEN_SERVICES = new Set(['demo', 'anyconnect']);
 
 export function serviceMeta(id: string): ServiceMeta | undefined {
   return SERVICE_META[id];
+}
+
+/**
+ * The other way in for a service that cannot be connected here yet (see `ServiceMeta.alternative`):
+ * the alternative's name and the connect link that starts it with the preset values.
+ */
+export function serviceAlternative(
+  id: string,
+  connectors: readonly ConnectorDefinition[],
+  lang: UiLanguage,
+): { service: string; url: string } | undefined {
+  const alternative = serviceMeta(id)?.alternative;
+  const connector = alternative && connectors.find((c) => c.id === alternative.connectorId);
+  if (!alternative || !connector) return undefined;
+  const query = new URLSearchParams(alternative.values ?? {}).toString();
+  return {
+    service: connectorText(connector, lang).name,
+    url: `/connect/${encodeURIComponent(connector.id)}${query ? `?${query}` : ''}`,
+  };
 }
 
 /** Everyday words people search a category by, in both languages ("почта" finds Gmail). */
