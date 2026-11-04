@@ -143,6 +143,7 @@ describe('action metadata', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           lastUsedAt: null,
+          checkedAt: null,
         },
       ],
     });

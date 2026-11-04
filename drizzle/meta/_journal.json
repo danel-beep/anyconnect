@@ -12,15 +12,22 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1793751616594,
-      "tag": "0001_tool_call_outcome",
+      "when": 1793752217458,
+      "tag": "0001_oauth_client",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1793752800784,
-      "tag": "0002_data_protection",
+      "when": 1793752738402,
+      "tag": "0002_custom_services",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793753308096,
+      "tag": "0003_executor_and_data_protection",
       "breakpoints": true
     }
   ]

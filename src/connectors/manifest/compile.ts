@@ -56,9 +56,24 @@ function defaultCredentials(manifest: HttpManifest): JsonSchema | undefined {
         properties: { token: { type: 'string', minLength: 1, description: `${manifest.name} access token` } },
         required: ['token'],
       };
+    case 'oauth2':
+      return personalTokenSchema(manifest);
     default:
       return undefined;
   }
+}
+
+function personalTokenSchema(manifest: HttpManifest): JsonSchema | undefined {
+  if (manifest.auth.type !== 'oauth2' || !manifest.auth.token) return undefined;
+  return {
+    type: 'object',
+    properties: {
+      token: {
+        type: 'string',
+        description: `${manifest.name} personal access token (only if the account is not connected through OAuth)`,
+      },
+    },
+  };
 }
 
 function encodeCursor(value: unknown): string {
@@ -146,7 +161,12 @@ class ManifestRuntime {
         break;
       }
       case 'oauth2':
-        requireOAuth(ctx); // the client adds the bearer token and refreshes it on 401
+        // With ctx.oauth the client adds the bearer token and refreshes it on 401.
+        if (!ctx.oauth) {
+          if (!auth.token) requireOAuth(ctx);
+          else
+            headers.authorization = `Bearer ${secret(auth.token, 'Neither an OAuth connection nor a token')}`;
+        }
         break;
       case 'none':
         break;
@@ -370,6 +390,7 @@ export function defineManifestConnector(input: HttpManifestInput): ConnectorDefi
             provider: auth.provider,
             scopes: auth.scopes,
             ...(auth.authorizeParams ? { authorizeParams: auth.authorizeParams } : {}),
+            ...(auth.token ? { optional: true } : {}),
           },
         }
       : {}),

@@ -127,7 +127,7 @@ async function main() {
         break;
       }
       case 'connectors:list':
-        for (const c of services.connectors.all()) {
+        for (const c of services.connectors.builtin.all()) {
           console.log(`${c.id.padEnd(16)} ${c.name} — ${c.description}`);
           console.log(`${''.padEnd(16)} actions: ${c.actions.map((a) => a.name).join(', ')}`);
         }

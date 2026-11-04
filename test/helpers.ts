@@ -17,12 +17,27 @@ export const TEST_DATABASE_URL =
 export const ADMIN = { email: 'owner@example.com', password: 'correct-horse-battery-staple' };
 export const TEST_KEY = Buffer.alloc(32, 7).toString('base64');
 
+/** A second test database next to TEST_DATABASE_URL (e.g. for a second hub), created if missing. */
+export async function ensureTestDatabase(suffix: string): Promise<string> {
+  const url = new URL(TEST_DATABASE_URL);
+  const name = `${url.pathname.slice(1)}_${suffix}`;
+  const admin = new pg.Pool({ connectionString: TEST_DATABASE_URL, max: 1 });
+  try {
+    const exists = await admin.query('select 1 from pg_database where datname = $1', [name]);
+    if (exists.rowCount === 0) await admin.query(`CREATE DATABASE "${name}"`);
+  } finally {
+    await admin.end();
+  }
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+
 /** Recreates the schema from migrations. Call once per test file. */
-export async function resetDatabase(): Promise<void> {
-  const pool = new pg.Pool({ connectionString: TEST_DATABASE_URL, max: 1 });
+export async function resetDatabase(databaseUrl = TEST_DATABASE_URL): Promise<void> {
+  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
   try {
     await pool.query(
-      'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;',
+      'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS pgboss CASCADE; CREATE SCHEMA public;',
     );
     await runMigrations(pool);
   } finally {
@@ -32,9 +47,10 @@ export async function resetDatabase(): Promise<void> {
 
 export async function truncateAll(services: Services): Promise<void> {
   await services.database.pool.query(`
-    TRUNCATE tool_calls, accounts, api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants,
-             oauth_clients, web_sessions, pending_logins, webauthn_challenges, webauthn_credentials,
-             user_recovery_codes, user_totp, workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
+    TRUNCATE tool_calls, account_oauth, oauth_connect_states, oauth_apps, custom_connectors, accounts,
+             api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants, oauth_clients, web_sessions,
+             pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
+             workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
 }
 
 export interface TestHub {
@@ -54,6 +70,7 @@ export async function startTestHub(
     stages?: StageMap;
     /** A fake Telegram Bot API (set TELEGRAM_BOT_TOKEN in `env` too). */
     telegramFetch?: typeof fetch;
+    databaseUrl?: string;
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -67,7 +84,7 @@ export async function startTestHub(
   const baseUrl = `http://127.0.0.1:${port}`;
   const config = loadConfig({
     NODE_ENV: 'test',
-    DATABASE_URL: TEST_DATABASE_URL,
+    DATABASE_URL: options.databaseUrl ?? TEST_DATABASE_URL,
     DATABASE_POOL_MAX: '4',
     PUBLIC_URL: baseUrl,
     ENCRYPTION_KEY: TEST_KEY,
@@ -78,6 +95,7 @@ export async function startTestHub(
     LOG_LEVEL: 'silent',
     // Test services (fake APIs, a second hub) listen on localhost.
     ALLOW_PRIVATE_NETWORK: 'true',
+    JOBS_ENABLED: 'false',
     ...options.env,
   });
   const services = createServices(config, {

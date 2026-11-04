@@ -1,7 +1,13 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ConnectorResolver } from '../connectors/registry.js';
-import type { AccountContext, ConnectorDefinition, ConnectorLogger, TestResult } from '../connectors/sdk.js';
+import {
+  type AccountContext,
+  type ConnectorDefinition,
+  ConnectorError,
+  type ConnectorLogger,
+  type TestResult,
+} from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { type AccountSettings, accounts } from '../db/schema.js';
 import type { DataKey } from '../lib/crypto.js';
@@ -10,6 +16,7 @@ import { newId } from '../lib/ids.js';
 import type { NetworkPolicy } from '../lib/network.js';
 import { slugify } from '../lib/slug.js';
 import type { AccountKeyring } from './account-keys.js';
+import type { TokenManager } from './oauth-tokens.js';
 
 export type AccountRow = typeof accounts.$inferSelect;
 
@@ -32,6 +39,7 @@ export interface AccountView {
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string | null;
+  checkedAt: string | null;
 }
 
 export function toAccountView(row: AccountRow): AccountView {
@@ -51,6 +59,7 @@ export function toAccountView(row: AccountRow): AccountView {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+    checkedAt: row.checkedAt?.toISOString() ?? null,
   };
 }
 
@@ -90,6 +99,10 @@ function parseWith<T extends z.ZodType>(schema: T, value: unknown, what: string)
   return result.data;
 }
 
+function hasAnyValue(record: Record<string, unknown>): boolean {
+  return Object.values(record).some((v) => v !== undefined && v !== null && v !== '');
+}
+
 function isUniqueViolation(error: unknown): boolean {
   const code = (error as { code?: string; cause?: { code?: string } })?.code ?? (error as any)?.cause?.code;
   return code === '23505';
@@ -105,6 +118,8 @@ export class AccountService {
     private readonly connectors: ConnectorResolver,
     private readonly keys: AccountKeyring,
     private readonly network: NetworkPolicy,
+    /** OAuth tokens of OAuth-connected services (`ctx.oauth`). */
+    private readonly tokens?: TokenManager,
   ) {}
 
   async list(workspaceId: string): Promise<AccountRow[]> {
@@ -184,6 +199,10 @@ export class AccountService {
             : null,
           enabled: input.enabled ?? true,
           settings: disabledActions ? { disabledActions } : {},
+          // OAuth services get their tokens from the connect flow; until then the account is unusable.
+          ...(connector.oauth && !(connector.oauth.optional && hasAnyValue(credentials))
+            ? { status: 'needs_reauth' as const, statusMessage: 'Not connected yet: connect the account' }
+            : {}),
         })
         .returning();
       return row!;
@@ -236,6 +255,10 @@ export class AccountService {
   }
 
   async delete(workspaceId: string, accountId: string): Promise<void> {
+    const existing = await this.get(workspaceId, accountId);
+    const connector = await this.connectors.get(workspaceId, existing.connectorId);
+    // Best effort: tell the provider to drop the grant so a deleted account leaves no live token.
+    if (connector?.oauth && this.tokens) await this.tokens.revoke(connector, existing).catch(() => {});
     const deleted = await this.db
       .delete(accounts)
       .where(and(eq(accounts.workspaceId, workspaceId), eq(accounts.id, accountId)))
@@ -360,6 +383,7 @@ export class AccountService {
       },
       signal: options.signal,
       logger: options.logger,
+      oauth: this.tokens ? await this.tokens.access(connector, row, options.signal) : undefined,
       fetch: this.network.fetch,
       network: { lookup: this.network.lookup, assertHostAllowed: this.network.assertHostAllowed },
     };
@@ -371,18 +395,22 @@ export class AccountService {
     const connector = await this.connector(workspaceId, row.connectorId);
     if (!connector.test) return { ok: true, message: 'This service has no connection test' };
     let result: TestResult;
+    let authFailed = false;
     try {
       const ctx = await this.buildContext(connector, row, { signal: AbortSignal.timeout(30_000), logger });
       result = await connector.test(ctx);
     } catch (error) {
       result = { ok: false, message: error instanceof Error ? error.message : String(error) };
+      if (error instanceof ConnectorError && error.kind === 'auth') authFailed = true;
     }
     await this.db
       .update(accounts)
       .set({
-        status: result.ok ? 'active' : 'error',
+        status: result.ok ? 'active' : authFailed ? 'needs_reauth' : 'error',
         statusMessage: result.ok ? null : (result.message ?? 'Connection test failed'),
         metadata: result.identity ? { ...row.metadata, identity: result.identity } : row.metadata,
+        checkedAt: new Date(),
+        updatedAt: sql`${accounts.updatedAt}`,
       })
       .where(eq(accounts.id, row.id));
     return result;

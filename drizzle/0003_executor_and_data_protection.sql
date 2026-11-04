@@ -130,6 +130,8 @@ ALTER TABLE "oauth_authorization_codes" ADD COLUMN "ai_client_id" text;--> state
 ALTER TABLE "oauth_authorization_codes" ADD COLUMN "persona_id" text;--> statement-breakpoint
 ALTER TABLE "oauth_grants" ADD COLUMN "ai_client_id" text;--> statement-breakpoint
 ALTER TABLE "oauth_grants" ADD COLUMN "persona_id" text;--> statement-breakpoint
+ALTER TABLE "tool_calls" ADD COLUMN "outcome" text;--> statement-breakpoint
+ALTER TABLE "tool_calls" ADD COLUMN "risk" text;--> statement-breakpoint
 ALTER TABLE "web_sessions" ADD COLUMN "amr" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
 ALTER TABLE "web_sessions" ADD COLUMN "authenticated_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "access_rules" ADD CONSTRAINT "access_rules_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

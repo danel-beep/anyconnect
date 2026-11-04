@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { AppError } from './lib/errors.js';
 import { apiRoutes } from './routes/api.js';
 import { confirmRoutes } from './routes/confirm.js';
+import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
 import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
@@ -48,6 +49,7 @@ export function createApp(services: Services) {
   app.route('/', mcpRoutes());
   app.route('/api/v1', apiRoutes());
   app.route('/', confirmRoutes());
+  app.route('/', connectRoutes());
   app.route('/', webRoutes());
 
   app.notFound((c) =>

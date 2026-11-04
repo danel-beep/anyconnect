@@ -68,6 +68,8 @@ const EnvSchema = z.object({
   CONFIRMATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
   /** Users must set up a second factor (authenticator app or passkey) before using the hub. */
   REQUIRE_2FA: bool(false),
+  /** Background jobs: account health checks, token refresh, later schedules and triggers. */
+  JOBS_ENABLED: bool(true),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -117,6 +119,26 @@ export interface AppConfig {
     /** Expected origin of WebAuthn ceremonies = the public URL. */
     origin: string;
   };
+  /**
+   * Hub-wide OAuth apps of service providers, by provider id, from
+   * `OAUTH_APP_<PROVIDER>_CLIENT_ID` / `OAUTH_APP_<PROVIDER>_CLIENT_SECRET`
+   * (e.g. `OAUTH_APP_GOOGLE_CLIENT_ID`). Users can also add their own apps per workspace.
+   */
+  oauthApps: Record<string, { clientId: string; clientSecret: string | undefined }>;
+  /** Run background jobs (pg-boss) in this process. */
+  jobs: { enabled: boolean };
+}
+
+/** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
+export function readOAuthApps(source: NodeJS.ProcessEnv): AppConfig['oauthApps'] {
+  const apps: AppConfig['oauthApps'] = {};
+  for (const [key, value] of Object.entries(source)) {
+    const match = key.match(/^OAUTH_APP_([A-Z0-9_]+)_CLIENT_ID$/);
+    if (!match || !value?.trim()) continue;
+    const secret = source[`OAUTH_APP_${match[1]}_CLIENT_SECRET`]?.trim();
+    apps[match[1]!.toLowerCase()] = { clientId: value.trim(), clientSecret: secret || undefined };
+  }
+  return apps;
 }
 
 export class ConfigError extends Error {
@@ -225,5 +247,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       rpName: 'AnyConnect',
       origin: publicUrl,
     },
+    oauthApps: readOAuthApps(source),
+    jobs: { enabled: env.JOBS_ENABLED },
   };
 }

@@ -31,6 +31,7 @@ const ProviderSpec = z.object({
   scopeParam: z.string().optional(),
   baseScopes: z.array(z.string()).optional(),
   authorizeParams: z.record(z.string(), z.string()).optional(),
+  tokenParams: z.record(z.string(), z.string()).optional(),
   tokenPath: z.string().optional(),
   appSetupUrl: z.url().optional(),
 });
@@ -60,6 +61,11 @@ export const ManifestAuth = z.discriminatedUnion('type', [
     provider: z.union([z.string(), ProviderSpec]),
     scopes: z.array(z.string()).default([]),
     authorizeParams: z.record(z.string(), z.string()).optional(),
+    /**
+     * Alternative to OAuth: a personal token sent as `Bearer` when the account has no OAuth
+     * connection, e.g. `{{credentials.token}}`. Makes OAuth optional for the connector.
+     */
+    token: z.string().optional(),
   }),
 ]);
 export type ManifestAuth = z.output<typeof ManifestAuth>;

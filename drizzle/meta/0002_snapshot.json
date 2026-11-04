@@ -1,69 +1,58 @@
 {
-  "id": "09826221-06b0-4ceb-b3e7-48fb6340bab0",
-  "prevId": "2433919d-ccbe-4670-80e9-70bce42bcbb5",
+  "id": "bb9234d2-d2ff-4245-bdb1-e4dab790acce",
+  "prevId": "0cd366b4-5af8-4b49-873e-50845d623ec9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.access_rules": {
-      "name": "access_rules",
+    "public.account_oauth": {
+      "name": "account_oauth",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
+        "account_id": {
+          "name": "account_id",
           "type": "text",
           "primaryKey": true,
           "notNull": true
         },
-        "workspace_id": {
-          "name": "workspace_id",
+        "provider_id": {
+          "name": "provider_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "ai_client_id": {
-          "name": "ai_client_id",
+        "app_ref": {
+          "name": "app_ref",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "persona_id": {
-          "name": "persona_id",
+        "tokens_encrypted": {
+          "name": "tokens_encrypted",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "connector_id": {
-          "name": "connector_id",
-          "type": "text",
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
+        "scopes": {
+          "name": "scopes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "refreshed_at": {
+          "name": "refreshed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "access": {
-          "name": "access",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "confirm": {
-          "name": "confirm",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "undo_window_seconds": {
-          "name": "undo_window_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "note": {
-          "name": "note",
+        "last_error": {
+          "name": "last_error",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -84,11 +73,11 @@
         }
       },
       "indexes": {
-        "access_rules_workspace_id_index": {
-          "name": "access_rules_workspace_id_index",
+        "account_oauth_expires_at_index": {
+          "name": "account_oauth_expires_at_index",
           "columns": [
             {
-              "expression": "workspace_id",
+              "expression": "expires_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -101,48 +90,9 @@
         }
       },
       "foreignKeys": {
-        "access_rules_workspace_id_workspaces_id_fk": {
-          "name": "access_rules_workspace_id_workspaces_id_fk",
-          "tableFrom": "access_rules",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "access_rules_ai_client_id_ai_clients_id_fk": {
-          "name": "access_rules_ai_client_id_ai_clients_id_fk",
-          "tableFrom": "access_rules",
-          "tableTo": "ai_clients",
-          "columnsFrom": [
-            "ai_client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "access_rules_persona_id_personas_id_fk": {
-          "name": "access_rules_persona_id_personas_id_fk",
-          "tableFrom": "access_rules",
-          "tableTo": "personas",
-          "columnsFrom": [
-            "persona_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "access_rules_account_id_accounts_id_fk": {
-          "name": "access_rules_account_id_accounts_id_fk",
-          "tableFrom": "access_rules",
+        "account_oauth_account_id_accounts_id_fk": {
+          "name": "account_oauth_account_id_accounts_id_fk",
+          "tableFrom": "account_oauth",
           "tableTo": "accounts",
           "columnsFrom": [
             "account_id"
@@ -207,12 +157,6 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "data_key_encrypted": {
-          "name": "data_key_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "credentials_encrypted": {
           "name": "credentials_encrypted",
           "type": "text",
@@ -269,6 +213,12 @@
         },
         "last_used_at": {
           "name": "last_used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checked_at": {
+          "name": "checked_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -339,105 +289,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.ai_clients": {
-      "name": "ai_clients",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "match_key": {
-          "name": "match_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_used_at": {
-          "name": "last_used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "ai_clients_workspace_id_match_key_index": {
-          "name": "ai_clients_workspace_id_match_key_index",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "match_key",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "ai_clients_workspace_id_workspaces_id_fk": {
-          "name": "ai_clients_workspace_id_workspaces_id_fk",
-          "tableFrom": "ai_clients",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.api_tokens": {
       "name": "api_tokens",
       "schema": "",
@@ -484,18 +335,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::text[]"
-        },
-        "ai_client_id": {
-          "name": "ai_client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "persona_id": {
-          "name": "persona_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -566,32 +405,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "api_tokens_ai_client_id_ai_clients_id_fk": {
-          "name": "api_tokens_ai_client_id_ai_clients_id_fk",
-          "tableFrom": "api_tokens",
-          "tableTo": "ai_clients",
-          "columnsFrom": [
-            "ai_client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "api_tokens_persona_id_personas_id_fk": {
-          "name": "api_tokens_persona_id_personas_id_fk",
-          "tableFrom": "api_tokens",
-          "tableTo": "personas",
-          "columnsFrom": [
-            "persona_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -608,8 +421,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.notification_channels": {
-      "name": "notification_channels",
+    "public.custom_connectors": {
+      "name": "custom_connectors",
       "schema": "",
       "columns": {
         "id": {
@@ -618,8 +431,14 @@
           "primaryKey": true,
           "notNull": true
         },
-        "user_id": {
-          "name": "user_id",
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connector_id": {
+          "name": "connector_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -630,33 +449,27 @@
           "primaryKey": false,
           "notNull": true
         },
-        "address": {
-          "name": "address",
-          "type": "text",
+        "definition": {
+          "name": "definition",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tools": {
+          "name": "tools",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "link_code_hash": {
-          "name": "link_code_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "link_expires_at": {
-          "name": "link_expires_at",
+        "tools_refreshed_at": {
+          "name": "tools_refreshed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "verified_at": {
-          "name": "verified_at",
-          "type": "timestamp with time zone",
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -676,17 +489,17 @@
         }
       },
       "indexes": {
-        "notification_channels_user_id_kind_index": {
-          "name": "notification_channels_user_id_kind_index",
+        "custom_connectors_workspace_id_connector_id_index": {
+          "name": "custom_connectors_workspace_id_connector_id_index",
           "columns": [
             {
-              "expression": "user_id",
+              "expression": "workspace_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "kind",
+              "expression": "connector_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -696,12 +509,96 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        }
+      },
+      "foreignKeys": {
+        "custom_connectors_workspace_id_workspaces_id_fk": {
+          "name": "custom_connectors_workspace_id_workspaces_id_fk",
+          "tableFrom": "custom_connectors",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.oauth_apps": {
+      "name": "oauth_apps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
         },
-        "notification_channels_link_code_hash_index": {
-          "name": "notification_channels_link_code_hash_index",
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_secret_encrypted": {
+          "name": "client_secret_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "oauth_apps_workspace_id_provider_id_index": {
+          "name": "oauth_apps_workspace_id_provider_id_index",
           "columns": [
             {
-              "expression": "link_code_hash",
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -714,12 +611,12 @@
         }
       },
       "foreignKeys": {
-        "notification_channels_user_id_users_id_fk": {
-          "name": "notification_channels_user_id_users_id_fk",
-          "tableFrom": "notification_channels",
-          "tableTo": "users",
+        "oauth_apps_workspace_id_workspaces_id_fk": {
+          "name": "oauth_apps_workspace_id_workspaces_id_fk",
+          "tableFrom": "oauth_apps",
+          "tableTo": "workspaces",
           "columnsFrom": [
-            "user_id"
+            "workspace_id"
           ],
           "columnsTo": [
             "id"
@@ -808,18 +705,6 @@
         },
         "grant_id": {
           "name": "grant_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ai_client_id": {
-          "name": "ai_client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "persona_id": {
-          "name": "persona_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -930,6 +815,149 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.oauth_connect_states": {
+      "name": "oauth_connect_states",
+      "schema": "",
+      "columns": {
+        "state_hash": {
+          "name": "state_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connector_id": {
+          "name": "connector_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "draft": {
+          "name": "draft",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "app_ref": {
+          "name": "app_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_verifier_encrypted": {
+          "name": "code_verifier_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "redirect_uri": {
+          "name": "redirect_uri",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "return_to": {
+          "name": "return_to",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "oauth_connect_states_expires_at_index": {
+          "name": "oauth_connect_states_expires_at_index",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "oauth_connect_states_workspace_id_workspaces_id_fk": {
+          "name": "oauth_connect_states_workspace_id_workspaces_id_fk",
+          "tableFrom": "oauth_connect_states",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "oauth_connect_states_user_id_users_id_fk": {
+          "name": "oauth_connect_states_user_id_users_id_fk",
+          "tableFrom": "oauth_connect_states",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "oauth_connect_states_account_id_accounts_id_fk": {
+          "name": "oauth_connect_states_account_id_accounts_id_fk",
+          "tableFrom": "oauth_connect_states",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.oauth_grants": {
       "name": "oauth_grants",
       "schema": "",
@@ -973,18 +1001,6 @@
         },
         "client_name": {
           "name": "client_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ai_client_id": {
-          "name": "ai_client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "persona_id": {
-          "name": "persona_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1074,32 +1090,6 @@
           "tableTo": "workspaces",
           "columnsFrom": [
             "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "oauth_grants_ai_client_id_ai_clients_id_fk": {
-          "name": "oauth_grants_ai_client_id_ai_clients_id_fk",
-          "tableFrom": "oauth_grants",
-          "tableTo": "ai_clients",
-          "columnsFrom": [
-            "ai_client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "oauth_grants_persona_id_personas_id_fk": {
-          "name": "oauth_grants_persona_id_personas_id_fk",
-          "tableFrom": "oauth_grants",
-          "tableTo": "personas",
-          "columnsFrom": [
-            "persona_id"
           ],
           "columnsTo": [
             "id"
@@ -1215,434 +1205,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.pending_calls": {
-      "name": "pending_calls",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "principal": {
-          "name": "principal",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tool_name": {
-          "name": "tool_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connector_id": {
-          "name": "connector_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "risk": {
-          "name": "risk",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "args_encrypted": {
-          "name": "args_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "args_hash": {
-          "name": "args_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "channels": {
-          "name": "channels",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "decided_via": {
-          "name": "decided_via",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "undo_window_seconds": {
-          "name": "undo_window_seconds",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "execute_at": {
-          "name": "execute_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "result_encrypted": {
-          "name": "result_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "consumed_at": {
-          "name": "consumed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "telegram_message": {
-          "name": "telegram_message",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "pending_calls_status_execute_at_index": {
-          "name": "pending_calls_status_execute_at_index",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "execute_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "pending_calls_workspace_id_created_at_index": {
-          "name": "pending_calls_workspace_id_created_at_index",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "pending_calls_workspace_id_args_hash_index": {
-          "name": "pending_calls_workspace_id_args_hash_index",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "args_hash",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "pending_calls_workspace_id_workspaces_id_fk": {
-          "name": "pending_calls_workspace_id_workspaces_id_fk",
-          "tableFrom": "pending_calls",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "pending_calls_account_id_accounts_id_fk": {
-          "name": "pending_calls_account_id_accounts_id_fk",
-          "tableFrom": "pending_calls",
-          "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.pending_logins": {
-      "name": "pending_logins",
-      "schema": "",
-      "columns": {
-        "token_hash": {
-          "name": "token_hash",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "amr": {
-          "name": "amr",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "pending_logins_expires_at_index": {
-          "name": "pending_logins_expires_at_index",
-          "columns": [
-            {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "pending_logins_user_id_users_id_fk": {
-          "name": "pending_logins_user_id_users_id_fk",
-          "tableFrom": "pending_logins",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.personas": {
-      "name": "personas",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_ids": {
-          "name": "account_ids",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "max_access": {
-          "name": "max_access",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'full'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "personas_workspace_id_slug_index": {
-          "name": "personas_workspace_id_slug_index",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "personas_workspace_id_workspaces_id_fk": {
-          "name": "personas_workspace_id_workspaces_id_fk",
-          "tableFrom": "personas",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.tool_calls": {
       "name": "tool_calls",
       "schema": "",
@@ -1718,18 +1280,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "outcome": {
-          "name": "outcome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "risk": {
-          "name": "risk",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "error_message": {
           "name": "error_message",
           "type": "text",
@@ -1798,132 +1348,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_recovery_codes": {
-      "name": "user_recovery_codes",
-      "schema": "",
-      "columns": {
-        "code_hash": {
-          "name": "code_hash",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "user_recovery_codes_user_id_index": {
-          "name": "user_recovery_codes_user_id_index",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "user_recovery_codes_user_id_users_id_fk": {
-          "name": "user_recovery_codes_user_id_users_id_fk",
-          "tableFrom": "user_recovery_codes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_totp": {
-      "name": "user_totp",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "secret_encrypted": {
-          "name": "secret_encrypted",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "confirmed_at": {
-          "name": "confirmed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_used_step": {
-          "name": "last_used_step",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_totp_user_id_users_id_fk": {
-          "name": "user_totp_user_id_users_id_fk",
-          "tableFrom": "user_totp",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -2045,19 +1469,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "amr": {
-          "name": "amr",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "authenticated_at": {
-          "name": "authenticated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -2109,213 +1520,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.webauthn_challenges": {
-      "name": "webauthn_challenges",
-      "schema": "",
-      "columns": {
-        "challenge_hash": {
-          "name": "challenge_hash",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "challenge": {
-          "name": "challenge",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "purpose": {
-          "name": "purpose",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "binding_hash": {
-          "name": "binding_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "webauthn_challenges_expires_at_index": {
-          "name": "webauthn_challenges_expires_at_index",
-          "columns": [
-            {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "webauthn_challenges_user_id_users_id_fk": {
-          "name": "webauthn_challenges_user_id_users_id_fk",
-          "tableFrom": "webauthn_challenges",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.webauthn_credentials": {
-      "name": "webauthn_credentials",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "credential_id": {
-          "name": "credential_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "public_key": {
-          "name": "public_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "counter": {
-          "name": "counter",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "transports": {
-          "name": "transports",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::text[]"
-        },
-        "device_type": {
-          "name": "device_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "backed_up": {
-          "name": "backed_up",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_used_at": {
-          "name": "last_used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "webauthn_credentials_user_id_index": {
-          "name": "webauthn_credentials_user_id_index",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "webauthn_credentials_user_id_users_id_fk": {
-          "name": "webauthn_credentials_user_id_users_id_fk",
-          "tableFrom": "webauthn_credentials",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "webauthn_credentials_credentialId_unique": {
-          "name": "webauthn_credentials_credentialId_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "credential_id"
-          ]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

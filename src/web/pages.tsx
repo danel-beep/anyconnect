@@ -329,3 +329,33 @@ export const HomePage: FC<{ t: Translate; lang: string; view: HomeView }> = ({ t
     </div>
   </Layout>
 );
+
+export interface ConnectedView {
+  service: string;
+  label: string;
+  created: boolean;
+  identity?: string | undefined;
+  /** Set when the connection test failed. */
+  problem?: string | undefined;
+  returnTo: string;
+}
+
+export const ConnectedPage: FC<{ t: Translate; lang: string; view: ConnectedView }> = ({ t, lang, view }) => (
+  <Layout title={t('connect.doneTitle')} narrow lang={lang}>
+    <div class="card">
+      <h1>{t('connect.doneTitle')}</h1>
+      <p>
+        {t(view.created ? 'connect.created' : 'connect.reconnected', {
+          service: view.service,
+          label: view.label,
+        })}
+      </p>
+      {view.identity ? <p>{t('connect.identity', { identity: view.identity })}</p> : null}
+      {view.problem ? <p class="muted">{t('connect.testFailed', { message: view.problem })}</p> : null}
+      <p class="muted small">{t('connect.aiHint')}</p>
+      <p>
+        <a href={view.returnTo}>{t('error.back')}</a>
+      </p>
+    </div>
+  </Layout>
+);
