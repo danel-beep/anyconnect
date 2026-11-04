@@ -13,7 +13,7 @@ import type { LookupAddress, LookupOptions } from 'node:dns';
 import { z } from 'zod';
 import type { CapabilityId } from './capabilities.js';
 
-export type { CapabilityId } from './capabilities.js';
+export type { CapabilityId, CapabilityInput, CapabilityOutput } from './capabilities.js';
 export * from './shape.js';
 
 export type JsonSchema = Record<string, unknown>;

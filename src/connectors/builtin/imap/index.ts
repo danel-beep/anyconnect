@@ -1,0 +1,453 @@
+import net from 'node:net';
+import type { ImapFlow } from 'imapflow';
+import type Mail from 'nodemailer/lib/mailer/index.js';
+import { z } from 'zod';
+import { type AccountContext, ConnectorError, defineConnector } from '../../sdk.js';
+import { day, dayAfter, mailRead, mailSearch, mailSend } from '../email/capability.js';
+import {
+  Addresses,
+  buildForward,
+  buildReply,
+  composeMessage,
+  envelopeRecipients,
+  parseRaw,
+  ReadOptions,
+  readResult,
+  threadingHeaders,
+} from '../email/message.js';
+import { type ImapLogin, ImapPool, type ResolveHost, toConnectorError } from './connection.js';
+import {
+  decodeId,
+  encodeId,
+  FOLDER_ROLES,
+  fetchMessage,
+  fetchRaw,
+  groupIds,
+  resolveFolder,
+  roleOf,
+  searchFolder,
+  toSearchObject,
+} from './mailbox.js';
+import { guessProvider, PROVIDER_IDS, PROVIDERS, type Security, type ServerSettings } from './presets.js';
+import { sendRaw } from './smtp.js';
+
+const security = z.enum(['tls', 'starttls']);
+
+const Config = z
+  .object({
+    email: z.email().describe('Mailbox address, e.g. me@yandex.ru'),
+    provider: z
+      .enum(PROVIDER_IDS)
+      .optional()
+      .describe('Mail provider; guessed from the address when empty. "custom" requires the server fields'),
+    fromName: z.string().trim().max(100).optional().describe('Sender name shown to recipients'),
+    username: z.string().trim().max(200).optional().describe('Login, if it differs from the address'),
+    imapHost: z.string().trim().max(253).optional().describe('IMAP server (overrides the provider)'),
+    imapPort: z.number().int().min(1).max(65535).optional(),
+    imapSecurity: security.optional().describe('tls (port 993) or starttls (port 143)'),
+    smtpHost: z.string().trim().max(253).optional().describe('SMTP server (overrides the provider)'),
+    smtpPort: z.number().int().min(1).max(65535).optional(),
+    smtpSecurity: security.optional().describe('tls (port 465) or starttls (port 587)'),
+    allowInvalidCertificate: z
+      .boolean()
+      .default(false)
+      .describe('Accept a self-signed server certificate (self-hosted servers, Proton Mail Bridge only)'),
+    saveSentCopy: z
+      .boolean()
+      .optional()
+      .describe('Save a copy of sent mail to the Sent folder; the default depends on the provider'),
+  })
+  .superRefine((config, ctx) => {
+    const provider = config.provider ?? guessProvider(config.email);
+    if (provider !== 'custom') return;
+    if (!config.imapHost)
+      ctx.addIssue({ code: 'custom', path: ['imapHost'], message: 'required for a custom provider' });
+    if (!config.smtpHost)
+      ctx.addIssue({ code: 'custom', path: ['smtpHost'], message: 'required for a custom provider' });
+  });
+
+const Credentials = z.object({
+  password: z
+    .string()
+    .min(1)
+    .describe('App password of the mailbox (or the regular password if the provider allows it)'),
+  smtpPassword: z.string().min(1).optional().describe('Only if SMTP uses a different password'),
+});
+
+type ConfigT = z.output<typeof Config>;
+type CredentialsT = z.output<typeof Credentials>;
+type Ctx = AccountContext<ConfigT, CredentialsT>;
+
+interface ResolvedSettings {
+  imap: ServerSettings;
+  smtp: ServerSettings;
+  saveSentCopy: boolean;
+}
+
+export function resolveSettings(config: ConfigT): ResolvedSettings {
+  const provider = config.provider ?? guessProvider(config.email);
+  const preset = provider === 'custom' ? undefined : PROVIDERS[provider];
+  const server = (
+    host: string | undefined,
+    port: number | undefined,
+    sec: Security | undefined,
+    fallback: ServerSettings | undefined,
+    defaults: { tls: number; starttls: number },
+  ): ServerSettings => {
+    const chosen = sec ?? fallback?.security ?? 'tls';
+    return {
+      host: host ?? fallback?.host ?? '',
+      port: port ?? (host ? defaults[chosen] : fallback?.port) ?? defaults[chosen],
+      security: chosen,
+    };
+  };
+  return {
+    imap: server(config.imapHost, config.imapPort, config.imapSecurity, preset?.imap, {
+      tls: 993,
+      starttls: 143,
+    }),
+    smtp: server(config.smtpHost, config.smtpPort, config.smtpSecurity, preset?.smtp, {
+      tls: 465,
+      starttls: 587,
+    }),
+    saveSentCopy: config.saveSentCopy ?? !(preset?.savesSentCopy ?? false),
+  };
+}
+
+/**
+ * Resolves the configured server under the hub's network policy (no private addresses in the
+ * cloud). The connector then connects to the returned address, so the check cannot be bypassed by
+ * DNS rebinding; the hostname is still used for TLS verification.
+ */
+function hostResolver(ctx: Ctx): ResolveHost {
+  return (hostname) => {
+    if (net.isIP(hostname.replace(/^\[|\]$/g, ''))) {
+      ctx.network.assertHostAllowed(hostname);
+      return Promise.resolve(hostname);
+    }
+    return new Promise((resolve, reject) =>
+      ctx.network.lookup(hostname, { all: true }, (error, addresses) => {
+        if (error) return reject(error);
+        const first = Array.isArray(addresses) ? addresses[0]?.address : addresses;
+        if (!first) return reject(new Error(`${hostname} has no address`));
+        resolve(first);
+      }),
+    );
+  };
+}
+
+const pool = new ImapPool();
+
+/** Closes pooled IMAP connections (used by tests and on shutdown). */
+export const closeImapConnections = () => pool.closeAll();
+
+function imapLogin(ctx: Ctx): ImapLogin {
+  return {
+    server: resolveSettings(ctx.config).imap,
+    user: ctx.config.username || ctx.config.email,
+    password: ctx.credentials.password,
+    allowInvalidCertificate: ctx.config.allowInvalidCertificate,
+  };
+}
+
+async function withImap<T>(ctx: Ctx, fn: (client: ImapFlow) => Promise<T>): Promise<T> {
+  try {
+    return await pool.use(ctx.account.id, imapLogin(ctx), hostResolver(ctx), fn);
+  } catch (error) {
+    throw toConnectorError(error, 'IMAP');
+  }
+}
+
+const sender = (ctx: Ctx) =>
+  ctx.config.fromName ? { name: ctx.config.fromName, address: ctx.config.email } : ctx.config.email;
+
+/** Sends a composed message over SMTP and, if the provider does not do it itself, saves it to Sent. */
+async function deliver(ctx: Ctx, mail: Mail.Options): Promise<Record<string, unknown>> {
+  const settings = resolveSettings(ctx.config);
+  const raw = await composeMessage({ ...mail, from: sender(ctx) });
+  const envelope = { from: ctx.config.email, to: envelopeRecipients(mail) };
+  const result = await sendRaw(
+    {
+      server: settings.smtp,
+      user: ctx.config.username || ctx.config.email,
+      password: ctx.credentials.smtpPassword ?? ctx.credentials.password,
+      allowInvalidCertificate: ctx.config.allowInvalidCertificate,
+    },
+    hostResolver(ctx),
+    envelope,
+    raw,
+  );
+  let savedTo: string | undefined;
+  if (settings.saveSentCopy) {
+    savedTo = await withImap(ctx, async (client) => {
+      const sent = await resolveFolder(client, 'sent').catch(() => undefined);
+      if (!sent) return undefined;
+      await client.append(sent, raw, ['\\Seen']);
+      return sent;
+    }).catch((error) => {
+      ctx.logger.warn({ err: (error as Error).message }, 'could not save the sent copy');
+      return undefined;
+    });
+  }
+  return {
+    sent: true,
+    ...(result.messageId ? { messageId: result.messageId } : {}),
+    accepted: result.accepted,
+    ...(result.rejected.length ? { rejected: result.rejected } : {}),
+    ...(savedTo ? { savedTo } : {}),
+  };
+}
+
+const MessageId = z.string().min(3).max(500).describe('Message id from imap_search, e.g. "INBOX:4521"');
+const Folder = z
+  .string()
+  .trim()
+  .min(1)
+  .max(500)
+  .describe(`Folder role (${FOLDER_ROLES.join(', ')}) or a folder path from imap_list_folders`);
+
+export default defineConnector({
+  id: 'imap',
+  name: 'Email (IMAP/SMTP)',
+  description:
+    'Any mailbox over IMAP/SMTP: Gmail, Yandex, Mail.ru, iCloud, Outlook, Fastmail, corporate mail. Search, read, send, reply, forward, move and flag messages.',
+  version: '1.0.0',
+  homepage: 'https://datatracker.ietf.org/doc/html/rfc9051',
+  instructions:
+    'Message ids look like "INBOX:4521" (folder:uid). imap_search returns newest first with a short snippet; call imap_read only for messages you need in full. Folders accept roles: inbox, sent, drafts, trash, junk, archive, all. To delete, move to "trash".',
+  config: Config,
+  credentials: Credentials,
+  async test(ctx) {
+    const status = await withImap(ctx, async (client) => client.status('INBOX', { messages: true }));
+    const count = status ? (status.messages ?? 0) : 0;
+    return { ok: true, identity: ctx.config.email, message: `INBOX: ${count} messages` };
+  },
+  actions: (action) => [
+    action({
+      name: 'list_folders',
+      title: 'List folders',
+      description: 'Lists mail folders with their role (inbox, sent, trash, ...) and message/unread counts.',
+      input: z.object({}),
+      hints: { readOnly: true, idempotent: true },
+      run: (_input, ctx) =>
+        withImap(ctx, async (client) => {
+          const folders = await client.list({ statusQuery: { messages: true, unseen: true } });
+          return {
+            folders: folders
+              .filter((f) => !f.flags.has('\\Noselect') && !f.flags.has('\\NonExistent'))
+              .map((f) => {
+                const role = roleOf(f);
+                return {
+                  path: f.path,
+                  ...(role ? { role } : {}),
+                  ...(f.status?.messages !== undefined ? { messages: f.status.messages } : {}),
+                  ...(f.status?.unseen ? { unread: f.status.unseen } : {}),
+                };
+              }),
+          };
+        }),
+    }),
+    action({
+      name: 'search',
+      title: 'Search mail',
+      description:
+        'Finds messages in one folder, newest first. Returns id, date, from, subject, snippet, unread flag. Combine filters; all are optional.',
+      input: z.object({
+        folder: Folder.default('inbox'),
+        query: z
+          .string()
+          .trim()
+          .max(500)
+          .optional()
+          .describe('Text in subject, body or addresses. On Gmail, full Gmail search syntax works'),
+        from: z.string().trim().max(320).optional().describe('Sender address or name contains'),
+        to: z.string().trim().max(320).optional().describe('Recipient address or name contains'),
+        subject: z.string().trim().max(500).optional().describe('Subject contains'),
+        since: z.iso.date().optional().describe('Received on or after (YYYY-MM-DD)'),
+        before: z.iso.date().optional().describe('Received before (YYYY-MM-DD)'),
+        unread: z.boolean().optional().describe('true: only unread; false: only read'),
+        flagged: z.boolean().optional().describe('true: only starred/flagged'),
+        limit: z.number().int().min(1).max(50).default(15),
+        cursor: z.string().max(20).optional().describe('nextCursor from the previous page'),
+      }),
+      hints: { readOnly: true, idempotent: true },
+      capability: mailSearch((input) => ({
+        folder: input.folder ?? 'inbox',
+        query: input.query,
+        from: input.from,
+        to: input.to,
+        ...(input.since ? { since: day(input.since) } : {}),
+        ...(input.until ? { before: dayAfter(input.until) } : {}),
+        ...(input.unread_only ? { unread: true } : {}),
+        limit: input.limit,
+      })),
+      run: ({ folder, limit, cursor, ...filters }, ctx) =>
+        withImap(ctx, async (client) => {
+          const path = await resolveFolder(client, folder);
+          const gmail = client.capabilities.has('X-GM-EXT-1');
+          return searchFolder(client, path, toSearchObject(filters, gmail), {
+            limit,
+            cursor,
+            snippets: true,
+          });
+        }),
+    }),
+    action({
+      name: 'read',
+      title: 'Read message',
+      description:
+        'Returns one message as plain text (HTML converted, quoted history removed by default) with headers and the attachment list.',
+      input: z.object({ id: MessageId, ...ReadOptions }),
+      hints: { readOnly: true, idempotent: true },
+      capability: mailRead,
+      run: ({ id, maxChars, includeQuoted }, ctx) =>
+        withImap(ctx, async (client) => {
+          const { folder, uid } = decodeId(id);
+          const { parsed, flags } = await fetchMessage(client, folder, uid);
+          return readResult(parsed, { id, maxChars, includeQuoted, unread: !flags.has('\\Seen') });
+        }),
+    }),
+    action({
+      name: 'send',
+      title: 'Send email',
+      description: 'Sends a new email from this mailbox. The body is plain text.',
+      input: z.object({
+        to: Addresses.min(1),
+        cc: Addresses.optional(),
+        bcc: Addresses.optional(),
+        subject: z.string().trim().max(998).default('').describe('Default for replies: Re: original subject'),
+        body: z.string().max(200_000).describe('Plain-text body'),
+        replyToId: MessageId.optional().describe('Send as a reply in the thread of this message'),
+      }),
+      hints: { readOnly: false, destructive: false, idempotent: false },
+      risk: 'write',
+      capability: mailSend,
+      run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
+        let threading: Mail.Options = {};
+        if (replyToId) {
+          const { folder, uid } = decodeId(replyToId);
+          const { parsed } = await withImap(ctx, (client) => fetchMessage(client, folder, uid));
+          threading = threadingHeaders(parsed);
+        }
+        return deliver(ctx, { ...threading, to, cc, bcc, ...(subject ? { subject } : {}), text: body });
+      },
+    }),
+    action({
+      name: 'reply',
+      title: 'Reply',
+      description:
+        'Replies to a message in the same thread (sets Re:, In-Reply-To and References). replyAll also copies the other recipients.',
+      input: z.object({
+        id: MessageId,
+        body: z.string().max(200_000).describe('Plain-text reply, without the quoted original'),
+        replyAll: z.boolean().default(false),
+        cc: Addresses.optional().describe('Extra recipients in copy'),
+      }),
+      hints: { readOnly: false, destructive: false, idempotent: false },
+      risk: 'write',
+      run: async ({ id, body, replyAll, cc }, ctx) => {
+        const { folder, uid } = decodeId(id);
+        const original = await withImap(ctx, (client) => fetchMessage(client, folder, uid));
+        const reply = buildReply(original.parsed, { me: ctx.config.email, body, replyAll, cc });
+        const result = await deliver(ctx, reply);
+        await withImap(ctx, async (client) => {
+          const lock = await client.getMailboxLock(folder);
+          try {
+            await client.messageFlagsAdd(String(uid), ['\\Answered'], { uid: true });
+          } finally {
+            lock.release();
+          }
+        }).catch(() => {});
+        return { ...result, to: reply.to, ...(reply.cc ? { cc: reply.cc } : {}) };
+      },
+    }),
+    action({
+      name: 'forward',
+      title: 'Forward',
+      description:
+        'Forwards a message with all its attachments (attached as the original email) and an optional note.',
+      input: z.object({
+        id: MessageId,
+        to: Addresses.min(1),
+        body: z.string().max(200_000).default('').describe('Note above the forwarded message'),
+      }),
+      hints: { readOnly: false, destructive: false, idempotent: false },
+      risk: 'write',
+      run: async ({ id, to, body }, ctx) => {
+        const { folder, uid } = decodeId(id);
+        const raw = await withImap(ctx, (client) => fetchRaw(client, folder, uid));
+        const parsed = await parseRaw(raw);
+        return deliver(ctx, buildForward(raw, parsed.subject, { to, body }));
+      },
+    }),
+    action({
+      name: 'move',
+      title: 'Move messages',
+      description: 'Moves messages to another folder: archive, trash (delete), junk or any folder path.',
+      input: z.object({
+        ids: z.array(MessageId).min(1).max(200),
+        to: Folder,
+      }),
+      hints: { readOnly: false, destructive: false, idempotent: true },
+      // Moving to trash is restorable until the server empties it.
+      risk: 'write',
+      run: ({ ids, to }, ctx) =>
+        withImap(ctx, async (client) => {
+          const destination = await resolveFolder(client, to);
+          const moved: Record<string, string> = {};
+          for (const [folder, uids] of groupIds(ids)) {
+            if (folder === destination) continue;
+            const lock = await client.getMailboxLock(folder);
+            try {
+              const result = (await client.messageMove(uids, destination, { uid: true })) || undefined;
+              if (result?.uidMap) {
+                for (const [from, next] of result.uidMap)
+                  moved[encodeId(folder, from)] = encodeId(destination, next);
+              }
+            } finally {
+              lock.release();
+            }
+          }
+          return {
+            moved: ids.length,
+            to: destination,
+            ...(Object.keys(moved).length ? { newIds: moved } : {}),
+          };
+        }),
+    }),
+    action({
+      name: 'mark',
+      title: 'Mark messages',
+      description: 'Marks messages as read/unread and/or flagged (starred)/unflagged.',
+      input: z.object({
+        ids: z.array(MessageId).min(1).max(500),
+        read: z.boolean().optional(),
+        flagged: z.boolean().optional(),
+      }),
+      hints: { readOnly: false, destructive: false, idempotent: true },
+      risk: 'write',
+      run: ({ ids, read, flagged }, ctx) => {
+        if (read === undefined && flagged === undefined) {
+          throw new ConnectorError('invalid_input', 'Pass "read" and/or "flagged".');
+        }
+        return withImap(ctx, async (client) => {
+          for (const [folder, uids] of groupIds(ids)) {
+            const lock = await client.getMailboxLock(folder);
+            try {
+              const apply = async (flag: string, on: boolean | undefined) => {
+                if (on === undefined) return;
+                if (on) await client.messageFlagsAdd(uids, [flag], { uid: true });
+                else await client.messageFlagsRemove(uids, [flag], { uid: true });
+              };
+              await apply('\\Seen', read);
+              await apply('\\Flagged', flagged);
+            } finally {
+              lock.release();
+            }
+          }
+          return { updated: ids.length };
+        });
+      },
+    }),
+  ],
+});
