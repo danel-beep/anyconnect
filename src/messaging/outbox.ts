@@ -2,8 +2,8 @@ import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import type { OutboundJob } from '../connectors/messaging.js';
 import type { Db } from '../db/client.js';
 import { messengerChats, messengerOutbox, type OutboxStatus } from '../db/schema.js';
-import type { SecretBox } from '../lib/crypto.js';
 import { newId } from '../lib/ids.js';
+import type { CipherSource } from './ciphers.js';
 import type { MessengerKeys } from './keys.js';
 import type { ChatInfo } from './store.js';
 
@@ -37,7 +37,7 @@ export interface ClaimedJob {
 export class Outbox {
   constructor(
     private readonly db: Db,
-    private readonly secrets: SecretBox,
+    private readonly ciphers: CipherSource,
     private readonly keys: MessengerKeys,
   ) {}
 
@@ -48,6 +48,7 @@ export class Outbox {
     payload: OutboxPayload;
     newContact?: boolean;
   }): Promise<{ row: OutboxRow; deduplicated: boolean }> {
+    const cipher = await this.ciphers.forAccount(input.accountId);
     const contentKey = this.keys.lookupKey(
       input.accountId,
       'outbox',
@@ -86,7 +87,7 @@ export class Outbox {
           accountId: input.accountId,
           chatId: input.chatId,
           kind: input.kind,
-          payloadEncrypted: this.secrets.encryptJson(input.payload, payloadContext(id)),
+          payloadEncrypted: cipher.encryptJson(input.payload, payloadContext(id)),
           contentKey,
           newContact: input.newContact ?? false,
         })
@@ -157,14 +158,15 @@ export class Outbox {
   }
 
   private async toJob(row: OutboxRow): Promise<OutboundJob> {
-    const payload = this.secrets.decryptJson<OutboxPayload>(row.payloadEncrypted, payloadContext(row.id));
+    const cipher = await this.ciphers.forAccount(row.accountId);
+    const payload = cipher.decryptJson<OutboxPayload>(row.payloadEncrypted, payloadContext(row.id));
     const [chat] = await this.db
       .select()
       .from(messengerChats)
       .where(eq(messengerChats.id, row.chatId))
       .limit(1);
     if (!chat) throw new Error(`chat ${row.chatId} of job ${row.id} is missing`);
-    const info = this.secrets.decryptJson<ChatInfo>(chat.infoEncrypted, `messenger:chat:${chat.id}`);
+    const info = cipher.decryptJson<ChatInfo>(chat.infoEncrypted, `messenger:chat:${chat.id}`);
     return {
       id: row.id,
       attempt: row.attempts,

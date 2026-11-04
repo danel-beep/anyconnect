@@ -51,12 +51,14 @@ export function createGatewayRuntime(
   const port: MessagingPort = { forAccount: (id) => messaging!.service.forAccount(id) };
   const builtin: BuiltinDeps = { messaging: port };
   const connectors = options.connectors ? options.connectors(builtin) : createBuiltinRegistry(builtin);
-  const accounts = new AccountService(db, connectors, new AccountKeyring(secrets, secrets), network);
+  const keyring = new AccountKeyring(secrets, secrets);
+  const accounts = new AccountService(db, connectors, keyring, network);
   messaging = createMessaging({
     publicUrl: config.publicUrl,
     gatewayConfig: undefined,
     db,
     secrets,
+    keyring,
     accounts,
     connectors,
     builtin: connectors,
@@ -71,7 +73,6 @@ export function createGatewayRuntime(
   const host = new SessionHost(
     {
       db,
-      secrets,
       accounts,
       connectors,
       messaging,

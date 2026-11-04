@@ -235,6 +235,7 @@ export function createServices(
     gatewayConfig: config.gateway,
     db,
     secrets,
+    keyring,
     accounts,
     connectors,
     builtin,

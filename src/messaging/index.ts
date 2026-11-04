@@ -1,9 +1,11 @@
 import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registry.js';
+import type { AccountKeyring } from '../core/account-keys.js';
 import type { AccountService } from '../core/accounts.js';
 import type { Db } from '../db/client.js';
 import type { SecretBox } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
 import { MessengerAccounts } from './accounts.js';
+import { AccountCiphers } from './ciphers.js';
 import { DirectDeliveryExecutor } from './direct-executor.js';
 import { Dispatcher } from './dispatcher.js';
 import { type GatewayApi, HttpGatewayClient } from './gateway-client.js';
@@ -15,6 +17,8 @@ import { MessageStore } from './store.js';
 /** The hub's messaging subsystem, wired once (see docs/MESSENGERS.md). */
 export interface Messaging {
   keys: MessengerKeys;
+  /** Per-account encryption of stored chats, messages, outbox jobs and session state. */
+  ciphers: AccountCiphers;
   store: MessageStore;
   outbox: Outbox;
   accounts: MessengerAccounts;
@@ -35,7 +39,9 @@ export function createMessaging(deps: {
   /** The gateway's internal API, when deployed. */
   gatewayConfig: { url: string; token: string } | undefined;
   db: Db;
+  /** Wraps the per-account data keys (data_keys for blind indexes stays on the master key). */
   secrets: SecretBox;
+  keyring: AccountKeyring;
   accounts: AccountService;
   /** Resolves connectors of a workspace (built-in and custom). */
   connectors: ConnectorResolver;
@@ -47,8 +53,9 @@ export function createMessaging(deps: {
 }): Messaging {
   const { db, secrets, logger } = deps;
   const keys = new MessengerKeys(new DataKeys(db, secrets));
-  const store = new MessageStore(db, secrets, keys);
-  const outbox = new Outbox(db, secrets, keys);
+  const ciphers = new AccountCiphers(db, deps.keyring);
+  const store = new MessageStore(db, ciphers, keys);
+  const outbox = new Outbox(db, ciphers, keys);
   const messengerAccounts = new MessengerAccounts(db);
   const gateway =
     deps.gateway ??
@@ -95,6 +102,7 @@ export function createMessaging(deps: {
   const ready = dispatcher;
   return {
     keys,
+    ciphers,
     store,
     outbox,
     accounts: messengerAccounts,
