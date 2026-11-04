@@ -549,7 +549,8 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
                 </span>
               </div>
               <div class="node">
-                <BrandIcon slug="googlecalendar" /> Google Calendar
+                <BrandIcon slug="googlecalendar" />{' '}
+                {ctx.lang === 'ru' ? 'Google Календарь' : 'Google Calendar'}
                 <span class="accs">
                   <span class="acc">team</span>
                 </span>

@@ -135,38 +135,41 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
           </div>
         </div>
       </div>
-      <div class="grid-3">
-        <div class="card">
-          <h2>{t('admin.plans')}</h2>
-          <div class="top-list">
-            {view.plans.map((p) => (
-              <div class="bar">
-                <span class="name">{planName(ctx, p.planId)}</span>
-                <div class="meter">
-                  <span class={pctClass('w', p.n, Math.max(1, view.users.total))} />
-                </div>
-                <span class="num small">{p.n}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div class="card">
-          <h2>{t('admin.connectors')}</h2>
-          {view.byConnector.length === 0 ? (
-            <p class="muted">—</p>
-          ) : (
+      <div class="grid-2">
+        {/* The two short lists stack, so they line up with the longer list of new users. */}
+        <div class="stack-cards">
+          <div class="card">
+            <h2>{t('admin.plans')}</h2>
             <div class="top-list">
-              {view.byConnector.map((c) => (
+              {view.plans.map((p) => (
                 <div class="bar">
-                  <span class="name">{c.name}</span>
+                  <span class="name">{planName(ctx, p.planId)}</span>
                   <div class="meter">
-                    <span class={pctClass('w', c.n, maxConn)} />
+                    <span class={pctClass('w', p.n, Math.max(1, view.users.total))} />
                   </div>
-                  <span class="num small">{c.n}</span>
+                  <span class="num small">{p.n}</span>
                 </div>
               ))}
             </div>
-          )}
+          </div>
+          <div class="card">
+            <h2>{t('admin.connectors')}</h2>
+            {view.byConnector.length === 0 ? (
+              <p class="muted">—</p>
+            ) : (
+              <div class="top-list">
+                {view.byConnector.map((c) => (
+                  <div class="bar">
+                    <span class="name">{c.name}</span>
+                    <div class="meter">
+                      <span class={pctClass('w', c.n, maxConn)} />
+                    </div>
+                    <span class="num small">{c.n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div class="card">
           <div class="card-head">
@@ -899,7 +902,7 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
         <ul class="plain pad-x">
           {view.checks.map((c) => (
             <li>
-              <span class="row">
+              <span class="check-label">
                 <span class={`dot ${c.ok ? 'ok' : 'bad'}`} />
                 <strong>{c.label}</strong>
               </span>

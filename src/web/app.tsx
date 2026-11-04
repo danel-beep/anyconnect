@@ -251,9 +251,11 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
   ctx,
   calls,
   empty,
-  withClient,
-}) =>
-  calls.length === 0 ? (
+  withClient: wantClient,
+}) => {
+  // The app column only when some row has an app (calls from the dashboard or old tokens have none).
+  const withClient = wantClient && calls.some((call) => call.client);
+  return calls.length === 0 ? (
     <p class="muted pad-x">{empty}</p>
   ) : (
     <div class="table-wrap">
@@ -277,7 +279,9 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
                     <code>{call.toolName}</code>
                   </span>
                 </td>
-                {withClient ? <td class="small client">{call.client ?? '—'}</td> : null}
+                {withClient ? (
+                  <td class={`small client${call.client ? '' : ' empty'}`}>{call.client ?? '—'}</td>
+                ) : null}
                 <td class="status">
                   <CallStatus t={ctx.t} call={call} />
                 </td>
@@ -291,6 +295,7 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
       </table>
     </div>
   );
+};
 
 const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx, usage, extra }) => {
   const { t, lang } = ctx;

@@ -213,7 +213,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'security.reauthNeeded': 'Чтобы изменить эти настройки, сначала подтвердите вход (нужно раз в 10 минут).',
   'security.reauth': 'Подтвердить вход',
   'security.required':
-    'На этом хабе обязателен второй фактор. Настройте приложение-аутентификатор или passkey, чтобы продолжить.',
+    'Здесь обязателен второй фактор. Настройте приложение-аутентификатор или ключ доступа, чтобы продолжить.',
   'security.continue': 'Продолжить',
   'security.on': 'Включено',
   'security.off': 'Выключено',
@@ -231,11 +231,11 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'security.totpInvalid': 'Код не подошёл. Проверьте время на телефоне и попробуйте ещё раз.',
   'security.recovery': 'Коды восстановления',
   'security.recoveryHint':
-    'Каждый код срабатывает один раз — на случай, если вы потеряете аутентификатор или passkey.',
+    'Каждый код срабатывает один раз — на случай, если вы потеряете аутентификатор или ключ доступа.',
   'security.recoveryLeft': 'Неиспользованных: {count} из 10',
   'security.recoveryNone': 'Неиспользованных кодов не осталось — создайте новые.',
   'security.recoveryRegenerate': 'Создать новые коды',
-  'security.recoveryNeedsFactor': 'Станут доступны после настройки аутентификатора или passkey.',
+  'security.recoveryNeedsFactor': 'Станут доступны после настройки аутентификатора или ключа доступа.',
   'security.passkeys': 'Ключи доступа (passkey)',
   'security.passkeysHint': 'Вход по Face ID, Touch ID, Windows Hello или аппаратному ключу — без пароля.',
   'security.passkeysNone': 'Ключей доступа пока нет.',

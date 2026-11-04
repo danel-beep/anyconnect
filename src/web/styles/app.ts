@@ -142,7 +142,7 @@ ul.plain.pad-x{padding:0 24px 6px}
 .choice input{margin-top:3px;width:auto}
 .choice span{display:flex;flex-direction:column;gap:2px}
 .rule-list{display:flex;flex-direction:column}
-.rule-row{display:grid;grid-template-columns:minmax(0,1fr) 250px 250px auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
+.rule-row{display:grid;grid-template-columns:minmax(0,1fr) 290px 290px auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
 .rule-row:first-child{border-top:0}
 .rule-row label{margin:0 0 4px;display:block}
 @media (max-width:760px){.rule-row{grid-template-columns:1fr 1fr}.rule-row .grow{grid-column:1/-1}}
@@ -162,4 +162,9 @@ ul.plain.pad-x{padding:0 24px 6px}
   table.calls td.status{grid-column:2;grid-row:1}
   table.calls td.when{grid-column:1/-1}
 }
+.check-label{display:flex;gap:8px;align-items:baseline}.check-label .dot{flex:none;transform:translateY(-1px)}
+.acc .ops form.inline{margin:0;display:inline-flex}
+.menu>summary:has(.menu-label){height:32px;color:var(--text)}
+@media (max-width:640px){table.calls td.client.empty{display:none}}
+.stack-cards{display:flex;flex-direction:column;gap:16px}.stack-cards>.card{margin:0}
 `;
