@@ -46,7 +46,15 @@ d.addEventListener('submit',function(e){var f=e.target,msg=f.getAttribute&&f.get
 
 /* Dropdown menus: one open at a time, close on outside click or Escape */
 var menus=$$('details[data-menu]');
-menus.forEach(function(m){m.addEventListener('toggle',function(){if(m.open)menus.forEach(function(o){if(o!==m)o.open=false})})});
+/* The open menu floats above the page (position:fixed), so no card or scroll box clips it: it sits under
+   its button, opens upwards when there is no room below and stays inside the window. */
+function placeMenu(m){var pop=m.querySelector('.menu-pop'),s=m.querySelector('summary');if(!pop||!s)return;
+pop.classList.add('floating');pop.style.left='0px';pop.style.top='0px';var r=s.getBoundingClientRect(),vw=root.clientWidth,vh=window.innerHeight,w=pop.offsetWidth,h=pop.offsetHeight,gap=6;
+var below=vh-r.bottom-gap,above=r.top-gap,top=(h<=below||below>=above)?r.bottom+gap:r.top-gap-h;
+pop.style.left=Math.max(8,Math.min(r.right-w,vw-w-8))+'px';pop.style.top=Math.max(8,Math.min(top,vh-h-8))+'px'}
+function placeOpen(){menus.forEach(function(m){if(m.open)placeMenu(m)})}
+menus.forEach(function(m){m.addEventListener('toggle',function(){if(m.open){menus.forEach(function(o){if(o!==m)o.open=false});placeMenu(m)}})});
+window.addEventListener('resize',placeOpen);window.addEventListener('scroll',placeOpen,{passive:true,capture:true});
 d.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false})});
 d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});setNav(false)});
 
