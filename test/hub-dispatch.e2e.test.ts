@@ -7,6 +7,8 @@ import type { Catalog } from '../src/hub/catalog-types.js';
 import type { ToolCallResult } from '../src/hub/result.js';
 import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
 
+/** Whether each executed unit could ask the user in the chat. */
+const asked: boolean[] = [];
 const sent: Array<{ service: string; account: string; chat: string; text: string }> = [];
 
 /** A small messenger: two of them make the unified `messages_*` tools appear. */
@@ -68,6 +70,12 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
         .register(messenger('alpha', '2026-11-02'))
         .register(messenger('beta', '2026-11-03')),
       seed: false,
+      stages: {
+        confirm: (call, next) => {
+          asked.push(Boolean(call.interaction));
+          return next();
+        },
+      },
       env: { TOOL_LIST_TOKEN_BUDGET: '100000' },
     });
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
@@ -168,5 +176,22 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
     const data = json(await call('anyconnect_search_tools', { query: 'send a message' }));
     expect(data.tools[0].name).toBe('messages_send');
     expect(data.tools[0].inputSchema).toBeDefined();
+  });
+
+  it('lets only a single unit ask the user in the chat', async () => {
+    const interaction = { answers: {}, canAsk: true };
+    asked.length = 0;
+    await hub.services.hub.callTool(principal, catalog, 'beta_search', { query: 'a' }, { interaction });
+    expect(asked).toEqual([true]);
+    asked.length = 0;
+    await hub.services.hub.callTool(principal, catalog, 'alpha_search', { query: 'a' }, { interaction });
+    await hub.services.hub.callTool(
+      principal,
+      catalog,
+      'anyconnect_call_tools',
+      { calls: [{ name: 'beta_search', arguments: { query: 'a' } }] },
+      { interaction },
+    );
+    expect(asked).toEqual([false, false, false]);
   });
 });

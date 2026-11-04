@@ -379,13 +379,15 @@ export class Hub {
         `Pass 1 to ${MAX_BATCH_CALLS} calls as "calls": [{ "name": ..., "arguments": {...} }].`,
       );
     }
+    // Batched calls run in parallel, so none of them may ask the user in the chat.
+    const { interaction: _ignored, ...batched } = inner;
     const results = await Promise.all(
       calls.map(async (raw) => {
         const call = argsOf(raw);
         const name = typeof call.name === 'string' ? call.name : '';
         const result = isDispatcher(name)
           ? errorResult('Nested batches are not allowed.')
-          : await this.dispatch(principal, catalog, name, argsOf(call.arguments), inner);
+          : await this.dispatch(principal, catalog, name, argsOf(call.arguments), batched);
         return {
           name,
           ok: !result.isError,
@@ -465,7 +467,8 @@ export class Hub {
       const unit = await this.unit(principal, catalog, tool, connector, action, account, parsed.data, {
         options: callOptions,
         signal: options.signal,
-        interaction: options.interaction,
+        // Several units must not each ask the user in the chat: they use the out-of-chat channels.
+        interaction: undefined,
         group,
       });
       const result = 'rejected' in unit ? unit.rejected : await this.executor.execute(unit.call);
@@ -555,7 +558,7 @@ export class Hub {
         const unit = await this.unit(principal, catalog, tool, connector, action, account, valid.data, {
           options: {},
           signal: options.signal,
-          interaction: options.interaction,
+          interaction: targets.length === 1 ? options.interaction : undefined,
           group,
         });
         if ('rejected' in unit) return { ...base, result: unit.rejected };
