@@ -48,11 +48,11 @@ function planLines(input: LlmsInput): string[] {
       const name = t(`plan.${p.id}.name` as 'plan.free.name');
       const price = p.priceMonthly === 0 ? '$0' : `$${p.priceMonthly}/month or $${p.priceYearly}/year`;
       const actions = p.limits.actions === null ? 'unlimited actions' : `${p.limits.actions} actions/month`;
-      const intro = p.intro?.limits.actions
-        ? ` (${p.intro.limits.actions} in the first ${p.intro.days} days)`
+      const trial = p.start?.trial
+        ? ` (new workspaces start with ${p.start.trial.days} days of ${t(`plan.${p.start.trial.plan}.name` as 'plan.free.name')} free)`
         : '';
       const accounts = p.limits.accounts === null ? 'unlimited accounts' : `${p.limits.accounts} accounts`;
-      return `- ${name}: ${price}; ${actions}${intro}; ${accounts}.`;
+      return `- ${name}: ${price}; ${actions}; ${accounts}${trial}.`;
     });
 }
 

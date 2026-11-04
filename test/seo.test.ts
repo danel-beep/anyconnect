@@ -165,6 +165,7 @@ describe('docs content', () => {
     const free = PLANS.find((p) => p.id === 'free')!;
     expect(facts.actions).toBe(free.limits.actions);
     expect(facts.accounts).toBe(free.limits.accounts);
+    expect(facts.trialDays).toBe(free.start?.trial.days ?? 0);
     expect(facts.from).toBe(
       `$${Math.min(...PLANS.filter((p) => p.public && p.priceMonthly > 0).map((p) => p.priceMonthly))}`,
     );
@@ -177,13 +178,13 @@ describe('docs content', () => {
     const text = t('seo.faq.free.a', {
       client: 'Claude',
       actions: 150,
-      intro: 500,
-      days: 30,
+      days: 14,
+      trialPlan: 'Pro',
       accounts: 3,
       from: '$5',
     });
     expect(text).toContain('150 действий');
-    expect(text).toContain('30 дней');
+    expect(text).toContain('14 дней тарифа «Pro»');
     expect(text).toContain('3 подключённых аккаунтов');
     expect(text).not.toMatch(/\{/);
   });

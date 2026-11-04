@@ -40,7 +40,7 @@ export const seoEn = {
 
   'seo.faq.free.q': 'Is it free to connect {client} to Manyplug?',
   'seo.faq.free.a':
-    'Yes. The free plan includes {actions} actions a month ({intro} in the first {days} days) and up to {accounts} connected accounts, with no card. Paid plans start at {from} a month.',
+    'Yes. New workspaces get {days} days of {trialPlan} free, then the free plan keeps going with {actions} actions a month and up to {accounts} connected accounts. No card needed. Paid plans start at {from} a month.',
   'seo.faq.accounts.q': 'Can {client} use several accounts of the same service?',
   'seo.faq.accounts.a':
     'Yes. Connect each account under its own name, for example Work and Personal. {client} can use one of them or search all of them at once.',
@@ -179,7 +179,7 @@ export const seoRu: Record<SeoKey, string> = {
 
   'seo.faq.free.q': 'Подключить {client} к Manyplug бесплатно?',
   'seo.faq.free.a':
-    'Да. На бесплатном тарифе {actions} {actions|действие|действия|действий} в месяц ({intro} в первые {days} {days|день|дня|дней}) и до {accounts} {accounts|подключённого аккаунта|подключённых аккаунтов|подключённых аккаунтов}, без карты. Платные тарифы — от {from} в месяц.',
+    'Да. Новое пространство получает {days} {days|день|дня|дней} тарифа «{trialPlan}» бесплатно, а дальше бесплатный тариф: {actions} {actions|действие|действия|действий} в месяц и до {accounts} {accounts|подключённого аккаунта|подключённых аккаунтов|подключённых аккаунтов}. Карта не нужна. Платные тарифы — от {from} в месяц.',
   'seo.faq.accounts.q': 'Может ли {client} пользоваться несколькими аккаунтами одного сервиса?',
   'seo.faq.accounts.a':
     'Да. Подключите каждый аккаунт под своим именем, например «Работа» и «Личный». {client} может работать с одним из них или искать сразу во всех.',

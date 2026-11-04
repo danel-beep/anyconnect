@@ -181,7 +181,7 @@ const ClientSteps: FC<{ ctx: PageCtx; guide: ClientGuide; idPrefix: string }> = 
 
 /** Questions every client page answers, with the plan's real numbers. */
 function sharedFaq(t: Translate, client: string): QA[] {
-  const vars = { client, ...planVars() };
+  const vars = { client, ...planVars((id) => t(`plan.${id}.name` as 'plan.free.name')) };
   return (['free', 'accounts', 'safety', 'keys'] as const).map((k) => ({
     q: t(`seo.faq.${k}.q`, vars),
     a: t(`seo.faq.${k}.a`, vars),

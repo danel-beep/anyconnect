@@ -7,9 +7,9 @@ import { PLANS } from '../../billing/plans.js';
 export interface PlanFacts {
   /** Actions a month on the free plan. */
   actions: number;
-  /** Actions a month during the free plan's intro period, and its length in days. */
-  intro: number;
-  days: number;
+  /** New workspaces start with a free trial of a bigger plan: its length and plan id (0 / '' without one). */
+  trialDays: number;
+  trialPlan: string;
   /** Accounts on the free plan. */
   accounts: number;
   /** The cheapest paid plan per month, e.g. "$5". */
@@ -23,17 +23,26 @@ export function planFacts(): PlanFacts {
   )[0];
   return {
     actions: free?.limits.actions ?? 0,
-    intro: free?.intro?.limits.actions ?? free?.limits.actions ?? 0,
-    days: free?.intro?.days ?? 0,
+    trialDays: free?.start?.trial.days ?? 0,
+    trialPlan: free?.start?.trial.plan ?? '',
     accounts: free?.limits.accounts ?? 0,
     from: cheapest ? `$${cheapest.priceMonthly}` : '',
   };
 }
 
-/** `planFacts` as text variables for the translator (plain numbers, so plural forms can read them). */
-export function planVars(): Record<string, string | number> {
+/**
+ * `planFacts` as text variables for the translator (plain numbers, so plural forms can read them);
+ * `trialPlan` is the plan's name in the reader's language.
+ */
+export function planVars(planName: (id: string) => string = (id) => id): Record<string, string | number> {
   const f = planFacts();
-  return { actions: f.actions, intro: f.intro, days: f.days, accounts: f.accounts, from: f.from };
+  return {
+    actions: f.actions,
+    days: f.trialDays,
+    trialPlan: f.trialPlan ? planName(f.trialPlan) : '',
+    accounts: f.accounts,
+    from: f.from,
+  };
 }
 
 /** Fills `{name}` placeholders of a content text (articles, comparisons). */
