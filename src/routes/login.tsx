@@ -74,6 +74,7 @@ const EXTERNAL_STATE_COOKIE = 'ac_login';
 /** Messages a redirect back to /login may show (`?error=`); anything else is ignored. */
 const LOGIN_ERRORS = {
   externalFailed: 'login.externalFailed',
+  externalCancelled: 'login.externalCancelled',
   expired: 'login.expired',
   suspended: 'login.refused.suspended',
   signups_closed: 'login.refused.signups_closed',
@@ -172,7 +173,12 @@ export function loginRoutes() {
     const opts = cookieOpts(c);
     const browserState = readCookie(c, EXTERNAL_STATE_COOKIE, opts);
     clearCookie(c, EXTERNAL_STATE_COOKIE, opts);
-    const back = (code: LoginError) => c.redirect(`/login?error=${code}`, 302);
+    // Back to the sign-in page, still on the way to where the user was going (e.g. an app's consent).
+    const back = (code: LoginError, next?: string) => {
+      const target = next === undefined ? '/app' : nextOf(next);
+      const query = target === '/app' ? '' : `&next=${encodeURIComponent(target)}`;
+      return c.redirect(`/login?error=${code}${query}`, 302);
+    };
     let result: { profile: ExternalProfile; next: string };
     try {
       result = await s.externalLogin.complete(
@@ -183,7 +189,8 @@ export function loginRoutes() {
     } catch (error) {
       if (!(error instanceof ExternalLoginError)) throw error;
       s.logger.warn({ provider: providerId, reason: error.message }, 'external sign-in failed');
-      return back(browserState ? 'externalFailed' : 'expired');
+      if (!browserState) return back('expired');
+      return back(error.cancelled ? 'externalCancelled' : 'externalFailed', error.next);
     }
     const next = nextOf(result.next);
     try {
@@ -199,7 +206,7 @@ export function loginRoutes() {
     } catch (error) {
       if (!(error instanceof SignInRefused)) throw error;
       s.logger.warn({ provider: providerId, reason: error.reason }, 'external sign-in refused');
-      return back(error.reason);
+      return back(error.reason, next);
     }
   });
 

@@ -11,6 +11,7 @@ import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
 import { createLogger } from '../src/logger.js';
 import { createServices, type Services } from '../src/services.js';
+import type { FakeInternet } from './e2e/fake-internet.js';
 
 export const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5432/manyplug_test';
@@ -75,6 +76,11 @@ export async function startTestHub(
     databaseUrl?: string;
     /** External sign-in providers with fake endpoints ("Sign in with Google" tests). */
     loginProviders?: OidcLoginProvider[];
+    /**
+     * All outbound traffic (connectors, provider OAuth, Google sign-in, client metadata documents)
+     * goes to these fake services instead of the network.
+     */
+    internet?: FakeInternet;
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -106,6 +112,9 @@ export async function startTestHub(
     logger: createLogger({ level: 'silent' }),
     ...(options.connectors ? { connectors: options.connectors } : {}),
     ...(options.fetchDocument ? { fetchDocument: options.fetchDocument } : {}),
+    ...(options.internet
+      ? { network: options.internet.network(), fetchDocument: options.internet.fetchDocument }
+      : {}),
     ...(options.stages ? { stages: options.stages } : {}),
     ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
     ...(options.loginProviders ? { loginProviders: options.loginProviders } : {}),
@@ -130,7 +139,14 @@ export class TestBrowser {
   /** Starts as a visitor who picked Russian with the language switch (tests assert Russian texts). */
   private readonly cookies = new Map<string, string>([['ac_lang', 'ru']]);
 
-  constructor(private readonly origin: string) {}
+  /**
+   * @param external answers pages on other sites (a provider's sign-in page in the fake internet);
+   *   without it they are fetched for real.
+   */
+  constructor(
+    private readonly origin: string,
+    private readonly external?: (request: Request) => Response | Promise<Response>,
+  ) {}
 
   async request(
     url: string,
@@ -149,7 +165,12 @@ export class TestBrowser {
       headers.origin = this.origin;
       body = JSON.stringify(init.json);
     }
-    const response = await fetch(new URL(url, this.origin), {
+    const target = new URL(url, this.origin);
+    if (target.origin !== this.origin && this.external) {
+      // Another site: no cookies of ours go there (the jar only holds this origin's cookies).
+      return this.external(new Request(target, { method: init.method ?? 'GET', redirect: 'manual' }));
+    }
+    const response = await fetch(target, {
       method: init.method ?? (body !== undefined ? 'POST' : 'GET'),
       headers,
       body,
@@ -164,6 +185,28 @@ export class TestBrowser {
       else this.cookies.set(name, value);
     }
     return response;
+  }
+
+  /**
+   * Follows redirects like a browser, across sites, until a page answers or the next location is
+   * one `stopAt` claims (an app's redirect URI). Returns the last response and its URL; `stopped`
+   * is the claimed location, not requested.
+   */
+  async walk(
+    start: string | URL,
+    stopAt: (url: URL) => boolean = () => false,
+    maxHops = 12,
+  ): Promise<{ response: Response; url: URL; stopped?: URL }> {
+    let url = new URL(start, this.origin);
+    for (let hop = 0; hop < maxHops; hop++) {
+      const response = await this.request(url.toString());
+      const location = response.headers.get('location');
+      if (response.status < 300 || response.status >= 400 || !location) return { response, url };
+      const next = new URL(location, url);
+      if (stopAt(next)) return { response, url, stopped: next };
+      url = next;
+    }
+    throw new Error(`Too many redirects from ${start.toString()}`);
   }
 
   /** Value of a cookie, by its full name. */

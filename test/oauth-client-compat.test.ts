@@ -1,104 +1,25 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { OAuthClient } from '../src/oauth/clients.js';
+import { suggestClientIdentity } from '../src/security/clients.js';
+import { AI_CLIENTS, type AiClientProfile } from './e2e/ai-clients.js';
 import { startTestHub, type TestHub } from './helpers.js';
 
 /**
  * What popular AI clients send when they connect, so that a quirk of one client (extra grant types,
- * nulls, many redirect URIs, custom URL schemes) never locks it out. Shapes are copied from the
- * clients' published metadata documents and registration requests.
+ * nulls, many redirect URIs, custom URL schemes) never locks it out. The real clients' shapes live
+ * in `e2e/ai-clients.ts` (shared with the end-to-end connection tests); odd shapes seen in the wild
+ * are added here.
  */
-const CLAUDE_DOCUMENTS: Record<string, Record<string, unknown>> = {
-  'https://claude.ai/oauth/mcp-oauth-client-metadata': {
-    client_id: 'https://claude.ai/oauth/mcp-oauth-client-metadata',
-    client_name: 'Claude',
-    client_uri: 'https://claude.ai',
-    redirect_uris: ['https://claude.ai/api/mcp/auth_callback'],
-    grant_types: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:jwt-bearer'],
-    response_types: ['code'],
-    token_endpoint_auth_method: 'none',
-  },
-  'https://claude.ai/oauth/claude-code-client-metadata': {
-    client_id: 'https://claude.ai/oauth/claude-code-client-metadata',
-    client_name: 'Claude Code',
-    client_uri: 'https://claude.ai',
-    redirect_uris: ['http://localhost/callback', 'http://127.0.0.1/callback'],
-    grant_types: ['authorization_code', 'refresh_token'],
-    response_types: ['code'],
-    token_endpoint_auth_method: 'none',
-  },
-};
-
-const REDIRECTS: Record<string, string> = {
-  'https://claude.ai/oauth/mcp-oauth-client-metadata': 'https://claude.ai/api/mcp/auth_callback',
-  'https://claude.ai/oauth/claude-code-client-metadata': 'http://localhost:54123/callback',
-};
+const DOCUMENTS = Object.fromEntries(
+  AI_CLIENTS.flatMap((c) => (c.identity.kind === 'metadata_document' ? [[c.identity.url, c]] : [])),
+) as Record<string, AiClientProfile & { identity: { kind: 'metadata_document' } }>;
 
 /** Dynamic registration requests: [name, body, redirect_uri used at /oauth/authorize]. */
 const REGISTRATIONS: [string, Record<string, unknown>, string][] = [
-  [
-    'ChatGPT',
-    {
-      client_name: 'ChatGPT',
-      redirect_uris: ['https://chatgpt.com/connector_platform_oauth_redirect'],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'client_secret_post',
-    },
-    'https://chatgpt.com/connector_platform_oauth_redirect',
-  ],
-  [
-    'VS Code',
-    {
-      client_name: 'Visual Studio Code',
-      client_uri: 'https://code.visualstudio.com',
-      grant_types: ['authorization_code', 'refresh_token', 'urn:ietf:params:oauth:grant-type:device_code'],
-      response_types: ['code'],
-      redirect_uris: [
-        'https://insiders.vscode.dev/redirect',
-        'https://vscode.dev/redirect',
-        'http://localhost',
-        'http://127.0.0.1',
-        'http://localhost:33418',
-        'http://127.0.0.1:33418',
-      ],
-      token_endpoint_auth_method: 'none',
-    },
-    'http://127.0.0.1:33418/',
-  ],
-  [
-    'Cursor',
-    {
-      client_name: 'Cursor',
-      redirect_uris: ['cursor://anysphere.cursor-retrieval/oauth/user-manyplug/callback'],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-    },
-    'cursor://anysphere.cursor-retrieval/oauth/user-manyplug/callback',
-  ],
-  [
-    'Gemini CLI',
-    {
-      client_name: 'Gemini CLI MCP Client',
-      redirect_uris: ['http://localhost:7777/oauth/callback'],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-      code_challenge_method: ['S256'],
-    },
-    'http://localhost:7777/oauth/callback',
-  ],
-  [
-    'Codex CLI',
-    {
-      client_name: 'Codex',
-      redirect_uris: ['http://127.0.0.1:41234/callback'],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-    },
-    'http://127.0.0.1:50999/callback',
-  ],
+  ...AI_CLIENTS.flatMap((c): [string, Record<string, unknown>, string][] =>
+    c.identity.kind === 'registration' ? [[c.id, c.identity.body, c.redirectUrl]] : [],
+  ),
   [
     'a client with nulls and a data: logo',
     {
@@ -122,7 +43,7 @@ describe('AI client compatibility', () => {
   beforeAll(async () => {
     hub = await startTestHub({
       fetchDocument: async (url) => {
-        const doc = CLAUDE_DOCUMENTS[url];
+        const doc = DOCUMENTS[url]?.identity.document;
         return doc
           ? { status: 200, headers: { 'cache-control': 'max-age=600' }, body: JSON.stringify(doc) }
           : { status: 404, headers: {}, body: '' };
@@ -151,8 +72,8 @@ describe('AI client compatibility', () => {
     expect(res.headers.get('location')).toContain('/login');
   }
 
-  it.each(Object.keys(CLAUDE_DOCUMENTS))('accepts the metadata document %s', async (clientId) => {
-    await expectAuthorizeAccepted(clientId, REDIRECTS[clientId]!);
+  it.each(Object.keys(DOCUMENTS))('accepts the metadata document %s', async (clientId) => {
+    await expectAuthorizeAccepted(clientId, DOCUMENTS[clientId]!.redirectUrl);
   });
 
   it.each(REGISTRATIONS)('registers %s', async (_name, body, redirectUri) => {
@@ -166,5 +87,49 @@ describe('AI client compatibility', () => {
     expect(registered.grant_types).toEqual(['authorization_code', 'refresh_token']);
     expect(registered.response_types).toEqual(['code']);
     await expectAuthorizeAccepted(registered.client_id as string, redirectUri);
+  });
+});
+
+describe('which AI client a connection belongs to', () => {
+  const clientOf = (profile: AiClientProfile) =>
+    (profile.identity.kind === 'metadata_document'
+      ? {
+          id: profile.identity.url,
+          registrationType: 'metadata_document',
+          metadata: profile.identity.document,
+        }
+      : {
+          id: 'cli_test',
+          registrationType: 'dynamic',
+          metadata: profile.identity.body,
+        }) as unknown as OAuthClient;
+
+  it.each(AI_CLIENTS.map((c) => [c.id, c] as const))('recognises %s', (_id, profile) => {
+    expect(suggestClientIdentity(clientOf(profile), profile.redirectUrl).name).toBe(profile.expectedName);
+  });
+
+  it('keeps Claude under the key its rules already use, and Claude Code apart from it', () => {
+    const [claude, code] = ['claude', 'claude-code'].map((id) => AI_CLIENTS.find((c) => c.id === id)!);
+    const web = suggestClientIdentity(clientOf(claude!), claude!.redirectUrl);
+    const cli = suggestClientIdentity(clientOf(code!), code!.redirectUrl);
+    expect(web).toEqual({ matchKey: 'app:claude', name: 'Claude', verified: true });
+    expect(cli).toEqual({
+      matchKey: 'cimd:https://claude.ai/oauth/claude-code-client-metadata',
+      name: 'Claude Code',
+      verified: true,
+    });
+  });
+
+  it('does not give a well-known name to a registered client that only claims it', () => {
+    const impostor = {
+      id: 'cli_x',
+      registrationType: 'dynamic',
+      metadata: { client_name: 'Claude', redirect_uris: ['https://evil.example/cb'] },
+    } as unknown as OAuthClient;
+    expect(suggestClientIdentity(impostor, 'https://evil.example/cb')).toEqual({
+      matchKey: 'dcr:claude@evil.example',
+      name: 'Claude',
+      verified: false,
+    });
   });
 });

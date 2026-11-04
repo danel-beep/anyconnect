@@ -861,7 +861,7 @@ export class Hub {
       }
       return normalizeResult(value);
     } catch (error) {
-      return this.handleError(error, call.tool.name, call.connector, account);
+      return this.handleError(error, call.tool.name, call.connector, account, call.principal.workspaceId);
     }
   }
 
@@ -870,6 +870,7 @@ export class Hub {
     toolName: string,
     connector: ConnectorDefinition,
     account: CatalogAccount | undefined,
+    workspaceId: string,
   ): Promise<ExecResult> {
     if (error instanceof ToolTimeoutError) {
       return errorResult(
@@ -880,8 +881,16 @@ export class Hub {
     if (account && error instanceof ConnectorError && error.kind === 'auth') {
       // Flag the account so the user sees in the panel that it must be reconnected.
       await this.deps.accounts.markStatus(account.id, 'needs_reauth', error.message).catch(() => {});
+      // Give the AI the link that repairs the account, so it can hand it to the user right away.
+      const link = await this.deps.setup?.admin
+        .connectLink(workspaceId, { service: connector.id, reconnect: account.id })
+        .catch(() => undefined);
+      const reason = error.message.replace(/[.\s]+$/, '');
       return errorResult(
-        `Authorization with ${connector.name} failed for account "${account.name}": ${error.message}. The user needs to reconnect this account.`,
+        `Authorization with ${connector.name} failed for account "${account.name}": ${reason}. ` +
+          (link
+            ? `The user needs to reconnect this account: give them this link ${link.url}`
+            : 'The user needs to reconnect this account.'),
         'auth',
       );
     }

@@ -38,12 +38,19 @@ export function suggestClientIdentity(
 ): { matchKey: string; name: string; verified: boolean } {
   const declared = client.metadata.client_name?.trim().slice(0, 100) || undefined;
   const redirect = new URL(redirectUri);
-  const cimdHost = client.registrationType === 'metadata_document' ? new URL(client.id).host : undefined;
-  const known =
-    (cimdHost ? knownClientName(cimdHost) : undefined) ??
-    (redirect.protocol === 'https:' ? knownClientName(redirect.host) : undefined);
+  if (client.registrationType === 'metadata_document') {
+    const host = new URL(client.id).host;
+    const known = knownClientName(host);
+    // The document is served from the app's own host, so its name is as trustworthy as the host.
+    // One vendor can host several apps (Claude and Claude Code on claude.ai): an app whose
+    // document names it differently from the vendor's main app is its own client, keyed by URL.
+    if (known && (!declared || declared.toLowerCase() === known.toLowerCase())) {
+      return { matchKey: `app:${known.toLowerCase()}`, name: known, verified: true };
+    }
+    return { matchKey: `cimd:${client.id}`, name: declared ?? host, verified: true };
+  }
+  const known = redirect.protocol === 'https:' ? knownClientName(redirect.host) : undefined;
   if (known) return { matchKey: `app:${known.toLowerCase()}`, name: known, verified: true };
-  if (cimdHost) return { matchKey: `cimd:${client.id}`, name: declared ?? cimdHost, verified: true };
   if (isLoopbackRedirect(redirectUri)) {
     const name = declared ?? 'Local app';
     return { matchKey: `local:${name.toLowerCase()}`, name, verified: false };
