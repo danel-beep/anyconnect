@@ -83,6 +83,10 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .menu-pop button.danger{color:var(--danger)}
 .menu-pop .rename{display:flex;gap:6px;padding:6px}
 .menu-pop .rename input{min-height:34px;padding:6px 10px}
+.menu-pop svg{width:16px;height:16px;flex:none}
+/* With JS the open menu floats above the page (placed by site.js), so no card clips it; without JS the card lets it show. */
+.menu-pop.floating{position:fixed;right:auto;z-index:60;max-height:calc(100vh - 16px);overflow:auto}
+.card.flush:has(details[data-menu]){overflow:visible}
 @media (max-width:640px){.acc{grid-template-columns:auto minmax(0,1fr)}.acc .ops{grid-column:1/-1;justify-content:flex-start}}
 
 /* Catalog in the dashboard */
