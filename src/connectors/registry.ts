@@ -65,18 +65,18 @@ export class ConnectorRegistry implements ConnectorResolver {
 
   /** A connector that brings another spec under the id of a provider the hub already has. */
   private redefinesProvider(connector: ConnectorDefinition): boolean {
-    if (!connector.oauth) return false;
-    const provider = resolveProvider(connector.oauth);
-    const known = this.knownProvider(provider.id);
-    return known !== undefined && known !== provider;
+    // A reference by id (`provider: 'google'`) uses the provider that has the id.
+    const own = inlineProvider(connector);
+    if (!own) return false;
+    const known = this.knownProvider(own.id);
+    return known !== undefined && known !== own;
   }
 
   private knownProvider(id: string): OAuthProviderSpec | undefined {
     if (Object.hasOwn(BUILTIN_PROVIDERS, id)) return BUILTIN_PROVIDERS[id];
     for (const connector of this.connectors.values()) {
-      if (!connector.oauth) continue;
-      const provider = resolveProvider(connector.oauth);
-      if (provider.id === id) return provider;
+      const provider = inlineProvider(connector);
+      if (provider?.id === id) return provider;
     }
     return undefined;
   }
@@ -92,6 +92,12 @@ export class ConnectorRegistry implements ConnectorResolver {
   async get(_workspaceId: string, connectorId: string): Promise<ConnectorDefinition | undefined> {
     return this.connectors.get(connectorId);
   }
+}
+
+/** The provider spec a connector declares itself, if it does not reference one by id. */
+function inlineProvider(connector: ConnectorDefinition): OAuthProviderSpec | undefined {
+  const provider = connector.oauth?.provider;
+  return provider && typeof provider !== 'string' ? provider : undefined;
 }
 
 export function validateConnector(connector: ConnectorDefinition): void {
