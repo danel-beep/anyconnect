@@ -185,7 +185,7 @@ export class CustomServiceManager {
   private assertOwnProvider(connector: ConnectorDefinition): void {
     const provider = connector.oauth?.provider;
     if (!provider || typeof provider === 'string') return;
-    if (this.deps.builtin.oauthProvider(provider.id)) {
+    if (this.deps.builtin.hasOAuthProvider(provider.id)) {
       throw new Error(
         'The OAuth provider id belongs to a provider built into the hub: to use that provider, write its id as "provider" (for example "provider": "google"); otherwise give yours another id',
       );

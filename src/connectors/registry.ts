@@ -35,40 +35,50 @@ export interface ConnectorResolver {
 
 export class ConnectorRegistry implements ConnectorResolver {
   private readonly connectors = new Map<string, ConnectorDefinition>();
-  /** OAuth providers of the hub's own code: the built-in ones plus inline specs of registered connectors. */
-  private readonly providers = new Map<string, OAuthProviderSpec>(Object.entries(BUILTIN_PROVIDERS));
 
   register(connector: ConnectorDefinition): this {
     validateConnector(connector);
     if (this.connectors.has(connector.id))
       throw new Error(`Connector "${connector.id}" is already registered`);
-    if (connector.oauth) {
-      const provider = resolveProvider(connector.oauth);
-      const known = this.providers.get(provider.id);
-      if (known && known !== provider) {
-        // The message names only the connector: provider specs stay out of logs.
-        throw new Error(
-          `Connector "${connector.id}" defines its own OAuth provider under an id another provider already has; reference that provider by its id`,
-        );
-      }
-      this.providers.set(provider.id, provider);
+    if (this.redefinesProvider(connector)) {
+      throw new Error(
+        `Connector "${connector.id}" defines its own OAuth provider under an id another provider already has; reference that provider by its id`,
+      );
     }
     this.connectors.set(connector.id, connector);
     return this;
   }
 
   /**
-   * The hub's own definition of an OAuth provider (built in, or declared by a registered connector).
-   * Only these specs may be used with the hub-wide OAuth apps (`OAUTH_APP_*`): a service a user
-   * defines may name a provider with the same id, but never gets the hub's client secret.
+   * Whether the hub's own code defines an OAuth provider with this id (built in, or declared by a
+   * registered connector). Only those specs are used with the hub-wide OAuth apps (`OAUTH_APP_*`):
+   * a service a user defines may not take such an id for a provider of its own.
    */
-  oauthProvider(id: string): OAuthProviderSpec | undefined {
-    return this.providers.get(id);
+  hasOAuthProvider(id: string): boolean {
+    return this.knownProvider(id) !== undefined;
   }
 
   /** Whether this very connector (not just one with its id) is registered here. */
   includes(connector: ConnectorDefinition): boolean {
     return this.connectors.get(connector.id) === connector;
+  }
+
+  /** A connector that brings another spec under the id of a provider the hub already has. */
+  private redefinesProvider(connector: ConnectorDefinition): boolean {
+    if (!connector.oauth) return false;
+    const provider = resolveProvider(connector.oauth);
+    const known = this.knownProvider(provider.id);
+    return known !== undefined && known !== provider;
+  }
+
+  private knownProvider(id: string): OAuthProviderSpec | undefined {
+    if (Object.hasOwn(BUILTIN_PROVIDERS, id)) return BUILTIN_PROVIDERS[id];
+    for (const connector of this.connectors.values()) {
+      if (!connector.oauth) continue;
+      const provider = resolveProvider(connector.oauth);
+      if (provider.id === id) return provider;
+    }
+    return undefined;
   }
 
   all(): ConnectorDefinition[] {

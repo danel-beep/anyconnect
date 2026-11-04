@@ -313,7 +313,7 @@ src/
 - OAuth-приложения хаба (`OAUTH_APP_*`) только для коннекторов из кода: свой сервис пространства
   не получает client secret хаба и его экран согласия (иначе манифест с `"provider": "google"`
   получил бы Google-токены пользователя на свой `baseUrl`). Свой провайдер в манифесте не может
-  взять id встроенного (`ConnectorRegistry.oauthProvider`).
+  взять id встроенного (`ConnectorRegistry.hasOAuthProvider`).
 
 ### Защита данных
 
