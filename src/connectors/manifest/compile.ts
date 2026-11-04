@@ -344,6 +344,7 @@ function compileAction(
     inputSchema,
     ...(action.hints ? { hints: action.hints } : {}),
     ...(action.risk ? { risk: action.risk } : {}),
+    ...(action.tags?.length ? { tags: action.tags } : {}),
     ...(action.undo ? { undo: action.undo } : {}),
     ...(action.capability
       ? {
@@ -412,7 +413,7 @@ function compileAction(
  */
 export type ManifestActionExtension = Pick<
   ActionDefinition,
-  'capability' | 'undo' | 'assessRisk' | 'risk' | 'rateLimit'
+  'capability' | 'undo' | 'assessRisk' | 'risk' | 'rateLimit' | 'tags'
 >;
 
 export interface ManifestExtensions {

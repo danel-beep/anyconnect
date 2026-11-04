@@ -29,6 +29,7 @@ export const siteEn = {
   'site.footer.contact': 'Contact us',
   'site.footer.privacy': 'Privacy policy',
   'site.footer.terms': 'Terms of service',
+  'site.footer.support': 'Support',
   'site.footer.mcp': 'Built on the open Model Context Protocol',
 
   'landing.title': 'Manyplug: connect all your services to AI in one step',
@@ -368,6 +369,7 @@ export const siteRu: Record<SiteKey, string> = {
   'site.footer.contact': 'Написать нам',
   'site.footer.privacy': 'Политика конфиденциальности',
   'site.footer.terms': 'Условия использования',
+  'site.footer.support': 'Поддержка',
   'site.footer.mcp': 'Работает на открытом протоколе MCP',
 
   'landing.title': 'Manyplug: все ваши сервисы в ИИ за один шаг',

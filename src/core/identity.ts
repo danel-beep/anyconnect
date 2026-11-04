@@ -114,20 +114,31 @@ export async function ensureAdmin(
   db: Db,
   admin: { email: string; password: string },
 ): Promise<{ user: User; workspace: Workspace; created: boolean; passwordUpdated: boolean }> {
-  const existing = await findUserByEmail(db, admin.email);
+  return ensurePasswordUser(db, { ...admin, role: 'admin' });
+}
+
+/**
+ * A user configured by environment variables (the owner, the directory reviewers' account): created
+ * on first start; later starts restore its role and password if they were changed.
+ */
+export async function ensurePasswordUser(
+  db: Db,
+  spec: { email: string; password: string; role: User['role'] },
+): Promise<{ user: User; workspace: Workspace; created: boolean; passwordUpdated: boolean }> {
+  const existing = await findUserByEmail(db, spec.email);
   if (!existing) {
     const { user, workspace } = await createUser(db, {
-      email: admin.email,
-      password: admin.password,
-      role: 'admin',
+      email: spec.email,
+      password: spec.password,
+      role: spec.role,
     });
     return { user, workspace, created: true, passwordUpdated: false };
   }
-  if (existing.role !== 'admin')
-    await db.update(users).set({ role: 'admin' }).where(eq(users.id, existing.id));
+  if (existing.role !== spec.role)
+    await db.update(users).set({ role: spec.role }).where(eq(users.id, existing.id));
   let passwordUpdated = false;
-  if (!existing.passwordHash || !(await verifyPassword(admin.password, existing.passwordHash))) {
-    await setPassword(db, existing.id, admin.password);
+  if (!existing.passwordHash || !(await verifyPassword(spec.password, existing.passwordHash))) {
+    await setPassword(db, existing.id, spec.password);
     passwordUpdated = true;
   }
   let workspace = await getDefaultWorkspace(db, existing.id);

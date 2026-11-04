@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type BillingConfig, BillingConfigError, readBillingConfig } from './billing/config.js';
 import { BRAND } from './brand.js';
+import { CLIENT_POLICY_IDS } from './hub/client-policies.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
 
 /**
@@ -108,6 +109,17 @@ const EnvSchema = z.object({
   JOBS_ENABLED: bool(true),
   /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
   TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
+  /**
+   * AI app directory rules the hub enforces for clients of those apps (comma separated ids from
+   * `src/hub/client-policies.ts`: `claude`, `chatgpt`; `none` for no rules). Default `claude`.
+   */
+  CLIENT_POLICIES: optionalString,
+  /**
+   * A sign-in for directory reviewers (Anthropic, OpenAI...): email + password, no second factor,
+   * demo accounts connected. Created on start; the password is re-synced if it changes.
+   */
+  REVIEW_ACCOUNT_EMAIL: optionalString,
+  REVIEW_ACCOUNT_PASSWORD: optionalString,
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -183,6 +195,55 @@ export interface AppConfig {
   jobs: { enabled: boolean };
   /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
   billing: BillingConfig;
+  /** Listing in AI app directories (see `docs/DIRECTORIES.md`). */
+  directories: {
+    /** Enforced directory rules (ids of `CLIENT_POLICIES` in `src/hub/client-policies.ts`). */
+    clientPolicies: string[];
+    /** The reviewers' sign-in (REVIEW_ACCOUNT_EMAIL / REVIEW_ACCOUNT_PASSWORD). */
+    reviewAccount: { email: string; password: string } | undefined;
+    /**
+     * Ownership proofs served as plain text at `/.well-known/<name>`, from `WELL_KNOWN_<NAME>`
+     * variables (`WELL_KNOWN_MCP_REGISTRY_AUTH` → `/.well-known/mcp-registry-auth`).
+     */
+    wellKnown: Record<string, string>;
+  };
+}
+
+/** `/.well-known/` names the hub itself serves; a WELL_KNOWN_* variable cannot replace them. */
+const RESERVED_WELL_KNOWN = /^(oauth-|openid-|mcp$|security\.txt$)/;
+
+/** Reads `WELL_KNOWN_<NAME>` variables: `/.well-known/<name>` (lower case, `_` → `-`) serves the value. */
+export function readWellKnownFiles(source: NodeJS.ProcessEnv): Record<string, string> {
+  const files: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    const match = key.match(/^WELL_KNOWN_([A-Z0-9_]+)$/);
+    if (!match || !value?.trim()) continue;
+    const name = match[1]!.toLowerCase().replace(/_/g, '-');
+    if (RESERVED_WELL_KNOWN.test(name))
+      throw new ConfigError(`${key}: /.well-known/${name} is served by the hub`);
+    files[name] = value.trim();
+  }
+  return files;
+}
+
+function clientPolicies(value: string | undefined): string[] {
+  const raw = (value ?? 'claude').trim().toLowerCase();
+  if (raw === 'none' || raw === '') return [];
+  const ids = [
+    ...new Set(
+      raw
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  ];
+  for (const id of ids) {
+    if (!CLIENT_POLICY_IDS.includes(id))
+      throw new ConfigError(
+        `CLIENT_POLICIES: unknown policy "${id}" (known: ${CLIENT_POLICY_IDS.join(', ')}, none)`,
+      );
+  }
+  return ids;
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -280,6 +341,16 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     );
   }
 
+  if (Boolean(env.REVIEW_ACCOUNT_EMAIL) !== Boolean(env.REVIEW_ACCOUNT_PASSWORD)) {
+    throw new ConfigError('REVIEW_ACCOUNT_EMAIL and REVIEW_ACCOUNT_PASSWORD must be set together');
+  }
+  if (env.REVIEW_ACCOUNT_PASSWORD && env.REVIEW_ACCOUNT_PASSWORD.length < 12) {
+    throw new ConfigError('REVIEW_ACCOUNT_PASSWORD must be at least 12 characters');
+  }
+  if (env.REVIEW_ACCOUNT_EMAIL && env.REVIEW_ACCOUNT_EMAIL.toLowerCase() === env.ADMIN_EMAIL?.toLowerCase()) {
+    throw new ConfigError('REVIEW_ACCOUNT_EMAIL must differ from ADMIN_EMAIL');
+  }
+
   if ((env.ADMIN_EMAIL && !env.ADMIN_PASSWORD) || (!env.ADMIN_EMAIL && env.ADMIN_PASSWORD)) {
     throw new ConfigError('ADMIN_EMAIL and ADMIN_PASSWORD must be set together');
   }
@@ -362,6 +433,14 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     oauthApps: hubOAuthApps(env, source),
     jobs: { enabled: env.JOBS_ENABLED },
     billing: billingConfig(source, isProduction),
+    directories: {
+      clientPolicies: clientPolicies(env.CLIENT_POLICIES),
+      reviewAccount:
+        env.REVIEW_ACCOUNT_EMAIL && env.REVIEW_ACCOUNT_PASSWORD
+          ? { email: env.REVIEW_ACCOUNT_EMAIL.toLowerCase(), password: env.REVIEW_ACCOUNT_PASSWORD }
+          : undefined,
+      wellKnown: readWellKnownFiles(source),
+    },
   };
 }
 

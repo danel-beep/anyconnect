@@ -15,6 +15,7 @@ import {
   ServiceDetailPage,
   ServicesPage,
 } from '../web/site.js';
+import { supportDoc } from '../web/support.js';
 import type { AppContext, AppEnv } from './context.js';
 import { currentUser } from './context.js';
 import { pageCtx, saveLocale } from './page-helpers.js';
@@ -96,7 +97,7 @@ export function siteRoutes() {
 
   app.get('/sitemap.xml', async (c) => {
     const base = c.get('services').config.publicUrl;
-    const paths = ['/', '/pricing', '/services', '/docs', '/privacy', '/terms'];
+    const paths = ['/', '/pricing', '/services', '/docs', '/support', '/privacy', '/terms'];
     for (const service of await publicServices(c)) paths.push(`/services/${service.id}`);
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${paths
       .map((p) => `  <url><loc>${base}${p}</loc></url>`)
@@ -178,6 +179,12 @@ export function siteRoutes() {
       />,
     ),
   );
+
+  app.get('/support', async (c) => {
+    const ctx = pageCtx(c, await currentUser(c));
+    const doc = supportDoc(ctx.lang, { publicUrl: ctx.publicUrl, supportEmail: ctx.supportEmail });
+    return c.html(<LegalPage ctx={ctx} doc={doc} path="/support" />);
+  });
 
   for (const kind of ['privacy', 'terms'] as const) {
     app.get(`/${kind}`, async (c) => {

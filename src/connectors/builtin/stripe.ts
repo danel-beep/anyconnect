@@ -149,6 +149,7 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: true },
       risk: 'dangerous',
+      tags: ['moves_money'],
       request: { method: 'POST', path: '/refunds', bodyType: 'form' },
       response: { fields: ['id', 'amount', 'currency', 'status'] },
     },

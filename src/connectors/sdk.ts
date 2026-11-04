@@ -40,6 +40,19 @@ export interface ActionHints {
  */
 export type RiskLevel = 'read' | 'write' | 'dangerous';
 
+/**
+ * Kinds of effect some AI app directories exclude as a whole, whatever the risk (the Claude
+ * directory accepts no connector that moves money; ChatGPT apps may not sell digital goods). The hub
+ * leaves tagged actions out for the AI apps whose directory rules exclude them (`hub/client-policies.ts`).
+ * - `moves_money`: transfers money or other financial assets (payments, refunds, payouts, trades);
+ * - `generates_media`: generates images, video or audio with an AI model;
+ * - `commerce`: shows plans or prices, or starts a purchase or subscription;
+ * - `test_only`: exists to test the hub itself (e.g. always fails); directories expect every tool
+ *   to succeed with valid input.
+ */
+export const ACTION_TAGS = ['moves_money', 'generates_media', 'commerce', 'test_only'] as const;
+export type ActionTag = (typeof ACTION_TAGS)[number];
+
 /** How the effect of an action can be undone (shown in the audit log; the panel offers "undo"). */
 export type UndoSpec =
   /** Another action of the same connector reverses it, e.g. `delete_message` for `send_message`. */
@@ -247,6 +260,8 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
    */
   requiresConfirmation?: boolean;
   undo?: UndoSpec;
+  /** Kinds of effect AI app directories care about, see {@link ActionTag}. */
+  tags?: readonly ActionTag[];
   /** Shared interface operation(s) this action implements, e.g. `'mail.search'`. */
   capability?: CapabilityId | CapabilityBinding | Array<CapabilityId | CapabilityBinding>;
   response?: ResponseSpec;

@@ -11,6 +11,7 @@ import {
   ConnectorError,
 } from '../connectors/sdk.js';
 import type { AccountService } from '../core/accounts.js';
+import { knownAppOfClient } from '../core/ai-apps.js';
 import { getWorkspace } from '../core/identity.js';
 import type { Principal } from '../core/principal.js';
 import type { WorkspaceAdmin } from '../core/workspace-admin.js';
@@ -33,6 +34,7 @@ import {
   DEFAULT_PROFILE,
   describeAccount,
 } from './catalog.js';
+import { restrictionsFor } from './client-policies.js';
 import { searchTools } from './discovery.js';
 import {
   type CallContext,
@@ -92,6 +94,11 @@ export interface HubDeps {
    * run. Without it the AI cannot manage the hub from the chat.
    */
   setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin; billing?: WorkspaceBilling };
+  /**
+   * Directory rules enforced for clients of known AI apps (ids from `client-policies.ts`, config
+   * `CLIENT_POLICIES`). Default: none.
+   */
+  clientPolicies?: readonly string[];
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
 }
@@ -132,7 +139,7 @@ const isEmpty = (value: unknown) => value === undefined || value === null || val
 export class Hub {
   readonly executor: Executor;
   private readonly usageCache = new Map<string, { at: number; usage: Record<string, number> }>();
-  private readonly clientNames = new Map<string, { at: number; name: string | null }>();
+  private readonly clients = new Map<string, { at: number; name: string | null; app: string | undefined }>();
 
   constructor(private readonly deps: HubDeps) {
     this.executor = new Executor(
@@ -202,18 +209,34 @@ export class Hub {
       tokenBudget: this.deps.toolListTokenBudget ?? DEFAULT_PROFILE.tokenBudget,
     };
     if (!principal.clientId) return profile;
-    let entry = this.clientNames.get(principal.clientId);
+    let entry = this.clients.get(principal.clientId);
     if (!entry || Date.now() - entry.at > CACHE_TTL_MS) {
       const [row] = await this.deps.db
-        .select({ metadata: oauthClients.metadata })
+        .select({ registrationType: oauthClients.registrationType, metadata: oauthClients.metadata })
         .from(oauthClients)
         .where(eq(oauthClients.id, principal.clientId))
         .limit(1);
-      entry = { at: Date.now(), name: row?.metadata.client_name ?? null };
-      this.clientNames.set(principal.clientId, entry);
+      entry = {
+        at: Date.now(),
+        name: row?.metadata.client_name ?? null,
+        app: row
+          ? knownAppOfClient({
+              id: principal.clientId,
+              registrationType: row.registrationType,
+              redirectUris: row.metadata.redirect_uris,
+            })
+          : undefined,
+      };
+      this.clients.set(principal.clientId, entry);
     }
-    const limit = entry.name ? CLIENT_LIMITS.find((l) => l.match.test(entry.name!)) : undefined;
-    return limit ? { ...profile, maxTools: limit.maxTools } : profile;
+    const { name, app } = entry;
+    const limit = name ? CLIENT_LIMITS.find((l) => l.match.test(name)) : undefined;
+    const restrictions = restrictionsFor(app, this.deps.clientPolicies ?? []);
+    return {
+      ...profile,
+      ...(limit ? { maxTools: limit.maxTools } : {}),
+      ...(restrictions ? { restrictions } : {}),
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -240,8 +263,11 @@ export class Hub {
   ): Promise<ExecResult> {
     const tool = catalog.tools.find((t) => t.name === toolName);
     if (!tool) {
+      const search = catalog.tools.some((t) => t.name === BUILTIN_TOOLS.search_tools.name)
+        ? `${BUILTIN_TOOLS.search_tools.name} or `
+        : '';
       return errorResult(
-        `Unknown tool "${toolName}". Find tools with ${BUILTIN_TOOLS.search_tools.name} or ${BUILTIN_TOOLS.list_accounts.name}.`,
+        `Unknown tool "${toolName}". Find tools with ${search}${BUILTIN_TOOLS.list_accounts.name}.`,
       );
     }
     const started = Date.now();

@@ -182,6 +182,11 @@ Paddle или Stripe подключаются переменными `BILLING_PR
 приложений определяет, нужен ли вход, по первому ответу сервера: если он 200, такое приложение
 подключится без входа и не покажет кнопку входа.
 
+Каталоги ИИ-приложений (официальный MCP Registry, каталоги Claude и ChatGPT, Cursor, VS Code,
+Smithery, Glama): что уже подано, что подготовлено и что нужно сделать владельцу —
+[docs/DIRECTORIES.md](docs/DIRECTORIES.md). Файлы для них (`server.json`, плагины в `integrations/`)
+собираются из `src/distribution/listing.ts` командой `npm run distribution`.
+
 Персоны: если создать персону `work` (`POST /api/v1/personas`), у неё будет свой адрес
 `https://<хаб>/mcp/work` — подключённый к нему клиент видит только её аккаунты.
 

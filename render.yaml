@@ -41,6 +41,15 @@ services:
         sync: false
       - key: SIGNUPS
         value: open
+      # AI app directories (docs/DIRECTORIES.md)
+      - key: CLIENT_POLICIES
+        value: claude
+      - key: REVIEW_ACCOUNT_EMAIL
+        sync: false
+      - key: REVIEW_ACCOUNT_PASSWORD
+        sync: false
+      - key: WELL_KNOWN_MCP_REGISTRY_AUTH
+        sync: false
 
 databases:
   - name: anyconnect-db
