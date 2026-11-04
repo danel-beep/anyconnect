@@ -1,4 +1,5 @@
-const CYRILLIC: Record<string, string> = {
+/** Latin spelling of Cyrillic letters (also used by the website's script that suggests addresses). */
+export const CYRILLIC: Record<string, string> = {
   а: 'a',
   б: 'b',
   в: 'v',
@@ -38,15 +39,18 @@ const CYRILLIC: Record<string, string> = {
   ґ: 'g',
 };
 
-/** "Рабочая почта" -> "rabochaya_pochta". Used to suggest account names from labels. */
-export function slugify(input: string, maxLength = 32): string {
+/**
+ * "Рабочая почта" -> "rabochaya_pochta". Used to suggest account names from labels (`_`) and
+ * persona addresses from names (`-`).
+ */
+export function slugify(input: string, maxLength = 32, separator: '_' | '-' = '_'): string {
   const transliterated = [...input.toLowerCase()].map((ch) => CYRILLIC[ch] ?? ch).join('');
-  const slug = transliterated
+  const trim = new RegExp(`^${separator}+|${separator}+$`, 'g');
+  return transliterated
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, separator)
+    .replace(trim, '')
     .slice(0, maxLength)
-    .replace(/_+$/g, '');
-  return slug;
+    .replace(trim, '');
 }
