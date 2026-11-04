@@ -54,6 +54,7 @@ describe('built-in connectors and the core rules', () => {
       intercom: ['contacts.search'],
       pipedrive: ['contacts.search'],
       freshdesk: ['contacts.search'],
+      calcom: ['calendar.list_events'],
       slack: ['messages.list_chats', 'messages.read_chat', 'messages.search', 'messages.send'],
     });
   });
