@@ -853,6 +853,26 @@ export const limitGrants = pgTable(
   (t) => [index().on(t.workspaceId)],
 );
 
+/**
+ * "I want this plan" from the dashboard while payments are manual (no `BillingProvider`). Admins
+ * see open requests in the panel; setting a plan for the workspace closes them.
+ */
+export const planRequests = pgTable(
+  'plan_requests',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text().references(() => users.id, { onDelete: 'set null' }),
+    planId: text().notNull(),
+    interval: text().$type<'month' | 'year'>().notNull().default('month'),
+    createdAt: createdAt(),
+    closedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.workspaceId), index().on(t.closedAt)],
+);
+
 /** What admins did in the admin panel. Kept when the admin or the target user is deleted. */
 export const adminAuditLog = pgTable(
   'admin_audit_log',

@@ -78,7 +78,10 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   notion: {
     icon: 'notion',
     category: 'docs',
-    blurb: { ru: 'Страницы и базы: поиск, чтение, записи.', en: 'Pages and databases: search, read, write.' },
+    blurb: {
+      ru: 'Страницы и базы: поиск, чтение и запись.',
+      en: 'Pages and databases: search, read, write.',
+    },
   },
   todoist: {
     icon: 'todoist',
@@ -139,4 +142,25 @@ export const HIDDEN_SERVICES = new Set(['demo', 'anyconnect']);
 
 export function serviceMeta(id: string): ServiceMeta | undefined {
   return SERVICE_META[id];
+}
+
+/** Everyday words people search a category by, in both languages ("почта" finds Gmail). */
+const CATEGORY_WORDS: Record<ServiceCategory, string> = {
+  mail: 'почта письма ящик mail email inbox',
+  messengers: 'мессенджер чат сообщения messenger chat messages',
+  calendar: 'календарь встречи события calendar meetings events',
+  files: 'файлы диск документы files drive storage',
+  docs: 'документы заметки база знаний docs notes wiki',
+  tasks: 'задачи дела проекты tasks todo projects',
+  dev: 'код репозиторий разработка code repository dev',
+  payments: 'платежи оплата счета payments billing invoices',
+  crm: 'клиенты сделки продажи crm customers deals sales',
+  custom: 'свой api сервер custom server',
+  other: '',
+};
+
+/** Text a service is found by in the search boxes: name, id, description and category words. */
+export function searchText(id: string, name: string, description: string): string {
+  const meta = serviceMeta(id);
+  return `${name} ${id} ${description} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
 }

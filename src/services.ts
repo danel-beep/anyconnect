@@ -21,7 +21,7 @@ import { PasskeyService } from './core/passkeys.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
 import { TotpService } from './core/totp.js';
-import { UserService } from './core/users.js';
+import { activeUserCheck, UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
@@ -306,10 +306,16 @@ export function createServices(
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
   });
-  const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl, async (workspaceId, personaId) => {
-    const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
-    return persona && personas.urlFor(persona.slug);
-  });
+  const verifier = new HubTokenVerifier(
+    oauth,
+    apiTokens,
+    config.mcpUrl,
+    async (workspaceId, personaId) => {
+      const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
+      return persona && personas.urlFor(persona.slug);
+    },
+    activeUserCheck(db),
+  );
   const sessions = new SessionService(db, config.sessionTtlSeconds);
   const users = new UserService({
     db,

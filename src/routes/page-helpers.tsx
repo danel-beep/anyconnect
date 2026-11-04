@@ -1,6 +1,7 @@
 import type { Child } from 'hono/jsx';
 import { z } from 'zod';
 import { getDefaultWorkspace } from '../core/identity.js';
+import type { AppError } from '../lib/errors.js';
 import { type AppSection, AppShell, type ShellInfo } from '../web/app.js';
 import { type Frame, PageFrame } from '../web/frame.js';
 import { clearCookie, csrfToken, readCookie, setSecureCookie, verifyCsrf } from '../web/http.js';
@@ -141,4 +142,28 @@ export function csrfOk(c: AppContext, form: Record<string, string>): boolean {
 
 export function csrfFailedPage(c: AppContext) {
   return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('error.csrf')} />, 403);
+}
+
+/** UI texts for error codes (`AppError.code`); other errors show their own (English) message. */
+const ERROR_TEXTS: Partial<Record<string, Key>> = {
+  not_found: 'error.code.not_found',
+  self_change: 'error.code.self_change',
+  admin_target: 'error.code.admin_target',
+  confirm_email: 'error.code.confirm_email',
+  no_workspace: 'error.code.no_workspace',
+  unknown_plan: 'error.code.unknown_plan',
+  unknown_limit: 'error.code.unknown_limit',
+  bad_amount: 'error.code.bad_amount',
+  past_date: 'error.code.past_date',
+  amount_required: 'error.code.amount_required',
+  plan_limit: 'error.code.plan_limit',
+  csrf: 'error.csrf',
+};
+
+/** A user-facing text for an error from a form action, in the page language. */
+export function uiError(c: AppContext, error: AppError | z.ZodError): string {
+  const t = c.get('t');
+  if (error instanceof z.ZodError) return t('app.flash.invalid');
+  const key = ERROR_TEXTS[error.code];
+  return key ? t(key) : error.message;
 }

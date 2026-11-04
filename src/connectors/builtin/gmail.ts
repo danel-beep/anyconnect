@@ -138,6 +138,90 @@ export default defineConnector({
     const { data } = await api(ctx).get<{ emailAddress: string; messagesTotal?: number }>('profile');
     return { ok: true, identity: data.emailAddress };
   },
+  ui: {
+    locales: {
+      ru: {
+        description:
+          'Gmail через Google API: поиск с синтаксисом Gmail, чтение, отправка, ответы, пересылка, ярлыки, архив и черновики.',
+        actions: {
+          search: {
+            title: 'Поиск писем',
+            description:
+              'Находит письма, сначала новые: отправитель, тема, начало текста. По умолчанию — во входящих.',
+          },
+          read: {
+            title: 'Чтение письма',
+            description:
+              'Открывает письмо как обычный текст, без цитат прошлой переписки, со списком вложений.',
+          },
+          send: { title: 'Отправка письма', description: 'Отправляет новое письмо. Текст — без оформления.' },
+          reply: {
+            title: 'Ответ на письмо',
+            description: 'Отвечает в той же цепочке писем. Можно ответить всем получателям.',
+          },
+          forward: {
+            title: 'Пересылка письма',
+            description: 'Пересылает письмо со всеми вложениями и, если нужно, с вашим комментарием.',
+          },
+          create_draft: {
+            title: 'Черновик',
+            description:
+              'Сохраняет черновик, в том числе ответ в цепочке, чтобы вы проверили и отправили его сами.',
+          },
+          modify: {
+            title: 'Ярлыки, архив и отметки',
+            description:
+              'Отмечает письма прочитанными или непрочитанными, ставит звёздочку, убирает в архив, добавляет и снимает ярлыки.',
+          },
+          trash: {
+            title: 'Удаление в корзину',
+            description:
+              'Переносит письма в корзину. Gmail удалит их через 30 дней, а до этого их можно вернуть.',
+          },
+          list_labels: {
+            title: 'Список ярлыков',
+            description: 'Системные и ваши ярлыки Gmail, у ваших — число непрочитанных.',
+          },
+        },
+      },
+      en: {
+        actions: {
+          search: {
+            title: 'Search mail',
+            description:
+              'Finds messages, newest first, with sender, subject and a snippet. Inbox by default.',
+          },
+          read: {
+            title: 'Read a message',
+            description: 'Opens a message as plain text without the quoted history, with its attachments.',
+          },
+          send: { title: 'Send an email', description: 'Sends a new plain-text email.' },
+          reply: { title: 'Reply', description: 'Replies in the same thread, optionally to all recipients.' },
+          forward: {
+            title: 'Forward',
+            description: 'Forwards a message with all its attachments and an optional note.',
+          },
+          create_draft: {
+            title: 'Create a draft',
+            description: 'Saves a draft, a reply in a thread too, for you to review and send yourself.',
+          },
+          modify: {
+            title: 'Labels, archive and marks',
+            description: 'Marks messages read or unread, stars them, archives them, adds or removes labels.',
+          },
+          trash: {
+            title: 'Move to trash',
+            description:
+              'Moves messages to Trash. Gmail deletes them after 30 days; until then they can be restored.',
+          },
+          list_labels: {
+            title: 'List labels',
+            description: 'System and your own Gmail labels, with unread counts for yours.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'search',

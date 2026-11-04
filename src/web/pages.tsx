@@ -107,6 +107,8 @@ export const LoginPage: FC<{
         : t('login.subtitle');
   const googleHref = `/auth/google?next=${encodeURIComponent(next)}${mode === 'reauth' ? '&reauth=1' : ''}`;
   const showPassword = passwordOpen || !google || Boolean(error && !google);
+  // With sign-ups closed the sign-up page only says so; existing users sign in on /login.
+  const signupClosed = mode === 'signup' && !signupsOpen;
   const passwordForm = (
     <form method="post" action="/login">
       <input type="hidden" name="csrf" value={csrf} />
@@ -127,7 +129,7 @@ export const LoginPage: FC<{
     <Layout title={title} narrow lang={lang} script>
       <div class="card">
         <h1>{title}</h1>
-        <p class="muted">{subtitle}</p>
+        {signupClosed ? null : <p class="muted">{subtitle}</p>}
         {fromApp && mode !== 'reauth' ? (
           <div class="notice info small">
             <Icon name="zap" /> {t('login.fromApp')}
@@ -138,7 +140,7 @@ export const LoginPage: FC<{
             {error}
           </p>
         ) : null}
-        {google ? (
+        {google && !signupClosed ? (
           <>
             <a class="btn block btn-google" href={googleHref}>
               <GoogleG /> {t('login.google')}
@@ -151,8 +153,10 @@ export const LoginPage: FC<{
             ) : null}
           </>
         ) : null}
-        {mode === 'signup' && !signupsOpen ? <div class="notice small">{t('signup.closed')}</div> : null}
-        {mode === 'signup' && !google ? <div class="notice small">{t('signup.noGoogle')}</div> : null}
+        {signupClosed ? <div class="notice small">{t('signup.closed')}</div> : null}
+        {mode === 'signup' && !signupClosed && !google ? (
+          <div class="notice small">{t('signup.noGoogle')}</div>
+        ) : null}
         {mode !== 'signup' ? (
           <>
             {google ? (
@@ -179,7 +183,7 @@ export const LoginPage: FC<{
           </>
         ) : null}
       </div>
-      {mode === 'login' && google ? (
+      {mode === 'login' && google && signupsOpen ? (
         <p class="center small muted switch-auth">
           {t('login.noAccount')}{' '}
           <a href={`/signup?next=${encodeURIComponent(next)}`}>{t('login.signupLink')}</a>

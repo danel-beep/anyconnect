@@ -25,6 +25,7 @@ import {
   setFlash,
   shellInfo,
   takeFlash,
+  uiError,
 } from './page-helpers.js';
 
 const DAY = 86_400_000;
@@ -106,9 +107,10 @@ export function adminRoutes() {
       const userId = c.req.param('id')!;
       const back = `/admin/users/${encodeURIComponent(userId)}`;
       const form = await bodyParams(c);
-      if (!csrfOk(c, form)) return csrfFailedPage(c);
+      // The gate first: to anyone but an admin the panel does not exist, not even as a CSRF error.
       const g = await gate(c, back);
       if ('response' in g) return g.response;
+      if (!csrfOk(c, form)) return csrfFailedPage(c);
       if (!s.rateLimiter.consume(`admin:${g.ok.user.id}`, 60, 60_000).allowed) {
         setFlash(c, 'bad', 'admin.flash.error', { message: c.get('t')('login.rateLimited') });
         return c.redirect(back, 303);
@@ -118,9 +120,7 @@ export function adminRoutes() {
         return c.redirect(redirect ?? back, 303);
       } catch (error) {
         if (!(error instanceof AppError) && !(error instanceof z.ZodError)) throw error;
-        const message =
-          error instanceof AppError ? error.message : error.issues.map((i) => i.message).join('; ');
-        setFlash(c, 'bad', 'admin.flash.error', { message: message.slice(0, 300) });
+        setFlash(c, 'bad', 'admin.flash.error', { message: uiError(c, error).slice(0, 300) });
         return c.redirect(back, 303);
       }
     };
@@ -130,17 +130,32 @@ export function adminRoutes() {
     '/admin',
     view(async (c, auth) => {
       const s = c.get('services');
-      const [overview, recent, shell] = await Promise.all([
+      const [overview, recent, requests, shell] = await Promise.all([
         s.adminPanel.overview(),
         s.adminPanel.listUsers({ perPage: 6 }),
+        s.entitlements.openRequests(20),
         shellInfo(c, auth.workspace.id),
       ]);
+      const planRequests = await Promise.all(
+        requests.map(async (r) => ({
+          userId: r.userId,
+          email: (r.userId && (await s.users.get(r.userId))?.email) || '—',
+          planId: r.planId,
+          interval: r.interval,
+          at: r.createdAt,
+        })),
+      );
       return c.html(
         <AdminOverviewPage
           ctx={pageCtx(c, auth.user)}
           shell={shell}
           view={{
             ...overview,
+            planRequests,
+            byConnector: overview.byConnector.map((x) => ({
+              ...x,
+              name: s.connectors.builtin.all().find((d) => d.id === x.connectorId)?.name ?? x.connectorId,
+            })),
             recentUsers: recent.items.map((i) => ({
               id: i.user.id,
               email: i.user.email,
@@ -312,6 +327,7 @@ export function adminRoutes() {
               action: r.action,
               actorEmail: r.actorEmail,
               targetUserId: r.targetUserId,
+              targetEmail: r.targetEmail ?? (r.details as { email?: string } | null)?.email ?? null,
               details: (r.details ?? {}) as Record<string, unknown>,
               ip: r.ip,
               createdAt: r.createdAt,
@@ -332,30 +348,47 @@ export function adminRoutes() {
         .then(() => true)
         .catch(() => false);
       const shell = await shellInfo(c, auth.workspace.id);
-      const yes = c.get('locale') === 'ru' ? 'настроено' : 'configured';
-      const no = c.get('locale') === 'ru' ? 'не настроено' : 'not configured';
+      const t = c.get('t');
+      const yes = t('admin.sys.on');
+      const no = t('admin.sys.off');
+      const hours = Math.round(cfg.site.adminSessionMaxAgeMs / 3_600_000);
+      const forwarded = c.req.header('x-forwarded-for');
       const checks = [
-        { label: 'Google sign-in', ok: Boolean(cfg.site.google), detail: cfg.site.google ? yes : no },
-        { label: 'Sign-ups', ok: cfg.site.signups === 'open', detail: cfg.site.signups },
+        { label: t('admin.sys.google'), ok: Boolean(cfg.site.google), detail: cfg.site.google ? yes : no },
         {
-          label: 'Second factor required',
-          ok: cfg.auth.requireSecondFactor,
-          detail: String(cfg.auth.requireSecondFactor),
+          label: t('admin.sys.signups'),
+          ok: cfg.site.signups === 'open',
+          detail: t(cfg.site.signups === 'open' ? 'admin.sys.open' : 'admin.sys.closed'),
         },
         {
-          label: 'Admin IP allowlist',
+          label: t('admin.sys.require2fa'),
+          ok: cfg.auth.requireSecondFactor,
+          detail: cfg.auth.requireSecondFactor ? t('admin.sys.yes') : t('admin.sys.no'),
+        },
+        {
+          label: t('admin.sys.allowlist'),
           ok: cfg.site.adminAllowedIps.length > 0,
           detail: cfg.site.adminAllowedIps.length ? cfg.site.adminAllowedIps.join(', ') : no,
         },
         {
-          label: 'Admin session',
+          // Lets the owner check the proxy settings (TRUST_PROXY) before relying on the IP allowlist.
+          label: t('admin.sys.yourIp'),
           ok: true,
-          detail: `${Math.round(cfg.site.adminSessionMaxAgeMs / 3_600_000)} h`,
+          detail: `${auth.actor.ip ?? '—'}${forwarded ? ` (X-Forwarded-For: ${forwarded.slice(0, 200)})` : ''}`,
         },
-        { label: 'Payments', ok: Boolean(s.billing), detail: s.billing ? s.billing.name : no },
-        { label: 'Telegram bot', ok: Boolean(s.telegramBot), detail: s.telegramBot ? yes : no },
-        { label: 'Support email', ok: Boolean(cfg.site.supportEmail), detail: cfg.site.supportEmail ?? no },
-        { label: 'HTTPS cookies', ok: cfg.secureCookies, detail: String(cfg.secureCookies) },
+        { label: t('admin.sys.adminSession'), ok: true, detail: t('admin.sys.hours', { n: hours }) },
+        { label: t('admin.sys.payments'), ok: Boolean(s.billing), detail: s.billing ? s.billing.name : no },
+        { label: t('admin.sys.telegram'), ok: Boolean(s.telegramBot), detail: s.telegramBot ? yes : no },
+        {
+          label: t('admin.sys.support'),
+          ok: Boolean(cfg.site.supportEmail),
+          detail: cfg.site.supportEmail ?? no,
+        },
+        {
+          label: t('admin.sys.https'),
+          ok: cfg.secureCookies,
+          detail: cfg.secureCookies ? t('admin.sys.yes') : t('admin.sys.httpsOff'),
+        },
       ];
       return c.html(
         <AdminSystemPage
@@ -380,14 +413,7 @@ export function adminRoutes() {
         .parse({ plan: form.plan, until: form.until ?? '', note: form.note ?? '' });
       const periodEnd = input.until ? new Date(`${input.until}T23:59:59Z`) : null;
       if (periodEnd && periodEnd.getTime() <= Date.now())
-        throw new z.ZodError([
-          {
-            code: 'custom',
-            path: ['until'],
-            message: 'The end date must be in the future',
-            input: input.until,
-          },
-        ]);
+        throw new AppError(400, 'past_date', 'The end date must be in the future');
       getPlan(input.plan);
       await c
         .get('services')
@@ -415,9 +441,7 @@ export function adminRoutes() {
           reason: form.reason ?? '',
         });
       if (!input.unlimited && input.amount === undefined)
-        throw new z.ZodError([
-          { code: 'custom', path: ['amount'], message: 'Enter an amount or tick “Unlimited”', input: '' },
-        ]);
+        throw new AppError(400, 'amount_required', 'Enter an amount or tick “Unlimited”');
       const now = new Date();
       const expiresAt =
         input.duration === 'forever'

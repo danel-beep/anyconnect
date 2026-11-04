@@ -1,6 +1,12 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Limits, type Metric, PLANS, type Plan } from '../billing/plans.js';
-import { CATEGORY_ORDER, PLANNED_SERVICES, type ServiceCategory, serviceMeta } from './catalog.js';
+import {
+  CATEGORY_ORDER,
+  PLANNED_SERVICES,
+  type ServiceCategory,
+  searchText,
+  serviceMeta,
+} from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
@@ -41,11 +47,28 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
               {label}
             </a>
           ))}
+          {/* Phones: the header has room only for the logo and the menu, so the buttons live here. */}
+          <div class="nav-extra">
+            {ctx.user ? (
+              <a class="btn primary" href="/app">
+                {t('site.cta.dashboard')}
+              </a>
+            ) : (
+              <>
+                <a class="btn" href="/login">
+                  {t('site.cta.signIn')}
+                </a>
+                <a class="btn primary" href="/signup">
+                  {t('site.cta.start')}
+                </a>
+              </>
+            )}
+          </div>
         </nav>
         <div class="site-cta">
           <Prefs t={t} lang={ctx.lang} path={ctx.path} />
           {ctx.user ? (
-            <a class="btn primary" href="/app">
+            <a class="btn primary cta-main" href="/app">
               {t('site.cta.dashboard')}
             </a>
           ) : (
@@ -53,7 +76,7 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
               <a class="btn ghost hide-sm" href="/login">
                 {t('site.cta.signIn')}
               </a>
-              <a class="btn primary" href="/signup">
+              <a class="btn primary cta-main" href="/signup">
                 {t('site.cta.start')}
               </a>
             </>
@@ -101,7 +124,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 <a href="/login">{t('site.cta.signIn')}</a>
               </>
             )}
-            <a href="/security">{t('site.footer.security')}</a>
+            <a href={ctx.user ? '/security' : '/#security'}>{t('site.footer.security')}</a>
           </div>
           <div>
             <h4>{t('site.footer.company')}</h4>
@@ -180,7 +203,7 @@ const ServiceCard: FC<{ ctx: PageCtx; service: PublicService }> = ({ ctx, servic
     <a
       class="svc"
       href={`/services/${service.id}`}
-      data-search={`${service.name} ${service.id} ${blurb(ctx.lang, service)}`}
+      data-search={searchText(service.id, service.name, blurb(ctx.lang, service))}
     >
       <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={service.name} />
       <span class="grow">
@@ -311,7 +334,15 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
 );
 
 const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
-  const href = ctx.user ? (plan.priceMonthly === 0 ? '/app' : '/app/billing') : '/signup';
+  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan.
+  const href =
+    plan.priceMonthly === 0
+      ? ctx.user
+        ? '/app'
+        : '/signup'
+      : ctx.user
+        ? '/app/billing'
+        : `/signup?next=${encodeURIComponent('/app/billing')}`;
   return (
     <a class={`btn block ${plan.featured ? 'primary' : ''}`} href={href}>
       {plan.priceMonthly === 0
@@ -328,10 +359,13 @@ const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
 const DemoWindow: FC<{ t: Translate }> = ({ t }) => (
   <div class="demo" aria-label={t('landing.demo.label')} role="img">
     <div class="demo-bar">
-      <i />
-      <i />
-      <i />
-      <span class="grow">{t('landing.demo.title')}</span>
+      <span class="demo-avatar">
+        <BrandIcon slug="claude" />
+      </span>
+      <strong class="grow">{t('landing.demo.title')}</strong>
+      <span class="demo-status">
+        <span class="dot ok" /> {t('landing.demo.connected')}
+      </span>
     </div>
     <div class="demo-body">
       <div class="msg user step s1">{t('landing.demo.ask')}</div>
@@ -357,6 +391,10 @@ const DemoWindow: FC<{ t: Translate }> = ({ t }) => (
         <span class="res wait">{t('landing.demo.confirmed')}</span>
       </div>
       <div class="msg ai step s5">{t('landing.demo.answer')}</div>
+    </div>
+    <div class="demo-input" aria-hidden="true">
+      <span class="grow">{t('landing.demo.input')}</span>
+      <Icon name="arrow" />
     </div>
   </div>
 );
@@ -384,7 +422,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <section class="hero">
         <div class="wrap">
           <div>
-            <p class="eyebrow">{t('landing.eyebrow')}</p>
             <h1>
               {t('landing.h1a')} <span class="mark">{t('landing.h1b')}</span> {t('landing.h1c')}
             </h1>
@@ -411,22 +448,9 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
         </div>
       </section>
 
-      <div class="wrap">
-        <div class="works">
-          <span>{t('landing.works')}</span>
-          {WORKS_WITH.map((c) => (
-            <strong>
-              {c.icon ? <BrandIcon slug={c.icon} /> : null}
-              {c.name}
-            </strong>
-          ))}
-        </div>
-      </div>
-
       <section class="section" id="how">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.how.eyebrow')}</p>
             <h2>{t('landing.how.title')}</h2>
             <p>{t('landing.how.lead')}</p>
           </div>
@@ -446,8 +470,16 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
               <h3>{t('landing.step2.title')}</h3>
               <p>{t('landing.step2.text')}</p>
               <div class="visual">
-                <div class="url-pill">
-                  <span class="dot accent" /> {ctx.mcpUrl}
+                <div class="chips">
+                  <span class="chip on">
+                    <BrandIcon slug="gmail" /> gmail:work
+                  </span>
+                  <span class="chip on">
+                    <BrandIcon slug="gmail" /> gmail:personal
+                  </span>
+                  <span class="chip">
+                    <BrandIcon slug="notion" /> notion:wiki
+                  </span>
                 </div>
               </div>
             </div>
@@ -455,7 +487,10 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
               <span class="n">03</span>
               <h3>{t('landing.step3.title')}</h3>
               <p>{t('landing.step3.text')}</p>
-              <div class="visual">
+              <div class="visual stack">
+                <div class="url-pill">
+                  <span class="dot accent" /> {ctx.mcpUrl}
+                </div>
                 <div class="prompt-pill">{t('landing.step3.prompt')}</div>
               </div>
             </div>
@@ -466,7 +501,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <section class="section border">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.map.eyebrow')}</p>
             <h2>{t('landing.map.title')}</h2>
             <p>{t('landing.map.lead')}</p>
           </div>
@@ -529,7 +563,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <section class="section border" id="features">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.features.eyebrow')}</p>
             <h2>{t('landing.features.title')}</h2>
           </div>
           <div class="bento">
@@ -642,7 +675,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
         <div class="wrap">
           <div class="section-head row between">
             <div>
-              <p class="eyebrow">{t('landing.services.eyebrow')}</p>
               <h2>{t('landing.services.title')}</h2>
               <p>{t('landing.services.lead')}</p>
             </div>
@@ -666,7 +698,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <section class="section border" id="security">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.security.eyebrow')}</p>
             <h2>{t('landing.security.title')}</h2>
             <p>{t('landing.security.lead')}</p>
           </div>
@@ -695,7 +726,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <section class="section border" id="pricing">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.pricing.eyebrow')}</p>
             <h2>{t('landing.pricing.title')}</h2>
             <p>{t('landing.pricing.lead')}</p>
           </div>
@@ -706,7 +736,6 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <section class="section border" id="faq">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">FAQ</p>
             <h2>{t('landing.faq.title')}</h2>
           </div>
           <Faq t={t} keys={['mcp', 'why', 'secrets', 'action', 'limit', 'custom', 'delete']} />
@@ -781,7 +810,6 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
       <section class="section">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.pricing.eyebrow')}</p>
             <h2>{t('pricing.h1')}</h2>
             <p>{t('pricing.lead')}</p>
           </div>
@@ -875,7 +903,6 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
       <section class="section">
         <div class="wrap">
           <div class="section-head">
-            <p class="eyebrow">{t('landing.services.eyebrow')}</p>
             <h2>{t('services.h1')}</h2>
             <p>{t('services.lead')}</p>
           </div>
@@ -888,9 +915,13 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
               type="search"
               placeholder={t('services.search')}
               data-filter="#svc-all"
+              data-filter-empty="#svc-none"
               autocomplete="off"
             />
           </div>
+          <p class="muted" id="svc-none" hidden>
+            {t('services.none')}
+          </p>
           <div id="svc-all">
             {CATEGORY_ORDER.map((cat) => {
               const inCat = services.filter((s) => categoryOf(s.id) === cat);

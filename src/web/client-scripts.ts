@@ -53,5 +53,10 @@ d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEac
 /* Live filter */
 $$('[data-filter]').forEach(function(input){var box=d.querySelector(input.getAttribute('data-filter'));if(!box)return;
 input.addEventListener('input',function(){var q=input.value.trim().toLowerCase();$$('[data-search]',box).forEach(function(el){el.hidden=q!==''&&el.getAttribute('data-search').toLowerCase().indexOf(q)<0});
-$$('[data-filter-group]',box).forEach(function(g){g.hidden=$$('[data-search]',g).every(function(el){return el.hidden})})})});
+$$('[data-filter-group]',box).forEach(function(g){g.hidden=$$('[data-search]',g).every(function(el){return el.hidden})});
+var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=!$$('[data-search]',box).every(function(el){return el.hidden})})});
+
+/* A page shown in answer to a form post (e.g. a new token) gets a clean address, so reloading it
+   does not post the form again. */
+var clean=d.querySelector('[data-replace-url]');if(clean&&history.replaceState)history.replaceState(null,'',clean.getAttribute('data-replace-url'));
 })();`;

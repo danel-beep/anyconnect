@@ -3,8 +3,9 @@ import { resolveProvider } from '../connectors/oauth/providers.js';
 import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registry.js';
 import type { ConnectorDefinition, ConnectorLogger, TestResult } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
-import { type WorkspaceSettings, workspaces } from '../db/schema.js';
+import { type SecuritySettings, type WorkspaceSettings, workspaces } from '../db/schema.js';
 import { badRequest, notFound } from '../lib/errors.js';
+import { DEFAULT_SECURITY } from '../security/policy.js';
 import type { AccountRow, AccountService, UpdateAccountInput } from './accounts.js';
 import type { AddServiceInput, CustomServiceManager, ServiceView } from './custom-services.js';
 import { getWorkspace } from './identity.js';
@@ -240,6 +241,24 @@ export class WorkspaceAdmin {
     const workspace = await getWorkspace(this.deps.db, workspaceId);
     if (!workspace) throw notFound('Workspace');
     return workspace.settings;
+  }
+
+  /** Default access and confirmation level for the workspace (`DEFAULT_SECURITY` fills the gaps). */
+  async security(workspaceId: string): Promise<Required<SecuritySettings>> {
+    return { ...DEFAULT_SECURITY, ...(await this.settings(workspaceId)).security };
+  }
+
+  async updateSecurity(workspaceId: string, change: SecuritySettings): Promise<Required<SecuritySettings>> {
+    const current = await this.settings(workspaceId);
+    const security = {
+      ...current.security,
+      ...Object.fromEntries(Object.entries(change).filter(([, v]) => v !== undefined)),
+    };
+    await this.deps.db
+      .update(workspaces)
+      .set({ settings: { ...current, security } })
+      .where(eq(workspaces.id, workspaceId));
+    return { ...DEFAULT_SECURITY, ...security };
   }
 
   async updateSettings(

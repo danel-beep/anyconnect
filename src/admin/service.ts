@@ -16,7 +16,7 @@ import {
   webSessions,
   workspaceMembers,
 } from '../db/schema.js';
-import { badRequest, forbidden, notFound } from '../lib/errors.js';
+import { AppError, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 
 /** Who does an admin action, for the audit log. */
@@ -282,13 +282,18 @@ export class AdminService {
     const [[total], rows] = await Promise.all([
       db.select({ n: count() }).from(adminAuditLog),
       db
-        .select()
+        .select({ entry: adminAuditLog, targetEmail: users.email })
         .from(adminAuditLog)
+        .leftJoin(users, eq(users.id, adminAuditLog.targetUserId))
         .orderBy(desc(adminAuditLog.createdAt))
         .limit(perPage)
         .offset((page - 1) * perPage),
     ]);
-    return { rows, page, pages: Math.max(1, Math.ceil((total?.n ?? 0) / perPage)) };
+    return {
+      rows: rows.map((r) => ({ ...r.entry, targetEmail: r.targetEmail })),
+      page,
+      pages: Math.max(1, Math.ceil((total?.n ?? 0) / perPage)),
+    };
   }
 
   // --- Changing ----------------------------------------------------------------
@@ -313,7 +318,7 @@ export class AdminService {
 
   private async workspaceOf(userId: string): Promise<string> {
     const workspace = (await this.deps.users.ownedWorkspaces(userId))[0];
-    if (!workspace) throw badRequest('The user has no workspace');
+    if (!workspace) throw new AppError(400, 'no_workspace', 'The user has no workspace');
     return workspace.id;
   }
 
@@ -321,8 +326,10 @@ export class AdminService {
   private async assertManageable(actor: AdminActor, userId: string): Promise<UserRow> {
     const user = await this.deps.users.get(userId);
     if (!user) throw notFound('User');
-    if (user.id === actor.userId) throw forbidden('You cannot do this to your own account');
-    if (user.role === 'admin') throw forbidden('Other admins are managed with the CLI (users:role)');
+    if (user.id === actor.userId)
+      throw new AppError(403, 'self_change', 'You cannot do this to your own account');
+    if (user.role === 'admin')
+      throw new AppError(403, 'admin_target', 'Other admins are managed with the CLI (users:role)');
     return user;
   }
 
@@ -405,7 +412,7 @@ export class AdminService {
   async deleteUser(actor: AdminActor, userId: string, confirmEmail: string): Promise<void> {
     const user = await this.assertManageable(actor, userId);
     if (confirmEmail.trim().toLowerCase() !== user.email)
-      throw badRequest('Type the user’s email to confirm');
+      throw new AppError(400, 'confirm_email', 'Type the user’s email to confirm');
     await this.deps.users.delete(userId);
     await this.log(actor, 'user.delete', { userId }, { email: user.email });
   }

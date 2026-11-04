@@ -6,6 +6,7 @@ import { isRecentAuth } from '../core/auth-methods.js';
 import type { toolCalls } from '../db/schema.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
+import { ACCESS_LEVELS, CONFIRM_LEVELS } from '../security/policy.js';
 import {
   type AccountView,
   ActivityPage,
@@ -19,6 +20,7 @@ import {
   type UsageView,
 } from '../web/app.js';
 import { clearCookie } from '../web/http.js';
+import { RulesPage } from '../web/rules.js';
 import { type AppContext, type AppEnv, bodyParams, SESSION_COOKIE } from './context.js';
 import {
   type AppAuth,
@@ -31,6 +33,7 @@ import {
   setFlash,
   shellInfo,
   takeFlash,
+  uiError,
 } from './page-helpers.js';
 
 const DAY = 86_400_000;
@@ -55,7 +58,7 @@ function accountView(a: AccountRow, serviceName: string, oauth: boolean): Accoun
 
 /** Error text for a failed form action: our own messages are user-safe, others are not shown. */
 const errorText = (c: AppContext, error: unknown): string =>
-  error instanceof AppError ? error.message : c.get('t')('error.internal');
+  error instanceof AppError ? uiError(c, error) : c.get('t')('error.internal');
 
 /**
  * The signed-in dashboard (`/app/...`): overview, services and accounts, AI apps and tokens,
@@ -88,6 +91,10 @@ export function appRoutes() {
         const response = await run(c, auth, form);
         if (response) return response;
       } catch (error) {
+        if (error instanceof z.ZodError) {
+          setFlash(c, 'bad', 'app.flash.invalid');
+          return c.redirect(back, 303);
+        }
         if (!(error instanceof AppError))
           c.get('services').logger.error({ err: error }, 'dashboard action failed');
         setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
@@ -220,6 +227,14 @@ export function appRoutes() {
             })),
             usage,
             flash: takeFlash(c),
+            ...(c.req.query('draft')
+              ? {
+                  customDraft: {
+                    name: (c.req.query('name') ?? '').slice(0, 60),
+                    url: (c.req.query('url') ?? '').slice(0, 2000),
+                  },
+                }
+              : {}),
           }}
         />,
       );
@@ -240,7 +255,10 @@ export function appRoutes() {
 
   accountAction('test', async (c, auth, account) => {
     const { test } = await c.get('services').admin.testAccount(auth.workspace.id, account.id);
-    if (test.ok) setFlash(c, 'ok', 'app.flash.testOk', { label: account.label });
+    if (test.ok)
+      setFlash(c, 'ok', account.enabled ? 'app.flash.testOk' : 'app.flash.testOkPaused', {
+        label: account.label,
+      });
     else
       setFlash(c, 'bad', 'app.flash.testFailed', {
         label: account.label,
@@ -270,12 +288,39 @@ export function appRoutes() {
     '/app/custom',
     action('/app/services', async (c, auth, form) => {
       const s = c.get('services');
-      const added = await s.customServices.add(auth.workspace.id, {
-        kind: 'mcp',
-        name: (form.name ?? '').trim(),
-        url: (form.url ?? '').trim(),
-      });
+      const name = (form.name ?? '').trim().slice(0, 60);
+      const url = (form.url ?? '').trim().slice(0, 2000);
+      const token = (form.token ?? '').trim();
+      // On failure the user gets the form back as they filled it (but never the token).
+      const retry = (
+        key: 'app.flash.customFailed' | 'app.flash.customExists' | 'app.flash.customInvalid',
+      ) => {
+        setFlash(c, 'bad', key);
+        return c.redirect(`/app/services?${new URLSearchParams({ draft: '1', name, url })}#custom`, 303);
+      };
+      let added: Awaited<ReturnType<typeof s.customServices.add>>;
+      try {
+        added = await s.customServices.add(auth.workspace.id, {
+          kind: 'mcp',
+          name,
+          url,
+          ...(token ? { auth: 'bearer' as const } : {}),
+        });
+      } catch (error) {
+        if (!(error instanceof AppError)) throw error;
+        if (error.status === 409) return retry('app.flash.customExists');
+        if (error.message.startsWith('Invalid service')) return retry('app.flash.customInvalid');
+        return retry('app.flash.customFailed');
+      }
+      if (token) {
+        await s.accounts.create(auth.workspace.id, {
+          connectorId: added.connectorId,
+          label: name,
+          credentials: { token },
+        });
+      }
       setFlash(c, 'ok', 'app.flash.customAdded', { name: added.name });
+      return undefined;
     }),
   );
 
@@ -402,9 +447,10 @@ export function appRoutes() {
     page('/app/billing', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, entitlements, shell] = await Promise.all([
+      const [usage, entitlements, request, shell] = await Promise.all([
         usageOf(c, ws),
         s.entitlements.entitlements(ws),
+        s.entitlements.openRequest(ws),
         shellInfo(c, ws),
       ]);
       const sub = entitlements.subscription;
@@ -427,6 +473,7 @@ export function appRoutes() {
                 expiresAt: g.expiresAt,
                 reason: g.reason,
               })),
+            requested: request ? { planId: request.planId, at: request.createdAt } : undefined,
             flash: takeFlash(c),
           }}
         />,
@@ -452,6 +499,113 @@ export function appRoutes() {
         cancelUrl: `${s.config.publicUrl}/app/billing`,
       });
       return c.redirect(url, 303);
+    }),
+  );
+
+  /** Payments are manual until a `BillingProvider` is wired: the request shows up in the admin panel. */
+  app.post(
+    '/app/billing/request',
+    action('/app/billing', async (c, auth, form) => {
+      const input = z
+        .object({ plan: z.string().max(40), interval: z.enum(['month', 'year']).default('month') })
+        .parse({ plan: form.plan, interval: form.interval || undefined });
+      await c
+        .get('services')
+        .entitlements.requestPlan(auth.workspace.id, auth.user.id, input.plan, input.interval);
+      setFlash(c, 'ok', 'app.flash.planRequested', {
+        plan: c.get('t')(`plan.${input.plan}.name` as 'plan.free.name'),
+      });
+      return undefined;
+    }),
+  );
+
+  // --- Rules: confirmations and access -----------------------------------------------
+  app.get(
+    '/app/rules',
+    page('/app/rules', async (c, auth) => {
+      const s = c.get('services');
+      const ws = auth.workspace.id;
+      const [security, rules, clients, accounts, shell] = await Promise.all([
+        s.admin.security(ws),
+        s.policies.listRules(ws),
+        s.aiClients.list(ws),
+        accountsOf(c, ws),
+        shellInfo(c, ws),
+      ]);
+      const simple = (r: (typeof rules)[number]) => r.personaId === null && r.connectorId === null;
+      const appRule = (id: string) =>
+        rules.find((r) => simple(r) && r.aiClientId === id && r.accountId === null);
+      const accountRule = (id: string) =>
+        rules.find((r) => simple(r) && r.accountId === id && r.aiClientId === null);
+      const edited = new Set(
+        [...clients.map((x) => appRule(x.id)?.id), ...accounts.map((a) => accountRule(a.id)?.id)].filter(
+          Boolean,
+        ),
+      );
+      return c.html(
+        <RulesPage
+          ctx={pageCtx(c, auth.user)}
+          shell={shell}
+          view={{
+            defaultConfirm: security.defaultConfirm,
+            undoWindowSeconds: security.undoWindowSeconds,
+            apps: clients.map((x) => ({
+              id: x.id,
+              name: x.name,
+              access: appRule(x.id)?.access ?? null,
+              confirm: appRule(x.id)?.confirm ?? null,
+            })),
+            accounts: accounts.map((a) => ({
+              id: a.id,
+              name: a.label,
+              detail: `${a.service} · ${a.connectorId}:${a.name}`,
+              access: accountRule(a.id)?.access ?? null,
+              confirm: accountRule(a.id)?.confirm ?? null,
+            })),
+            otherRules: rules.filter((r) => !edited.has(r.id)).length,
+            flash: takeFlash(c),
+          }}
+        />,
+      );
+    }),
+  );
+
+  app.post(
+    '/app/rules/defaults',
+    action('/app/rules', async (c, auth, form) => {
+      const input = z
+        .object({ confirm: z.enum(CONFIRM_LEVELS), undo: z.coerce.number().int().min(0).max(3600) })
+        .parse({ confirm: form.confirm, undo: form.undo ?? '0' });
+      await c.get('services').admin.updateSecurity(auth.workspace.id, {
+        defaultConfirm: input.confirm,
+        undoWindowSeconds: input.undo,
+      });
+      setFlash(c, 'ok', 'app.flash.rulesSaved');
+      return undefined;
+    }),
+  );
+
+  app.post(
+    '/app/rules/scoped',
+    action('/app/rules', async (c, auth, form) => {
+      const s = c.get('services');
+      const input = z
+        .object({
+          kind: z.enum(['app', 'account']),
+          id: z.string().min(1).max(64),
+          access: z.union([z.literal(''), z.enum(ACCESS_LEVELS)]),
+          confirm: z.union([z.literal(''), z.enum(CONFIRM_LEVELS)]),
+        })
+        .parse({ kind: form.kind, id: form.id, access: form.access ?? '', confirm: form.confirm ?? '' });
+      const value = { access: input.access || null, confirm: input.confirm || null };
+      // The rule service checks that the app or account belongs to this workspace.
+      await s.policies.setScopedRule(
+        auth.workspace.id,
+        input.kind === 'app' ? { aiClientId: input.id } : { accountId: input.id },
+        value,
+      );
+      setFlash(c, 'ok', 'app.flash.rulesSaved');
+      return undefined;
     }),
   );
 
@@ -537,6 +691,11 @@ export function appRoutes() {
         return c.redirect(`/login?reauth=1&next=${encodeURIComponent('/app/settings')}`, 303);
       if ((form.email ?? '').trim().toLowerCase() !== auth.user.email.toLowerCase()) {
         setFlash(c, 'bad', 'app.flash.deleteMismatch');
+        return;
+      }
+      // The hub owner would lock everyone out of the admin panel; roles change in the CLI.
+      if (auth.user.role === 'admin') {
+        setFlash(c, 'bad', 'app.flash.deleteAdmin');
         return;
       }
       await s.users.delete(auth.user.id);

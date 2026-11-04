@@ -5,6 +5,7 @@ import type { Db } from '../db/client.js';
 import {
   accounts,
   limitGrants,
+  planRequests,
   type SubscriptionStatus,
   subscriptions,
   usageCounters,
@@ -12,7 +13,7 @@ import {
 } from '../db/schema.js';
 import type { QuotaDecision, QuotaGate } from '../hub/quota.js';
 import type { UsageMeter } from '../hub/usage.js';
-import { AppError, badRequest, notFound } from '../lib/errors.js';
+import { AppError, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 import { monthPeriod, type Period } from './period.js';
 import {
@@ -253,7 +254,7 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       note?: string | null;
     } = {},
   ): Promise<SubscriptionRow> {
-    if (!findPlan(planId)) throw badRequest(`Unknown plan "${planId}"`);
+    if (!findPlan(planId)) throw new AppError(400, 'unknown_plan', `Unknown plan "${planId}"`);
     const values = {
       planId,
       status: opts.status ?? ('active' as const),
@@ -269,6 +270,7 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       .onConflictDoUpdate({ target: subscriptions.workspaceId, set: { ...values, updatedAt: new Date() } })
       .returning();
     this.usageCache.delete(workspaceId);
+    await this.closeRequests(workspaceId);
     return row!;
   }
 
@@ -289,15 +291,19 @@ export class EntitlementService implements QuotaGate, AccountLimits {
     },
   ): Promise<LimitGrantRow> {
     if (!isMetric(input.metric))
-      throw badRequest(`Unknown limit "${input.metric}" (one of ${METRICS.join(', ')})`);
+      throw new AppError(
+        400,
+        'unknown_limit',
+        `Unknown limit "${input.metric}" (one of ${METRICS.join(', ')})`,
+      );
     if (
       input.amount !== null &&
       (!Number.isInteger(input.amount) || input.amount <= 0 || input.amount > 1e9)
     ) {
-      throw badRequest('The amount must be a positive whole number');
+      throw new AppError(400, 'bad_amount', 'The amount must be a positive whole number');
     }
     if (input.expiresAt && input.expiresAt.getTime() <= this.now().getTime()) {
-      throw badRequest('The end date must be in the future');
+      throw new AppError(400, 'past_date', 'The end date must be in the future');
     }
     const [row] = await this.deps.db
       .insert(limitGrants)
@@ -328,5 +334,53 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       .returning();
     if (!row) throw notFound('Limit grant');
     return row;
+  }
+
+  // --- Manual plan requests (until a payment provider is wired) ------------------
+
+  /** Records "I want this plan"; a workspace has at most one open request (the latest wins). */
+  async requestPlan(
+    workspaceId: string,
+    userId: string,
+    planId: string,
+    interval: 'month' | 'year',
+  ): Promise<void> {
+    const plan = findPlan(planId);
+    if (!plan?.public || plan.priceMonthly === 0)
+      throw new AppError(400, 'unknown_plan', `Unknown plan "${planId}"`);
+    await this.deps.db.transaction(async (tx) => {
+      await tx
+        .update(planRequests)
+        .set({ closedAt: this.now() })
+        .where(and(eq(planRequests.workspaceId, workspaceId), isNull(planRequests.closedAt)));
+      await tx.insert(planRequests).values({ id: newId('preq'), workspaceId, userId, planId, interval });
+    });
+  }
+
+  /** The workspace's open request, if any (shown on its billing page). */
+  async openRequest(workspaceId: string) {
+    const [row] = await this.deps.db
+      .select()
+      .from(planRequests)
+      .where(and(eq(planRequests.workspaceId, workspaceId), isNull(planRequests.closedAt)))
+      .limit(1);
+    return row;
+  }
+
+  /** Open requests across the hub, newest first (admin panel). */
+  async openRequests(limit = 20) {
+    return this.deps.db
+      .select()
+      .from(planRequests)
+      .where(isNull(planRequests.closedAt))
+      .orderBy(desc(planRequests.createdAt))
+      .limit(limit);
+  }
+
+  async closeRequests(workspaceId: string): Promise<void> {
+    await this.deps.db
+      .update(planRequests)
+      .set({ closedAt: this.now() })
+      .where(and(eq(planRequests.workspaceId, workspaceId), isNull(planRequests.closedAt)));
   }
 }

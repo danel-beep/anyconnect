@@ -75,7 +75,7 @@ describe('config', () => {
       RENDER_EXTERNAL_URL: 'https://anyconnect.onrender.com',
     });
     expect(config.publicUrl).toBe('https://anyconnect.onrender.com');
-    expect(config.trustProxy).toBe(true);
+    expect(config.trustProxy).toEqual({ hops: 2 });
   });
 
   it('rejects a public URL with a path', () => {

@@ -52,4 +52,5 @@ export type IdPrefix =
   | 'oap' // OAuth app of a service provider (bring your own app)
   | 'svc' // user-defined service (remote MCP server, HTTP manifest)
   | 'lim' // limit grant (extra limits on top of a plan)
-  | 'adm'; // admin audit log entry
+  | 'adm' // admin audit log entry
+  | 'preq'; // plan request (manual upgrades before payments)

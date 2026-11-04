@@ -41,8 +41,14 @@ const EnvSchema = z.object({
   ADMIN_EMAIL: optionalString,
   ADMIN_PASSWORD: optionalString,
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  /** Trust X-Forwarded-* headers (set automatically on Render). */
+  /**
+   * Proxies in front of the hub: `true`/a number of proxies that append to X-Forwarded-For (the
+   * client IP is taken that many entries from the right, so a client cannot forge it), `false` for
+   * none. Defaults to 2 on Render (Cloudflare + Render's load balancer).
+   */
   TRUST_PROXY: optionalString,
+  /** A header the platform itself sets to the client IP (e.g. `cf-connecting-ip`); wins over X-Forwarded-For. */
+  CLIENT_IP_HEADER: optionalString,
   MIGRATE_ON_START: bool(true),
   SEED_DEMO_ACCOUNTS: bool(true),
   OAUTH_DYNAMIC_REGISTRATION: bool(true),
@@ -109,7 +115,8 @@ export interface AppConfig {
   mcpUrl: string;
   /** Whether cookies must be Secure (https public URL). */
   secureCookies: boolean;
-  trustProxy: boolean;
+  /** How to find the client IP behind proxies (`hops: 0` = use the socket address). */
+  trustProxy: TrustProxy;
   database: { url: string; poolMax: number };
   encryption: { key: string | undefined; previousKeys: string[] };
   admin: { email: string; password: string } | undefined;
@@ -238,10 +245,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new ConfigError('ADMIN_PASSWORD must be at least 12 characters in production');
   }
 
-  const trustProxy =
-    env.TRUST_PROXY !== undefined
-      ? ['1', 'true', 'yes', 'on'].includes(env.TRUST_PROXY.toLowerCase())
-      : Boolean(source.RENDER) || Boolean(env.RENDER_EXTERNAL_URL);
+  const onRender = Boolean(source.RENDER) || Boolean(env.RENDER_EXTERNAL_URL);
+  const trustProxy: TrustProxy = {
+    hops: proxyHops(env.TRUST_PROXY, onRender ? 2 : 0),
+    ...(env.CLIENT_IP_HEADER ? { header: env.CLIENT_IP_HEADER.trim().toLowerCase() } : {}),
+  };
 
   return {
     env: env.NODE_ENV,
@@ -325,4 +333,22 @@ function adminAllowedIps(value: string | undefined): string[] {
     throw new Error(`ADMIN_ALLOWED_IPS: ${(error as Error).message}`);
   }
   return entries;
+}
+
+export interface TrustProxy {
+  /** Proxies that append to X-Forwarded-For; 0 = trust no forwarded header. */
+  hops: number;
+  /** A header set by the platform with the client IP. */
+  header?: string;
+}
+
+function proxyHops(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const v = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(v)) return 1;
+  if (['0', 'false', 'no', 'off', ''].includes(v)) return 0;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0 || n > 10)
+    throw new ConfigError('TRUST_PROXY must be true, false or the number of proxies (0–10)');
+  return n;
 }

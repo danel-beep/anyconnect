@@ -294,6 +294,74 @@ export default defineConnector({
     const auth = await call<SlackResponse & { user?: string; team?: string }>(ctx, 'auth.test', {});
     return { ok: true, identity: [auth.user, auth.team].filter(Boolean).join(' @ ') };
   },
+  ui: {
+    locales: {
+      ru: {
+        description:
+          'Slack от вашего имени: поиск сообщений, каналы, личные сообщения и ветки, отправка сообщений.',
+        fields: {
+          token: {
+            label: 'Токен пользователя (xoxp-…)',
+            hint: 'Из вашего приложения Slack. Не нужен, если входить через Slack.',
+          },
+        },
+        actions: {
+          search_messages: {
+            title: 'Поиск сообщений',
+            description:
+              'Ищет сообщения во всех каналах и личных переписках. Понимает фильтры Slack: from:@user, in:#channel, after:2026-11-01, has:link.',
+          },
+          list_channels: {
+            title: 'Список каналов',
+            description: 'Каналы и личные переписки, в которых вы состоите.',
+          },
+          read_channel: {
+            title: 'Чтение канала',
+            description:
+              'Последние сообщения канала или личной переписки, сначала новые. Можно прочитать ветку.',
+          },
+          send_message: {
+            title: 'Отправка сообщения',
+            description:
+              'Пишет в канал или личную переписку от вашего имени, в том числе ответом в ветке. Поддерживает разметку Slack.',
+          },
+          find_user: {
+            title: 'Поиск людей',
+            description: 'Ищет людей в рабочем пространстве по имени, нику или почте.',
+          },
+        },
+      },
+      en: {
+        fields: {
+          token: {
+            label: 'User token (xoxp-…)',
+            hint: 'From your Slack app. Not needed when you sign in with Slack.',
+          },
+        },
+        actions: {
+          search_messages: {
+            title: 'Search messages',
+            description:
+              'Searches messages in all channels and DMs. Understands Slack filters: from:@user, in:#channel, after:2026-11-01, has:link.',
+          },
+          list_channels: { title: 'List channels', description: 'Channels and direct messages you are in.' },
+          read_channel: {
+            title: 'Read a channel',
+            description: 'Latest messages of a channel or DM, newest first, or a whole thread.',
+          },
+          send_message: {
+            title: 'Send a message',
+            description:
+              'Posts to a channel or DM as you, optionally as a thread reply. Slack formatting works.',
+          },
+          find_user: {
+            title: 'Find people',
+            description: 'Finds people in the workspace by name, username or email.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'search_messages',

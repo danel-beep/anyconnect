@@ -1,6 +1,9 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
+  apiTokens,
+  oauthAuthorizationCodes,
+  oauthGrants,
   type UserRole,
   type UserStatus,
   userIdentities,
@@ -28,8 +31,14 @@ export interface ExternalProfile {
   /** The provider's stable user id. */
   subject: string;
   email: string;
-  /** Only verified addresses create accounts or link to existing ones. */
+  /** Only verified addresses create accounts. */
   emailVerified: boolean;
+  /**
+   * Whether the provider is the authority for this address (Google: an @gmail.com address or a
+   * Google Workspace domain), not just "verified once". Only then may it link to an existing user
+   * or become an admin: anyone can create a Google account for an address they once controlled.
+   */
+  emailAuthoritative: boolean;
   name?: string | undefined;
 }
 
@@ -123,6 +132,9 @@ export class UserService {
     if (!profile.emailVerified) throw new SignInRefused('email_unverified');
 
     const existing = await findUserByEmail(db, email);
+    const isAdminEmail = this.deps.adminEmails.includes(email);
+    if ((existing || isAdminEmail) && !profile.emailAuthoritative)
+      throw new SignInRefused('email_unverified');
     if (existing) {
       if (existing.status !== 'active') throw new SignInRefused('suspended');
       await this.link(existing.id, profile, email);
@@ -134,12 +146,11 @@ export class UserService {
       return { user: await this.syncRole(existing), created: false };
     }
 
-    if (this.deps.signups === 'closed' && !this.deps.adminEmails.includes(email))
-      throw new SignInRefused('signups_closed');
+    if (this.deps.signups === 'closed' && !isAdminEmail) throw new SignInRefused('signups_closed');
     const { user } = await createUser(db, {
       email,
       ...(profile.name ? { name: profile.name.slice(0, 100) } : {}),
-      role: this.deps.adminEmails.includes(email) ? 'admin' : 'user',
+      role: isAdminEmail ? 'admin' : 'user',
     });
     await this.link(user.id, profile, email);
     return { user, created: true };
@@ -173,29 +184,34 @@ export class UserService {
       .where(eq(users.id, userId))
       .returning();
     if (!user) throw notFound('User');
+    activeCache.delete(userId);
     if (status === 'suspended') await this.revokeAccess(userId);
     return user;
   }
 
-  /** Signs the user out everywhere and disconnects every AI app and personal token. */
+  /**
+   * Signs the user out everywhere and disconnects every AI app and personal token they hold, in any
+   * workspace; authorization codes not yet exchanged are dropped too.
+   */
   async revokeAccess(userId: string): Promise<{ sessions: number; apps: number; tokens: number }> {
-    const sessions = await this.deps.db
+    const db = this.deps.db;
+    const sessions = await db
       .delete(webSessions)
       .where(eq(webSessions.userId, userId))
       .returning({ id: webSessions.tokenHash });
-    let apps = 0;
-    let tokens = 0;
-    for (const workspace of await this.ownedWorkspaces(userId)) {
-      for (const grant of await this.deps.oauth.listGrants(workspace.id)) {
-        await this.deps.oauth.revokeGrantById(grant.id);
-        apps += 1;
-      }
-      for (const token of await this.deps.apiTokens.list(workspace.id)) {
-        await this.deps.apiTokens.revoke(workspace.id, token.id);
-        tokens += 1;
-      }
-    }
-    return { sessions: sessions.length, apps, tokens };
+    await db.delete(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.userId, userId));
+    const grants = await db
+      .select({ id: oauthGrants.id })
+      .from(oauthGrants)
+      .where(and(eq(oauthGrants.userId, userId), isNull(oauthGrants.revokedAt)));
+    for (const grant of grants) await this.deps.oauth.revokeGrantById(grant.id);
+    const tokens = await db
+      .select({ id: apiTokens.id, workspaceId: apiTokens.workspaceId })
+      .from(apiTokens)
+      .where(and(eq(apiTokens.userId, userId), isNull(apiTokens.revokedAt)));
+    for (const token of tokens) await this.deps.apiTokens.revoke(token.workspaceId, token.id);
+    activeCache.delete(userId);
+    return { sessions: sessions.length, apps: grants.length, tokens: tokens.length };
   }
 
   /**
@@ -217,4 +233,24 @@ export class UserService {
     }
     await this.deps.db.delete(users).where(eq(users.id, userId));
   }
+}
+
+const ACTIVE_CACHE_MS = 15_000;
+const activeCache = new Map<string, { at: number; active: boolean }>();
+
+/**
+ * `userId → is the user active`, for the token verifier on every MCP/API request. Cached for 15 s
+ * per process; suspending also revokes the user's tokens, so the cache only delays the backstop.
+ */
+export function activeUserCheck(db: Db): (userId: string) => Promise<boolean> {
+  return async (userId) => {
+    const now = Date.now();
+    const hit = activeCache.get(userId);
+    if (hit && now - hit.at < ACTIVE_CACHE_MS) return hit.active;
+    const [row] = await db.select({ status: users.status }).from(users).where(eq(users.id, userId)).limit(1);
+    const active = row?.status === 'active';
+    activeCache.set(userId, { at: now, active });
+    if (activeCache.size > 10_000) activeCache.delete(activeCache.keys().next().value!);
+    return active;
+  };
 }

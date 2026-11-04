@@ -29,7 +29,7 @@ pre code{border:0;padding:0;background:none;white-space:pre}
 pre{margin:0}
 hr{border:0;border-top:1px solid var(--border);margin:24px 0}
 ::selection{background:var(--accent);color:var(--accent-text)}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px;border-radius:6px}
 [hidden]{display:none!important}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--card);border:1px solid var(--border);padding:8px 12px;border-radius:8px}
@@ -207,6 +207,9 @@ ul.codes code{font-size:15px}
 :root[data-theme=dark] .theme-dark-icon{display:block}
 :root[data-theme=dark] .theme-light-icon{display:none}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .theme-dark-icon{display:block}:root:not([data-theme=light]) .theme-light-icon{display:none}}
+.connect-advanced{margin:8px 0 16px;border:1px solid var(--border);border-radius:12px;padding:0 14px}
+.connect-advanced>summary{padding:12px 0;font-weight:560;cursor:pointer}
+.connect-advanced>section{padding:4px 0 8px}
 `;
 
 /** Served at /assets/app.css (no inline styles, so the CSP can forbid them). Colors come from `theme.ts`. */

@@ -1,6 +1,6 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan } from '../billing/plans.js';
-import { serviceMeta } from './catalog.js';
+import { searchText, serviceMeta } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
@@ -33,6 +33,7 @@ export type AppSection =
   | 'apps'
   | 'activity'
   | 'confirm'
+  | 'rules'
   | 'billing'
   | 'security'
   | 'settings'
@@ -58,8 +59,9 @@ const NAV: {
   { id: 'apps', href: '/app/apps', icon: 'zap', key: 'app.nav.apps', group: 'main' },
   { id: 'activity', href: '/app/activity', icon: 'activity', key: 'app.nav.activity', group: 'main' },
   { id: 'confirm', href: '/confirm', icon: 'bell', key: 'app.nav.confirm', group: 'main' },
+  { id: 'rules', href: '/app/rules', icon: 'shield', key: 'app.nav.rules', group: 'main' },
   { id: 'billing', href: '/app/billing', icon: 'card', key: 'app.nav.billing', group: 'account' },
-  { id: 'security', href: '/security', icon: 'shield', key: 'app.nav.security', group: 'account' },
+  { id: 'security', href: '/security', icon: 'lock', key: 'app.nav.security', group: 'account' },
   { id: 'settings', href: '/app/settings', icon: 'settings', key: 'app.nav.settings', group: 'account' },
   { id: 'admin', href: '/admin', icon: 'chart', key: 'admin.nav.overview', group: 'admin' },
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
@@ -131,14 +133,14 @@ export const AppShell: FC<{
                 </span>
                 <span class="plan-name">
                   {t(`plan.${shell.planId}.name` as 'plan.free.name')}
-                  {user.isAdmin ? <span class="admin-tag">admin</span> : null}
+                  {user.isAdmin ? <span class="admin-tag">{t('app.adminTag')}</span> : null}
                 </span>
               </span>
             </div>
-            <div class="prefs">
+            <div class="side-tools">
               <Prefs t={t} lang={ctx.lang} path={ctx.path} />
               <a class="icon-btn" href="/" title={t('app.toSite')} aria-label={t('app.toSite')}>
-                <Icon name="globe" />
+                <Icon name="external" />
               </a>
               <form method="post" action="/logout" class="inline">
                 <input type="hidden" name="csrf" value={ctx.csrf} />
@@ -521,6 +523,8 @@ export interface ServicesView {
   custom: CustomServiceView[];
   usage: UsageView;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
+  /** What the user typed into the "own MCP server" form when adding it failed. */
+  customDraft?: { name: string; url: string } | undefined;
 }
 
 const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
@@ -536,7 +540,7 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
         </div>
         <div class="sub">
           {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
-          {a.identity ? ` · ${a.identity}` : ''}
+          {a.identity && a.identity !== `${a.connectorId}:${a.name}` ? ` · ${a.identity}` : ''}
         </div>
         {a.enabled && a.status !== 'active' && a.statusMessage ? (
           <div class="sub error">{a.statusMessage}</div>
@@ -609,7 +613,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
   return (
     <AppShell ctx={ctx} shell={shell} section="services" title={t('app.nav.services')}>
       <PageHead title={t('app.nav.services')} sub={t('app.services.sub')} />
-      <Flash flash={view.flash} />
+      {view.customDraft ? null : <Flash flash={view.flash} />}
       <div class="card flush">
         <div class="card-head pad">
           <h2>
@@ -645,16 +649,20 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
             placeholder={t('services.search')}
             aria-label={t('services.search')}
             data-filter="#catalog"
+            data-filter-empty="#catalog-none"
             autocomplete="off"
           />
         </div>
         <p class="hint">{t('app.services.addHint')}</p>
+        <p class="muted" id="catalog-none" hidden>
+          {t('services.none')}
+        </p>
         <div class="catalog" id="catalog">
           {view.catalog.map((s) => {
             const meta = serviceMeta(s.service);
             const desc = meta ? (lang === 'ru' ? meta.blurb.ru : meta.blurb.en) : s.description;
             return (
-              <div class="cat-item" id={`add-${s.service}`} data-search={`${s.name} ${s.service} ${desc}`}>
+              <div class="cat-item" id={`add-${s.service}`} data-search={searchText(s.service, s.name, desc)}>
                 <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={s.name} />
                 <div class="grow">
                   <strong>{s.name}</strong>
@@ -709,15 +717,36 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
             ))}
           </ul>
         ) : null}
+        {view.customDraft ? <Flash flash={view.flash} /> : null}
         <form method="post" action="/app/custom" class="inline-form">
           <input type="hidden" name="csrf" value={ctx.csrf} />
           <div>
             <label for="mcp-name">{t('app.custom.name')}</label>
-            <input id="mcp-name" type="text" name="name" required maxlength={60} placeholder="CRM" />
+            <input
+              id="mcp-name"
+              type="text"
+              name="name"
+              required
+              maxlength={60}
+              placeholder="CRM"
+              value={view.customDraft?.name ?? ''}
+            />
           </div>
           <div class="wide-2">
             <label for="mcp-url-in">{t('app.custom.url')}</label>
-            <input id="mcp-url-in" type="url" name="url" required placeholder="https://example.com/mcp" />
+            <input
+              id="mcp-url-in"
+              type="url"
+              name="url"
+              required
+              placeholder="https://example.com/mcp"
+              value={view.customDraft?.url ?? ''}
+            />
+          </div>
+          <div class="wide">
+            <label for="mcp-token">{t('app.custom.token')}</label>
+            <input id="mcp-token" type="password" name="token" autocomplete="off" maxlength={4000} />
+            <p class="hint">{t('app.custom.tokenHint')}</p>
           </div>
           <div>
             <button type="submit" class="block">
@@ -802,7 +831,7 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
         <h2>{t('app.tokens.title')}</h2>
         <p class="muted">{t('app.tokens.text')}</p>
         {view.newToken ? (
-          <div class="notice ok">
+          <div class="notice ok" data-replace-url="/app/apps">
             <p>
               <strong>{t('app.tokens.created')}</strong> {t('app.tokens.once')}
             </p>
@@ -962,6 +991,8 @@ export interface BillingView {
   plan: Plan;
   subscription?: { provider: string; periodEnd: Date | null; status: string } | undefined;
   grants: { metric: Metric; amount: number | null; expiresAt: Date | null; reason: string | null }[];
+  /** An open "switch me to this plan" request (manual payments). */
+  requested?: { planId: string; at: Date } | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
 
@@ -1014,8 +1045,19 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           </>
         ) : null}
       </div>
-      {ctx.billing ? null : (
-        <div class="notice info">{t('app.billing.manual', { email: ctx.supportEmail ?? '' })}</div>
+      {ctx.billing ? null : view.requested ? (
+        <div class="notice info">
+          {t('app.billing.requested', {
+            plan: t(`plan.${view.requested.planId}.name` as 'plan.free.name'),
+            date: fmtDate(lang, view.requested.at),
+          })}
+        </div>
+      ) : (
+        <div class="notice info">
+          {ctx.supportEmail
+            ? t('app.billing.manualEmail', { email: ctx.supportEmail })
+            : t('app.billing.manual')}
+        </div>
       )}
       <div data-interval="month" data-interval-root>
         <div class="row between">
@@ -1049,17 +1091,18 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                       {t('pricing.choose', { plan: t(`plan.${plan.id}.name` as 'plan.free.name') })}
                     </button>
                   </form>
-                ) : ctx.supportEmail ? (
-                  <a
-                    class={`btn block ${plan.featured ? 'primary' : ''}`}
-                    href={`mailto:${ctx.supportEmail}?subject=${encodeURIComponent(`AnyConnect ${plan.id}`)}`}
-                  >
-                    {t('app.billing.request')}
-                  </a>
-                ) : (
+                ) : view.requested?.planId === plan.id ? (
                   <span class="btn block" aria-disabled="true">
-                    {t('app.billing.soon')}
+                    {t('app.billing.requestSent')}
                   </span>
+                ) : (
+                  <form method="post" action="/app/billing/request">
+                    <Hidden values={{ csrf: ctx.csrf, plan: plan.id }} />
+                    <input type="hidden" name="interval" value="month" data-interval-input />
+                    <button type="submit" class={`block ${plan.featured ? 'primary' : ''}`}>
+                      {t('app.billing.request', { plan: t(`plan.${plan.id}.name` as 'plan.free.name') })}
+                    </button>
+                  </form>
                 )
               }
             />

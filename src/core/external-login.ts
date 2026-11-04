@@ -32,7 +32,17 @@ export interface OidcProviderSpec {
   scopes: string[];
   /** Extra authorization parameters (e.g. `prompt=select_account`). */
   authorizeParams?: Record<string, string>;
+  /** Whether the provider is the authority for the address in these claims (see `ExternalProfile`). */
+  emailAuthority?: (claims: { email: string; hd?: string | undefined }) => boolean;
 }
+
+/** Google vouches for its own mailboxes and for Google Workspace domains (the `hd` claim). */
+export const googleEmailAuthority = ({ email, hd }: { email: string; hd?: string | undefined }) => {
+  const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+  return (
+    domain === 'gmail.com' || domain === 'googlemail.com' || (hd !== undefined && hd.toLowerCase() === domain)
+  );
+};
 
 export const googleLoginSpec = (client: {
   clientId: string;
@@ -47,6 +57,7 @@ export const googleLoginSpec = (client: {
   clientSecret: client.clientSecret,
   scopes: ['openid', 'email', 'profile'],
   authorizeParams: { prompt: 'select_account' },
+  emailAuthority: googleEmailAuthority,
 });
 
 const STATE_TTL_MS = 10 * 60_000;
@@ -63,6 +74,7 @@ const IdTokenClaims = z.object({
   email: z.string().email().max(320).optional(),
   email_verified: z.union([z.boolean(), z.enum(['true', 'false'])]).optional(),
   name: z.string().max(200).optional(),
+  hd: z.string().max(255).optional(),
 });
 
 export class ExternalLoginError extends AppError {
@@ -161,11 +173,14 @@ export class OidcLoginProvider {
     if (!claims.nonce || !safeEqual(claims.nonce, input.nonce))
       throw new ExternalLoginError('The sign-in response does not match this browser');
     if (!claims.email) throw new ExternalLoginError(`${this.spec.name} did not share an email address`);
+    const emailVerified = claims.email_verified === true || claims.email_verified === 'true';
     return {
       provider: this.spec.id,
       subject: claims.sub,
       email: claims.email,
-      emailVerified: claims.email_verified === true || claims.email_verified === 'true',
+      emailVerified,
+      emailAuthoritative:
+        emailVerified && (this.spec.emailAuthority?.({ email: claims.email, hd: claims.hd }) ?? false),
       name: claims.name,
     };
   }

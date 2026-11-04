@@ -165,6 +165,99 @@ export default defineConnector({
     const response = await client(ctx).request({ method: 'GET', url: ctx.config.baseUrl });
     return { ok: true, identity: new URL(ctx.config.baseUrl).host, message: `HTTP ${response.status}` };
   },
+  ui: {
+    primaryFields: ['baseUrl', 'auth', 'token'],
+    locales: {
+      ru: {
+        description: 'Любой REST/JSON API как аккаунт: адрес и ключ. Для сервисов без готового коннектора.',
+        fields: {
+          baseUrl: {
+            label: 'Адрес API',
+            hint: 'Запросы будут уходить только по адресам внутри него',
+            placeholder: 'https://api.example.com/v1',
+          },
+          auth: {
+            label: 'Авторизация',
+            hint: 'Логин и пароль для Basic вводятся в разделе «Дополнительно»',
+            options: {
+              none: 'Без авторизации',
+              bearer: 'Токен в заголовке Authorization (Bearer)',
+              header: 'Ключ в отдельном заголовке',
+              query: 'Ключ в параметре адреса',
+              basic: 'Логин и пароль (Basic)',
+            },
+          },
+          authName: {
+            label: 'Имя заголовка или параметра',
+            hint: 'Для ключа в отдельном заголовке или в параметре адреса. По умолчанию X-API-Key или api_key.',
+            placeholder: 'X-API-Key',
+          },
+          headers: {
+            label: 'Заголовки запросов',
+            hint: 'Несекретные заголовки для каждого запроса в формате JSON, например {"X-Api-Version": "2"}',
+          },
+          token: { label: 'Ключ API или токен', hint: 'Нужен для всех способов авторизации, кроме Basic' },
+          username: { label: 'Логин', hint: 'Для авторизации по логину и паролю (Basic)' },
+          password: { label: 'Пароль', hint: 'Для авторизации по логину и паролю (Basic)' },
+        },
+        actions: {
+          get: {
+            title: 'GET-запрос',
+            description:
+              'Читает данные из API: GET-запрос с параметрами. Возвращает код ответа и JSON или текст.',
+          },
+          request: {
+            title: 'Запрос на изменение',
+            description: 'Меняет данные через API: запрос POST, PUT, PATCH или DELETE с телом в JSON.',
+          },
+        },
+      },
+      en: {
+        fields: {
+          baseUrl: {
+            label: 'API base URL',
+            hint: 'Requests can only go to addresses below it',
+            placeholder: 'https://api.example.com/v1',
+          },
+          auth: {
+            label: 'Authentication',
+            hint: 'The username and password for Basic go under “Advanced”',
+            options: {
+              none: 'None',
+              bearer: 'Token in the Authorization header (Bearer)',
+              header: 'Key in a custom header',
+              query: 'Key in a query parameter',
+              basic: 'Username and password (Basic)',
+            },
+          },
+          authName: {
+            label: 'Header or parameter name',
+            hint: 'For a key in a custom header or query parameter. Default: X-API-Key or api_key.',
+            placeholder: 'X-API-Key',
+          },
+          headers: {
+            label: 'Request headers',
+            hint: 'Non-secret headers sent with every request, as JSON, e.g. {"X-Api-Version": "2"}',
+          },
+          token: { label: 'API key or token', hint: 'Needed for every method except Basic' },
+          username: { label: 'Username', hint: 'For username and password authentication (Basic)' },
+          password: { label: 'Password', hint: 'For username and password authentication (Basic)' },
+        },
+        actions: {
+          get: {
+            title: 'GET request',
+            description:
+              'Reads from the API: a GET request with query parameters. Returns the status and JSON or text.',
+          },
+          request: {
+            title: 'Write request',
+            description:
+              'Changes data through the API: a POST, PUT, PATCH or DELETE request with a JSON body.',
+          },
+        },
+      },
+    },
+  },
   actions: (action) => [
     action({
       name: 'get',

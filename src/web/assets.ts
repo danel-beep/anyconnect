@@ -68,8 +68,8 @@ const cache = new Map<string, Buffer>();
 
 /** The bytes of a public font file, or undefined for unknown names. */
 export function fontFile(name: string): Buffer | undefined {
-  const font = FONT_FILES[name];
-  if (!font) return undefined;
+  if (!Object.hasOwn(FONT_FILES, name)) return undefined;
+  const font = FONT_FILES[name]!;
   let bytes = cache.get(name);
   if (!bytes) {
     bytes = readFileSync(require.resolve(font.module));

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { actionRisk } from '../connectors/sdk.js';
+import { actionRisk, actionText } from '../connectors/sdk.js';
 import { fontFile } from '../web/assets.js';
 import { HIDDEN_SERVICES } from '../web/catalog.js';
 import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
@@ -133,16 +133,17 @@ export function siteRoutes() {
       : s.connectors.builtin.all().find((x) => x.id === id);
     const entry = connector && (await publicServices(c)).find((x) => x.id === id);
     if (!connector || !entry) return c.notFound();
+    const ctx = pageCtx(c, await currentUser(c));
     return c.html(
       <ServiceDetailPage
-        ctx={pageCtx(c, await currentUser(c))}
+        ctx={ctx}
         service={{
           ...entry,
           homepage: connector.homepage,
+          // Texts for people in the page language; the AI keeps the connector's own descriptions.
           actions: connector.actions.map((a) => ({
             name: a.name,
-            title: a.title ?? a.name,
-            description: a.description,
+            ...actionText(connector, a, ctx.lang),
             risk: actionRisk(a),
           })),
         }}

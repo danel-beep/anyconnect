@@ -1,8 +1,6 @@
-import { eq } from 'drizzle-orm';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 import { getWorkspace } from '../core/identity.js';
-import { workspaces } from '../db/schema.js';
 import { forbidden, notFound } from '../lib/errors.js';
 import { toAiClientView } from '../security/clients.js';
 import { previewArguments } from '../security/confirmations.js';
@@ -56,14 +54,7 @@ export function securityRoutes(api: Hono<AppEnv>) {
         undoWindowSeconds: z.number().int().min(0).max(3600).optional(),
       }),
     );
-    const workspace = await getWorkspace(s.db, p.workspaceId);
-    if (!workspace) throw notFound('Workspace');
-    const security = { ...workspace.settings.security, ...body };
-    await s.db
-      .update(workspaces)
-      .set({ settings: { ...workspace.settings, security } })
-      .where(eq(workspaces.id, p.workspaceId));
-    return c.json({ ...DEFAULT_SECURITY, ...security });
+    return c.json(await s.admin.updateSecurity(p.workspaceId, body));
   });
 
   // --- AI clients -------------------------------------------------------------

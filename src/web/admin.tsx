@@ -2,6 +2,7 @@ import type { FC } from 'hono/jsx';
 import { METRICS, type Metric, PLANS } from '../billing/plans.js';
 import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
 import { serviceMeta } from './catalog.js';
+import type { Key, Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { fmtAgo, fmtDate, fmtNumber, Hidden, Icon, initials, Meter, pctClass, ServiceLogo } from './ui.js';
 
@@ -22,8 +23,10 @@ export interface AdminOverviewView {
   calls24h: number;
   calls30d: number;
   errors30d: number;
-  byConnector: { connectorId: string; n: number }[];
+  byConnector: { connectorId: string; name: string; n: number }[];
   recentUsers: { id: string; email: string; name: string | null; createdAt: Date; planId: string }[];
+  /** Open "switch me to this plan" requests (manual payments). */
+  planRequests: { userId: string | null; email: string; planId: string; interval: string; at: Date }[];
 }
 
 export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminOverviewView }> = ({
@@ -39,6 +42,28 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
   return (
     <AppShell ctx={ctx} shell={shell} section="admin" title={t('admin.nav.overview')}>
       <PageHead title={t('admin.overview.title')} sub={t('admin.overview.sub')} />
+      {view.planRequests.length ? (
+        <div class="card">
+          <h2>
+            {t('admin.requests.title')} <span class="badge accent">{view.planRequests.length}</span>
+          </h2>
+          <p class="hint">{t('admin.requests.hint')}</p>
+          <ul class="plain">
+            {view.planRequests.map((r) => (
+              <li>
+                <span class="grow">
+                  {r.userId ? <a href={`/admin/users/${r.userId}#plan-card`}>{r.email}</a> : r.email}{' '}
+                  <span class="muted">
+                    → {planName(ctx, r.planId)} ·{' '}
+                    {t(r.interval === 'year' ? 'admin.requests.year' : 'admin.requests.month')} ·{' '}
+                    {fmtAgo(lang, r.at)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div class="stats">
         <div class="stat">
           <span class="label">{t('admin.stat.users')}</span>
@@ -122,7 +147,7 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
             <div class="top-list">
               {view.byConnector.map((c) => (
                 <div class="bar">
-                  <span class="name">{c.connectorId}</span>
+                  <span class="name">{c.name}</span>
                   <div class="meter">
                     <span class={pctClass('w', c.n, maxConn)} />
                   </div>
@@ -136,7 +161,7 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
           <div class="card-head">
             <h2>{t('admin.recentUsers')}</h2>
             <a class="btn sm ghost" href="/admin/users">
-              {t('app.activity.all')}
+              {t('admin.allUsers')}
             </a>
           </div>
           <ul class="plain">
@@ -418,7 +443,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
       ) : null}
 
       <div class="grid-2">
-        <div class="card">
+        <div class="card" id="plan-card">
           <h2>{t('admin.user.plan')}</h2>
           <form method="post" action={`${base}/plan`}>
             <Hidden values={csrf} />
@@ -521,8 +546,8 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
               <thead>
                 <tr>
                   <th>{t('admin.user.metric')}</th>
-                  <th>{t('admin.user.amount')}</th>
-                  <th>{t('admin.user.until')}</th>
+                  <th>{t('admin.user.amountCol')}</th>
+                  <th>{t('admin.user.untilCol')}</th>
                   <th>{t('admin.user.reasonLabel')}</th>
                   <th />
                 </tr>
@@ -547,7 +572,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
                         >
                           <Hidden values={csrf} />
                           <button type="submit" class="sm danger">
-                            {t('home.revoke')}
+                            {t('admin.user.cancelGrant')}
                           </button>
                         </form>
                       ) : (
@@ -570,7 +595,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
             <h2>{t('app.services.connected')}</h2>
           </div>
           {view.accounts.length === 0 ? (
-            <p class="muted pad-x">{t('app.services.none')}</p>
+            <p class="muted pad-x">{t('admin.user.noAccounts')}</p>
           ) : (
             <div class="acc-list">
               {view.accounts.map((a) => {
@@ -695,10 +720,63 @@ export interface AdminAuditView {
     action: string;
     actorEmail: string;
     targetUserId: string | null;
+    targetEmail: string | null;
     details: Record<string, unknown>;
     ip: string | null;
     createdAt: Date;
   }[];
+}
+
+const AUDIT_ACTIONS: Record<string, Key> = {
+  'plan.set': 'admin.action.plan.set',
+  'limit.grant': 'admin.action.limit.grant',
+  'limit.revoke': 'admin.action.limit.revoke',
+  'user.suspend': 'admin.action.user.suspend',
+  'user.reactivate': 'admin.action.user.reactivate',
+  'user.sign_out': 'admin.action.user.sign_out',
+  'user.delete': 'admin.action.user.delete',
+};
+
+/** One readable line for an admin log entry ("Free → Personal until Dec 31, 2026"). */
+function auditDetails(t: Translate, lang: Locale, action: string, d: Record<string, unknown>): string {
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const date = (v: unknown) => (typeof v === 'string' && v ? fmtDate(lang, new Date(v)) : '');
+  const plan = (v: unknown) => {
+    const id = str(v);
+    return PLANS.some((p) => p.id === id) ? t(`plan.${id}.name` as 'plan.free.name') : id;
+  };
+  const metric = (v: unknown) => {
+    const m = str(v);
+    return (METRICS as readonly string[]).includes(m) ? t(`pricing.row.${m}` as 'pricing.row.actions') : m;
+  };
+  const parts: string[] = [];
+  switch (action) {
+    case 'plan.set':
+      parts.push(`${plan(d.from)} → ${plan(d.to)}`);
+      if (d.until) parts.push(t('admin.audit.until', { date: date(d.until) }));
+      break;
+    case 'limit.grant':
+      parts.push(
+        `${metric(d.metric)}: ${d.amount === null ? t('admin.audit.unlimited') : `+${String(d.amount)}`}`,
+      );
+      if (d.until) parts.push(t('admin.audit.until', { date: date(d.until) }));
+      break;
+    case 'limit.revoke':
+      parts.push(metric(d.metric));
+      break;
+    case 'user.sign_out':
+      parts.push(
+        t('admin.audit.signedOut', {
+          sessions: String(d.sessions ?? 0),
+          apps: String(d.apps ?? 0),
+          tokens: String(d.tokens ?? 0),
+        }),
+      );
+      break;
+  }
+  const note = str(d.note) || str(d.reason);
+  if (note) parts.push(`«${note}»`);
+  return parts.join(' · ');
 }
 
 export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAuditView }> = ({
@@ -739,21 +817,15 @@ export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAud
                       {r.actorEmail}
                       {r.ip ? <div class="muted tiny">{r.ip}</div> : null}
                     </td>
-                    <td>
-                      <code>{r.action}</code>
-                    </td>
+                    <td>{AUDIT_ACTIONS[r.action] ? t(AUDIT_ACTIONS[r.action]!) : r.action}</td>
                     <td class="small">
-                      {r.targetUserId ? (
-                        <a href={`/admin/users/${r.targetUserId}`}>{r.targetUserId.slice(0, 12)}…</a>
+                      {r.targetUserId && r.action !== 'user.delete' ? (
+                        <a href={`/admin/users/${r.targetUserId}`}>{r.targetEmail ?? r.targetUserId}</a>
                       ) : (
-                        '—'
+                        (r.targetEmail ?? '—')
                       )}
                     </td>
-                    <td class="small muted">
-                      {Object.entries(r.details)
-                        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-                        .join(' · ')}
-                    </td>
+                    <td class="small muted">{auditDetails(t, lang, r.action, r.details)}</td>
                   </tr>
                 ))
               )}

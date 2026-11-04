@@ -69,7 +69,7 @@ export class ActivityService {
       .select()
       .from(toolCalls)
       .where(and(...conditions))
-      .orderBy(desc(toolCalls.id))
+      .orderBy(desc(toolCalls.createdAt), desc(toolCalls.id))
       .limit(opts.limit);
   }
 

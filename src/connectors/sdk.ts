@@ -316,6 +316,53 @@ export interface OAuthProviderSpec {
   appSetupUrl?: string;
 }
 
+/**
+ * A language of the website, e.g. `ru` or `en`. Connector texts for the AI stay English; these are
+ * only for people (the connect form, the service page).
+ */
+export type UiLanguage = 'ru' | 'en' | (string & {});
+
+/** How one connect form field reads in one language. */
+export interface FieldLocale {
+  label: string;
+  /** Short help under the input. A locale entry replaces the field's texts as a whole, so no hint here means none. */
+  hint?: string;
+  /** Example value shown in an empty input; for a select, the label of the empty choice. */
+  placeholder?: string;
+  /** Labels of select values, e.g. `{ starttls: 'STARTTLS (порт 587)' }`; unlisted values show as is. */
+  options?: Record<string, string>;
+}
+
+/** How one action reads on the website in one language (the AI keeps `title`/`description`). */
+export interface ActionLocale {
+  title?: string;
+  description?: string;
+}
+
+/** A connector's website texts in one language. */
+export interface ConnectorLocale<TFieldKey extends string = string> {
+  name?: string;
+  description?: string;
+  /** Connect form fields by key; `config` and `credentials` keys share one namespace. */
+  fields?: Partial<Record<TFieldKey, FieldLocale>>;
+  /** Actions by `name`. */
+  actions?: Record<string, ActionLocale>;
+}
+
+/**
+ * Presentation of a connector for people. Everything is optional: without it the website falls
+ * back to the English texts (schema `title`/`description`, action `title`/`description`).
+ */
+export interface ConnectorUi<TFieldKey extends string = string> {
+  /** Texts by language. When a language lacks a text, English is used, then the connector's own. */
+  locales?: Partial<Record<UiLanguage, ConnectorLocale<TFieldKey>>>;
+  /**
+   * Fields shown up front in the connect form. Required fields are always shown; every other field
+   * goes under "Advanced". Without it all fields are shown.
+   */
+  primaryFields?: TFieldKey[];
+}
+
 export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> {
   /** Stable key: lowercase letters, digits, underscores; becomes the tool name prefix (`gmail_...`). */
   id: string;
@@ -337,7 +384,15 @@ export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> 
   rateLimit?: RateLimitSpec;
   /** Verify that an account works (called when it is added and on demand). */
   test?(ctx: AccountContext<TConfig, TCredentials>): Promise<TestResult>;
+  /** Website texts in other languages and the layout of the connect form. */
+  ui?: ConnectorUi;
 }
+
+/** Keys of the connect form fields of a connector (its `config` and `credentials` keys). */
+export type FieldKey<TConfig extends AnyObjectSchema, TCredentials extends AnyObjectSchema> = Extract<
+  keyof z.input<TConfig> | keyof z.input<TCredentials>,
+  string
+>;
 
 type ActionSpec<TInput extends AnyObjectSchema, TConfig, TCredentials> = Omit<
   ActionDefinition<TConfig, TCredentials>,
@@ -373,6 +428,8 @@ export interface ConnectorSpec<TConfig extends AnyObjectSchema, TCredentials ext
     action: ActionFactory<z.output<TConfig>, z.output<TCredentials>>,
   ) => ActionDefinition<z.output<TConfig>, z.output<TCredentials>>[];
   test?(ctx: AccountContext<z.output<TConfig>, z.output<TCredentials>>): Promise<TestResult>;
+  /** Website texts and form layout; field keys are checked against `config` and `credentials`. */
+  ui?: ConnectorUi<FieldKey<TConfig, TCredentials>>;
 }
 
 /**
@@ -417,8 +474,52 @@ export function defineConnector<
     actions: spec.actions(factory),
     rateLimit: spec.rateLimit,
     test: spec.test,
+    ...(spec.ui ? { ui: spec.ui as ConnectorUi } : {}),
   };
   return definition as unknown as ConnectorDefinition;
+}
+
+/**
+ * Adds website texts to a connector made another way, e.g. an HTTP manifest. Prefer `ui` in
+ * {@link defineConnector}, where field keys are type-checked.
+ */
+export function withUi(connector: ConnectorDefinition, ui: ConnectorUi): ConnectorDefinition {
+  return { ...connector, ui };
+}
+
+/** The connector's texts for a language, then English: the order in which website texts are looked up. */
+export function uiLocales(
+  connector: Pick<ConnectorDefinition, 'ui'>,
+  language: UiLanguage,
+): ConnectorLocale[] {
+  const locales = connector.ui?.locales;
+  if (!locales) return [];
+  return [...new Set([language, 'en'])].flatMap((code) => locales[code] ?? []);
+}
+
+/** The service's name and description for people in a language (falls back to English, then to its own). */
+export function connectorText(
+  connector: Pick<ConnectorDefinition, 'ui' | 'name' | 'description'>,
+  language: UiLanguage,
+): { name: string; description: string } {
+  const locales = uiLocales(connector, language);
+  return {
+    name: locales.find((l) => l.name)?.name ?? connector.name,
+    description: locales.find((l) => l.description)?.description ?? connector.description,
+  };
+}
+
+/** An action's title and description for people in a language (falls back to English, then to the AI texts). */
+export function actionText(
+  connector: Pick<ConnectorDefinition, 'ui'>,
+  action: Pick<ActionDefinition, 'name' | 'title' | 'description'>,
+  language: UiLanguage,
+): { title: string; description: string } {
+  const entries = uiLocales(connector, language).flatMap((l) => l.actions?.[action.name] ?? []);
+  return {
+    title: entries.find((e) => e.title)?.title ?? action.title ?? action.name,
+    description: entries.find((e) => e.description)?.description ?? action.description,
+  };
 }
 
 /** The action's risk level, explicit or derived from its hints. */

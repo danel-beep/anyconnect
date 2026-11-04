@@ -1,4 +1,5 @@
 import { defineManifestConnector } from '../manifest/compile.js';
+import { type ConnectorUi, withUi } from '../sdk.js';
 
 const repo = {
   owner: { type: 'string', description: 'Repository owner (user or organization)' },
@@ -19,7 +20,7 @@ const ISSUE_FIELDS = [
 ];
 
 /** GitHub REST API. Personal access token (fine-grained or classic) or OAuth. */
-export default defineManifestConnector({
+const manifest = defineManifestConnector({
   id: 'github',
   name: 'GitHub',
   description: 'GitHub repositories, issues, pull requests and notifications.',
@@ -247,3 +248,97 @@ export default defineManifestConnector({
     },
   ],
 });
+
+/** How the service reads on the website; the AI keeps the English texts of the manifest. */
+const ui: ConnectorUi = {
+  locales: {
+    ru: {
+      description: 'Репозитории, задачи, пулл-реквесты и уведомления GitHub.',
+      fields: {
+        token: {
+          label: 'Персональный токен доступа',
+          hint: 'Нужен, только если не входить через GitHub. Создать токен можно на github.com/settings/personal-access-tokens.',
+        },
+      },
+      actions: {
+        search_issues: {
+          title: 'Поиск задач и пулл-реквестов',
+          description: 'Ищет задачи и пулл-реквесты по всему GitHub с фильтрами поиска.',
+        },
+        get_issue: {
+          title: 'Задача или пулл-реквест',
+          description: 'Показывает задачу или пулл-реквест с описанием.',
+        },
+        list_comments: {
+          title: 'Комментарии',
+          description: 'Комментарии к задаче или пулл-реквесту, сначала старые.',
+        },
+        create_issue: { title: 'Новая задача', description: 'Создаёт задачу в репозитории.' },
+        update_issue: {
+          title: 'Изменение задачи',
+          description:
+            'Меняет заголовок, описание, статус (открыта или закрыта), метки или исполнителей задачи или пулл-реквеста.',
+        },
+        add_comment: {
+          title: 'Новый комментарий',
+          description: 'Добавляет комментарий к задаче или пулл-реквесту.',
+        },
+        list_pull_requests: {
+          title: 'Список пулл-реквестов',
+          description: 'Пулл-реквесты репозитория, сначала недавно обновлённые.',
+        },
+        list_repos: {
+          title: 'Список репозиториев',
+          description: 'Репозитории, к которым есть доступ, сначала недавно обновлённые.',
+        },
+        list_notifications: {
+          title: 'Уведомления',
+          description: 'Непрочитанные уведомления: запросы на ревью, упоминания, назначенные задачи, сборки.',
+        },
+      },
+    },
+    en: {
+      fields: {
+        token: {
+          label: 'Personal access token',
+          hint: 'Only if you do not sign in with GitHub. Create one at github.com/settings/personal-access-tokens.',
+        },
+      },
+      actions: {
+        search_issues: {
+          title: 'Search issues and pull requests',
+          description: 'Searches issues and pull requests across GitHub with search filters.',
+        },
+        get_issue: {
+          title: 'Issue or pull request',
+          description: 'Shows an issue or pull request with its description.',
+        },
+        list_comments: {
+          title: 'Comments',
+          description: 'Comments on an issue or pull request, oldest first.',
+        },
+        create_issue: { title: 'Create an issue', description: 'Opens a new issue in a repository.' },
+        update_issue: {
+          title: 'Update an issue',
+          description:
+            'Changes the title, body, state (open or closed), labels or assignees of an issue or pull request.',
+        },
+        add_comment: { title: 'Add a comment', description: 'Comments on an issue or pull request.' },
+        list_pull_requests: {
+          title: 'List pull requests',
+          description: 'Pull requests of a repository, recently updated first.',
+        },
+        list_repos: {
+          title: 'List repositories',
+          description: 'Repositories you can access, recently updated first.',
+        },
+        list_notifications: {
+          title: 'Notifications',
+          description: 'Unread notifications: review requests, mentions, assigned issues, CI runs.',
+        },
+      },
+    },
+  },
+};
+
+export default withUi(manifest, ui);
