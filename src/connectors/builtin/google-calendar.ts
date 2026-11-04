@@ -201,6 +201,7 @@ export default defineManifestConnector(
         },
         hints: { readOnly: false, destructive: false },
         risk: 'write',
+        undo: { kind: 'action', action: 'delete_event' },
         request: {
           method: 'POST',
           path: '/calendars/{calendar_id}/events',
@@ -292,7 +293,7 @@ export default defineManifestConnector(
   {
     actions: {
       list_events: { capability: listEvents },
-      create_event: { capability: createEvent, undo: { kind: 'action', action: 'delete_event' } },
+      create_event: { capability: createEvent },
     },
   },
 );

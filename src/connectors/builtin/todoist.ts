@@ -159,6 +159,7 @@ export default defineManifestConnector(
         input: { type: 'object', properties: taskFields, required: ['content'] },
         hints: { readOnly: false, destructive: false },
         risk: 'write',
+        undo: { kind: 'action', action: 'delete_task' },
         request: { method: 'POST', path: '/tasks' },
         response: { fields: TASK_FIELDS },
       },
@@ -179,6 +180,7 @@ export default defineManifestConnector(
         input: { type: 'object', properties: { task_id: taskId }, required: ['task_id'] },
         hints: { readOnly: false, destructive: false, idempotent: true },
         risk: 'write',
+        undo: { kind: 'action', action: 'reopen_task' },
         request: { method: 'POST', path: '/tasks/{task_id}/close', body: {} },
         response: { empty: 'Completed.' },
       },
@@ -189,6 +191,7 @@ export default defineManifestConnector(
         input: { type: 'object', properties: { task_id: taskId }, required: ['task_id'] },
         hints: { readOnly: false, destructive: false, idempotent: true },
         risk: 'write',
+        undo: { kind: 'action', action: 'complete_task' },
         request: { method: 'POST', path: '/tasks/{task_id}/reopen', body: {} },
         response: { empty: 'Reopened.' },
       },
@@ -207,9 +210,7 @@ export default defineManifestConnector(
   {
     actions: {
       find_tasks: { capability: listTasks },
-      add_task: { capability: createTask, undo: { kind: 'action', action: 'delete_task' } },
-      complete_task: { undo: { kind: 'action', action: 'reopen_task' } },
-      reopen_task: { undo: { kind: 'action', action: 'complete_task' } },
+      add_task: { capability: createTask },
     },
   },
 );

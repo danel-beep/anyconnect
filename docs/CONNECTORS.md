@@ -80,15 +80,17 @@ export default defineManifestConnector({
 });
 ```
 
-У пишущего действия манифеста укажите `risk` (`write` или `dangerous`), как и в коде. То, что
-нельзя выразить данными (привязка к общему интерфейсу с функциями `mapInput` / `mapOutput`,
-`undo`, `assessRisk`), встроенный манифест получает вторым аргументом:
+Риск, отмену и привязку к общим интерфейсам манифест задаёт данными (раздел «Риск, отмена и
+общие интерфейсы» ниже). Если отображение на интерфейс требует логики, которую шаблоны не выразят
+(дата → `{date}` или `{dateTime}`, сборка строки фильтра, отбор результатов), встроенный манифест
+получает привязку кодом вторым аргументом:
 
 ```ts
 export default defineManifestConnector(manifest, {
   actions: {
-    list_tasks: { capability: { id: 'tasks.list', mapInput: (q) => ({ project_id: q.project }) } },
-    add_task: { undo: { kind: 'action', action: 'delete_task' } },
+    list_tasks: {
+      capability: { id: 'tasks.list', mapInput: (q) => ({ filter: q.query ? `search: ${q.query}` : 'all' }) },
+    },
   },
 });
 ```
