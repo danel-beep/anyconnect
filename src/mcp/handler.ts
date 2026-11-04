@@ -8,9 +8,14 @@ import {
   McpServer,
   type ServerContext,
 } from '@modelcontextprotocol/server';
+import type { ConnectorDefinition } from '../connectors/sdk.js';
 import { principalFromAuthInfo } from '../core/auth.js';
+import { aiSubjectFromMeta } from '../core/principal.js';
+import type { WorkspaceAdmin } from '../core/workspace-admin.js';
+import type { CatalogTool } from '../hub/catalog-types.js';
 import type { Interaction } from '../hub/executor.js';
 import type { Hub, ToolCallResult } from '../hub/hub.js';
+import { buildVisitorCatalog, callVisitorTool } from '../hub/visitor.js';
 import type { Logger } from '../logger.js';
 
 type InputValidator = ReturnType<typeof fromJsonSchema<Record<string, unknown>>>;
@@ -70,6 +75,45 @@ export function toMcpResult(result: ToolCallResult) {
   });
 }
 
+type ToolCaller = (
+  tool: CatalogTool,
+  args: Record<string, unknown>,
+  mcpReq: ServerContext['mcpReq'],
+) => Promise<ToolCallResult>;
+
+const SERVER_INFO = {
+  name: 'anyconnect',
+  title: 'AnyConnect',
+  description: 'One hub for all your services and accounts.',
+};
+
+/** One MCP server for one request: the given tools, each answered by `call`. */
+function buildServer(
+  version: string,
+  view: { instructions: string; tools: CatalogTool[] },
+  call: ToolCaller,
+): McpServer {
+  const server = new McpServer({ ...SERVER_INFO, version }, { instructions: view.instructions });
+  for (const tool of view.tools) {
+    server.registerTool(
+      tool.name,
+      {
+        title: tool.title,
+        description: tool.description,
+        inputSchema: inputValidator(tool.inputSchema),
+        annotations: tool.annotations,
+      },
+      async (args, ctx) => toMcpResult(await call(tool, args ?? {}, ctx.mcpReq)),
+    );
+  }
+  return server;
+}
+
+const handlerOptions = (logger: Logger) => ({
+  legacy: 'stateless' as const,
+  onerror: (error: unknown) => logger.debug({ err: error }, 'mcp request error'),
+});
+
 /**
  * The MCP endpoint. A fresh MCP server is built per HTTP request from the caller's workspace
  * catalog, so the protocol layer is stateless: any instance can serve any request, deploys do not
@@ -79,42 +123,34 @@ export function toMcpResult(result: ToolCallResult) {
  * 2025-era clients (today's Claude and ChatGPT).
  */
 export function createHubMcpHandler(deps: { hub: Hub; logger: Logger; version: string }): McpHttpHandler {
+  return createMcpHandler(async ({ authInfo }) => {
+    const principal = principalFromAuthInfo(authInfo);
+    const catalog = await deps.hub.getCatalog(principal);
+    const view = { instructions: catalog.instructions, tools: catalog.listed };
+    return buildServer(deps.version, view, (tool, args, mcpReq) => {
+      const aiSubject = aiSubjectFromMeta(mcpReq._meta as Record<string, unknown> | undefined);
+      const caller = aiSubject ? { ...principal, aiSubject } : principal;
+      return deps.hub.callTool(caller, catalog, tool.name, args, {
+        signal: mcpReq.signal,
+        interaction: interactionOf(mcpReq),
+      });
+    });
+  }, handlerOptions(deps.logger));
+}
+
+/**
+ * The MCP endpoint for an app that has not signed in yet (see `hub/visitor.ts`). The route lets
+ * only visitor-callable tool calls through; the rest get a 401 that starts the app's sign-in.
+ */
+export function createVisitorMcpHandler(deps: {
+  admin: WorkspaceAdmin;
+  setup: ConnectorDefinition;
+  logger: Logger;
+  version: string;
+}): McpHttpHandler {
+  const view = buildVisitorCatalog(deps.setup);
   return createMcpHandler(
-    async ({ authInfo }) => {
-      const principal = principalFromAuthInfo(authInfo);
-      const catalog = await deps.hub.getCatalog(principal);
-      const server = new McpServer(
-        {
-          name: 'anyconnect',
-          title: 'AnyConnect',
-          version: deps.version,
-          description: 'One hub for all your services and accounts.',
-        },
-        { instructions: catalog.instructions },
-      );
-      for (const tool of catalog.listed) {
-        server.registerTool(
-          tool.name,
-          {
-            title: tool.title,
-            description: tool.description,
-            inputSchema: inputValidator(tool.inputSchema),
-            annotations: tool.annotations,
-          },
-          async (args, ctx) =>
-            toMcpResult(
-              await deps.hub.callTool(principal, catalog, tool.name, args ?? {}, {
-                signal: ctx.mcpReq.signal,
-                interaction: interactionOf(ctx.mcpReq),
-              }),
-            ),
-        );
-      }
-      return server;
-    },
-    {
-      legacy: 'stateless',
-      onerror: (error) => deps.logger.debug({ err: error }, 'mcp request error'),
-    },
+    async () => buildServer(deps.version, view, (tool, args) => callVisitorTool(deps.admin, tool.name, args)),
+    handlerOptions(deps.logger),
   );
 }

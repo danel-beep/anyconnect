@@ -14,6 +14,7 @@ import {
   type PolicyPersona,
   type PolicyRule,
   type PolicySubject,
+  type PolicyTarget,
 } from './policy.js';
 
 export type AccessRuleRow = typeof accessRules.$inferSelect;
@@ -59,11 +60,11 @@ export class CallerPolicy {
   ) {}
 
   /** Can the caller see this account at all (any risk)? */
-  seesAccount(target: { connectorId: string; accountId: string }): boolean {
+  seesAccount(target: PolicyTarget): boolean {
     return accountPolicy(this.rules, this.subject, target, this.settings).access !== 'none';
   }
 
-  decide(target: { connectorId: string; accountId: string }, risk: RiskLevel): PolicyDecision {
+  decide(target: PolicyTarget, risk: RiskLevel): PolicyDecision {
     return evaluatePolicy(this.rules, this.subject, target, risk, this.settings);
   }
 }

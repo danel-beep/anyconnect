@@ -13,6 +13,7 @@ import {
 import type { AccountService } from '../core/accounts.js';
 import { getWorkspace } from '../core/identity.js';
 import type { Principal } from '../core/principal.js';
+import type { WorkspaceAdmin } from '../core/workspace-admin.js';
 import type { Db } from '../db/client.js';
 import { oauthClients, toolCalls } from '../db/schema.js';
 import { AppError, notFound } from '../lib/errors.js';
@@ -51,8 +52,10 @@ import {
   type ToolCallResult,
   toTransport,
 } from './result.js';
+import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
+import type { UsageMeter } from './usage.js';
 
 export type { ToolCallResult } from './result.js';
 
@@ -76,8 +79,15 @@ export interface HubDeps {
   idempotencyWindowMs: number;
   /** Token budget for `tools/list`; above it the catalog switches to discovery (setting `auto`). */
   toolListTokenBudget?: number;
+  /** Counts executed calls (stage `meter`); without it nothing is counted. */
+  meter?: UsageMeter;
   /** Replaces built-in stages or fills the policy / confirm / untrusted slots. */
   stages?: StageMap;
+  /**
+   * The hub's setup tools (`anyconnect_*`, connector `anyconnect`) and the workspace operations they
+   * run. Without it the AI cannot manage the hub from the chat.
+   */
+  setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin };
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
 }
@@ -130,6 +140,7 @@ export class Hub {
           idempotency: deps.idempotency,
           idempotencyWindowMs: deps.idempotencyWindowMs,
           maxResultTokens: deps.maxResultTokens,
+          ...(deps.meter ? { meter: deps.meter } : {}),
         }),
         ...deps.stages,
       },
@@ -160,6 +171,7 @@ export class Hub {
       client,
       usage,
       ...(allow ? { allow } : {}),
+      ...(this.deps.setup ? { setup: this.deps.setup.connector } : {}),
     });
   }
 
@@ -248,6 +260,14 @@ export class Hub {
           } else result = outcome.result;
           break;
         }
+        case 'workspace': {
+          const outcome = await this.runWorkspaceTool(principal, catalog, tool, args, options);
+          if ('rejected' in outcome) {
+            result = outcome.rejected;
+            audit = { accountId: null };
+          } else result = outcome.result;
+          break;
+        }
         case 'capability': {
           const outcome = await this.runCapabilityTool(principal, catalog, tool, args, options);
           if ('rejected' in outcome) {
@@ -273,11 +293,25 @@ export class Hub {
    */
   async runApproved(
     principal: Principal,
-    target: { toolName: string; connectorId: string; action: string; accountId: string },
+    /** `accountId` null: a setup tool acting on the workspace. */
+    target: { toolName: string; connectorId: string; action: string; accountId: string | null },
     args: Record<string, unknown>,
   ): Promise<ExecResult> {
     try {
       const catalog = await this.getCatalog(principal);
+      if (target.accountId === null) {
+        const tool = catalog.tools.find(
+          (t) =>
+            t.target.kind === 'workspace' &&
+            t.target.connectorId === target.connectorId &&
+            t.target.action === target.action,
+        );
+        if (!tool) {
+          return errorResult('This action is no longer available, so nothing was done.', 'permission');
+        }
+        const outcome = await this.runWorkspaceTool(principal, catalog, tool, args, {}, true);
+        return 'rejected' in outcome ? outcome.rejected : outcome.result;
+      }
       const candidates = catalog.tools.filter(
         (t) =>
           t.target.kind === 'action' &&
@@ -669,6 +703,58 @@ export class Hub {
     };
   }
 
+  // --- Setup tools (the workspace itself) ----------------------------------------
+
+  private async runWorkspaceTool(
+    principal: Principal,
+    catalog: Catalog,
+    tool: CatalogTool,
+    args: Record<string, unknown>,
+    options: CallOptions,
+    /** The user already approved this call (see `runApproved`). */
+    preApproved = false,
+  ): Promise<{ result: ExecResult } | { rejected: ExecResult }> {
+    if (tool.target.kind !== 'workspace') throw new Error('not a workspace tool');
+    const setup = this.deps.setup;
+    const { action: actionName } = tool.target;
+    const action = setup?.connector.actions.find((a) => a.name === actionName);
+    if (!setup || !action) return { rejected: errorResult('This tool is no longer available.') };
+    const parsed = action.input.safeParse(args);
+    if (!parsed.success) return { rejected: errorResult(`Invalid arguments: ${issuesOf(parsed.error)}`) };
+
+    const now = Date.now();
+    const signals = [AbortSignal.timeout(this.deps.toolTimeoutMs)];
+    if (options.signal) signals.push(options.signal);
+    const signal = AbortSignal.any(signals);
+    const context: SetupContext = { principal, admin: setup.admin, signal };
+    const call: CallContext = {
+      principal,
+      catalog,
+      tool,
+      connector: setup.connector,
+      action,
+      scope: 'workspace',
+      input: parsed.data as Record<string, unknown>,
+      options: {},
+      risk: actionRisk(action),
+      meta: {
+        idempotent: actionIdempotent(action),
+        ...(action.undo ? { undo: action.undo } : {}),
+        capabilities: [],
+      },
+      // Setup actions take the setup context in place of an account context (see setup-tools.ts).
+      context: async () => context as unknown as Awaited<ReturnType<CallContext['context']>>,
+      signal,
+      startedAt: now,
+      deadline: now + this.deps.toolTimeoutMs,
+      audit: {},
+      locals: {},
+      ...(options.interaction ? { interaction: options.interaction } : {}),
+      ...(preApproved ? { preApproved } : {}),
+    };
+    return { result: await this.executor.execute(call) };
+  }
+
   // --- Units -------------------------------------------------------------------
 
   /** Loads the fresh account state and builds one executor unit. */
@@ -709,6 +795,7 @@ export class Hub {
         tool,
         connector,
         action,
+        scope: 'account',
         account,
         accountRow: row,
         input: input as Record<string, unknown>,
@@ -757,9 +844,11 @@ export class Hub {
           .then(resolve, reject)
           .finally(() => signal.removeEventListener('abort', onAbort));
       });
-      await this.deps.accounts.touch(account.id).catch(() => {});
-      if (row.status !== 'active')
-        await this.deps.accounts.markStatus(account.id, 'active', null).catch(() => {});
+      if (account && row) {
+        await this.deps.accounts.touch(account.id).catch(() => {});
+        if (row.status !== 'active')
+          await this.deps.accounts.markStatus(account.id, 'active', null).catch(() => {});
+      }
       return normalizeResult(value);
     } catch (error) {
       return this.handleError(error, call.tool.name, call.connector, account);
@@ -770,7 +859,7 @@ export class Hub {
     error: unknown,
     toolName: string,
     connector: ConnectorDefinition,
-    account: CatalogAccount,
+    account: CatalogAccount | undefined,
   ): Promise<ExecResult> {
     if (error instanceof ToolTimeoutError) {
       return errorResult(
@@ -778,7 +867,7 @@ export class Hub {
         'timeout',
       );
     }
-    if (error instanceof ConnectorError && error.kind === 'auth') {
+    if (account && error instanceof ConnectorError && error.kind === 'auth') {
       // Flag the account so the user sees in the panel that it must be reconnected.
       await this.deps.accounts.markStatus(account.id, 'needs_reauth', error.message).catch(() => {});
       return errorResult(
@@ -796,7 +885,7 @@ export class Hub {
         : '';
       return errorResult(`${error.message}${retry}`, error.kind, error.options.retryAfterSeconds);
     }
-    if (error instanceof AppError) return errorResult(error.message);
+    if (error instanceof AppError) return errorResult(appErrorText(error));
     const ref = Math.random().toString(36).slice(2, 10);
     this.deps.logger.error({ err: error, tool: toolName, ref }, 'tool call failed');
     return errorResult(`Internal error while running ${toolName} (ref ${ref}).`, 'internal');
@@ -813,9 +902,9 @@ export class Hub {
     return recordToolCall(this.deps.db, this.deps.logger, {
       principal,
       toolName: tool.name,
-      connectorId: target.kind === 'action' ? target.connectorId : null,
+      connectorId: target.kind === 'action' || target.kind === 'workspace' ? target.connectorId : null,
       action:
-        target.kind === 'action'
+        target.kind === 'action' || target.kind === 'workspace'
           ? target.action
           : target.kind === 'builtin'
             ? target.id
@@ -840,6 +929,16 @@ export class Hub {
       .orderBy(desc(toolCalls.id))
       .limit(limit);
   }
+}
+
+/** An app error for the AI, with field problems when there are any. */
+function appErrorText(error: AppError): string {
+  const details = Array.isArray(error.details)
+    ? (error.details as Array<{ path?: string; message?: string }>)
+        .map((d) => (d.path ? `${d.path}: ${d.message}` : d.message))
+        .filter(Boolean)
+    : [];
+  return details.length ? `${error.message}: ${details.join('; ')}` : error.message;
 }
 
 function issuesOf(error: { issues: Array<{ path: PropertyKey[]; message: string }> }): string {

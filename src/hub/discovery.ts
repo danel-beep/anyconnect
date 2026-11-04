@@ -29,6 +29,8 @@ export function chooseListing(input: {
   builtins: CatalogTool[];
   unified: CatalogTool[];
   serviceTools: CatalogTool[];
+  /** Hub setup tools: listed in either mode while they still fit, never a reason to switch. */
+  setupTools?: CatalogTool[];
   setting: ListingSetting;
   profile: ClientProfile;
   usage: Record<string, number>;
@@ -44,11 +46,18 @@ export function chooseListing(input: {
     tokens <= profile.tokenBudget && (profile.maxTools === undefined || tools.length <= profile.maxTools);
 
   const useDirect = input.setting === 'direct' || (input.setting === 'auto' && fits(direct, directTokens));
+  const setupTools = input.setupTools ?? [];
+  /** Adds setup tools while they fit (all of them when the user asked for every tool). */
+  const withSetup = (listed: CatalogTool[], all: boolean) => {
+    for (const tool of setupTools) if (all || fits([...listed, tool])) listed.push(tool);
+    return listed;
+  };
   if (useDirect) {
+    const listed = withSetup([...direct], input.setting === 'direct');
     return {
       listing: 'direct',
-      listed: direct,
-      stats: { directTokens, listedTokens: directTokens, budget: profile.tokenBudget },
+      listed,
+      stats: { directTokens, listedTokens: toolListTokens(listed), budget: profile.tokenBudget },
     };
   }
 
@@ -68,6 +77,7 @@ export function chooseListing(input: {
   for (const candidate of [...used, ...unused]) {
     if (fits([...listed, candidate])) listed.push(candidate);
   }
+  withSetup(listed, false);
   return {
     listing: 'discovery',
     listed,

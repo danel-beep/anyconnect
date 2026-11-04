@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { CallContext, Middleware } from '../executor.js';
+import { type CallContext, type Middleware, unitKey, unitLabel } from '../executor.js';
 import type { IdempotencyStore } from '../idempotency.js';
 import type { ExecResult } from '../result.js';
 
@@ -20,7 +20,7 @@ export function idempotencyKey(call: CallContext): string {
     .update(
       [
         call.principal.workspaceId,
-        call.account.id,
+        unitKey(call),
         call.connector.id,
         call.action.name,
         stableStringify(call.input),
@@ -37,7 +37,7 @@ function duplicate(call: CallContext, result: ExecResult, secondsAgo: number | n
     content: [
       {
         type: 'text',
-        text: `Not repeated: an identical ${call.connector.name} "${call.action.name}" call on account "${call.account.name}" ${when}, so it was not executed again (duplicate protection). Its result is below. If the user explicitly wants it done a second time, tell them it was already done and ask them to confirm.`,
+        text: `Not repeated: an identical ${call.connector.name} "${call.action.name}" call on ${unitLabel(call)} ${when}, so it was not executed again (duplicate protection). Its result is below. If the user explicitly wants it done a second time, tell them it was already done and ask them to confirm.`,
       },
       ...result.content,
     ],

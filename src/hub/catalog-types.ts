@@ -46,6 +46,12 @@ export type ToolTarget =
       fanOut: boolean;
     }
   | {
+      /** A hub setup tool (connector `anyconnect`): runs on the workspace, not on an account. */
+      kind: 'workspace';
+      connectorId: string;
+      action: string;
+    }
+  | {
       /** A unified tool over a shared interface operation, e.g. `mail_search` over all mailboxes. */
       kind: 'capability';
       capabilityId: string;
@@ -70,12 +76,13 @@ export interface CatalogTool {
 /**
  * Decides whether an account may use an action at all (policy, personas). Applied before anything
  * else, so a denied account disappears from the `account` enum and an action without allowed
- * accounts disappears from the catalog (and from unified tools).
+ * accounts disappears from the catalog (and from unified tools). `account` is `undefined` for the
+ * hub's setup tools, which act on the workspace itself.
  */
 export type CatalogAllow = (
   connector: ConnectorDefinition,
   action: ActionDefinition,
-  account: AccountRow,
+  account: AccountRow | undefined,
 ) => boolean;
 
 export interface CatalogService {

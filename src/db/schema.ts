@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -328,6 +329,8 @@ export const toolCalls = pgTable(
     principalType: text().$type<'oauth' | 'api_token' | 'session'>().notNull(),
     principalId: text(),
     clientId: text(),
+    /** Hashed end-user id at the AI provider, when the client sends one (see `Principal.aiSubject`). */
+    aiSubject: text(),
     status: text().$type<'ok' | 'error'>().notNull(),
     /**
      * Why the call ended the way it did when that is more than ok/error: `denied` (policy),
@@ -341,6 +344,32 @@ export const toolCalls = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index().on(t.workspaceId, t.createdAt)],
+);
+
+/**
+ * Usage counters for plans and limits: executed calls per workspace, day, caller (AI account when
+ * known, else the AI app connection; see `usageCaller`) and action. Only counted for now; plans and
+ * limits read them later. Kept apart from `tool_calls`, which is an audit log and may be pruned.
+ */
+export const usageCounters = pgTable(
+  'usage_counters',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** UTC day. */
+    day: date({ mode: 'string' }).notNull(),
+    caller: text().notNull(),
+    connectorId: text().notNull(),
+    action: text().notNull(),
+    calls: integer().notNull().default(0),
+    errors: integer().notNull().default(0),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.day, t.caller, t.connectorId, t.action] }),
+    index().on(t.caller, t.day),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -457,9 +486,8 @@ export const pendingCalls = pgTable(
     toolName: text().notNull(),
     connectorId: text().notNull(),
     action: text().notNull(),
-    accountId: text()
-      .notNull()
-      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Null for a setup tool, which acts on the workspace. */
+    accountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
     risk: text().$type<RiskLevel>().notNull(),
     /** Why the call is risky, when the action explained it (e.g. "first message to a new contact"). */
     reason: text(),

@@ -178,6 +178,7 @@ export function buildInstructions(
   services: CatalogService[],
   mode: ExposureMode,
   listing: ListingMode,
+  setup = false,
 ): string {
   const lines = [
     'AnyConnect is a hub that connects the user’s services and accounts. Several accounts of the same service can be connected (for example two mailboxes or two Telegram accounts).',
@@ -195,9 +196,18 @@ export function buildInstructions(
     );
   }
   lines.push(`Call ${BUILTIN_TOOLS.list_accounts.name} for details of all connected accounts.`);
+  if (setup) {
+    lines.push(
+      'The user manages this hub from the chat: anyconnect_services lists what can be connected, anyconnect_connect_account returns a link to connect an account (never ask for passwords or keys in the chat), anyconnect_update_account / anyconnect_remove_account / anyconnect_add_service / anyconnect_update_settings change the setup. Find them with anyconnect_search_tools if they are not listed.',
+    );
+  }
   const active = services.filter((s) => s.accounts.some((a) => a.enabled));
   if (active.length === 0) {
-    lines.push('No services are connected yet. The user can add accounts in the AnyConnect web panel.');
+    lines.push(
+      setup
+        ? 'No services are connected yet. Offer to connect one: anyconnect_services, then anyconnect_connect_account.'
+        : 'No services are connected yet. The user can add accounts in the AnyConnect web panel.',
+    );
   } else {
     lines.push('Connected services:');
     for (const { connector, accounts } of active) {
@@ -297,6 +307,8 @@ export function buildCatalog(input: {
   client?: ClientProfile;
   /** Recent call counts per tool name: the most used tools stay listed in discovery mode. */
   usage?: Record<string, number>;
+  /** The hub's setup tools (connector `anyconnect`, see `setup-tools.ts`), acting on the workspace. */
+  setup?: ConnectorDefinition;
 }): Catalog {
   const mode = input.mode ?? 'grouped';
   const byConnector = new Map(input.connectors.map((c) => [c.id, c]));
@@ -387,11 +399,31 @@ export function buildCatalog(input: {
     }
   }
 
-  const tools = [...builtins, ...unified, ...serviceTools];
+  const setupTools: CatalogTool[] = [];
+  if (input.setup) {
+    const connector = input.setup;
+    for (const action of connector.actions) {
+      if (input.allow && !input.allow(connector, action, undefined)) continue;
+      const title = action.title ?? action.name;
+      add(setupTools, {
+        name: makeToolName([connector.id, action.name], `${connector.id}:${action.name}`),
+        title,
+        description: action.description,
+        inputSchema: action.inputSchema ?? toJsonSchema(action.input),
+        annotations: annotationsFor(title, action),
+        risk: actionRisk(action),
+        keywords: 'setup settings hub anyconnect',
+        target: { kind: 'workspace', connectorId: connector.id, action: action.name },
+      });
+    }
+  }
+
+  const tools = [...builtins, ...unified, ...serviceTools, ...setupTools];
   const { listing, listed, stats } = chooseListing({
     builtins,
     unified,
     serviceTools,
+    setupTools,
     setting: input.listing ?? 'auto',
     profile: input.client ?? DEFAULT_PROFILE,
     usage: input.usage ?? {},
@@ -402,7 +434,7 @@ export function buildCatalog(input: {
     tools,
     listed,
     services,
-    instructions: buildInstructions(services, mode, listing),
+    instructions: buildInstructions(services, mode, listing, setupTools.length > 0),
     stats: { ...stats, totalTools: tools.length },
   };
 }

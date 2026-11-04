@@ -26,7 +26,8 @@ export interface PendingCallInput {
   toolName: string;
   connectorId: string;
   action: string;
-  accountId: string;
+  /** Null for a setup tool, which acts on the workspace. */
+  accountId: string | null;
   risk: RiskLevel;
   reason?: string | undefined;
   args: Record<string, unknown>;
@@ -39,7 +40,7 @@ const FINAL: PendingCallStatus[] = ['succeeded', 'failed', 'denied', 'cancelled'
 const DAY = 86_400_000;
 
 /** Stable hash of tool arguments (key order does not matter). */
-export function argumentsHash(toolName: string, accountId: string, args: unknown): string {
+export function argumentsHash(toolName: string, accountId: string | null, args: unknown): string {
   const canonical = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(canonical);
     if (value && typeof value === 'object') {
@@ -174,7 +175,7 @@ export class PendingCallService {
    * The latest not yet consumed call of this caller with exactly these arguments, so repeating a
    * held-back call returns its status or result instead of asking the user again.
    */
-  async findRepeat(principal: Principal, toolName: string, accountId: string, args: unknown) {
+  async findRepeat(principal: Principal, toolName: string, accountId: string | null, args: unknown) {
     const rows = await this.db
       .select()
       .from(pendingCalls)

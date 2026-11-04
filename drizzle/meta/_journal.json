@@ -36,6 +36,13 @@
       "when": 1793753389577,
       "tag": "0004_data_protection",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793755446845,
+      "tag": "0005_setup_and_usage",
+      "breakpoints": true
     }
   ]
 }

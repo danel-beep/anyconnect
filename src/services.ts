@@ -16,10 +16,13 @@ import { PasskeyService } from './core/passkeys.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
 import { TotpService } from './core/totp.js';
+import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
 import { type IdempotencyStore, MemoryIdempotencyStore } from './hub/idempotency.js';
+import { SETUP_CONNECTOR } from './hub/setup-tools.js';
+import { PgUsageMeter, type UsageMeter } from './hub/usage.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
 import { SecretBox } from './lib/crypto.js';
@@ -27,7 +30,7 @@ import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
-import { createHubMcpHandler } from './mcp/handler.js';
+import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { AiClientService } from './security/clients.js';
@@ -64,6 +67,10 @@ export interface Services {
   connectors: WorkspaceConnectorResolver;
   /** Remote MCP servers and HTTP manifests added without code. */
   customServices: CustomServiceManager;
+  /** Workspace administration (what the setup tools and the panel do for the user). */
+  admin: WorkspaceAdmin;
+  /** Usage counters per workspace, AI account and action. */
+  usage: UsageMeter;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -100,6 +107,8 @@ export interface Services {
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
+  /** /mcp for apps that have not signed in yet; absent when `MCP_ANONYMOUS` is off. */
+  visitorMcp?: McpHttpHandler;
   close(): Promise<void>;
 }
 
@@ -183,8 +192,10 @@ export function createServices(
     row: Parameters<ConfirmationCenter['describe']>[0],
   ): Promise<CallDescription> => {
     const [connector, account, client] = await Promise.all([
-      connectors.get(row.workspaceId, row.connectorId),
-      accounts.get(row.workspaceId, row.accountId).catch(() => undefined),
+      row.connectorId === SETUP_CONNECTOR.id
+        ? SETUP_CONNECTOR
+        : connectors.get(row.workspaceId, row.connectorId),
+      row.accountId ? accounts.get(row.workspaceId, row.accountId).catch(() => undefined) : undefined,
       row.principal.aiClientId
         ? aiClients.get(row.workspaceId, row.principal.aiClientId).catch(() => undefined)
         : undefined,
@@ -193,7 +204,7 @@ export function createServices(
     return {
       service: connector?.name ?? row.connectorId,
       action: action?.title ?? row.action,
-      account: account ? `${account.label} (${account.name})` : row.accountId,
+      account: account ? `${account.label} (${account.name})` : (row.accountId ?? 'settings'),
       client: client?.name ?? (row.principal.kind === 'api_token' ? 'API token' : 'AI app'),
       risk: row.risk,
       reason: row.reason ?? undefined,
@@ -220,11 +231,24 @@ export function createServices(
     untrusted: untrustedStage,
   };
 
+  const admin = new WorkspaceAdmin({
+    db,
+    connectors,
+    builtin: connectors.builtin,
+    accounts,
+    customServices,
+    apps: oauthApps,
+    publicUrl: config.publicUrl,
+    logger,
+  });
+  const usage = new PgUsageMeter(db);
   const hub = new Hub({
     db,
+    meter: usage,
     connectors,
     accounts,
     logger,
+    setup: { connector: SETUP_CONNECTOR, admin },
     rateLimiter,
     idempotency,
     toolTimeoutMs: config.toolTimeoutMs,
@@ -270,6 +294,9 @@ export function createServices(
     new PasskeyService(db, { id: config.auth.rpId, name: config.auth.rpName, origin: config.auth.origin }),
   );
   const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
+  const visitorMcp = config.anonymousMcp.enabled
+    ? createVisitorMcpHandler({ admin, setup: SETUP_CONNECTOR, logger, version: VERSION })
+    : undefined;
 
   return {
     config,
@@ -281,6 +308,8 @@ export function createServices(
     network,
     connectors,
     customServices,
+    admin,
+    usage,
     accounts,
     oauthApps,
     tokens,
@@ -307,11 +336,13 @@ export function createServices(
     rateLimiter,
     idempotency,
     mcp,
+    ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
       await pendingRunner.stop();
       rateLimiter.close();
       await jobs.stop();
       await mcp.close();
+      await visitorMcp?.close();
       await network.close();
       await database.close();
     },

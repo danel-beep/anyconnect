@@ -55,6 +55,14 @@ const EnvSchema = z.object({
    * Off by default: in the cloud it would expose internal services to anyone who can add an account.
    */
   ALLOW_PRIVATE_NETWORK: bool(false),
+  /**
+   * Lets AI apps connect to /mcp before signing in: they see what the hub can do, and the first
+   * call that needs an account makes the app open the sign-in page. Off by default: apps that
+   * detect sign-in by a 401 on the first request would otherwise treat the hub as needing none.
+   */
+  MCP_ANONYMOUS: bool(false),
+  /** Requests per minute one IP address may make to /mcp without signing in. */
+  MCP_ANONYMOUS_RATE_LIMIT: z.coerce.number().int().min(1).default(30),
   /** Default size budget of one tool result, in tokens (larger results are trimmed with a note). */
   TOOL_RESULT_MAX_TOKENS: z.coerce.number().int().min(200).default(2000),
   /** How long a successful write is remembered to suppress accidental duplicates (0 disables). */
@@ -121,6 +129,8 @@ export interface AppConfig {
     /** Expected origin of WebAuthn ceremonies = the public URL. */
     origin: string;
   };
+  /** /mcp before signing in (see MCP_ANONYMOUS). */
+  anonymousMcp: { enabled: boolean; perMinute: number };
   /**
    * Hub-wide OAuth apps of service providers, by provider id, from
    * `OAUTH_APP_<PROVIDER>_CLIENT_ID` / `OAUTH_APP_<PROVIDER>_CLIENT_SECRET`
@@ -233,6 +243,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionTtlSeconds: env.SESSION_TTL_DAYS * 86_400,
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
+    anonymousMcp: { enabled: env.MCP_ANONYMOUS, perMinute: env.MCP_ANONYMOUS_RATE_LIMIT },
     tools: {
       maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
