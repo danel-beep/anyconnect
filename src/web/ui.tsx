@@ -183,6 +183,8 @@ export const pctClass = (prefix: 'w' | 'h', used: number, limit: number | null):
 };
 
 export const Meter: FC<{ used: number; limit: number | null; label: string }> = ({ used, limit, label }) => {
+  // Nothing to fill without a limit: an always-empty bar reads as "nothing used".
+  if (limit === null) return null;
   const ratio = limit === null ? 0 : used / Math.max(1, limit);
   const tone = ratio >= 1 ? 'bad' : ratio >= 0.8 ? '' : 'ok';
   return (

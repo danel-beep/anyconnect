@@ -1045,7 +1045,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           </>
         ) : null}
       </div>
-      {ctx.billing ? null : view.requested ? (
+      {!view.plan.public ? null : ctx.billing ? null : view.requested ? (
         <div class="notice info">
           {t('app.billing.requested', {
             plan: t(`plan.${view.requested.planId}.name` as 'plan.free.name'),
@@ -1059,7 +1059,8 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             : t('app.billing.manual')}
         </div>
       )}
-      <div data-interval="month" data-interval-root>
+      {/* A special plan from the admin (e.g. unlimited) has nothing to switch to. */}
+      <div data-interval="month" data-interval-root hidden={!view.plan.public}>
         <div class="row between">
           <h2>{t('app.billing.plans')}</h2>
           <fieldset class="billing-switch">

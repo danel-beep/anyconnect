@@ -4,6 +4,8 @@
 # After the first deploy:
 #   1. Set ADMIN_EMAIL and ADMIN_PASSWORD in the service's Environment tab (you are asked on creation).
 #   2. Back up ENCRYPTION_KEY somewhere safe: without it stored credentials cannot be decrypted.
+#   3. For "Sign in with Google" set LOGIN_GOOGLE_CLIENT_ID / LOGIN_GOOGLE_CLIENT_SECRET (redirect URI
+#      <your URL>/auth/google/callback) and SUPPORT_EMAIL. See .env.example for the rest.
 services:
   - type: web
     name: anyconnect
@@ -28,6 +30,14 @@ services:
         sync: false
       - key: LOG_LEVEL
         value: info
+      - key: LOGIN_GOOGLE_CLIENT_ID
+        sync: false
+      - key: LOGIN_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false
+      - key: SIGNUPS
+        value: open
 
 databases:
   - name: anyconnect-db
