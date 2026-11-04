@@ -60,7 +60,7 @@ describe('http connector', () => {
     const result = (await acc.run('get', {
       path: '/users/1',
       query: { expand: 'team' },
-      fields: ['name', 'team.name'],
+      select: ['name', 'team.name'],
     })) as Record<string, unknown>;
     expect(result).toEqual({ status: 200, data: { name: 'Ann', team: { name: 'Core' } } });
     expect(service.calls[0]!.headers.get('authorization')).toBe('Bearer s3cret');
@@ -93,7 +93,7 @@ describe('http connector', () => {
     expect(result.truncated.totalItems).toBe(50);
     expect(result.truncated.shownItems).toBe(result.data.length);
     expect(result.headers.link).toContain('rel="next"');
-    const small = (await acc.run('get', { path: '/users', root: 'data', fields: ['id'] })) as {
+    const small = (await acc.run('get', { path: '/users', root: 'data', select: ['id'] })) as {
       data: unknown[];
       truncated?: unknown;
     };

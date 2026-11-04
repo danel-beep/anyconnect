@@ -3,6 +3,7 @@ import type { ImapFlow } from 'imapflow';
 import type Mail from 'nodemailer/lib/mailer/index.js';
 import { z } from 'zod';
 import { type AccountContext, ConnectorError, defineConnector } from '../../sdk.js';
+import { day, dayAfter, mailRead, mailSearch, mailSend } from '../email/capability.js';
 import {
   Addresses,
   buildForward,
@@ -12,6 +13,7 @@ import {
   parseRaw,
   ReadOptions,
   readResult,
+  threadingHeaders,
 } from '../email/message.js';
 import { type ImapLogin, ImapPool, type ResolveHost, toConnectorError } from './connection.js';
 import {
@@ -269,6 +271,16 @@ export default defineConnector({
         cursor: z.string().max(20).optional().describe('nextCursor from the previous page'),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: mailSearch((input) => ({
+        folder: input.folder ?? 'inbox',
+        query: input.query,
+        from: input.from,
+        to: input.to,
+        ...(input.since ? { since: day(input.since) } : {}),
+        ...(input.until ? { before: dayAfter(input.until) } : {}),
+        ...(input.unread_only ? { unread: true } : {}),
+        limit: input.limit,
+      })),
       run: ({ folder, limit, cursor, ...filters }, ctx) =>
         withImap(ctx, async (client) => {
           const path = await resolveFolder(client, folder);
@@ -285,30 +297,14 @@ export default defineConnector({
       title: 'Read message',
       description:
         'Returns one message as plain text (HTML converted, quoted history removed by default) with headers and the attachment list.',
-      input: z.object({
-        id: MessageId,
-        ...ReadOptions,
-        markRead: z.boolean().default(false).describe('Also mark the message as read'),
-      }),
+      input: z.object({ id: MessageId, ...ReadOptions }),
       hints: { readOnly: true, idempotent: true },
-      run: ({ id, maxChars, includeQuoted, markRead }, ctx) =>
+      capability: mailRead,
+      run: ({ id, maxChars, includeQuoted }, ctx) =>
         withImap(ctx, async (client) => {
           const { folder, uid } = decodeId(id);
           const { parsed, flags } = await fetchMessage(client, folder, uid);
-          if (markRead && !flags.has('\\Seen')) {
-            const lock = await client.getMailboxLock(folder);
-            try {
-              await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true });
-            } finally {
-              lock.release();
-            }
-          }
-          return readResult(parsed, {
-            id,
-            maxChars,
-            includeQuoted,
-            unread: !flags.has('\\Seen') && !markRead,
-          });
+          return readResult(parsed, { id, maxChars, includeQuoted, unread: !flags.has('\\Seen') });
         }),
     }),
     action({
@@ -319,11 +315,22 @@ export default defineConnector({
         to: Addresses.min(1),
         cc: Addresses.optional(),
         bcc: Addresses.optional(),
-        subject: z.string().trim().max(998),
+        subject: z.string().trim().max(998).default('').describe('Default for replies: Re: original subject'),
         body: z.string().max(200_000).describe('Plain-text body'),
+        replyToId: MessageId.optional().describe('Send as a reply in the thread of this message'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: false },
-      run: ({ to, cc, bcc, subject, body }, ctx) => deliver(ctx, { to, cc, bcc, subject, text: body }),
+      risk: 'write',
+      capability: mailSend,
+      run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
+        let threading: Mail.Options = {};
+        if (replyToId) {
+          const { folder, uid } = decodeId(replyToId);
+          const { parsed } = await withImap(ctx, (client) => fetchMessage(client, folder, uid));
+          threading = threadingHeaders(parsed);
+        }
+        return deliver(ctx, { ...threading, to, cc, bcc, ...(subject ? { subject } : {}), text: body });
+      },
     }),
     action({
       name: 'reply',
@@ -337,6 +344,7 @@ export default defineConnector({
         cc: Addresses.optional().describe('Extra recipients in copy'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: false },
+      risk: 'write',
       run: async ({ id, body, replyAll, cc }, ctx) => {
         const { folder, uid } = decodeId(id);
         const original = await withImap(ctx, (client) => fetchMessage(client, folder, uid));
@@ -364,6 +372,7 @@ export default defineConnector({
         body: z.string().max(200_000).default('').describe('Note above the forwarded message'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: false },
+      risk: 'write',
       run: async ({ id, to, body }, ctx) => {
         const { folder, uid } = decodeId(id);
         const raw = await withImap(ctx, (client) => fetchRaw(client, folder, uid));
@@ -380,6 +389,8 @@ export default defineConnector({
         to: Folder,
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      // Moving to trash is restorable until the server empties it.
+      risk: 'write',
       run: ({ ids, to }, ctx) =>
         withImap(ctx, async (client) => {
           const destination = await resolveFolder(client, to);
@@ -414,6 +425,7 @@ export default defineConnector({
         flagged: z.boolean().optional(),
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      risk: 'write',
       run: ({ ids, read, flagged }, ctx) => {
         if (read === undefined && flagged === undefined) {
           throw new ConnectorError('invalid_input', 'Pass "read" and/or "flagged".');

@@ -1,3 +1,4 @@
+import { getCapability } from '../../src/connectors/capabilities.js';
 import type {
   AccountContext,
   ActionResult,
@@ -6,7 +7,7 @@ import type {
   NetworkAccess,
   OAuthAccess,
 } from '../../src/connectors/sdk.js';
-import { isRawResult } from '../../src/connectors/sdk.js';
+import { actionCapabilities, isRawResult } from '../../src/connectors/sdk.js';
 import { createNetworkPolicy } from '../../src/lib/network.js';
 
 /**
@@ -21,6 +22,12 @@ export interface TestAccount {
   /** Credentials saved through ctx.updateCredentials (e.g. refreshed tokens). */
   savedCredentials: unknown[];
   run(action: string, input?: Record<string, unknown>): Promise<ActionResult>;
+  /**
+   * Calls the action bound to a shared capability the way the hub does (canonical input →
+   * mapInput → action → mapOutput) and checks the result against the capability's schema,
+   * strictly: a misnamed field fails the test instead of silently disappearing.
+   */
+  runCapability(capability: string, input: Record<string, unknown>): Promise<any>;
 }
 
 const localNetwork = createNetworkPolicy({ allowPrivateNetwork: true });
@@ -84,6 +91,36 @@ export function testAccount(
       if (!action) throw new Error(`No action ${connector.id}.${actionName}`);
       const result = await action.run(action.input.parse(input), ctx);
       return isRawResult(result) ? result : JSON.parse(JSON.stringify(result));
+    },
+    async runCapability(capabilityId, canonicalInput) {
+      const capability = getCapability(capabilityId);
+      if (!capability) throw new Error(`Unknown capability ${capabilityId}`);
+      const bound = connector.actions.flatMap((action) =>
+        actionCapabilities(action)
+          .filter((b) => b.id === capabilityId)
+          .map((binding) => ({ action, binding })),
+      )[0];
+      if (!bound) throw new Error(`${connector.id} does not implement ${capabilityId}`);
+      const { action, binding } = bound;
+      const input = capability.input.parse(canonicalInput) as Record<string, unknown>;
+      const native = binding.mapInput ? binding.mapInput(input) : input;
+      const result = await action.run(action.input.parse(native), ctx);
+      const output = JSON.parse(
+        JSON.stringify(binding.mapOutput ? binding.mapOutput(result, input) : result),
+      );
+      const strict = capability.output.strict();
+      if (capability.kind === 'list') {
+        const items = Array.isArray(output) ? output : output.items;
+        if (!Array.isArray(items)) throw new Error(`${capabilityId}: a list result needs items`);
+        for (const item of items) strict.parse(item);
+      } else if (capabilityId === 'messages.read_chat') {
+        for (const message of output.messages ?? [])
+          getCapability('messages.search')!.output.strict().parse(message);
+        capability.output.parse(output);
+      } else {
+        strict.parse(output);
+      }
+      return output;
     },
   };
 }

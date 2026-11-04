@@ -2,6 +2,7 @@ import type Mail from 'nodemailer/lib/mailer/index.js';
 import { z } from 'zod';
 import { HttpClient } from '../http/client.js';
 import { type AccountContext, ConnectorError, defineConnector, requireOAuth } from '../sdk.js';
+import { mailRead, mailSearch, mailSend, quoted } from './email/capability.js';
 import {
   Addresses,
   buildForward,
@@ -11,6 +12,7 @@ import {
   parseRaw,
   ReadOptions,
   readResult,
+  threadingHeaders,
 } from './email/message.js';
 import { mapLimit } from './shared/concurrency.js';
 
@@ -152,6 +154,20 @@ export default defineConnector({
         cursor: z.string().max(200).optional().describe('nextCursor from the previous page'),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: mailSearch((input) => ({
+        query: [
+          input.query,
+          input.from && `from:${quoted(input.from)}`,
+          input.to && `to:${quoted(input.to)}`,
+          input.since && `after:${Math.floor(Date.parse(input.since) / 1000)}`,
+          input.until && `before:${Math.ceil(Date.parse(input.until) / 1000)}`,
+          input.unread_only && 'is:unread',
+          input.folder && `in:${quoted(input.folder)}`,
+        ]
+          .filter(Boolean)
+          .join(' '),
+        limit: input.limit,
+      })),
       run: async ({ query, limit, cursor }, ctx) => {
         const client = api(ctx);
         const { data } = await client.get<{
@@ -181,6 +197,7 @@ export default defineConnector({
         'Returns a message as plain text (quoted history removed by default) with the attachment list.',
       input: z.object({ id: MessageId, ...ReadOptions }),
       hints: { readOnly: true, idempotent: true },
+      capability: mailRead,
       run: async ({ id, maxChars, includeQuoted }, ctx) => {
         const { message, raw } = await getRaw(ctx, id);
         const parsed = await parseRaw(raw);
@@ -202,11 +219,20 @@ export default defineConnector({
         to: Addresses.min(1),
         cc: Addresses.optional(),
         bcc: Addresses.optional(),
-        subject: z.string().trim().max(998),
+        subject: z.string().trim().max(998).default('').describe('Default for replies: Re: original subject'),
         body: z.string().max(200_000),
+        replyToId: MessageId.optional().describe('Send as a reply in the thread of this message'),
       }),
       hints: { readOnly: false, destructive: false },
-      run: ({ to, cc, bcc, subject, body }, ctx) => sendMessage(ctx, { to, cc, bcc, subject, text: body }),
+      risk: 'write',
+      capability: mailSend,
+      run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
+        if (!replyToId) return sendMessage(ctx, { to, cc, bcc, subject, text: body });
+        const { message, raw } = await getRaw(ctx, replyToId);
+        const threading = threadingHeaders(await parseRaw(raw));
+        const mail = { ...threading, to, cc, bcc, ...(subject ? { subject } : {}), text: body };
+        return sendMessage(ctx, mail, message.threadId);
+      },
     }),
     action({
       name: 'reply',
@@ -219,6 +245,7 @@ export default defineConnector({
         cc: Addresses.optional(),
       }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ id, body, replyAll, cc }, ctx) => {
         const [{ message, raw }, me] = await Promise.all([getRaw(ctx, id), profileEmail(ctx)]);
         const reply = buildReply(await parseRaw(raw), { me, body, replyAll, cc });
@@ -232,6 +259,7 @@ export default defineConnector({
       description: 'Forwards a message with all attachments (as the original email) and an optional note.',
       input: z.object({ id: MessageId, to: Addresses.min(1), body: z.string().max(200_000).default('') }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ id, to, body }, ctx) => {
         const { raw } = await getRaw(ctx, id);
         const parsed = await parseRaw(raw);
@@ -250,6 +278,7 @@ export default defineConnector({
         replyToId: MessageId.optional().describe('Make the draft a reply to this message'),
       }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ to, cc, subject, body, replyToId }, ctx) => {
         let mail: Mail.Options = { to, cc, subject, text: body };
         let threadId: string | undefined;
@@ -280,6 +309,7 @@ export default defineConnector({
         removeLabels: z.array(z.string().max(200)).max(20).default([]),
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      risk: 'write',
       run: async ({ ids, read, starred, archive, addLabels, removeLabels }, ctx) => {
         const add = await labelIds(ctx, addLabels);
         const remove = await labelIds(ctx, removeLabels);
@@ -300,6 +330,9 @@ export default defineConnector({
       description: 'Moves messages to Trash (Gmail deletes them after 30 days; restore with untrash).',
       input: z.object({ ids: z.array(MessageId).min(1).max(100), untrash: z.boolean().default(false) }),
       hints: { readOnly: false, destructive: true, idempotent: true },
+      // Restorable for 30 days with untrash.
+      risk: 'write',
+      undo: { kind: 'action', action: 'trash', note: 'Call again with untrash: true' },
       run: async ({ ids, untrash }, ctx) => {
         const client = api(ctx);
         await mapLimit(ids, 5, (id) => client.post(`messages/${id}/${untrash ? 'untrash' : 'trash'}`));

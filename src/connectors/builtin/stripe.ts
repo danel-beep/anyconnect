@@ -147,6 +147,7 @@ export default defineManifestConnector({
         required: ['payment_intent'],
       },
       hints: { readOnly: false, destructive: true },
+      risk: 'dangerous',
       request: { method: 'POST', path: '/refunds', bodyType: 'form' },
       response: { fields: ['id', 'amount', 'currency', 'status'] },
     },

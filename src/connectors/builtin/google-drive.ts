@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { HttpClient } from '../http/client.js';
-import { type AccountContext, ConnectorError, defineConnector, requireOAuth } from '../sdk.js';
+import {
+  type AccountContext,
+  type CapabilityOutput,
+  ConnectorError,
+  defineConnector,
+  requireOAuth,
+} from '../sdk.js';
 
 /**
  * Google Drive API v3 over OAuth. Google Docs/Sheets/Slides are exported to text/CSV so the AI can
@@ -54,6 +60,19 @@ const fileSummary = (f: DriveFile) => ({
   ...(f.modifiedTime ? { modified: f.modifiedTime } : {}),
   ...(f.size ? { size: Number(f.size) } : {}),
   ...(f.webViewLink ? { url: f.webViewLink } : {}),
+});
+
+type Summary = ReturnType<typeof fileSummary>;
+const MIME_OF_SHORT = Object.fromEntries(Object.entries(SHORT_TYPES).map(([mime, short]) => [short, mime]));
+
+/** A native file summary as the shared `files.*` item. */
+const fileItem = (f: Summary): CapabilityOutput<'files.search'> => ({
+  id: f.id,
+  name: f.name,
+  mime_type: MIME_OF_SHORT[f.type] ?? f.type,
+  ...(f.size !== undefined ? { size: f.size } : {}),
+  ...(f.modified ? { modified: f.modified } : {}),
+  ...(f.url ? { url: f.url } : {}),
 });
 
 /** Escapes a value for a Drive query string literal. */
@@ -120,6 +139,14 @@ export default defineConnector({
         cursor: z.string().max(500).optional(),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'files.search',
+        mapInput: ({ query, limit }) => ({ text: query, limit }),
+        mapOutput: (result) => {
+          const { files, nextCursor } = result as { files: Summary[]; nextCursor?: string };
+          return { items: files.map(fileItem), ...(nextCursor ? { nextCursor } : {}) };
+        },
+      },
       run: async ({ limit, cursor, ...filters }, ctx) => {
         const { data } = await api(ctx).get<{ files: DriveFile[]; nextPageToken?: string }>('files', {
           q: buildQuery(filters),
@@ -143,6 +170,14 @@ export default defineConnector({
       description: 'Returns the text of a Google Doc/Sheet/Slides or a text file (cut to maxChars).',
       input: z.object({ id: FileId, maxChars: z.number().int().min(500).max(200_000).default(10_000) }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'files.read',
+        mapInput: ({ id, max_chars }) => ({ id, maxChars: Math.max(500, Number(max_chars)) }),
+        mapOutput: (result): CapabilityOutput<'files.read'> => {
+          const r = result as Summary & { text: string; truncated?: boolean };
+          return { ...fileItem(r), text: r.text, ...(r.truncated ? { truncated: true } : {}) };
+        },
+      },
       run: async ({ id, maxChars }, ctx) => {
         const client = api(ctx);
         const { data: file } = await client.get<DriveFile>(`files/${encodeURIComponent(id)}`, {
@@ -192,6 +227,8 @@ export default defineConnector({
         folderId: z.string().trim().max(200).optional().describe('Parent folder; default: My Drive root'),
       }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
+      undo: { kind: 'action', action: 'update', note: 'Move it to trash with trash: true' },
       run: async ({ name, kind, content, folderId }, ctx) => {
         const metadata = {
           name,
@@ -247,6 +284,8 @@ export default defineConnector({
         trash: z.boolean().optional().describe('true moves to trash, false restores'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      // Trash is restorable for 30 days.
+      risk: 'write',
       run: async ({ id, name, moveToFolderId, trash }, ctx) => {
         if (name === undefined && moveToFolderId === undefined && trash === undefined) {
           throw new ConnectorError('invalid_input', 'Pass name, moveToFolderId or trash.');

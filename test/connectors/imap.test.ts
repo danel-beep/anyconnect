@@ -80,9 +80,9 @@ const withAttachment = [
 const storage = () => ({
   INBOX: {
     messages: [
-      { raw: plainRussian, flags: [], internaldate: '2026-11-02T10:00:00Z' },
-      { raw: htmlCp1251, flags: ['\\Seen'], internaldate: '2026-11-03T09:00:00Z' },
-      { raw: withAttachment, flags: ['\\Seen', '\\Flagged'], internaldate: '2026-11-04T08:00:00Z' },
+      { raw: plainRussian, flags: [], internaldate: '02-Nov-2026 10:00:00 +0000' },
+      { raw: htmlCp1251, flags: ['\\Seen'], internaldate: '03-Nov-2026 09:00:00 +0000' },
+      { raw: withAttachment, flags: ['\\Seen', '\\Flagged'], internaldate: '04-Nov-2026 08:00:00 +0000' },
     ],
   },
   '': {
@@ -314,10 +314,9 @@ for (const variant of [
       });
       const again = (await acc.run('search', { unread: true })) as { total: number };
       expect(again.total).toBe(1);
-      const full = (await acc.run('read', { id: messages[0]!.id, includeQuoted: true, markRead: true })) as {
-        text: string;
-      };
+      const full = (await acc.run('read', { id: messages[0]!.id, includeQuoted: true })) as { text: string };
       expect(full.text).toContain('> Спасибо');
+      await acc.run('mark', { ids: [messages[0]!.id], read: true });
       expect(((await acc.run('search', { unread: true })) as { total: number }).total).toBe(0);
     });
 
@@ -421,6 +420,47 @@ for (const variant of [
       expect(mail.text?.trim()).toBe('FYI');
       expect(received[0]!.to).toEqual(['accountant@example.test']);
       expect(mail.attachments.map((a) => a.contentType)).toEqual(['message/rfc822']);
+    });
+
+    it('implements the shared mail capabilities', async () => {
+      const acc = account({ saveSentCopy: false });
+      const found = await acc.runCapability('mail.search', {
+        from: 'ivan',
+        since: '2026-11-02T09:00:00Z',
+        until: '2026-11-02T23:00:00Z',
+      });
+      expect(found.items).toEqual([
+        expect.objectContaining({
+          from: 'Иван Петров <ivan@example.test>',
+          to: [ME],
+          subject: 'Счёт за октябрь',
+          unread: true,
+          has_attachments: false,
+        }),
+      ]);
+      // The time bounds are exact even though IMAP filters by day.
+      const none = await acc.runCapability('mail.search', { from: 'ivan', since: '2026-11-02T11:00:00Z' });
+      expect(none.items).toEqual([]);
+      const message = await acc.runCapability('mail.read', { id: found.items[0].id });
+      expect(message).toMatchObject({
+        subject: 'Счёт за октябрь',
+        body: expect.stringContaining('оплатите'),
+      });
+      const statement = (await acc.runCapability('mail.search', { from: 'bank' })).items[0];
+      expect(statement.has_attachments).toBe(true);
+      expect((await acc.runCapability('mail.read', { id: statement.id })).attachments).toEqual([
+        { id: '1', name: 'statement.pdf', mime_type: 'application/pdf', size: expect.any(Number) },
+      ]);
+      const sent = await acc.runCapability('mail.send', {
+        to: ['ivan@example.test'],
+        subject: '',
+        body: 'Оплачено.',
+        reply_to_id: found.items[0].id,
+      });
+      expect(sent.id).toMatch(/^<.+>$/);
+      const mail = await simpleParser(received[0]!.raw);
+      expect(mail.subject).toBe('Re: Счёт за октябрь');
+      expect(mail.inReplyTo).toBe('<invoice-1@example.test>');
     });
   });
 }

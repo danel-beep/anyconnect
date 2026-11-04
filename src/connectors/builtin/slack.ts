@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { HttpClient, type QueryValue } from '../http/client.js';
-import { type AccountContext, ConnectorError, defineConnector, type ErrorKind } from '../sdk.js';
+import {
+  type AccountContext,
+  type CapabilityOutput,
+  ConnectorError,
+  defineConnector,
+  type ErrorKind,
+} from '../sdk.js';
 
 /**
  * Slack Web API as the user (user token `xoxp-…`): search, read channels and DMs, send messages.
@@ -231,6 +237,32 @@ const Channel = z
   .describe('Channel id (C…/D…), "#channel-name", "@username" or user id (opens a DM)');
 const Limit = (max: number, fallback: number) => z.number().int().min(1).max(max).default(fallback);
 
+type Formatted = Awaited<ReturnType<typeof formatMessages>>[number];
+type MessageItem = CapabilityOutput<'messages.search'>;
+
+/** A formatted Slack message as the shared `messages.*` item; Slack's ts is the message id. */
+const messageItem = (m: Formatted, channelId: string | undefined, channel?: string): MessageItem => ({
+  id: m.ts,
+  ...(channelId ? { chat_id: channelId } : {}),
+  ...(channel ? { chat: channel } : {}),
+  from: m.from,
+  ...(m.date ? { date: m.date } : {}),
+  text: m.text,
+  ...('url' in m && typeof m.url === 'string' ? { url: m.url } : {}),
+});
+
+/** Slack search filters by whole days: `after:` is exclusive, so start a day earlier. */
+const dayBefore = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
+const dayAfter = (iso: string) => {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
+
 export default defineConnector({
   id: 'slack',
   name: 'Slack',
@@ -275,6 +307,30 @@ export default defineConnector({
         page: z.number().int().min(1).max(100).default(1),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'messages.search',
+        mapInput: ({ query, from, since, until, limit }) => ({
+          query: [
+            query,
+            typeof from === 'string' && `from:${from.startsWith('@') ? from : `@${from}`}`,
+            typeof since === 'string' && `after:${dayBefore(since)}`,
+            typeof until === 'string' && `before:${dayAfter(until)}`,
+          ]
+            .filter(Boolean)
+            .join(' '),
+          limit,
+        }),
+        mapOutput: (result, input) => {
+          const { messages } = result as {
+            messages: (Formatted & { channel?: string; channelId?: string })[];
+          };
+          const since = typeof input.since === 'string' ? Date.parse(input.since) : -Infinity;
+          const until = typeof input.until === 'string' ? Date.parse(input.until) : Infinity;
+          return messages
+            .map((m) => messageItem(m, m.channelId, m.channel))
+            .filter((m) => !m.date || (Date.parse(m.date) >= since && Date.parse(m.date) <= until));
+        },
+      },
       run: async ({ query, sort, limit, page }, ctx) => {
         const result = await call<
           SlackResponse & {
@@ -312,6 +368,30 @@ export default defineConnector({
         cursor: z.string().max(200).optional().describe('nextCursor from the previous page'),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'messages.list_chats',
+        // Slack has no cheap unread counts, so unread_only cannot be honoured here.
+        mapInput: ({ limit }) => ({ limit: Math.min(200, Number(limit)) }),
+        mapOutput: (result, input) => {
+          const { channels, nextCursor } = result as {
+            channels: { id: string; name: string; kind: string }[];
+            nextCursor?: string;
+          };
+          const query = typeof input.query === 'string' ? input.query.toLowerCase().replace(/^[#@]/, '') : '';
+          return {
+            items: channels
+              .filter((c) => !query || c.name.toLowerCase().includes(query))
+              .map(
+                (c): CapabilityOutput<'messages.list_chats'> => ({
+                  id: c.id,
+                  title: c.name,
+                  kind: c.kind === 'dm' ? 'direct' : c.kind === 'group_dm' ? 'group' : 'channel',
+                }),
+              ),
+            ...(nextCursor ? { nextCursor } : {}),
+          };
+        },
+      },
       run: async ({ types, limit, cursor }, ctx) => {
         const result = await call<
           SlackResponse & {
@@ -356,6 +436,26 @@ export default defineConnector({
         cursor: z.string().max(200).optional().describe('nextCursor from the previous page (older messages)'),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'messages.read_chat',
+        mapInput: ({ chat, before, limit }) => ({
+          channel: chat,
+          ...(before ? { cursor: before } : {}),
+          limit,
+        }),
+        mapOutput: (result): CapabilityOutput<'messages.read_chat'> => {
+          const { channelId, messages, nextCursor } = result as {
+            channelId: string;
+            messages: Formatted[];
+            nextCursor?: string;
+          };
+          // Slack returns newest first; the capability reads like a chat, newest last.
+          return {
+            messages: messages.map((m) => messageItem(m, channelId)).reverse(),
+            ...(nextCursor ? { nextCursor } : {}),
+          };
+        },
+      },
       run: async ({ channel, thread_ts, limit, cursor }, ctx) => {
         const id = await resolveChannel(ctx, channel);
         const result = thread_ts
@@ -389,6 +489,19 @@ export default defineConnector({
         thread_ts: z.string().max(30).optional().describe('ts of the message to reply to in its thread'),
       }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
+      capability: {
+        id: 'messages.send',
+        mapInput: ({ chat, text, reply_to }) => ({
+          channel: chat,
+          text,
+          ...(reply_to ? { thread_ts: reply_to } : {}),
+        }),
+        mapOutput: (result): CapabilityOutput<'messages.send'> => ({
+          id: (result as { ts: string }).ts,
+          status: 'sent',
+        }),
+      },
       run: async ({ channel, text, thread_ts }, ctx) => {
         const id = await resolveChannel(ctx, channel);
         const result = await call<SlackResponse & { channel: string; ts: string }>(

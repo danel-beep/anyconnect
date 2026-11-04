@@ -36,11 +36,13 @@ function setup(config: Record<string, unknown> = {}) {
         { name: 'logo.png', contentType: 'image/png', size: 99, isInline: true },
       ],
     },
-    [`POST ${G}/sendMail`]: () => new Response(null, { status: 202 }),
     [`POST ${G}/messages/AAMk1/replyAll`]: () => new Response(null, { status: 202 }),
     [`POST ${G}/messages/AAMk1/forward`]: () => new Response(null, { status: 202 }),
     [`POST ${G}/messages/AAMk1/move`]: { ...message, id: 'AAMk1-moved' },
     [`POST ${G}/messages/AAMk1/createReply`]: { id: 'draft1' },
+    [`POST ${G}/messages`]: { id: 'draft2', webLink: 'https://outlook.office.com/mail/draft2' },
+    [`POST ${G}/messages/draft1/send`]: () => new Response(null, { status: 202 }),
+    [`POST ${G}/messages/draft2/send`]: () => new Response(null, { status: 202 }),
     [`GET ${G}/calendarView`]: {
       value: [
         {
@@ -111,7 +113,7 @@ describe('outlook', () => {
       threadId: 'conv1',
       date: '2026-11-02T10:00:00Z',
       from: 'Ivan <ivan@example.test>',
-      to: 'Me <me@outlook.com>',
+      to: ['Me <me@outlook.com>'],
       subject: 'Contract',
       snippet: 'Please sign and return.',
       unread: true,
@@ -137,10 +139,12 @@ describe('outlook', () => {
     expect(q.has('$filter')).toBe(false);
   });
 
-  it('reads the new part of a message as text with real attachments, and can mark it read', async () => {
+  it('reads the new part of a message as text with real attachments, with immutable ids', async () => {
     const { acc, service } = setup();
-    const read = (await acc.run('read', { id: 'AAMk1', markRead: true })) as Record<string, unknown>;
-    expect(service.calls[0]!.headers.get('prefer')).toBe('outlook.body-content-type="text"');
+    const read = (await acc.run('read', { id: 'AAMk1' })) as Record<string, unknown>;
+    expect(service.calls[0]!.headers.get('prefer')).toBe(
+      'IdType="ImmutableId", outlook.body-content-type="text"',
+    );
     expect(read).toMatchObject({
       id: 'AAMk1',
       from: 'Ivan <ivan@example.test>',
@@ -150,9 +154,8 @@ describe('outlook', () => {
       attachments: [{ filename: 'contract.pdf', contentType: 'application/pdf', size: 1234 }],
       url: 'https://outlook.office.com/mail/AAMk1',
     });
-    expect(read.unread).toBeUndefined();
-    const patch = service.calls.find((c) => c.method === 'PATCH')!;
-    expect(JSON.parse(patch.body!)).toEqual({ isRead: true });
+    expect(read.unread).toBe(true);
+    expect(service.calls.some((c) => c.method === 'PATCH')).toBe(false);
     const full = (await acc.run('read', { id: 'AAMk1', includeQuoted: true, maxChars: 500 })) as {
       text: string;
     };
@@ -168,33 +171,37 @@ describe('outlook', () => {
         body: 'Hello',
         bcc: ['b@x.test'],
       }),
-    ).toEqual({ sent: true, to: ['Ann <ann@example.test>'] });
+    ).toEqual({ sent: true, id: 'draft2', to: ['Ann <ann@example.test>'] });
+    // A draft, then send: the sent message keeps the draft's immutable id.
     expect(JSON.parse(service.calls[0]!.body!)).toEqual({
-      message: {
-        subject: 'Hi',
-        body: { contentType: 'Text', content: 'Hello' },
-        toRecipients: [{ emailAddress: { address: 'ann@example.test', name: 'Ann' } }],
-        bccRecipients: [{ emailAddress: { address: 'b@x.test' } }],
-      },
-      saveToSentItems: true,
+      subject: 'Hi',
+      body: { contentType: 'Text', content: 'Hello' },
+      toRecipients: [{ emailAddress: { address: 'ann@example.test', name: 'Ann' } }],
+      bccRecipients: [{ emailAddress: { address: 'b@x.test' } }],
     });
+    expect(service.calls[1]!.url.pathname).toBe(`${G}/messages/draft2/send`);
+    await acc.run('send', { to: ['ivan@example.test'], body: 'Signed.', replyToId: 'AAMk1' });
+    expect(service.calls[2]!.url.pathname).toBe(`${G}/messages/AAMk1/createReply`);
+    expect(JSON.parse(service.calls[2]!.body!)).toEqual({
+      message: { toRecipients: [{ emailAddress: { address: 'ivan@example.test' } }] },
+      comment: 'Signed.',
+    });
+    expect(service.calls[3]!.url.pathname).toBe(`${G}/messages/draft1/send`);
     await acc.run('reply', { id: 'AAMk1', body: 'Signed.', replyAll: true, cc: ['boss@example.test'] });
-    expect(JSON.parse(service.calls[1]!.body!)).toEqual({
+    expect(JSON.parse(service.calls[4]!.body!)).toEqual({
       comment: 'Signed.',
       message: { ccRecipients: [{ emailAddress: { address: 'boss@example.test' } }] },
     });
     await acc.run('forward', { id: 'AAMk1', to: ['lawyer@example.test'], body: 'FYI' });
-    expect(JSON.parse(service.calls[2]!.body!)).toMatchObject({ comment: 'FYI' });
+    expect(JSON.parse(service.calls[5]!.body!)).toMatchObject({ comment: 'FYI' });
     expect(await acc.run('create_draft', { body: 'Draft reply', replyToId: 'AAMk1' })).toEqual({
       draftId: 'draft1',
     });
   });
 
-  it('moves by friendly folder names and returns the new ids', async () => {
+  it('moves by friendly folder names', async () => {
     const { acc, service } = setup();
-    expect(await acc.run('move', { ids: ['AAMk1'], folder: 'trash' })).toEqual({
-      moved: [{ id: 'AAMk1', newId: 'AAMk1-moved' }],
-    });
+    expect(await acc.run('move', { ids: ['AAMk1'], folder: 'trash' })).toEqual({ moved: 1, folder: 'trash' });
     expect(JSON.parse(service.calls[0]!.body!)).toEqual({ destinationId: 'deleteditems' });
     await acc.run('mark', { ids: ['AAMk1'], flagged: true });
     expect(JSON.parse(service.calls[1]!.body!)).toEqual({ flag: { flagStatus: 'flagged' } });
@@ -208,15 +215,15 @@ describe('outlook', () => {
       to: '2026-11-08T00:00:00+03:00',
     })) as { timeZone: string; events: unknown[] };
     const call = service.calls[0]!;
-    expect(call.headers.get('prefer')).toBe('outlook.timezone="Europe/Moscow"');
+    expect(call.headers.get('prefer')).toBe('IdType="ImmutableId", outlook.timezone="Europe/Moscow"');
     expect(call.url.searchParams.get('startDateTime')).toBe('2026-11-05T00:00:00+03:00');
     expect(result.timeZone).toBe('Europe/Moscow');
     expect(result.events).toEqual([
       {
         id: 'ev1',
         subject: 'Standup',
-        start: '2026-11-05T10:00:00',
-        end: '2026-11-05T10:15:00',
+        start: '2026-11-05T10:00:00+03:00',
+        end: '2026-11-05T10:15:00+03:00',
         meetingUrl: 'https://teams.microsoft.com/l/meetup-join/1',
         url: 'https://outlook.office.com/calendar/ev1',
       },

@@ -2,20 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createBuiltinRegistry } from '../../src/connectors/index.js';
 import type { AccountRow } from '../../src/core/accounts.js';
 import { buildCatalog } from '../../src/hub/catalog.js';
+import { estimateTokens } from '../../src/hub/tokens.js';
 
 /**
  * Token budget of every built-in connector: what its tools cost in the model's context with one
  * connected account (grouped mode). A connector that grows past its budget fails CI, so new
  * actions and long descriptions are a deliberate choice, not an accident.
  */
-
-/** Same approximation as the hub's estimate: ~3.5 chars per token for ASCII, ~2 otherwise. */
-function estimateTokens(value: unknown): number {
-  const text = JSON.stringify(value) ?? '';
-  let ascii = 0;
-  for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) < 128) ascii++;
-  return Math.ceil(ascii / 3.5 + (text.length - ascii) / 2);
-}
 
 /**
  * Tokens for all tools of a connector and for its largest tool, about 15% above the current size.
@@ -42,6 +35,7 @@ function account(connectorId: string): AccountRow {
     id: `acc_${connectorId}`,
     workspaceId: 'wsp_1',
     connectorId,
+    name: 'main',
     label: 'Main',
     description: null,
     config: {},

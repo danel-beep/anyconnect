@@ -54,7 +54,8 @@ const Query = z
   .describe('Query parameters');
 const Shape = {
   root: z.string().max(200).optional().describe('Return only this part of the JSON, e.g. "data.items"'),
-  fields: z
+  // `fields` is the hub's own argument; this one takes dot paths into any JSON.
+  select: z
     .array(z.string().max(200))
     .max(50)
     .optional()
@@ -97,10 +98,10 @@ function client(ctx: Ctx): HttpClient {
 /** Response headers that help the AI page or follow up; everything else is noise. */
 const USEFUL_HEADERS = ['content-type', 'link', 'location', 'x-total-count', 'x-next-cursor', 'retry-after'];
 
-/** Shapes a response for the AI: optional root/fields projection, then a size cap. */
+/** Shapes a response for the AI: optional root/select projection, then a size cap. */
 export function shapeResponse(
   response: HttpResponse,
-  options: { root?: string | undefined; fields?: string[] | undefined; maxChars: number },
+  options: { root?: string | undefined; select?: string[] | undefined; maxChars: number },
 ): Record<string, unknown> {
   const headers: Record<string, string> = {};
   for (const name of USEFUL_HEADERS) {
@@ -109,7 +110,7 @@ export function shapeResponse(
   }
   let data: unknown = response.data;
   if (typeof data !== 'string' && data !== undefined) {
-    data = pickFields(getPath(data, options.root), options.fields);
+    data = pickFields(getPath(data, options.root), options.select);
   }
   const out: Record<string, unknown> = {
     status: response.status,
@@ -140,13 +141,13 @@ export function shapeResponse(
     out.truncated = {
       shownItems: kept.length,
       totalItems: data.length,
-      hint: 'Use fields/root or paging parameters to get the rest',
+      hint: 'Use select/root or paging parameters to get the rest',
     };
     return out;
   }
   const text = JSON.stringify(data);
   out.data = `${text.slice(0, options.maxChars)}…`;
-  out.truncated = { totalChars: size, hint: 'Use fields/root to select what you need' };
+  out.truncated = { totalChars: size, hint: 'Use select/root to choose what you need' };
   return out;
 }
 
@@ -157,7 +158,7 @@ export default defineConnector({
     'Any REST/JSON API saved as an account (base URL + key). For services without a dedicated connector.',
   version: '1.0.0',
   instructions:
-    'Paths are relative to the account base URL; see the account description for API notes. Use root/fields to keep responses small.',
+    'Paths are relative to the account base URL; see the account description for API notes. Use root/select to keep responses small.',
   config: Config,
   credentials: Credentials,
   async test(ctx) {
@@ -192,6 +193,10 @@ export default defineConnector({
         ...Shape,
       }),
       hints: { readOnly: false, destructive: true, idempotent: false },
+      // An unknown API: a write is a write, and a DELETE always asks for confirmation.
+      risk: 'write',
+      assessRisk: ({ method }) =>
+        method === 'DELETE' ? { risk: 'dangerous', reason: 'DELETE request to the API' } : undefined,
       run: async ({ method, path, query, body, ...shape }, ctx) => {
         const response = await client(ctx).request({
           method,

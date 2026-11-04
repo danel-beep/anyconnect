@@ -406,7 +406,23 @@ function compileAction(
  * Validates a manifest and compiles it into a connector. Throws `ManifestError` (or a zod error)
  * with a precise message when the manifest is invalid, so problems surface at registration time.
  */
-export function defineManifestConnector(input: HttpManifestInput): ConnectorDefinition {
+/**
+ * Code-only additions to manifest actions, for built-in manifests: capability bindings with
+ * mapping functions, undo, runtime risk checks. JSON manifests cannot carry functions.
+ */
+export type ManifestActionExtension = Pick<
+  ActionDefinition,
+  'capability' | 'undo' | 'assessRisk' | 'risk' | 'rateLimit'
+>;
+
+export interface ManifestExtensions {
+  actions?: Record<string, ManifestActionExtension>;
+}
+
+export function defineManifestConnector(
+  input: HttpManifestInput,
+  extensions: ManifestExtensions = {},
+): ConnectorDefinition {
   const parsed = HttpManifest.safeParse(input);
   if (!parsed.success) {
     const where =
@@ -418,7 +434,16 @@ export function defineManifestConnector(input: HttpManifestInput): ConnectorDefi
   }
   const manifest = parsed.data;
   const runtime = new ManifestRuntime(manifest);
-  const actions = manifest.actions.map((action) => compileAction(runtime, action, manifest.id).definition);
+  const extra = extensions.actions ?? {};
+  for (const name of Object.keys(extra)) {
+    if (!manifest.actions.some((a) => a.name === name)) {
+      throw new ManifestError(`Extension for unknown action "${manifest.id}.${name}"`);
+    }
+  }
+  const actions = manifest.actions.map((action) => ({
+    ...compileAction(runtime, action, manifest.id).definition,
+    ...extra[action.name],
+  }));
   const credentialsJson = defaultCredentials(manifest);
   const auth = manifest.auth;
 

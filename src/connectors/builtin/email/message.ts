@@ -113,6 +113,23 @@ export const reSubject = (prefix: 'Re' | 'Fwd', subject: string | undefined) => 
 
 const same = (a: string | undefined, b: string) => a?.toLowerCase() === b.toLowerCase();
 
+/** Headers that put a new message into the thread of `original`: Re: subject, In-Reply-To, References. */
+export function threadingHeaders(
+  original: ParsedMail,
+): Pick<Mail.Options, 'inReplyTo' | 'references'> & { subject: string } {
+  const previous = Array.isArray(original.references)
+    ? original.references
+    : original.references
+      ? [original.references]
+      : [];
+  const references = [...previous, ...(original.messageId ? [original.messageId] : [])];
+  return {
+    subject: reSubject('Re', original.subject),
+    ...(original.messageId ? { inReplyTo: original.messageId } : {}),
+    ...(references.length ? { references } : {}),
+  };
+}
+
 /**
  * Builds a reply to `original` sent from `me`: recipients (Reply-To, else From; with replyAll the
  * other recipients in copy, never yourself), Re: subject and threading headers.
@@ -140,20 +157,7 @@ export function buildReply(
     );
   if (!to.length) throw new ConnectorError('invalid_input', 'The message has no one to reply to.');
   const cc = [...others, ...(options.cc ?? [])];
-  const previous = Array.isArray(original.references)
-    ? original.references
-    : original.references
-      ? [original.references]
-      : [];
-  const references = [...previous, ...(original.messageId ? [original.messageId] : [])];
-  return {
-    to,
-    ...(cc.length ? { cc } : {}),
-    subject: reSubject('Re', original.subject),
-    text: options.body,
-    ...(original.messageId ? { inReplyTo: original.messageId } : {}),
-    ...(references.length ? { references } : {}),
-  };
+  return { to, ...(cc.length ? { cc } : {}), text: options.body, ...threadingHeaders(original) };
 }
 
 /** A forward that carries the original message (with all its attachments) as an .eml attachment. */

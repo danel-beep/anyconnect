@@ -1,20 +1,38 @@
 import addressparser from 'nodemailer/lib/addressparser/index.js';
 import { z } from 'zod';
 import { HttpClient } from '../http/client.js';
-import { type AccountContext, ConnectorError, defineConnector, requireOAuth } from '../sdk.js';
+import {
+  type AccountContext,
+  type CapabilityOutput,
+  ConnectorError,
+  defineConnector,
+  requireOAuth,
+} from '../sdk.js';
+import { day, dayAfter, mailRead, mailSearch, mailSend, quoted } from './email/capability.js';
 import { Addresses, formatAddress, isoDate, ReadOptions, stripQuotedTail } from './email/message.js';
 import { mapLimit } from './shared/concurrency.js';
 
 /**
  * Outlook mail and calendar (Microsoft 365 and personal outlook.com accounts) over Microsoft Graph.
  * Replies and forwards use Graph's own reply/forward so Outlook keeps conversations together.
+ * Ids are Graph's immutable ids: they stay the same when a message moves between folders.
  */
+
+const isTimeZone = (zone: string) => {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const Config = z.object({
   timeZone: z
     .string()
     .trim()
     .max(100)
+    .refine(isTimeZone, 'Unknown time zone; use an IANA name like Europe/Moscow')
     .default('UTC')
     .describe('IANA time zone for calendar times, e.g. Europe/Moscow'),
 });
@@ -22,9 +40,14 @@ type Ctx = AccountContext<z.output<typeof Config>, Record<string, never>>;
 
 const GRAPH = 'https://graph.microsoft.com/v1.0/';
 
-const api = (ctx: Ctx, headers: Record<string, string> = {}) => {
+/** `prefer` adds Graph preferences (text bodies, time zone) to the immutable-id one. */
+const api = (ctx: Ctx, ...prefer: string[]) => {
   requireOAuth(ctx);
-  return new HttpClient(ctx, { baseUrl: GRAPH, headers, errorMessagePaths: ['error.message'] });
+  return new HttpClient(ctx, {
+    baseUrl: GRAPH,
+    headers: { prefer: ['IdType="ImmutableId"', ...prefer].join(', ') },
+    errorMessagePaths: ['error.message'],
+  });
 };
 
 /** Graph's next pages are full URLs; the cursor only ever points back to Graph. */
@@ -99,7 +122,7 @@ function summary(m: GraphMessage) {
     threadId: m.conversationId,
     ...(date ? { date } : {}),
     from: address(m.from),
-    ...(to.length ? { to: to.join(', ') } : {}),
+    ...(to.length ? { to } : {}),
     subject: m.subject || '(no subject)',
     snippet: (m.bodyPreview ?? '').trim(),
     ...(m.isRead === false ? { unread: true } : {}),
@@ -111,7 +134,7 @@ function summary(m: GraphMessage) {
 /** KQL for $search: the whole query is one quoted string. */
 const kql = (query: string) => `"${query.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
-const TEXT_BODY = { prefer: 'outlook.body-content-type="text"' };
+const TEXT_BODY = 'outlook.body-content-type="text"';
 
 // --- Calendar ---
 
@@ -164,13 +187,39 @@ interface GraphEvent {
   bodyPreview?: string;
 }
 
-/** Graph returns "2026-11-05T15:00:00.0000000" in the zone asked for with Prefer. */
-const localTime = (t: GraphTime | undefined, allDay: boolean) => {
+/** UTC offset of `zone` at the moment `utcMs`, e.g. "+03:00". */
+function zoneOffset(zone: string, utcMs: number): string {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(utcMs))
+    .find((p) => p.type === 'timeZoneName')?.value;
+  return !name || name === 'GMT' ? '+00:00' : name.slice(3);
+}
+const offsetMs = (offset: string) => {
+  const sign = offset.startsWith('-') ? -1 : 1;
+  const [h, m] = offset.slice(1).split(':').map(Number);
+  return sign * ((h ?? 0) * 60 + (m ?? 0)) * 60_000;
+};
+
+/**
+ * Graph returns wall-clock "2026-11-05T15:00:00.0000000" in the zone asked for with Prefer; the
+ * result is RFC 3339 with that zone's offset at that moment, so it is never ambiguous.
+ */
+export function rfc3339(t: GraphTime | undefined, allDay: boolean): string | undefined {
   if (!t) return undefined;
   const value = t.dateTime.replace(/\.\d+$/, '');
   if (allDay) return value.slice(0, 10);
-  return t.timeZone === 'UTC' ? `${value}Z` : value;
-};
+  if (t.timeZone === 'UTC') return `${value}Z`;
+  const wall = Date.parse(`${value}Z`);
+  if (Number.isNaN(wall) || !isTimeZone(t.timeZone)) return value;
+  const guess = zoneOffset(t.timeZone, wall);
+  return `${value}${zoneOffset(t.timeZone, wall - offsetMs(guess))}`;
+}
+
+/** A range bound for calendarView: a bare date is midnight in the account zone. */
+const rangeTime = (value: string, zone: string) =>
+  DATE.test(value) ? (rfc3339({ dateTime: `${value}T00:00:00`, timeZone: zone }, false) ?? value) : value;
+
+type EventSummary = ReturnType<typeof eventSummary>;
 
 function eventSummary(e: GraphEvent, detailed = false) {
   const allDay = Boolean(e.isAllDay);
@@ -181,8 +230,8 @@ function eventSummary(e: GraphEvent, detailed = false) {
   return {
     id: e.id,
     subject: e.subject ?? '',
-    start: localTime(e.start, allDay),
-    end: localTime(e.end, allDay),
+    start: rfc3339(e.start, allDay),
+    end: rfc3339(e.end, allDay),
     ...(allDay ? { allDay: true } : {}),
     ...(e.location?.displayName ? { location: e.location.displayName } : {}),
     ...(e.onlineMeeting?.joinUrl ? { meetingUrl: e.onlineMeeting.joinUrl } : {}),
@@ -198,7 +247,7 @@ function eventSummary(e: GraphEvent, detailed = false) {
 const EVENT_FIELDS =
   'id,subject,start,end,isAllDay,isCancelled,location,organizer,onlineMeeting,showAs,webLink';
 
-const calendarHeaders = (ctx: Ctx) => ({ prefer: `outlook.timezone="${ctx.config.timeZone}"` });
+const zonePreference = (ctx: Ctx) => `outlook.timezone="${ctx.config.timeZone}"`;
 
 const calendarBase = (calendarId: string | undefined) =>
   calendarId ? `me/calendars/${encodeURIComponent(calendarId)}` : 'me';
@@ -268,7 +317,7 @@ export default defineConnector({
   version: '1.0.0',
   homepage: 'https://learn.microsoft.com/graph/api/resources/mail-api-overview',
   instructions:
-    'outlook_search query uses Outlook search syntax: from:ann subject:invoice hasattachments:true. Folders: inbox, sent, drafts, trash, junk, archive or an id from outlook_list_folders. Moving a message changes its id.',
+    'outlook_search query uses Outlook search syntax: from:ann subject:invoice hasattachments:true. Folders: inbox, sent, drafts, trash, junk, archive or an id from outlook_list_folders. Calendar times come with the offset of the account time zone.',
   config: Config,
   oauth: {
     provider: 'microsoft',
@@ -299,6 +348,21 @@ export default defineConnector({
         cursor: z.string().max(4000).optional().describe('nextCursor from the previous page'),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: mailSearch((input) => {
+        const kqlParts = [
+          input.query,
+          input.from && `from:${quoted(input.from)}`,
+          input.to && `to:${quoted(input.to)}`,
+          input.since && `received>=${day(input.since)}`,
+          input.until && `received<${dayAfter(input.until)}`,
+        ].filter(Boolean);
+        return {
+          ...(kqlParts.length ? { query: kqlParts.join(' ') } : {}),
+          folder: input.folder ?? 'all',
+          unreadOnly: Boolean(input.unread_only),
+          limit: input.limit,
+        };
+      }),
       run: async ({ query, folder, unreadOnly, limit, cursor }, ctx) => {
         const client = api(ctx);
         const path =
@@ -327,31 +391,22 @@ export default defineConnector({
       title: 'Read message',
       description:
         'Returns a message as plain text (quoted history removed by default) with the attachment list.',
-      input: z.object({
-        id: MessageId,
-        ...ReadOptions,
-        markRead: z.boolean().default(false),
-      }),
-      hints: { readOnly: false, destructive: false, idempotent: true },
-      run: async ({ id, maxChars, includeQuoted, markRead }, ctx) => {
+      input: z.object({ id: MessageId, ...ReadOptions }),
+      hints: { readOnly: true, idempotent: true },
+      capability: mailRead,
+      run: async ({ id, maxChars, includeQuoted }, ctx) => {
         const client = api(ctx, TEXT_BODY);
         const path = `me/messages/${encodeURIComponent(id)}`;
         const { data: m } = await client.get<GraphMessage>(path, {
           $select: `${SUMMARY_FIELDS},ccRecipients,replyTo,body,uniqueBody,webLink`,
         });
-        const [attachments] = await Promise.all([
-          m.hasAttachments
-            ? client
-                .get<{ value: { name: string; contentType?: string; size?: number; isInline?: boolean }[] }>(
-                  `${path}/attachments`,
-                  { $select: 'name,contentType,size,isInline' },
-                )
-                .then(({ data }) => data.value.filter((a) => !a.isInline))
-            : Promise.resolve([]),
-          markRead && m.isRead === false
-            ? client.request({ method: 'PATCH', url: path, json: { isRead: true } })
-            : null,
-        ]);
+        const attachments = m.hasAttachments
+          ? (
+              await client.get<{
+                value: { name: string; contentType?: string; size?: number; isInline?: boolean }[];
+              }>(`${path}/attachments`, { $select: 'name,contentType,size,isInline' })
+            ).data.value.filter((a) => !a.isInline)
+          : [];
         // uniqueBody is the part of the message that is new in the conversation.
         let text = ((includeQuoted ? m.body : (m.uniqueBody ?? m.body))?.content ?? '').trim();
         let quotedRemoved =
@@ -376,7 +431,7 @@ export default defineConnector({
           ...(cc.length ? { cc } : {}),
           ...(replyTo.length && replyTo[0] !== from ? { replyTo } : {}),
           subject: m.subject || '(no subject)',
-          ...(m.isRead === false && !markRead ? { unread: true } : {}),
+          ...(m.isRead === false ? { unread: true } : {}),
           text: truncated ? `${text.slice(0, maxChars)}…` : text,
           ...(truncated ? { truncated: true, totalChars } : {}),
           ...(quotedRemoved ? { quotedHistoryRemoved: true } : {}),
@@ -396,26 +451,40 @@ export default defineConnector({
     action({
       name: 'send',
       title: 'Send email',
-      description: 'Sends a new email (plain text); a copy is saved to Sent Items.',
+      description:
+        'Sends an email (plain text), optionally as a reply in a conversation; saved to Sent Items.',
       input: z.object({
         to: Addresses.min(1),
         cc: Addresses.optional(),
         bcc: Addresses.optional(),
-        subject: z.string().trim().max(998),
+        subject: z.string().trim().max(998).default('').describe('Default for replies: RE: original subject'),
         body: z.string().max(200_000),
+        replyToId: MessageId.optional().describe('Send as a reply in the conversation of this message'),
       }),
       hints: { readOnly: false, destructive: false },
-      run: async ({ to, cc, bcc, subject, body }, ctx) => {
-        const message = {
-          subject,
-          body: { contentType: 'Text', content: body },
+      risk: 'write',
+      capability: mailSend,
+      run: async ({ to, cc, bcc, subject, body, replyToId }, ctx) => {
+        const fields = {
+          ...(subject ? { subject } : {}),
           toRecipients: recipients(to),
           ...(cc ? { ccRecipients: recipients(cc) } : {}),
           ...(bcc ? { bccRecipients: recipients(bcc) } : {}),
         };
-        if (!message.toRecipients.length) throw new ConnectorError('invalid_input', 'No valid recipients');
-        await api(ctx).post('me/sendMail', { message, saveToSentItems: true });
-        return { sent: true, to: message.toRecipients.map(address) };
+        if (!fields.toRecipients.length) throw new ConnectorError('invalid_input', 'No valid recipients');
+        const client = api(ctx);
+        // A draft first, then send it: the immutable id of the draft is the id of the sent message.
+        const { data: draft } = replyToId
+          ? await client.post<GraphMessage>(`me/messages/${encodeURIComponent(replyToId)}/createReply`, {
+              message: fields,
+              comment: body,
+            })
+          : await client.post<GraphMessage>('me/messages', {
+              ...fields,
+              body: { contentType: 'Text', content: body },
+            });
+        await client.post(`me/messages/${encodeURIComponent(draft.id)}/send`);
+        return { sent: true, id: draft.id, to: fields.toRecipients.map(address) };
       },
     }),
     action({
@@ -430,6 +499,7 @@ export default defineConnector({
         cc: Addresses.optional(),
       }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ id, body, replyAll, cc }, ctx) => {
         await api(ctx).post(`me/messages/${encodeURIComponent(id)}/${replyAll ? 'replyAll' : 'reply'}`, {
           comment: body,
@@ -444,6 +514,7 @@ export default defineConnector({
       description: 'Forwards a message with its attachments and an optional note.',
       input: z.object({ id: MessageId, to: Addresses.min(1), body: z.string().max(200_000).default('') }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ id, to, body }, ctx) => {
         const toRecipients = recipients(to);
         await api(ctx).post(`me/messages/${encodeURIComponent(id)}/forward`, { comment: body, toRecipients });
@@ -462,6 +533,7 @@ export default defineConnector({
         replyToId: MessageId.optional().describe('Make the draft a reply to this message'),
       }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ to, cc, subject, body, replyToId }, ctx) => {
         const client = api(ctx);
         const fields = {
@@ -485,19 +557,18 @@ export default defineConnector({
       name: 'move',
       title: 'Move messages',
       description:
-        'Moves messages to a folder (archive, trash, junk, inbox or a folder id). Returns new ids.',
+        'Moves messages to a folder: archive, trash, junk, inbox or a folder id. Ids stay the same.',
       input: z.object({ ids: z.array(MessageId).min(1).max(100), folder: z.string().trim().min(1).max(500) }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      // Moving to Deleted Items is restorable.
+      risk: 'write',
       run: async ({ ids, folder }, ctx) => {
         const client = api(ctx);
         const destinationId = folderId(folder);
-        const moved = await mapLimit(ids, 4, async (id) => {
-          const { data } = await client.post<GraphMessage>(`me/messages/${encodeURIComponent(id)}/move`, {
-            destinationId,
-          });
-          return { id, newId: data.id };
-        });
-        return { moved };
+        await mapLimit(ids, 4, (id) =>
+          client.post(`me/messages/${encodeURIComponent(id)}/move`, { destinationId }),
+        );
+        return { moved: ids.length, folder };
       },
     }),
     action({
@@ -510,6 +581,7 @@ export default defineConnector({
         flagged: z.boolean().optional(),
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      risk: 'write',
       run: async ({ ids, read, flagged }, ctx) => {
         if (read === undefined && flagged === undefined) {
           throw new ConnectorError('invalid_input', 'Pass read or flagged.');
@@ -577,15 +649,40 @@ export default defineConnector({
         cursor: z.string().max(4000).optional(),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'calendar.list_events',
+        mapInput: ({ from, to, limit }) => ({ from, to, limit }),
+        // calendarView has no text search: the canonical query filters titles here.
+        mapOutput: (result, input) => {
+          const { events, nextCursor } = result as { events: EventSummary[]; nextCursor?: string };
+          const query = typeof input.query === 'string' ? input.query.toLowerCase() : '';
+          return {
+            items: events
+              .filter((e) => !query || e.subject.toLowerCase().includes(query))
+              .map(
+                (e): CapabilityOutput<'calendar.list_events'> => ({
+                  id: e.id,
+                  title: e.subject,
+                  start: e.start ?? '',
+                  ...(e.end ? { end: e.end } : {}),
+                  ...(e.allDay ? { all_day: true } : {}),
+                  ...(e.location ? { location: e.location } : {}),
+                  ...(e.url ? { url: e.url } : {}),
+                }),
+              ),
+            ...(nextCursor ? { nextCursor } : {}),
+          };
+        },
+      },
       run: async ({ from, to, calendarId, limit, cursor }, ctx) => {
-        const client = api(ctx, calendarHeaders(ctx));
+        const client = api(ctx, zonePreference(ctx));
         const { data } = cursor
           ? await client.get<{ value: GraphEvent[]; '@odata.nextLink'?: string }>(decodeCursor(cursor))
           : await client.get<{ value: GraphEvent[]; '@odata.nextLink'?: string }>(
               `${calendarBase(calendarId)}/calendarView`,
               {
-                startDateTime: from,
-                endDateTime: to,
+                startDateTime: rangeTime(from, ctx.config.timeZone),
+                endDateTime: rangeTime(to, ctx.config.timeZone),
                 $select: EVENT_FIELDS,
                 $orderby: 'start/dateTime',
                 $top: limit,
@@ -606,7 +703,7 @@ export default defineConnector({
       input: z.object({ id: EventId }),
       hints: { readOnly: true, idempotent: true },
       run: async ({ id }, ctx) => {
-        const { data } = await api(ctx, { ...calendarHeaders(ctx), ...TEXT_BODY }).get<GraphEvent>(
+        const { data } = await api(ctx, zonePreference(ctx), TEXT_BODY).get<GraphEvent>(
           `me/events/${encodeURIComponent(id)}`,
           { $select: `${EVENT_FIELDS},attendees,bodyPreview` },
         );
@@ -619,8 +716,18 @@ export default defineConnector({
       description: 'Creates an event; attendees get invitations.',
       input: z.object({ ...EventFields, calendarId: CalendarId }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
+      undo: { kind: 'action', action: 'delete_event' },
+      capability: {
+        id: 'calendar.create_event',
+        mapInput: ({ title, ...rest }) => ({ subject: title, ...rest }),
+        mapOutput: (result) => {
+          const e = result as EventSummary;
+          return { id: e.id, ...(e.url ? { url: e.url } : {}) };
+        },
+      },
       run: async ({ calendarId, ...input }, ctx) => {
-        const { data } = await api(ctx, calendarHeaders(ctx)).post<GraphEvent>(
+        const { data } = await api(ctx, zonePreference(ctx)).post<GraphEvent>(
           `${calendarBase(calendarId)}/events`,
           eventBody(input, ctx.config.timeZone),
         );
@@ -638,10 +745,11 @@ export default defineConnector({
         start: EventFields.start.optional(),
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      risk: 'write',
       run: async ({ id, ...input }, ctx) => {
         const body = eventBody(input, ctx.config.timeZone);
         if (!Object.keys(body).length) throw new ConnectorError('invalid_input', 'Nothing to change.');
-        const { data } = await api(ctx, calendarHeaders(ctx)).request<GraphEvent>({
+        const { data } = await api(ctx, zonePreference(ctx)).request<GraphEvent>({
           method: 'PATCH',
           url: `me/events/${encodeURIComponent(id)}`,
           json: body,
@@ -660,6 +768,7 @@ export default defineConnector({
         comment: z.string().max(2000).default(''),
       }),
       hints: { readOnly: false, destructive: true, idempotent: true },
+      risk: 'dangerous',
       run: async ({ id, cancel, comment }, ctx) => {
         const client = api(ctx);
         const path = `me/events/${encodeURIComponent(id)}`;

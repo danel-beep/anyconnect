@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { HttpClient } from '../../http/client.js';
-import { type AccountContext, ConnectorError, defineConnector } from '../../sdk.js';
+import { type AccountContext, type CapabilityOutput, ConnectorError, defineConnector } from '../../sdk.js';
 import {
   blocksToMarkdown,
   buildProperty,
@@ -118,6 +118,17 @@ const summary = (object: NotionPage) => ({
   ...(object.last_edited_time ? { edited: object.last_edited_time } : {}),
 });
 
+type Summary = ReturnType<typeof summary>;
+
+/** A page summary as the shared `files.*` item (Notion pages are documents). */
+const fileItem = (p: Summary): CapabilityOutput<'files.search'> => ({
+  id: p.id,
+  name: p.title,
+  mime_type: p.type === 'database' ? 'application/vnd.notion.database' : 'application/vnd.notion.page',
+  ...(p.edited ? { modified: p.edited } : {}),
+  ...(p.url ? { url: p.url } : {}),
+});
+
 /** Plain values → Notion property JSON, using the property types of the database or page. */
 function buildProperties(
   values: Record<string, unknown>,
@@ -159,6 +170,8 @@ export default defineConnector({
     'The integration only sees pages shared with it. Ids and notion.so URLs are both accepted. Database rows are pages: update them with notion_update_page.',
   credentials: Credentials,
   oauth: { provider: 'notion', scopes: [], optional: true },
+  // Notion allows about three requests per second per integration.
+  rateLimit: { requests: 3, perSeconds: 1 },
   async test(ctx) {
     const { data } = await api(ctx).get<{
       name?: string;
@@ -178,6 +191,14 @@ export default defineConnector({
         cursor: z.string().max(200).optional().describe('nextCursor from the previous page'),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'files.search',
+        mapInput: ({ query, limit }) => ({ query, limit, type: 'page' }),
+        mapOutput: (result) => {
+          const { results, nextCursor } = result as { results: Summary[]; nextCursor?: string };
+          return { items: results.map(fileItem), ...(nextCursor ? { nextCursor } : {}) };
+        },
+      },
       run: async ({ query, type, limit, cursor }, ctx) => {
         const { data } = await api(ctx).post<NotionList<NotionPage>>('search', {
           query,
@@ -201,6 +222,17 @@ export default defineConnector({
         maxChars: z.number().int().min(500).max(100_000).default(8000),
       }),
       hints: { readOnly: true, idempotent: true },
+      capability: {
+        id: 'files.read',
+        mapInput: ({ id, max_chars }) => ({
+          page_id: id,
+          maxChars: Math.min(100_000, Math.max(500, Number(max_chars))),
+        }),
+        mapOutput: (result): CapabilityOutput<'files.read'> => {
+          const r = result as Summary & { content: string; truncated?: boolean };
+          return { ...fileItem(r), text: r.content, ...(r.truncated ? { truncated: true } : {}) };
+        },
+      },
       run: async ({ page_id, maxChars }, ctx) => {
         const client = api(ctx);
         const id = notionId(page_id);
@@ -283,6 +315,8 @@ export default defineConnector({
           message: 'pass exactly one of parent_page_id or database_id',
         }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
+      undo: { kind: 'action', action: 'update_page', note: 'trash: true' },
       run: async ({ parent_page_id, database_id, title, properties, content }, ctx) => {
         const client = api(ctx);
         const children = content ? markdownToBlocks(content).slice(0, 100) : [];
@@ -319,6 +353,8 @@ export default defineConnector({
         trash: z.boolean().optional().describe('true moves the page to trash, false restores it'),
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
+      // Trashed pages are restorable (trash: false).
+      risk: 'write',
       run: async ({ page_id, properties, trash }, ctx) => {
         if (!properties && trash === undefined)
           throw new ConnectorError('invalid_input', 'Pass properties or trash');
@@ -350,6 +386,7 @@ export default defineConnector({
       description: 'Adds Markdown content to the end of a page.',
       input: z.object({ page_id: PageId, content: z.string().min(1).max(100_000) }),
       hints: { readOnly: false, destructive: false },
+      risk: 'write',
       run: async ({ page_id, content }, ctx) => {
         const blocks = markdownToBlocks(content);
         const client = api(ctx);
