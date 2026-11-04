@@ -1,6 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { BUILTIN_PROVIDERS } from '../connectors/oauth/providers.js';
+import { BUILTIN_PROVIDERS, resolveProvider } from '../connectors/oauth/providers.js';
+import type { ConnectorDefinition, OAuthProviderSpec } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { oauthApps } from '../db/schema.js';
 import type { SecretBox } from '../lib/crypto.js';
@@ -15,6 +16,12 @@ import { newId } from '../lib/ids.js';
  *   with an encrypted secret and referenced by id.
  *
  * Each connected account remembers which app issued its tokens (`appRef`): refreshes must use it.
+ *
+ * An app is only ever used with the provider it was made for, because its client secret goes to
+ * that provider's token endpoint. Hub-wide apps serve only the hub's own connectors
+ * (`isHubConnector`): a service a user defines (an HTTP manifest, a remote MCP server) chooses its
+ * own endpoints and where tokens are sent, so it never gets the hub's client secret or its consent
+ * screen; it uses an app the user registered.
  */
 
 export interface ResolvedOAuthApp {
@@ -43,6 +50,11 @@ export const CreateOAuthAppInput = z.object({
 export type CreateOAuthAppInput = z.infer<typeof CreateOAuthAppInput>;
 
 const ENV_PREFIX = 'env:';
+
+function providerOf(connector: ConnectorDefinition): OAuthProviderSpec {
+  if (!connector.oauth) throw badRequest(`${connector.name} is not connected through OAuth`);
+  return resolveProvider(connector.oauth);
+}
 const secretContext = (appId: string) => `oauth_app:${appId}:secret`;
 
 export class OAuthAppService {
@@ -50,7 +62,15 @@ export class OAuthAppService {
     private readonly db: Db,
     private readonly secrets: SecretBox,
     private readonly envApps: Record<string, { clientId: string; clientSecret: string | undefined }>,
+    /** Whether a connector is one of the hub's own (registered in code), not defined by a user. */
+    private readonly isHubConnector: (connector: ConnectorDefinition) => boolean,
   ) {}
+
+  /** The hub-wide app for an OAuth connector, only when the connector is one of the hub's own. */
+  private envAppFor(connector: ConnectorDefinition, provider: OAuthProviderSpec) {
+    const app = this.envApps[provider.id];
+    return app && this.isHubConnector(connector) ? app : undefined;
+  }
 
   /** Provider ids that have a hub-wide app configured. */
   envProviders(): string[] {
@@ -132,35 +152,55 @@ export class OAuthAppService {
    */
   async pick(
     workspaceId: string,
-    providerId: string,
+    connector: ConnectorDefinition,
     requested?: string,
   ): Promise<ResolvedOAuthApp | undefined> {
     if (requested) {
-      const app = await this.resolve(workspaceId, requested);
-      if (!app || app.providerId !== providerId)
-        throw badRequest('This OAuth app does not belong to the service');
+      const app = await this.resolve(workspaceId, requested, connector);
+      if (!app) throw badRequest('This OAuth app does not belong to the service');
       return app;
     }
+    const provider = providerOf(connector);
+    const row = await this.newestWorkspaceApp(workspaceId, provider.id);
+    if (row) return this.resolve(workspaceId, row.id, connector);
+    return this.resolve(workspaceId, `${ENV_PREFIX}${provider.id}`, connector);
+  }
+
+  /** Whether the workspace registered an app of its own for the provider. */
+  async hasWorkspaceApp(workspaceId: string, providerId: string): Promise<boolean> {
+    return Boolean(await this.newestWorkspaceApp(workspaceId, providerId));
+  }
+
+  private async newestWorkspaceApp(workspaceId: string, providerId: string) {
     const [row] = await this.db
       .select({ id: oauthApps.id })
       .from(oauthApps)
       .where(and(eq(oauthApps.workspaceId, workspaceId), eq(oauthApps.providerId, providerId)))
       .orderBy(desc(oauthApps.createdAt))
       .limit(1);
-    if (row) return this.resolve(workspaceId, row.id);
-    return this.resolve(workspaceId, `${ENV_PREFIX}${providerId}`);
+    return row;
   }
 
-  /** Whether the hub itself has an app for the provider (from env), whatever the workspace. */
-  hasHubApp(providerId: string): boolean {
-    return Boolean(this.envApps[providerId]);
+  /** Whether the hub itself has an app for the connector (from env), whatever the workspace. */
+  hasHubApp(connector: ConnectorDefinition): boolean {
+    return Boolean(this.envAppFor(connector, providerOf(connector)));
   }
 
-  /** Loads an app by reference with its decrypted secret. Undefined when it no longer exists. */
-  async resolve(workspaceId: string, ref: string): Promise<ResolvedOAuthApp | undefined> {
+  /**
+   * Loads an app by reference with its decrypted secret, for the connector's provider. Undefined
+   * when it no longer exists or does not fit the connector (another provider, or a hub-wide app
+   * for a service a user defined).
+   */
+  async resolve(
+    workspaceId: string,
+    ref: string,
+    connector: ConnectorDefinition,
+  ): Promise<ResolvedOAuthApp | undefined> {
+    const provider = providerOf(connector);
     if (ref.startsWith(ENV_PREFIX)) {
       const providerId = ref.slice(ENV_PREFIX.length);
-      const app = this.envApps[providerId];
+      if (providerId !== provider.id) return undefined;
+      const app = this.envAppFor(connector, provider);
       return app ? { ref, providerId, clientId: app.clientId, clientSecret: app.clientSecret } : undefined;
     }
     const [row] = await this.db
@@ -168,7 +208,7 @@ export class OAuthAppService {
       .from(oauthApps)
       .where(and(eq(oauthApps.workspaceId, workspaceId), eq(oauthApps.id, ref)))
       .limit(1);
-    if (!row) return undefined;
+    if (!row || row.providerId !== provider.id) return undefined;
     return {
       ref,
       providerId: row.providerId,

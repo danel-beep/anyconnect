@@ -1,6 +1,12 @@
 import { CAPABILITY_INTERFACES, getCapability } from './capabilities.js';
-import { resolveProvider, validateProvider } from './oauth/providers.js';
-import { actionCapabilities, actionRisk, type ConnectorDefinition, type RateLimitSpec } from './sdk.js';
+import { BUILTIN_PROVIDERS, resolveProvider, validateProvider } from './oauth/providers.js';
+import {
+  actionCapabilities,
+  actionRisk,
+  type ConnectorDefinition,
+  type OAuthProviderSpec,
+  type RateLimitSpec,
+} from './sdk.js';
 
 const CONNECTOR_ID = /^[a-z][a-z0-9_]{1,23}$/;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,39}$/;
@@ -29,13 +35,39 @@ export interface ConnectorResolver {
 
 export class ConnectorRegistry implements ConnectorResolver {
   private readonly connectors = new Map<string, ConnectorDefinition>();
+  /** OAuth providers of the hub's own code: the built-in ones plus inline specs of registered connectors. */
+  private readonly providers = new Map<string, OAuthProviderSpec>(Object.entries(BUILTIN_PROVIDERS));
 
   register(connector: ConnectorDefinition): this {
     validateConnector(connector);
     if (this.connectors.has(connector.id))
       throw new Error(`Connector "${connector.id}" is already registered`);
+    if (connector.oauth) {
+      const provider = resolveProvider(connector.oauth);
+      const known = this.providers.get(provider.id);
+      if (known && known !== provider) {
+        throw new Error(
+          `Connector "${connector.id}" defines its own OAuth provider "${provider.id}"; reference the existing one by id`,
+        );
+      }
+      this.providers.set(provider.id, provider);
+    }
     this.connectors.set(connector.id, connector);
     return this;
+  }
+
+  /**
+   * The hub's own definition of an OAuth provider (built in, or declared by a registered connector).
+   * Only these specs may be used with the hub-wide OAuth apps (`OAUTH_APP_*`): a service a user
+   * defines may name a provider with the same id, but never gets the hub's client secret.
+   */
+  oauthProvider(id: string): OAuthProviderSpec | undefined {
+    return this.providers.get(id);
+  }
+
+  /** Whether this very connector (not just one with its id) is registered here. */
+  includes(connector: ConnectorDefinition): boolean {
+    return this.connectors.get(connector.id) === connector;
   }
 
   all(): ConnectorDefinition[] {

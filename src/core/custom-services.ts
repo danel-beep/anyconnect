@@ -12,7 +12,12 @@ import {
   type RemoteMcpTool,
 } from '../connectors/mcp-remote/connector.js';
 import type { ConnectorRegistry } from '../connectors/registry.js';
-import { ConnectorError, type FetchLike, type OAuthProviderSpec } from '../connectors/sdk.js';
+import {
+  type ConnectorDefinition,
+  ConnectorError,
+  type FetchLike,
+  type OAuthProviderSpec,
+} from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { accounts, customConnectors } from '../db/schema.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
@@ -173,6 +178,20 @@ export class CustomServiceManager {
       : this.addManifest(workspaceId, input.manifest);
   }
 
+  /**
+   * A service of the workspace may describe its own OAuth provider, but not under the id of one the
+   * hub defines: that id stands for the hub's provider (and its hub-wide app) everywhere.
+   */
+  private assertOwnProvider(connector: ConnectorDefinition): void {
+    const provider = connector.oauth?.provider;
+    if (!provider || typeof provider === 'string') return;
+    if (this.deps.builtin.oauthProvider(provider.id)) {
+      throw new Error(
+        `The OAuth provider id "${provider.id}" belongs to a provider built into the hub: write "provider": "${provider.id}" to use it, or give your provider another id`,
+      );
+    }
+  }
+
   private async assertFreeId(workspaceId: string, connectorId: string): Promise<void> {
     if (!CONNECTOR_ID.test(connectorId)) {
       throw badRequest(
@@ -205,7 +224,8 @@ export class CustomServiceManager {
       updatedAt: now,
     };
     try {
-      compileCustomConnector(candidate); // validates exactly what the resolver will build
+      // Validates exactly what the resolver will build.
+      this.assertOwnProvider(compileCustomConnector(candidate));
     } catch (error) {
       if (error instanceof ManifestError || error instanceof Error) throw badRequest(error.message);
       throw error;
@@ -314,7 +334,7 @@ export class CustomServiceManager {
    */
   private async ensureOAuthClient(workspaceId: string, discovery: OAuthDiscovery, row: CustomConnectorRow) {
     const { spec: provider, metadata } = discovery;
-    if (await this.deps.apps.pick(workspaceId, provider.id)) return;
+    if (await this.deps.apps.hasWorkspaceApp(workspaceId, provider.id)) return;
     const methods = (metadata.token_endpoint_auth_methods_supported as string[] | undefined) ?? [
       'client_secret_basic',
     ];
@@ -490,7 +510,7 @@ export class CustomServiceManager {
       definition = { ...manifest, id: connectorId };
     }
     try {
-      compileCustomConnector({ ...row, definition });
+      this.assertOwnProvider(compileCustomConnector({ ...row, definition }));
     } catch (error) {
       throw badRequest((error as Error).message);
     }
