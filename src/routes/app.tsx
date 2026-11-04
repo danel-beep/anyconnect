@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { isMetric, type Metric } from '../billing/plans.js';
+import { isMetric, type Metric, PLANS } from '../billing/plans.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
@@ -653,6 +653,17 @@ export function appRoutes() {
         shellInfo(c, ws),
       ]);
       const sub = entitlements.subscription;
+      const paid = s.billing.liveSubscription(sub);
+      const query = z
+        .object({ plan: z.string().max(40).optional(), interval: z.enum(['month', 'year']).optional() })
+        .safeParse({ plan: c.req.query('plan'), interval: c.req.query('interval') });
+      const focus =
+        query.success && query.data.plan && query.data.plan !== entitlements.plan.id
+          ? PLANS.find((p) => p.id === query.data.plan && p.public && p.priceMonthly > 0)
+          : undefined;
+      const buyable = PLANS.flatMap((p) =>
+        (['month', 'year'] as const).filter((i) => s.billing.canBuy(p.id, i)).map((i) => `${p.id}:${i}`),
+      );
       return c.html(
         <BillingPage
           ctx={pageCtx(c, auth.user)}
@@ -664,6 +675,21 @@ export function appRoutes() {
               sub && sub.planId === entitlements.plan.id
                 ? { provider: sub.provider, periodEnd: sub.currentPeriodEnd, status: sub.status }
                 : undefined,
+            paid: paid
+              ? {
+                  provider: s.billing.provider!.name,
+                  status: paid.status,
+                  interval: paid.interval,
+                  periodEnd: paid.currentPeriodEnd,
+                  cancelAtPeriodEnd: paid.cancelAtPeriodEnd,
+                }
+              : undefined,
+            buyable,
+            testMode: s.billing.provider?.testMode ?? false,
+            justPaid: c.req.query('paid') === '1',
+            focus: focus
+              ? { planId: focus.id, interval: (query.success && query.data.interval) || 'month' }
+              : undefined,
             grants: entitlements.grants
               .filter((g) => isMetric(g.metric))
               .map((g) => ({
@@ -680,15 +706,15 @@ export function appRoutes() {
     }),
   );
 
+  /** Buying a plan: the provider's checkout, or a plan change when the workspace already pays. */
   app.post(
     '/app/billing/checkout',
     action('/app/billing', async (c, auth, form) => {
       const s = c.get('services');
-      if (!s.billing) return c.redirect('/app/billing', 303);
       const input = z
         .object({ plan: z.string().max(40), interval: z.enum(['month', 'year']).default('month') })
         .parse({ plan: form.plan, interval: form.interval || undefined });
-      const { url } = await s.billing.checkout({
+      const outcome = await s.billing.checkout({
         workspaceId: auth.workspace.id,
         userId: auth.user.id,
         email: auth.user.email,
@@ -697,7 +723,32 @@ export function appRoutes() {
         successUrl: `${s.config.publicUrl}/app/billing?paid=1`,
         cancelUrl: `${s.config.publicUrl}/app/billing`,
       });
+      if (outcome.kind === 'redirect') return c.redirect(outcome.url, 303);
+      setFlash(c, 'ok', 'app.flash.planChanging', {
+        plan: c.get('t')(`plan.${outcome.planId}.name` as 'plan.free.name'),
+      });
+      return undefined;
+    }),
+  );
+
+  /** The provider's page for the card, invoices and cancelling. */
+  app.post(
+    '/app/billing/portal',
+    action('/app/billing', async (c, auth) => {
+      const s = c.get('services');
+      const { url } = await s.billing.portal(auth.workspace.id, `${s.config.publicUrl}/app/billing`);
       return c.redirect(url, 303);
+    }),
+  );
+
+  app.post(
+    '/app/billing/cancel',
+    action('/app/billing', async (c, auth, form) => {
+      const cancel = form.undo !== '1';
+      const sub = await c.get('services').billing.setCancelAtPeriodEnd(auth.workspace.id, cancel);
+      const date = sub.currentPeriodEnd ? fmtDate(c.get('locale'), sub.currentPeriodEnd) : '';
+      setFlash(c, 'ok', cancel ? 'app.flash.planCanceled' : 'app.flash.planResumed', { date });
+      return undefined;
     }),
   );
 

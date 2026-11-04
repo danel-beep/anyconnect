@@ -2,6 +2,7 @@ import { and, count, desc, eq, gte, ilike, inArray, isNull, or, sql, sum } from 
 import type { EntitlementService } from '../billing/entitlements.js';
 import { monthPeriod } from '../billing/period.js';
 import { DEFAULT_PLAN_ID } from '../billing/plans.js';
+import { BillingService } from '../billing/service.js';
 import type { UserService } from '../core/users.js';
 import type { Db } from '../db/client.js';
 import {
@@ -348,7 +349,16 @@ export class AdminService {
     input: { planId: string; periodEnd: Date | null; note?: string | undefined },
   ): Promise<void> {
     const workspaceId = await this.workspaceOf(userId);
-    const before = this.deps.entitlements.planFor(await this.deps.entitlements.subscription(workspaceId)).id;
+    const current = await this.deps.entitlements.subscription(workspaceId);
+    if (BillingService.isPaidByProvider(current)) {
+      // The provider keeps charging and its next webhook would undo a manual plan.
+      throw new AppError(
+        409,
+        'paid_subscription',
+        `This plan is paid through ${current!.provider}. Change or cancel it there, or add extra limits instead.`,
+      );
+    }
+    const before = this.deps.entitlements.planFor(current).id;
     await this.deps.entitlements.setPlan(workspaceId, input.planId, {
       provider: 'manual',
       periodEnd: input.periodEnd,

@@ -19,6 +19,7 @@ import { oauthClients, toolCalls } from '../db/schema.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
+import type { WorkspaceBilling } from './billing-tools.js';
 import { BUILTIN_TOOLS, MAX_BATCH_CALLS } from './builtin-tools.js';
 import {
   ALL_ACCOUNTS,
@@ -90,7 +91,7 @@ export interface HubDeps {
    * The hub's setup tools (`manyplug_*`, connector `manyplug`) and the workspace operations they
    * run. Without it the AI cannot manage the hub from the chat.
    */
-  setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin };
+  setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin; billing?: WorkspaceBilling };
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
 }
@@ -730,7 +731,12 @@ export class Hub {
     const signals = [AbortSignal.timeout(this.deps.toolTimeoutMs)];
     if (options.signal) signals.push(options.signal);
     const signal = AbortSignal.any(signals);
-    const context: SetupContext = { principal, admin: setup.admin, signal };
+    const context: SetupContext = {
+      principal,
+      admin: setup.admin,
+      ...(setup.billing ? { billing: setup.billing } : {}),
+      signal,
+    };
     const call: CallContext = {
       principal,
       catalog,

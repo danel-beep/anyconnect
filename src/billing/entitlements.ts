@@ -99,7 +99,8 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   planFor(subscription: SubscriptionRow | undefined, at = this.now()): Plan {
     if (!subscription) return getPlan(DEFAULT_PLAN_ID);
     const ended = subscription.currentPeriodEnd && subscription.currentPeriodEnd.getTime() <= at.getTime();
-    if (subscription.status === 'canceled' || ended) return getPlan(DEFAULT_PLAN_ID);
+    const inactive = subscription.status === 'canceled' || subscription.status === 'paused';
+    if (inactive || ended) return getPlan(DEFAULT_PLAN_ID);
     return getPlan(subscription.planId);
   }
 
@@ -252,6 +253,11 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       status?: SubscriptionStatus;
       periodEnd?: Date | null;
       note?: string | null;
+      /** Payment provider details (see `BillingService`). */
+      customerId?: string | null;
+      interval?: 'month' | 'year' | null;
+      cancelAtPeriodEnd?: boolean;
+      providerUpdatedAt?: Date | null;
     } = {},
   ): Promise<SubscriptionRow> {
     if (!findPlan(planId)) throw new AppError(400, 'unknown_plan', `Unknown plan "${planId}"`);
@@ -261,7 +267,10 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       provider: opts.provider ?? 'manual',
       externalId: opts.externalId ?? null,
       currentPeriodEnd: opts.periodEnd ?? null,
-      cancelAtPeriodEnd: false,
+      cancelAtPeriodEnd: opts.cancelAtPeriodEnd ?? false,
+      customerId: opts.customerId ?? null,
+      interval: opts.interval ?? null,
+      providerUpdatedAt: opts.providerUpdatedAt ?? null,
       note: opts.note ?? null,
     };
     const [row] = await this.deps.db

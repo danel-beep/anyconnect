@@ -115,6 +115,12 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 
 /* Plan cards in the dashboard */
 .plan-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.focus-plan{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.focus-plan form{max-width:320px}
+.paid-sub{margin:12px 0}
+.paid-sub .actions{margin-top:8px;flex-wrap:wrap}
+.billing-events{margin:12px 0}
+.billing-events li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .plan-mini .plan{padding:18px;gap:10px}
 .plan-mini .price .amount{font-size:28px}
 .plan.current{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}

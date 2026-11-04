@@ -21,6 +21,7 @@ import {
   type WorkspaceAdmin,
 } from '../core/workspace-admin.js';
 import { AppError, badRequest } from '../lib/errors.js';
+import { billingActions, type WorkspaceBilling } from './billing-tools.js';
 
 /**
  * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
@@ -49,10 +50,12 @@ export const isSetupConnector = (id: string): boolean =>
 export interface SetupContext {
   principal: Principal;
   admin: WorkspaceAdmin;
+  /** Plans and payments (`billing-tools.ts`); absent in hubs built without billing. */
+  billing?: WorkspaceBilling;
   signal: AbortSignal;
 }
 
-interface SetupActionSpec<TInput extends AnyObjectSchema> {
+export interface SetupActionSpec<TInput extends AnyObjectSchema> {
   name: string;
   title: string;
   description: string;
@@ -417,13 +420,14 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       };
     },
   }),
+  ...billingActions(setupAction),
 ];
 
 /** The setup tools as a connector, so the catalog and the executor treat them like any other. */
 export const SETUP_CONNECTOR: ConnectorDefinition = {
   id: SETUP_CONNECTOR_ID,
   name: BRAND.name,
-  description: 'Setting up this hub: services, accounts and settings.',
+  description: 'Setting up this hub: services, accounts, settings and the plan.',
   version: '1.0.0',
   config: z.object({}),
   credentials: z.object({}),

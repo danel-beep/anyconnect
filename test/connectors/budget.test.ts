@@ -27,6 +27,12 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   gcal: { total: 2800, tool: 650 },
   gdrive: { total: 1200, tool: 400 },
   outlook: { total: 4200, tool: 450 },
+  jira: { total: 2000, tool: 300 },
+  linear: { total: 1650, tool: 380 },
+  asana: { total: 1600, tool: 320 },
+  trello: { total: 1800, tool: 300 },
+  airtable: { total: 1800, tool: 370 },
+  hubspot: { total: 1700, tool: 270 },
 };
 
 function account(connectorId: string): AccountRow {
