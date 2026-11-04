@@ -48,6 +48,12 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   wordpress: { total: 2020, tool: 300 },
   mailchimp: { total: 1710, tool: 280 },
   typeform: { total: 950, tool: 320 },
+  vercel: { total: 1430, tool: 270 },
+  cloudflare: { total: 1940, tool: 420 },
+  bitbucket: { total: 2220, tool: 300 },
+  brevo: { total: 1280, tool: 280 },
+  calcom: { total: 960, tool: 295 },
+  webflow: { total: 1660, tool: 270 },
   telegram: { total: 2050, tool: 400 },
   // Two more tools than Telegram: message templates (list_templates, send_template).
   whatsapp: { total: 2400, tool: 400 },
