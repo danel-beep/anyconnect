@@ -19,6 +19,8 @@ export const problemsEn = {
   'problem.call.declined': 'Not allowed: declined, cancelled or expired before anyone said yes.',
   'problem.call.quota': 'The plan limit for this month is reached.',
   'problem.call.timeout': 'The service did not answer in time.',
+  'problem.call.circuit':
+    'The service kept failing, so the hub paused calls to this account for a short while.',
   'problem.call.invalid_input': 'The service did not accept what the AI sent: {message}.',
   'problem.call.invalid_inputBare': 'The service did not accept what the AI sent.',
   'problem.call.not_found': 'Not found on the service: {message}.',
@@ -52,6 +54,8 @@ export const problemsRu: Record<keyof typeof problemsEn, string> = {
   'problem.call.declined': 'Не разрешено: отклонили, отменили или время вышло.',
   'problem.call.quota': 'Лимит тарифа на этот месяц исчерпан.',
   'problem.call.timeout': 'Сервис не ответил вовремя.',
+  'problem.call.circuit':
+    'Сервис раз за разом не отвечал, и хаб ненадолго приостановил вызовы к этому аккаунту.',
   'problem.call.invalid_input': 'Сервис не принял то, что прислал ИИ: {message}.',
   'problem.call.invalid_inputBare': 'Сервис не принял то, что прислал ИИ.',
   'problem.call.not_found': 'Не найдено в сервисе: {message}.',

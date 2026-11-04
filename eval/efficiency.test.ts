@@ -38,6 +38,7 @@ function rows(services: string[]) {
       updatedAt: now,
       lastUsedAt: null,
       checkedAt: null,
+      reauthNotifiedAt: null,
     })),
   );
 }
