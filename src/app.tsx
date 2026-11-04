@@ -16,7 +16,7 @@ import { siteRoutes } from './routes/site.js';
 import { webRoutes } from './routes/web.js';
 import type { Services } from './services.js';
 import { pageSecurityHeaders } from './web/http.js';
-import { pickLocale, translator } from './web/i18n.js';
+import { DEFAULT_LOCALE, translator } from './web/i18n.js';
 import { ErrorPage } from './web/pages.js';
 
 export function createApp(services: Services) {
@@ -25,7 +25,7 @@ export function createApp(services: Services) {
   app.use('*', async (c, next) => {
     const started = performance.now();
     c.set('services', services);
-    const locale = savedLocale(c) ?? pickLocale(c.req.header('accept-language'));
+    const locale = savedLocale(c) ?? DEFAULT_LOCALE;
     c.set('locale', locale);
     c.set('t', translator(locale));
     await next();

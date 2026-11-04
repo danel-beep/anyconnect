@@ -58,7 +58,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'mail',
     blurb: {
       ru: 'Любой ящик по IMAP/SMTP: Яндекс, Mail.ru, iCloud, корпоративная почта.',
-      en: 'Any IMAP/SMTP mailbox: Yandex, Mail.ru, iCloud, company mail.',
+      en: 'Any IMAP/SMTP mailbox: Outlook, iCloud, Fastmail, company mail.',
     },
   },
   slack: {
@@ -130,8 +130,8 @@ export const PLANNED_SERVICES: {
   { name: 'Trello', icon: 'trello', category: 'tasks' },
   { name: 'Airtable', icon: 'airtable', category: 'docs' },
   { name: 'HubSpot', icon: 'hubspot', category: 'crm' },
-  { name: 'amoCRM', category: 'crm' },
-  { name: 'Битрикс24', category: 'crm' },
+  { name: 'Zendesk', icon: 'zendesk', category: 'crm' },
+  { name: 'Intercom', icon: 'intercom', category: 'crm' },
   { name: 'Shopify', icon: 'shopify', category: 'payments' },
   { name: 'Dropbox', icon: 'dropbox', category: 'files' },
   { name: 'Discord', icon: 'discord', category: 'messengers' },

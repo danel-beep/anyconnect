@@ -17,7 +17,7 @@ const FLASH_COOKIE = 'ac_flash';
 
 export const cookieOpts = (c: AppContext) => ({ secure: c.get('services').config.secureCookies });
 
-/** The language picked by the switch, if any (it wins over Accept-Language). */
+/** The language picked by the switch or saved in settings, if any (otherwise `DEFAULT_LOCALE`). */
 export function savedLocale(c: AppContext): Locale | undefined {
   const value = readCookie(c, LANG_COOKIE, cookieOpts(c));
   return value === 'ru' || value === 'en' ? value : undefined;
