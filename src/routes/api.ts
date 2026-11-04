@@ -190,6 +190,12 @@ export function apiRoutes() {
     return c.json(await s.customServices.add(principal(c).workspaceId, body as never), 201);
   });
 
+  api.patch('/services/:id', async (c) => {
+    const s = c.get('services');
+    const body = await json(c, z.record(z.string(), z.unknown()));
+    return c.json(await s.customServices.update(principal(c).workspaceId, c.req.param('id'), body));
+  });
+
   api.post('/services/:id/refresh', async (c) => {
     const s = c.get('services');
     return c.json(await s.customServices.refreshTools(principal(c).workspaceId, c.req.param('id')));

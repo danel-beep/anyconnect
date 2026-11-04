@@ -111,7 +111,7 @@ REST API (`Authorization: Bearer ac_pat_...`):
 | POST | `/api/v1/connect` | начать подключение аккаунта через OAuth, ответ — `authorizationUrl` |
 | GET | `/api/v1/oauth/providers` | OAuth-провайдеры, redirect URI для их консолей, настроенные приложения |
 | GET/POST/DELETE | `/api/v1/oauth/apps[/:id]` | свои OAuth-приложения (client id + secret) |
-| GET/POST/DELETE | `/api/v1/services[/:id]` | свои сервисы без кода: внешние MCP-серверы и HTTP-манифесты |
+| GET/POST/PATCH/DELETE | `/api/v1/services[/:id]` | свои сервисы без кода: внешние MCP-серверы и HTTP-манифесты |
 | POST | `/api/v1/services/:id/refresh` | обновить список инструментов внешнего MCP-сервера |
 | GET | `/api/v1/tools` | инструменты так, как их видит ИИ |
 | POST | `/api/v1/tools/:name/call` | вызвать инструмент (для отладки) |

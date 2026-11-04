@@ -440,6 +440,84 @@ describe('HTTP manifest connectors', () => {
     });
     expect(() => new ConnectorRegistry().register(withAccount)).toThrow(/must not define an "account" input/);
   });
+
+  it('declares risk, undo and capabilities with template mappings', async () => {
+    const base = { id: 'todo', name: 'Todo', description: 'x', baseUrl: 'https://todo.example' };
+    const todo = defineManifestConnector({
+      ...base,
+      actions: [
+        {
+          name: 'search',
+          description: 'Finds tasks',
+          input: { type: 'object', properties: { text: { type: 'string' }, max: { type: 'number' } } },
+          hints: { readOnly: true },
+          request: { method: 'GET', path: '/tasks' },
+          capability: {
+            id: 'tasks.list',
+            input: { text: '{{input.query}}', max: '{{input.limit}}' },
+            output: {
+              id: '{{item.gid}}',
+              title: '{{item.name}}',
+              url: 'https://todo.example/t/{{item.gid}}',
+            },
+          },
+        },
+        {
+          name: 'add',
+          description: 'Adds a task',
+          input: { type: 'object', properties: { name: { type: 'string' } } },
+          request: { method: 'POST', path: '/tasks' },
+          risk: 'write',
+          undo: { kind: 'action', action: 'remove' },
+          capability: 'tasks.create',
+        },
+        {
+          name: 'remove',
+          description: 'Deletes a task',
+          input: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          request: { method: 'DELETE', path: '/tasks/{id}' },
+          risk: 'dangerous',
+          undo: { kind: 'none' },
+        },
+      ],
+    });
+    expect(() => new ConnectorRegistry().register(todo)).not.toThrow();
+    const [search, add, remove] = todo.actions;
+    expect(add).toMatchObject({ risk: 'write', undo: { kind: 'action', action: 'remove' } });
+    expect(remove!.risk).toBe('dangerous');
+    expect(add!.capability).toEqual([{ id: 'tasks.create' }]);
+
+    const [binding] = search!.capability as { mapInput: Function; mapOutput: Function }[];
+    expect(binding!.mapInput({ query: 'milk', limit: 5, status: 'open' })).toEqual({ text: 'milk', max: 5 });
+    const items = [{ gid: '7', name: 'Buy milk', extra: true }];
+    const mapped = [{ id: '7', title: 'Buy milk', url: 'https://todo.example/t/7' }];
+    expect(binding!.mapOutput(items, {})).toEqual(mapped);
+    expect(binding!.mapOutput({ items, nextCursor: 'c' }, {})).toEqual({ items: mapped, nextCursor: 'c' });
+
+    // Mistakes are caught when the connector is built or registered.
+    const action = { name: 'a', description: 'x', request: { method: 'GET' as const, path: '/' } };
+    expect(() =>
+      defineManifestConnector({
+        ...base,
+        actions: [{ ...action, capability: { id: 'tasks.create', input: { t: '{{credentials.key}}' } } }],
+      }),
+    ).toThrow(/placeholder \{\{credentials.key\}\} must start with input/);
+    const unknown = defineManifestConnector({ ...base, actions: [{ ...action, capability: 'tasks.fly' }] });
+    expect(() => new ConnectorRegistry().register(unknown)).toThrow(/unknown capability "tasks.fly"/);
+    const wrongRisk = defineManifestConnector({
+      ...base,
+      actions: [{ ...action, capability: 'tasks.list' }],
+    });
+    expect(() => new ConnectorRegistry().register(wrongRisk)).toThrow(/capability "tasks.list" is read-only/);
+    const badUndo = defineManifestConnector({
+      ...base,
+      actions: [{ ...action, undo: { kind: 'action', action: 'nope' } }],
+    });
+    expect(() => new ConnectorRegistry().register(badUndo)).toThrow(/unknown undo action "nope"/);
+    expect(() =>
+      defineManifestConnector({ ...base, actions: [{ ...action, risk: 'scary' as never }] }),
+    ).toThrow(/actions.0.risk/);
+  });
 });
 
 describe('HTTP client helpers', () => {
