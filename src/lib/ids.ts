@@ -58,4 +58,5 @@ export type IdPrefix =
   | 'lim' // limit grant (extra limits on top of a plan)
   | 'adm' // admin audit log entry
   | 'preq' // plan request (manual upgrades before payments)
-  | 'err'; // error group (the hub's own error tracker)
+  | 'err' // error group (the hub's own error tracker)
+  | 'inc'; // status page incident
