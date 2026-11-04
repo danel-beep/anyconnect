@@ -1,21 +1,20 @@
 import { Hono } from 'hono';
-import { authenticate, getDefaultWorkspace } from '../core/identity.js';
+import { getDefaultWorkspace } from '../core/identity.js';
 import { OAuthProtocolError } from '../oauth/clients.js';
 import { isLoopbackRedirect, knownClientName } from '../oauth/redirect.js';
 import type { AuthorizationRequest } from '../oauth/server.js';
 import { suggestClientIdentity } from '../security/clients.js';
+import { clientIp, csrfToken, publicCors, verifyCsrf } from '../web/http.js';
+import { ConsentPage, ErrorPage } from '../web/pages.js';
 import {
-  clearCookie,
-  clientIp,
-  csrfToken,
-  publicCors,
-  readCookie,
-  safeNextPath,
-  setSecureCookie,
-  verifyCsrf,
-} from '../web/http.js';
-import { ConsentPage, ErrorPage, LoginPage } from '../web/pages.js';
-import { type AppContext, type AppEnv, bodyParams, currentUser, SESSION_COOKIE } from './context.js';
+  type AppContext,
+  type AppEnv,
+  bodyParams,
+  currentSession,
+  currentUser,
+  loginUrl,
+  secondFactorRedirect,
+} from './context.js';
 
 const OAUTH_PARAMS = [
   'response_type',
@@ -137,7 +136,7 @@ async function renderConsent(c: AppContext, request: AuthorizationRequest, param
   );
 }
 
-/** OAuth authorization server endpoints plus the login and consent pages they rely on. */
+/** OAuth authorization server endpoints plus the consent page (sign-in lives in `login.tsx`). */
 export function oauthRoutes() {
   const app = new Hono<AppEnv>();
 
@@ -208,10 +207,11 @@ export function oauthRoutes() {
       );
     }
     if (validation.kind === 'error_redirect') return c.redirect(validation.location, 302);
-    if (!(await currentUser(c))) {
-      const url = new URL(c.req.url);
-      return c.redirect(`/login?next=${encodeURIComponent(url.pathname + url.search)}`, 302);
-    }
+    const url = new URL(c.req.url);
+    const session = await currentSession(c);
+    if (!session) return c.redirect(loginUrl(url.pathname + url.search), 302);
+    const gate = await secondFactorRedirect(c, session, url.pathname + url.search);
+    if (gate) return c.redirect(gate, 302);
     return renderConsent(c, validation.request, params);
   });
 
@@ -225,13 +225,12 @@ export function oauthRoutes() {
       );
     }
     const params = pickOAuthParams(form);
-    const user = await currentUser(c);
-    if (!user) {
-      return c.redirect(
-        `/login?next=${encodeURIComponent(`/oauth/authorize?${new URLSearchParams(params)}`)}`,
-        303,
-      );
-    }
+    const session = await currentSession(c);
+    const retry = `/oauth/authorize?${new URLSearchParams(params)}`;
+    if (!session) return c.redirect(loginUrl(retry), 303);
+    const gate = await secondFactorRedirect(c, session, retry);
+    if (gate) return c.redirect(gate, 303);
+    const user = session.user;
     const validation = await s.oauth.validateAuthorizationRequest(params);
     if (validation.kind === 'error_page') {
       return c.html(
@@ -265,69 +264,6 @@ export function oauthRoutes() {
       'oauth access approved',
     );
     return c.redirect(location, 303);
-  });
-
-  // --- Login / logout -------------------------------------------------------
-  app.get('/login', async (c) => {
-    const s = c.get('services');
-    const next = safeNextPath(c.req.query('next'));
-    if (await currentUser(c)) return c.redirect(next, 302);
-    const csrf = csrfToken(c, { secure: s.config.secureCookies });
-    return c.html(<LoginPage t={c.get('t')} lang={c.get('locale')} csrf={csrf} next={next} />);
-  });
-
-  app.post('/login', async (c) => {
-    const s = c.get('services');
-    const t = c.get('t');
-    const form = await bodyParams(c);
-    const next = safeNextPath(form.next);
-    const cookieOpts = { secure: s.config.secureCookies };
-    const csrf = csrfToken(c, cookieOpts);
-    const render = (error: string, status: 400 | 403 | 429) =>
-      c.html(
-        <LoginPage
-          t={t}
-          lang={c.get('locale')}
-          csrf={csrf}
-          next={next}
-          email={form.email ?? ''}
-          error={error}
-        />,
-        status,
-      );
-    if (!verifyCsrf(c, form.csrf, { ...cookieOpts, publicUrl: s.config.publicUrl }))
-      return render(t('error.csrf'), 403);
-    const ip = clientIp(c, s.config.trustProxy);
-    const email = (form.email ?? '').trim().toLowerCase();
-    const byIp = s.rateLimiter.consume(`login:ip:${ip}`, 20, 15 * 60_000);
-    const byEmail = s.rateLimiter.consume(`login:email:${email}`, 10, 15 * 60_000);
-    if (!byIp.allowed || !byEmail.allowed) return render(t('login.rateLimited'), 429);
-
-    const user = await authenticate(s.db, email, form.password ?? '');
-    if (!user) {
-      s.logger.warn({ ip }, 'failed login');
-      return render(t('login.invalid'), 400);
-    }
-    s.rateLimiter.reset(`login:email:${email}`);
-    const token = await s.sessions.create(user.id, { ip, userAgent: c.req.header('user-agent') });
-    setSecureCookie(c, SESSION_COOKIE, token, { ...cookieOpts, maxAge: s.config.sessionTtlSeconds });
-    s.logger.info({ userId: user.id, ip }, 'user signed in');
-    return c.redirect(next, 303);
-  });
-
-  app.post('/logout', async (c) => {
-    const s = c.get('services');
-    const cookieOpts = { secure: s.config.secureCookies };
-    const form = await bodyParams(c);
-    if (!verifyCsrf(c, form.csrf, { ...cookieOpts, publicUrl: s.config.publicUrl })) {
-      return c.html(
-        <ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('error.csrf')} />,
-        403,
-      );
-    }
-    await s.sessions.destroy(readCookie(c, SESSION_COOKIE, cookieOpts));
-    clearCookie(c, SESSION_COOKIE, cookieOpts);
-    return c.redirect('/login', 303);
   });
 
   return app;

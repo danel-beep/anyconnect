@@ -66,6 +66,8 @@ const EnvSchema = z.object({
   CONFIRMATION_WAIT_SECONDS: z.coerce.number().int().min(0).max(110).default(40),
   /** How long the user has to answer a confirmation. */
   CONFIRMATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
+  /** Users must set up a second factor (authenticator app or passkey) before using the hub. */
+  REQUIRE_2FA: bool(false),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -106,6 +108,15 @@ export interface AppConfig {
     runnerIntervalMs: number;
   };
   telegram: { botToken: string | undefined; apiUrl: string };
+  /** Sign-in hardening: whether a second factor is mandatory, and the WebAuthn relying party. */
+  auth: {
+    requireSecondFactor: boolean;
+    /** RP ID = hostname of the public URL; passkeys are bound to it. */
+    rpId: string;
+    rpName: string;
+    /** Expected origin of WebAuthn ceremonies = the public URL. */
+    origin: string;
+  };
 }
 
 export class ConfigError extends Error {
@@ -208,5 +219,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       runnerIntervalMs: 2000,
     },
     telegram: { botToken: env.TELEGRAM_BOT_TOKEN, apiUrl: env.TELEGRAM_API_URL.replace(/\/+$/, '') },
+    auth: {
+      requireSecondFactor: env.REQUIRE_2FA,
+      rpId: new URL(publicUrl).hostname,
+      rpName: 'AnyConnect',
+      origin: publicUrl,
+    },
   };
 }

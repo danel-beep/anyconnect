@@ -1,4 +1,7 @@
-import { themeCss } from './theme.js';
+import { THEMES, themeCss } from './theme.js';
+
+/** QR codes stay dark-on-light in both themes (not every scanner reads inverted codes). */
+const QR_COLORS = `background:${THEMES.light.card};color:${THEMES.light.text}`;
 
 /** Served at /assets/app.css (no inline styles, so the CSP can forbid them). Colors come from `theme.ts`. */
 export const APP_CSS = `
@@ -43,4 +46,11 @@ form.inline{display:inline}
 pre.args{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
 .item{border-top:1px solid var(--border);padding-top:16px;margin-top:16px}
 .item:first-of-type{border-top:0;padding-top:0;margin-top:0}
+[hidden]{display:none!important}
+.row{display:flex;gap:8px;align-items:center}
+.row input[type=text]{width:auto;min-width:0;flex:1;padding:6px 10px}
+.divider{text-align:center;margin:16px 0 0}
+.qr{display:block;width:200px;height:200px;margin:8px 0 12px;border-radius:8px;${QR_COLORS}}
+ul.codes{list-style:none;padding:0;margin:12px 0 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px}
+ul.codes code{font-size:15px}
 `;

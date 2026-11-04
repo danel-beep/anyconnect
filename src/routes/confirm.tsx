@@ -6,7 +6,15 @@ import type { PendingCallRow } from '../security/pending-calls.js';
 import { ConfirmListPage, ConfirmPage, type PendingCallView } from '../web/confirm-pages.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
-import { type AppContext, type AppEnv, bodyParams, currentUser } from './context.js';
+import type { SessionUser } from '../web/sessions.js';
+import {
+  type AppContext,
+  type AppEnv,
+  bodyParams,
+  currentSession,
+  loginUrl,
+  secondFactorRedirect,
+} from './context.js';
 
 export const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
@@ -36,20 +44,26 @@ export async function pendingCallView(c: AppContext, row: PendingCallRow): Promi
 export function confirmRoutes() {
   const app = new Hono<AppEnv>();
 
-  const session = async (c: AppContext) => {
+  /** The signed-in user and workspace, or where to send the browser first (sign-in, 2FA). */
+  const session = async (
+    c: AppContext,
+    next: string,
+  ): Promise<{ redirect: string } | { user: SessionUser; workspace: { id: string } }> => {
     const s = c.get('services');
-    const user = await currentUser(c);
-    if (!user) return undefined;
-    const workspace = await getDefaultWorkspace(s.db, user.id);
-    return workspace ? { user, workspace } : undefined;
+    const web = await currentSession(c);
+    if (!web) return { redirect: loginUrl(next) };
+    const gate = await secondFactorRedirect(c, web, next);
+    if (gate) return { redirect: gate };
+    const workspace = await getDefaultWorkspace(s.db, web.user.id);
+    return workspace ? { user: web.user, workspace } : { redirect: '/' };
   };
   const csrfFailed = (c: AppContext) =>
     c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('error.csrf')} />, 403);
 
   const renderList = async (c: AppContext, linkUrl?: string) => {
     const s = c.get('services');
-    const auth = await session(c);
-    if (!auth) return c.redirect(`/login?next=${encodeURIComponent('/confirm')}`, 302);
+    const auth = await session(c, '/confirm');
+    if ('redirect' in auth) return c.redirect(auth.redirect, 302);
     const [rows, channels] = await Promise.all([
       s.pendingCalls.listOpen(auth.workspace.id),
       s.notificationChannels.status(auth.user.id),
@@ -76,8 +90,8 @@ export function confirmRoutes() {
   app.get('/confirm/:id', async (c) => {
     const s = c.get('services');
     const id = c.req.param('id');
-    const auth = await session(c);
-    if (!auth) return c.redirect(`/login?next=${encodeURIComponent(`/confirm/${id}`)}`, 302);
+    const auth = await session(c, `/confirm/${id}`);
+    if ('redirect' in auth) return c.redirect(auth.redirect, 302);
     const row = await s.pendingCalls.getInWorkspace(auth.workspace.id, id);
     return c.html(
       <ConfirmPage
@@ -95,8 +109,8 @@ export function confirmRoutes() {
     const form = await bodyParams(c);
     if (!verifyCsrf(c, form.csrf, { secure: s.config.secureCookies, publicUrl: s.config.publicUrl }))
       return csrfFailed(c);
-    const auth = await session(c);
-    if (!auth) return c.redirect(`/login?next=${encodeURIComponent(`/confirm/${id}`)}`, 303);
+    const auth = await session(c, `/confirm/${id}`);
+    if ('redirect' in auth) return c.redirect(auth.redirect, 303);
     await s.pendingCalls.getInWorkspace(auth.workspace.id, id);
     const decision = form.decision;
     if (decision === 'approve' || decision === 'deny' || decision === 'cancel') {
@@ -112,8 +126,8 @@ export function confirmRoutes() {
     const form = await bodyParams(c);
     if (!verifyCsrf(c, form.csrf, { secure: s.config.secureCookies, publicUrl: s.config.publicUrl }))
       return csrfFailed(c);
-    const auth = await session(c);
-    if (!auth) return c.redirect('/login', 303);
+    const auth = await session(c, '/confirm');
+    if ('redirect' in auth) return c.redirect(auth.redirect, 303);
     if (!s.telegramBot) return c.redirect('/confirm', 303);
     const code = await s.notificationChannels.startTelegramLink(auth.user.id);
     const username = await s.telegramBot.getUsername();
@@ -125,8 +139,8 @@ export function confirmRoutes() {
     const form = await bodyParams(c);
     if (!verifyCsrf(c, form.csrf, { secure: s.config.secureCookies, publicUrl: s.config.publicUrl }))
       return csrfFailed(c);
-    const auth = await session(c);
-    if (!auth) return c.redirect('/login', 303);
+    const auth = await session(c, '/confirm');
+    if ('redirect' in auth) return c.redirect(auth.redirect, 303);
     await s.notificationChannels.unlinkTelegram(auth.user.id);
     return c.redirect('/confirm', 303);
   });

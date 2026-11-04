@@ -6,6 +6,10 @@ import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
+import { PasskeyService } from './core/passkeys.js';
+import { RecoveryCodeService } from './core/recovery-codes.js';
+import { SecondFactorService } from './core/second-factors.js';
+import { TotpService } from './core/totp.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
@@ -35,6 +39,7 @@ import {
 import { TelegramBot } from './security/telegram.js';
 import { VERSION } from './version.js';
 import { translator } from './web/i18n.js';
+import { PendingLoginService } from './web/pending-logins.js';
 import { SessionService } from './web/sessions.js';
 
 /** Everything the app needs, wired once. Tests build the same graph with overrides. */
@@ -68,6 +73,10 @@ export interface Services {
   /** Secret Telegram must send with webhook updates (derived from the master key). */
   telegramWebhookSecret: string;
   sessions: SessionService;
+  /** Sign-ins waiting for a second factor. */
+  pendingLogins: PendingLoginService;
+  /** TOTP, recovery codes and passkeys. */
+  secondFactors: SecondFactorService;
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
@@ -200,6 +209,12 @@ export function createServices(
     return persona && personas.urlFor(persona.slug);
   });
   const sessions = new SessionService(db, config.sessionTtlSeconds);
+  const pendingLogins = new PendingLoginService(db);
+  const secondFactors = new SecondFactorService(
+    new TotpService(db, secrets, config.auth.rpName),
+    new RecoveryCodeService(db),
+    new PasskeyService(db, { id: config.auth.rpId, name: config.auth.rpName, origin: config.auth.origin }),
+  );
   const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
 
   return {
@@ -227,6 +242,8 @@ export function createServices(
     telegramBot,
     telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
+    pendingLogins,
+    secondFactors,
     rateLimiter,
     idempotency,
     mcp,

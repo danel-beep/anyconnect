@@ -108,6 +108,13 @@ export const webSessions = pgTable(
     lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     ip: text(),
     userAgent: text(),
+    /**
+     * How the user proved who they are, RFC 8176 values: `pwd`, `otp`, `hwk` (passkey) plus
+     * `rec` for a recovery code. Lets features require a second factor or a passkey.
+     */
+    amr: text().array().notNull().default(sql`'{}'::text[]`),
+    /** When the user last signed in or re-confirmed (step-up). Null for sessions older than the column. */
+    authenticatedAt: timestamp({ withTimezone: true }),
   },
   (t) => [index().on(t.userId), index().on(t.expiresAt)],
 );
@@ -499,4 +506,94 @@ export const notificationChannels = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [uniqueIndex().on(t.userId, t.kind), index().on(t.linkCodeHash)],
+);
+
+// ---------------------------------------------------------------------------
+// Second factors (TOTP, recovery codes, passkeys) and the sign-in steps around them
+// ---------------------------------------------------------------------------
+
+/** Authenticator-app secret. One per user; unconfirmed until the user enters a valid code. */
+export const userTotp = pgTable('user_totp', {
+  userId: text()
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Base32 secret encrypted with the SecretBox (AAD = `user:<id>:totp`). */
+  secretEncrypted: text().notNull(),
+  /** Null while enrollment is pending: the factor is not used for sign-in until confirmed. */
+  confirmedAt: timestamp({ withTimezone: true }),
+  /** Last accepted time step; codes from this or an earlier step are rejected (no replay). */
+  lastUsedStep: bigint({ mode: 'number' }),
+  createdAt: createdAt(),
+});
+
+/** Single-use recovery codes (SHA-256 of `<user id>:<normalized code>`; the codes are shown once). */
+export const userRecoveryCodes = pgTable(
+  'user_recovery_codes',
+  {
+    codeHash: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+    usedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.userId)],
+);
+
+/** WebAuthn credentials (passkeys and security keys). */
+export const webauthnCredentials = pgTable(
+  'webauthn_credentials',
+  {
+    id: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Credential ID from the authenticator, base64url. */
+    credentialId: text().notNull().unique(),
+    /** COSE public key, base64url. */
+    publicKey: text().notNull(),
+    counter: bigint({ mode: 'number' }).notNull().default(0),
+    transports: text().array().notNull().default(sql`'{}'::text[]`),
+    deviceType: text().$type<'singleDevice' | 'multiDevice'>().notNull(),
+    backedUp: boolean().notNull().default(false),
+    /** Name the user gave it, e.g. "iPhone". */
+    name: text().notNull(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.userId)],
+);
+
+/** Outstanding WebAuthn challenges: short-lived and deleted when used. */
+export const webauthnChallenges = pgTable(
+  'webauthn_challenges',
+  {
+    /** SHA-256 of the challenge (base64url). */
+    challengeHash: text().primaryKey(),
+    challenge: text().notNull(),
+    purpose: text().$type<'registration' | 'authentication'>().notNull(),
+    /** The user the ceremony is for; null for sign-in with a discoverable passkey. */
+    userId: text().references(() => users.id, { onDelete: 'cascade' }),
+    /** SHA-256 of a browser-bound value (the CSRF cookie), so a challenge only works where it was issued. */
+    bindingHash: text().notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
+);
+
+/** Password accepted, second factor still due. The cookie holds a random token, the database its hash. */
+export const pendingLogins = pgTable(
+  'pending_logins',
+  {
+    tokenHash: text().primaryKey(),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Methods already passed (`pwd`). */
+    amr: text().array().notNull().default(sql`'{}'::text[]`),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
 );

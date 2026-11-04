@@ -11,7 +11,7 @@ import { workspaces } from '../db/schema.js';
 import { AppError, notFound, unauthorized } from '../lib/errors.js';
 import { json, principal } from './api-helpers.js';
 import { securityRoutes } from './api-security.js';
-import { type AppEnv, currentUser } from './context.js';
+import { type AppEnv, currentSession, secondFactorRedirect } from './context.js';
 
 const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -37,8 +37,12 @@ export function apiRoutes() {
         throw unauthorized('Invalid or insufficient token: use a personal access token');
       }
     } else {
-      const user = await currentUser(c);
-      if (!user) throw unauthorized();
+      const session = await currentSession(c);
+      if (!session) throw unauthorized();
+      if (await secondFactorRedirect(c, session, '/')) {
+        throw new AppError(403, 'second_factor_required', 'Set up a second factor on /security first');
+      }
+      const user = session.user;
       // Cookie-authenticated writes must come from the hub's own pages.
       if (UNSAFE.has(c.req.method) && c.req.header('origin') !== s.config.publicUrl) {
         throw new AppError(403, 'forbidden', 'Cross-origin request rejected');

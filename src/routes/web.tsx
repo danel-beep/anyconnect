@@ -3,7 +3,8 @@ import { getDefaultWorkspace } from '../core/identity.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
 import { ErrorPage, HomePage } from '../web/pages.js';
 import { APP_CSS } from '../web/styles.js';
-import { type AppEnv, bodyParams, currentUser } from './context.js';
+import { WEBAUTHN_JS } from '../web/webauthn-client.js';
+import { type AppEnv, bodyParams, currentSession, secondFactorRedirect } from './context.js';
 
 /** The hub's home page (a minimal dashboard until the full web panel exists). */
 export function webRoutes() {
@@ -16,10 +17,21 @@ export function webRoutes() {
     }),
   );
 
+  app.get('/assets/webauthn.js', (c) =>
+    c.body(WEBAUTHN_JS, 200, {
+      'Content-Type': 'text/javascript; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+      'X-Content-Type-Options': 'nosniff',
+    }),
+  );
+
   app.get('/', async (c) => {
     const s = c.get('services');
-    const user = await currentUser(c);
-    if (!user) return c.redirect('/login', 302);
+    const session = await currentSession(c);
+    if (!session) return c.redirect('/login', 302);
+    const gate = await secondFactorRedirect(c, session, '/');
+    if (gate) return c.redirect(gate, 302);
+    const user = session.user;
     const workspace = await getDefaultWorkspace(s.db, user.id);
     if (!workspace)
       return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message="No workspace" />, 500);
@@ -70,9 +82,11 @@ export function webRoutes() {
         403,
       );
     }
-    const user = await currentUser(c);
-    if (!user) return c.redirect('/login', 303);
-    const workspace = await getDefaultWorkspace(s.db, user.id);
+    const session = await currentSession(c);
+    if (!session) return c.redirect('/login', 303);
+    const gate = await secondFactorRedirect(c, session, '/');
+    if (gate) return c.redirect(gate, 303);
+    const workspace = await getDefaultWorkspace(s.db, session.user.id);
     if (workspace) await s.oauth.revokeGrant(workspace.id, c.req.param('id'));
     return c.redirect('/', 303);
   });
