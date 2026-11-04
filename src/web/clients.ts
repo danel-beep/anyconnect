@@ -21,6 +21,15 @@ export interface ClientGuide {
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
+/**
+ * The server name in the client's config: `manyplug`, or `manyplug-work` for the address of the
+ * access profile `work`, so adding a profile never replaces the main connection.
+ */
+export function serverName(url: string): string {
+  const profile = /\/mcp\/([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
+  return profile ? `manyplug-${profile}` : 'manyplug';
+}
+
 export const CLIENT_GUIDES: ClientGuide[] = [
   {
     id: 'claude',
@@ -82,7 +91,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'Start claude, type /mcp, pick manyplug and sign in in the browser.',
       ],
     },
-    code: (url) => `claude mcp add --transport http --scope user manyplug ${url}`,
+    code: (url) => `claude mcp add --transport http --scope user ${serverName(url)} ${url}`,
   },
   {
     id: 'cursor',
@@ -99,9 +108,9 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'In Cursor Settings → MCP click “Login” next to manyplug and sign in.',
       ],
     },
-    code: (url) => json({ mcpServers: { manyplug: { url } } }),
+    code: (url) => json({ mcpServers: { [serverName(url)]: { url } } }),
     install: (url) => ({
-      href: `cursor://anysphere.cursor-deeplink/mcp/install?name=manyplug&config=${encodeURIComponent(
+      href: `cursor://anysphere.cursor-deeplink/mcp/install?name=${serverName(url)}&config=${encodeURIComponent(
         Buffer.from(JSON.stringify({ url })).toString('base64'),
       )}`,
       label: { ru: 'Добавить в Cursor', en: 'Add to Cursor' },
@@ -122,9 +131,9 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'Start the server in the MCP list and sign in when VS Code asks.',
       ],
     },
-    code: (url) => json({ servers: { manyplug: { type: 'http', url } } }),
+    code: (url) => json({ servers: { [serverName(url)]: { type: 'http', url } } }),
     install: (url) => ({
-      href: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: 'manyplug', type: 'http', url }))}`,
+      href: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: serverName(url), type: 'http', url }))}`,
       label: { ru: 'Установить в VS Code', en: 'Install in VS Code' },
     }),
   },
@@ -143,7 +152,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'Run codex mcp login manyplug and sign in in the browser.',
       ],
     },
-    code: (url) => `[mcp_servers.manyplug]\nurl = "${url}"`,
+    code: (url) => `[mcp_servers.${serverName(url)}]\nurl = "${url}"`,
   },
   {
     id: 'gemini',
@@ -154,7 +163,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ru: ['Выполните команду.', 'В Gemini CLI введите /mcp auth manyplug и войдите.'],
       en: ['Run the command.', 'In Gemini CLI type /mcp auth manyplug and sign in.'],
     },
-    code: (url) => `gemini mcp add --transport http manyplug ${url}`,
+    code: (url) => `gemini mcp add --transport http ${serverName(url)} ${url}`,
   },
   {
     id: 'windsurf',
@@ -168,7 +177,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ],
       en: ['Add the server to ~/.codeium/windsurf/mcp_config.json.', 'Refresh the MCP servers and sign in.'],
     },
-    code: (url) => json({ mcpServers: { manyplug: { serverUrl: url } } }),
+    code: (url) => json({ mcpServers: { [serverName(url)]: { serverUrl: url } } }),
   },
   {
     id: 'other',

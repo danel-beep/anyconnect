@@ -45,6 +45,7 @@ import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
+import { WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
@@ -237,6 +238,7 @@ export function createServices(
     gatewayConfig: config.gateway,
     db,
     secrets,
+    keyring,
     accounts,
     connectors,
     builtin,
@@ -323,6 +325,7 @@ export function createServices(
       connector: SETUP_CONNECTOR,
       admin,
       billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
+      profiles: new WorkspaceProfileTools(personas),
     },
     rateLimiter,
     idempotency,

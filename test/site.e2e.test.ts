@@ -269,6 +269,11 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     await oidc.signIn(browser, { sub: 'g-lim', email: 'lim@example.com' });
     const user = await userByEmail('lim@example.com');
     const ws = await workspaceOf(user.id);
+    // Past the 14-day Pro trial, in the first step down (500 actions, Free accounts).
+    await hub.services.database.pool.query(
+      `UPDATE workspaces SET created_at = now() - interval '20 days' WHERE id = $1`,
+      [ws.id],
+    );
     const { token } = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: user.id, name: 't' });
     const api = async (path: string, method = 'GET', body?: unknown) => {
       const response = await fetch(`${hub.baseUrl}/api/v1${path}`, {
@@ -298,7 +303,7 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     });
     expect(fourth.status).toBe(402);
 
-    // Free plan with the sign-up bonus: 500 actions a month. Use them all up.
+    // Free plan in its first step down: 500 actions a month. Use them all up.
     const today = new Date().toISOString().slice(0, 10);
     await hub.services.database.pool.query(
       `INSERT INTO usage_counters (workspace_id, day, caller, connector_id, action, calls)
@@ -632,6 +637,94 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const html = await (await browser.request(location)).text();
     expect(html).toContain('value="ftp://nope"');
     expect(html).toContain('class="notice bad"');
+  });
+
+  it('creates, changes and deletes an access profile in the dashboard', async () => {
+    const foreign = (await hub.services.db.query.accounts.findFirst())!;
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-pr', email: 'profiles@example.com' });
+    const ws = await workspaceOf((await userByEmail('profiles@example.com')).id);
+    const create = (name: string, label: string) =>
+      hub.services.accounts.create(ws.id, { connectorId: 'demo', name, label, credentials: { secret: 's' } });
+    const work = await create('work', 'Work');
+    const home = await create('home', 'Home');
+
+    const list = await (await browser.request('/app/profiles')).text();
+    expect(list).toContain(`name="account.${work.id}"`);
+    expect(list).not.toContain(foreign.id);
+    const { csrf } = TestBrowser.hiddenInputs(list);
+
+    // Without an account the form comes back as filled in.
+    const empty = await browser.request('/app/profiles', {
+      form: { csrf: csrf!, name: 'Работа', maxAccess: 'read' },
+    });
+    expect(empty.status).toBe(400);
+    const again = await empty.text();
+    expect(again).toContain('class="notice bad"');
+    expect(again).toContain('value="Работа"');
+
+    // Another workspace's account is ignored; the address comes from the name.
+    const created = await browser.request('/app/profiles', {
+      form: {
+        csrf: csrf!,
+        name: 'Работа',
+        maxAccess: 'read',
+        [`account.${work.id}`]: 'on',
+        [`account.${foreign.id}`]: 'on',
+      },
+    });
+    expect(created.status).toBe(303);
+    const persona = (await hub.services.personas.bySlug(ws.id, 'rabota'))!;
+    expect(persona).toMatchObject({ name: 'Работа', accountIds: [work.id], maxAccess: 'read' });
+    const path = `/app/profiles/${persona.id}`;
+    expect(created.headers.get('location')).toBe(`${path}?created=1`);
+    const page = await (await browser.request(`${path}?created=1`)).text();
+    expect(page).toContain(`${hub.baseUrl}/mcp/rabota`);
+    // Its own server name in the clients' configs, so it never replaces the main connection.
+    expect(page).toContain('manyplug-rabota');
+    expect(page).toContain('class="notice ok"');
+
+    const taken = await browser.request('/app/profiles', {
+      form: { csrf: csrf!, name: 'Other', slug: 'rabota', [`account.${home.id}`]: 'on' },
+    });
+    expect(taken.status).toBe(400);
+    expect((await hub.services.personas.list(ws.id)).length).toBe(1);
+
+    const saved = await browser.request(path, {
+      form: {
+        csrf: csrf!,
+        name: 'Work AI',
+        note: 'office',
+        maxAccess: 'full',
+        [`account.${work.id}`]: 'on',
+        [`account.${home.id}`]: 'on',
+      },
+    });
+    expect(saved.headers.get('location')).toBe(path);
+    expect(await hub.services.personas.get(ws.id, persona.id)).toMatchObject({
+      name: 'Work AI',
+      description: 'office',
+      accountIds: [work.id, home.id],
+      maxAccess: 'full',
+    });
+
+    // A token for the profile is listed on its page, and revoking it comes back there.
+    await browser.request('/app/tokens', {
+      form: { csrf: csrf!, name: 'office script', days: '30', profile: persona.id },
+    });
+    const [token] = await hub.services.apiTokens.list(ws.id);
+    expect(token).toMatchObject({ name: 'office script', personaId: persona.id });
+    expect(await (await browser.request('/app/apps')).text()).toContain('/mcp/rabota');
+    expect(await (await browser.request(path)).text()).toContain('office script');
+    const revoked = await browser.request(`/app/tokens/${token!.id}/revoke`, {
+      form: { csrf: csrf!, back: path },
+    });
+    expect(revoked.headers.get('location')).toBe(path);
+
+    const deleted = await browser.request(`${path}/delete`, { form: { csrf: csrf! } });
+    expect(deleted.headers.get('location')).toBe('/app/profiles');
+    expect(await hub.services.personas.list(ws.id)).toEqual([]);
+    expect((await browser.request(path)).headers.get('location')).toBe('/app/profiles');
   });
 });
 

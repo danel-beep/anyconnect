@@ -248,7 +248,18 @@ export interface UsageView {
   actions: { used: number; limit: number | null };
   accounts: { used: number; limit: number | null };
   resetsAt: Date;
-  introUntil?: Date | undefined;
+  /** The start in force: a trial of another plan or a step down (see `Plan.start`). */
+  phase?: { kind: 'trial' | 'step'; asPlan?: string | undefined; until: Date } | undefined;
+  /** The whole published start: dates and the actions limit of each phase, then the plan's own. */
+  schedule?: {
+    kind: 'trial' | 'step';
+    from: Date;
+    until: Date;
+    actions: number | null;
+    asPlan?: string | undefined;
+  }[];
+  /** The plan's own actions limit, after the start. */
+  planLimitActions?: number | null;
 }
 
 export const AccountStatus: FC<{
@@ -380,9 +391,14 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
           </div>
           <Meter used={usage.accounts.used} limit={usage.accounts.limit} label={t('app.usage.accounts')} />
           <div class="sub">
-            {usage.introUntil
-              ? t('app.usage.intro', { date: fmtDate(lang, usage.introUntil) })
-              : t('app.usage.accountsHint')}
+            {usage.phase?.kind === 'trial'
+              ? t('app.usage.trial', {
+                  plan: t(`plan.${usage.phase.asPlan ?? 'pro'}.name` as 'plan.free.name'),
+                  date: fmtDate(lang, usage.phase.until),
+                })
+              : usage.phase
+                ? t('app.usage.step', { date: fmtDate(lang, usage.phase.until) })
+                : t('app.usage.accountsHint')}
           </div>
         </div>
         {extra}
@@ -626,18 +642,27 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
 };
 
 /** The MCP URL with per-client instructions; compact once an app is connected. */
-export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, compact }) => {
+/**
+ * The MCP address with steps for each AI app. `profile` shows a profile's own address instead of
+ * the main one (the steps are the same).
+ */
+export const ConnectAiCard: FC<{
+  ctx: PageCtx;
+  compact?: boolean;
+  profile?: { url: string; title: string; hint: string };
+}> = ({ ctx, compact, profile }) => {
   const { t, lang } = ctx;
+  const url = profile?.url ?? ctx.mcpUrl;
   return (
     <div class="card" id="connect-ai">
       <div class="card-head">
-        <h2>{compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
+        <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
         <a class="btn sm" href="/docs">
           <Icon name="book" /> {t('app.ai.docs')}
         </a>
       </div>
-      <CopyField t={t} id="mcp-url" value={ctx.mcpUrl} label={t('home.mcpUrl')} />
-      <p class="hint">{t('app.ai.hint')}</p>
+      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} />
+      <p class="hint">{profile ? profile.hint : t('app.ai.hint')}</p>
       {compact ? null : (
         <div class="stack">
           <Tabs
@@ -655,12 +680,12 @@ export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, co
                   </ol>
                   {g.install ? (
                     <p>
-                      <a class="btn sm primary" href={g.install(ctx.mcpUrl).href}>
-                        {lang === 'ru' ? g.install(ctx.mcpUrl).label.ru : g.install(ctx.mcpUrl).label.en}
+                      <a class="btn sm primary" href={g.install(url).href}>
+                        {lang === 'ru' ? g.install(url).label.ru : g.install(url).label.en}
                       </a>
                     </p>
                   ) : null}
-                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(ctx.mcpUrl)} /> : null}
+                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
                 </div>
               ),
             }))}
@@ -972,9 +997,25 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
 // ---------------------------------------------------------------------------
 
 export interface AppsView {
-  grants: { id: string; name: string; client: string | null; createdAt: Date; lastUsedAt: Date | null }[];
-  tokens: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null; expiresAt: Date | null }[];
-  personas: { name: string; url: string }[];
+  grants: {
+    id: string;
+    name: string;
+    client: string | null;
+    /** The access profile it connected through, if any. */
+    profile: string | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+  }[];
+  tokens: {
+    id: string;
+    name: string;
+    profile: string | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+    expiresAt: Date | null;
+  }[];
+  /** Access profiles (personas): own MCP addresses with some accounts (`/app/profiles`). */
+  profiles: { id: string; name: string; slug: string; accounts: number; apps: number }[];
   /** A token just created: shown once. */
   newToken?: string | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
@@ -1000,6 +1041,9 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
                 <span class="grow">
                   <strong>{g.name}</strong>
                   {g.client && g.client !== g.name ? <span class="badge">{g.client}</span> : null}
+                  {g.profile ? (
+                    <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span>
+                  ) : null}
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })} ·{' '}
                     {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('home.never')}
@@ -1020,20 +1064,33 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
           </ul>
         )}
       </div>
-      {view.personas.length ? (
-        <div class="card">
-          <h2>{t('app.apps.personas')}</h2>
-          <p class="muted">{t('app.apps.personasText')}</p>
+      <div class="card" id="profiles">
+        <div class="card-head">
+          <h2>{t('profiles.title')}</h2>
+          <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
+            {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
+          </a>
+        </div>
+        <p class="muted">{t('profiles.appsText')}</p>
+        {view.profiles.length ? (
           <ul class="plain">
-            {view.personas.map((p) => (
+            {view.profiles.map((p) => (
               <li>
-                <strong>{p.name}</strong>
-                <code>{p.url}</code>
+                <span class="grow">
+                  <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
+                    <strong>{p.name}</strong>
+                  </a>{' '}
+                  <code class="small">/mcp/{p.slug}</code>
+                </span>
+                <span class="small muted">
+                  {t('profiles.accountsN', { n: p.accounts })} ·{' '}
+                  {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
+                </span>
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       <div class="card" id="tokens">
         <h2>{t('app.tokens.title')}</h2>
         <p class="muted">{t('app.tokens.text')}</p>
@@ -1051,6 +1108,9 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <li>
                 <span class="grow">
                   <strong>{tok.name}</strong>
+                  {tok.profile ? (
+                    <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
+                  ) : null}
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
                     {tok.lastUsedAt
@@ -1088,6 +1148,17 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               placeholder={t('app.tokens.placeholder')}
             />
           </div>
+          {view.profiles.length ? (
+            <div>
+              <label for="tok-profile">{t('profiles.tokenFor')}</label>
+              <select id="tok-profile" name="profile">
+                <option value="">{t('profiles.tokenMain')}</option>
+                {view.profiles.map((p) => (
+                  <option value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label for="tok-exp">{t('app.tokens.expiry')}</label>
             <select id="tok-exp" name="days">
@@ -1105,6 +1176,7 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
             </button>
           </div>
         </form>
+        {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
       </div>
     </AppShell>
   );
@@ -1367,6 +1439,53 @@ const PaidSubscription: FC<{ ctx: PageCtx; paid: NonNullable<BillingView['paid']
   );
 };
 
+/** The published start of a free workspace: trial, steps down, then the plan's own limit. */
+const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) => {
+  const { t, lang } = ctx;
+  const schedule = usage.schedule ?? [];
+  const now = Date.now();
+  const actions = (n: number | null) =>
+    n === null ? t('plan.metric.actions.unlimited') : t('plan.metric.actions', { n: fmtNumber(lang, n) });
+  const last = schedule[schedule.length - 1];
+  return (
+    <div class="start-schedule">
+      <h3>{t('app.billing.start')}</h3>
+      <ol class="plain">
+        {schedule.map((p) => {
+          const current = p.from.getTime() <= now && now < p.until.getTime();
+          return (
+            <li class={current ? 'current' : p.until.getTime() <= now ? 'past' : undefined}>
+              <span>
+                {p.kind === 'trial'
+                  ? t('app.billing.startTrial', {
+                      plan: t(`plan.${p.asPlan ?? 'pro'}.name` as 'plan.free.name'),
+                    })
+                  : actions(p.actions)}
+                {current ? <span class="badge accent">{t('app.billing.startNow')}</span> : null}
+              </span>
+              <span class="small muted">
+                {t('app.billing.startDates', {
+                  from: fmtDate(lang, p.from),
+                  until: fmtDate(lang, new Date(p.until.getTime() - 86_400_000)),
+                })}
+              </span>
+            </li>
+          );
+        })}
+        {last ? (
+          <li class={last.until.getTime() <= now ? 'current' : undefined}>
+            <span>{actions(usage.planLimitActions ?? null)}</span>
+            <span class="small muted">
+              {t('app.billing.startAfter', { date: fmtDate(lang, last.until) })}
+            </span>
+          </li>
+        ) : null}
+      </ol>
+      <p class="hint">{t('app.billing.startHint')}</p>
+    </div>
+  );
+};
+
 export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView }> = ({
   ctx,
   shell,
@@ -1425,6 +1544,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
         </p>
         {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
+        {!view.paid && view.usage.schedule?.length ? <StartSchedule ctx={ctx} usage={view.usage} /> : null}
         <p class="hint">{t('app.usage.actionsHint')}</p>
         {view.grants.length ? (
           <>

@@ -43,6 +43,7 @@ import {
 } from './executor.js';
 import type { IdempotencyStore } from './idempotency.js';
 import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
+import type { WorkspaceProfiles } from './profile-tools.js';
 import type { QuotaGate } from './quota.js';
 import {
   carryUntrusted,
@@ -91,7 +92,12 @@ export interface HubDeps {
    * The hub's setup tools (`manyplug_*`, connector `manyplug`) and the workspace operations they
    * run. Without it the AI cannot manage the hub from the chat.
    */
-  setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin; billing?: WorkspaceBilling };
+  setup?: {
+    connector: ConnectorDefinition;
+    admin: WorkspaceAdmin;
+    billing?: WorkspaceBilling;
+    profiles?: WorkspaceProfiles;
+  };
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
 }
@@ -735,6 +741,7 @@ export class Hub {
       principal,
       admin: setup.admin,
       ...(setup.billing ? { billing: setup.billing } : {}),
+      ...(setup.profiles ? { profiles: setup.profiles } : {}),
       signal,
     };
     const call: CallContext = {

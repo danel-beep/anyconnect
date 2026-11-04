@@ -228,6 +228,11 @@ export class WorkspaceAdmin {
     return { url: url.toString(), method, service: connector.id };
   }
 
+  /** The workspace's accounts by id (to show ids as `service:account`). */
+  async accountsById(workspaceId: string): Promise<Map<string, AccountRow>> {
+    return new Map((await this.deps.accounts.list(workspaceId)).map((a) => [a.id, a]));
+  }
+
   async findAccount(workspaceId: string, ref: AccountRef, service?: string): Promise<AccountRow> {
     const all = await this.deps.accounts.list(workspaceId);
     const [first, second] = ref.includes(':') ? ref.split(':', 2) : [service, ref];

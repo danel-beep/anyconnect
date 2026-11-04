@@ -23,24 +23,31 @@ import {
   getPlan,
   isMetric,
   type Limits,
-  type LimitValue,
   METRICS,
   type Metric,
   type Plan,
 } from './plans.js';
+import { type StartPhase, startNow } from './start.js';
 
 export type SubscriptionRow = typeof subscriptions.$inferSelect;
 export type LimitGrantRow = typeof limitGrants.$inferSelect;
 
-/** What a workspace may use right now: its plan, the intro period and admin grants applied. */
+/** What a workspace may use right now: its plan, its start (trial, steps) and admin grants applied. */
 export interface Entitlements {
   plan: Plan;
   subscription: SubscriptionRow | undefined;
   limits: Limits;
-  /** Set while the plan's more generous start applies. */
-  intro: { until: Date } | undefined;
+  /** The trial or step of the plan's start in force now (see `Plan.start`). */
+  phase: StartPhase | undefined;
+  /** The whole published start of this workspace (empty when the plan has none). */
+  schedule: StartPhase[];
   grants: LimitGrantRow[];
   period: Period;
+  /**
+   * First day whose actions count against this month's limit (`YYYY-MM-DD`): the period start, or
+   * the day the trial ended when that was this month, so trial use does not eat the free allowance.
+   */
+  countFrom: string;
 }
 
 export interface UsageSummary extends Entitlements {
@@ -130,29 +137,25 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       this.grants(workspaceId, { activeOnly: true }),
     ]);
     const plan = this.planFor(subscription, now);
-    const limits = { ...plan.limits };
-    let intro: Entitlements['intro'];
-    if (plan.intro) {
-      const until = new Date(workspace.createdAt.getTime() + plan.intro.days * 86_400_000);
-      if (until.getTime() > now.getTime()) {
-        intro = { until };
-        for (const [metric, value] of Object.entries(plan.intro.limits) as [Metric, LimitValue][]) {
-          const base = limits[metric];
-          limits[metric] = base === null || value === null ? null : Math.max(base, value);
-        }
-      }
-    }
+    const { phase, schedule, trialEnd } = startNow(plan, workspace.createdAt, now);
+    const limits = { ...(phase?.limits ?? plan.limits) };
     for (const grant of grants) {
       if (isMetric(grant.metric)) limits[grant.metric] = addLimit(limits[grant.metric], grant.amount);
     }
-    return { plan, subscription, limits, intro, grants, period: monthPeriod(now) };
+    const period = monthPeriod(now);
+    const trialEndDay =
+      trialEnd && trialEnd.getTime() <= now.getTime() ? trialEnd.toISOString().slice(0, 10) : '';
+    // Trial usage does not eat into the first post-trial month (ISO days compare as strings).
+    const countFrom = [period.start, trialEndDay].sort().at(-1) ?? period.start;
+    return { plan, subscription, limits, phase, schedule, grants, period, countFrom };
   }
 
-  async actionsUsed(workspaceId: string, period: Period): Promise<number> {
+  /** Actions since `from` (`YYYY-MM-DD`, see `Entitlements.countFrom`). */
+  async actionsUsed(workspaceId: string, from: string): Promise<number> {
     const [row] = await this.deps.db
       .select({ calls: sum(usageCounters.calls) })
       .from(usageCounters)
-      .where(and(eq(usageCounters.workspaceId, workspaceId), sql`${usageCounters.day} >= ${period.start}`))
+      .where(and(eq(usageCounters.workspaceId, workspaceId), sql`${usageCounters.day} >= ${from}`))
       .limit(1);
     return Number(row?.calls ?? 0);
   }
@@ -168,7 +171,7 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   async summary(workspaceId: string): Promise<UsageSummary> {
     const ent = await this.entitlements(workspaceId);
     const [actions, accountsCount] = await Promise.all([
-      this.actionsUsed(workspaceId, ent.period),
+      this.actionsUsed(workspaceId, ent.countFrom),
       this.accountsUsed(workspaceId),
     ]);
     return { ...ent, used: { actions, accounts: accountsCount } };
@@ -180,16 +183,16 @@ export class EntitlementService implements QuotaGate, AccountLimits {
     const ent = await this.entitlements(principal.workspaceId);
     const limit = ent.limits.actions;
     if (limit === null) return { allowed: true };
-    const used = await this.cachedUsage(this.usageCache, principal.workspaceId, ent.period, () =>
-      this.actionsUsed(principal.workspaceId, ent.period),
+    const used = await this.cachedUsage(this.usageCache, principal.workspaceId, ent.countFrom, () =>
+      this.actionsUsed(principal.workspaceId, ent.countFrom),
     );
     if (used >= limit) return { allowed: false, message: this.actionsMessage(ent, limit) };
     // The free allowance belongs to the person at the AI provider, not to a sign-up: several hub
     // accounts used from one ChatGPT account share it.
     if (ent.plan.priceMonthly === 0 && principal.aiSubject) {
       const caller = usageCaller(principal);
-      const byCaller = await this.cachedUsage(this.callerCache, caller, ent.period, () =>
-        this.deps.usage.callerTotal(caller, ent.period.start),
+      const byCaller = await this.cachedUsage(this.callerCache, caller, ent.countFrom, () =>
+        this.deps.usage.callerTotal(caller, ent.countFrom),
       );
       if (byCaller >= limit) return { allowed: false, message: this.actionsMessage(ent, limit) };
       this.bump(this.callerCache, caller);
@@ -209,14 +212,15 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   private async cachedUsage(
     cache: Map<string, { at: number; period: string; actions: number }>,
     key: string,
-    period: Period,
+    /** Where counting starts; a new month or the end of the trial starts a new count. */
+    from: string,
     load: () => Promise<number>,
   ): Promise<number> {
     const now = Date.now();
     const hit = cache.get(key);
-    if (hit && hit.period === period.start && now - hit.at < CACHE_MS) return hit.actions;
+    if (hit && hit.period === from && now - hit.at < CACHE_MS) return hit.actions;
     const actions = await load();
-    cache.set(key, { at: now, period: period.start, actions });
+    cache.set(key, { at: now, period: from, actions });
     if (cache.size > 10_000) cache.delete(cache.keys().next().value!);
     return actions;
   }
