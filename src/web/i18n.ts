@@ -4,6 +4,7 @@ import { authEn, authRu } from './i18n/auth.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
+import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
 
 export type Locale = 'ru' | 'en';
@@ -186,6 +187,7 @@ const coreEn = {
 const en = {
   ...coreEn,
   ...siteEn,
+  ...seoEn,
   ...appEn,
   ...authEn,
   ...connectEn,
@@ -376,6 +378,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
 const ru: Record<Key, string> = {
   ...coreRu,
   ...siteRu,
+  ...seoRu,
   ...appRu,
   ...authRu,
   ...connectRu,

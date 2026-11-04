@@ -13,6 +13,18 @@ import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
+import { ARTICLES } from './seo/articles.js';
+import { clientGuidePath } from './seo/client-pages.js';
+import { OG_IMAGE_PATH } from './seo/og-image.js';
+import {
+  breadcrumbs,
+  faqPage,
+  type JsonLd,
+  organization,
+  softwareApplication,
+  website,
+} from './seo/structured-data.js';
+import { alternates, localizedPath, OG_LOCALE, SITE_LOCALES } from './seo/urls.js';
 import { PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
 import {
   Brand,
@@ -118,6 +130,12 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href="/docs">{t('site.nav.docs')}</a>
           </div>
           <div>
+            <h4>{t('site.footer.resources')}</h4>
+            <a href="/guides/what-is-mcp">{t('site.nav.whatIsMcp')}</a>
+            <a href="/faq">{t('site.nav.faq')}</a>
+            <a href="/compare">{t('site.nav.compare')}</a>
+          </div>
+          <div>
             <h4>{t('site.footer.account')}</h4>
             {ctx.user ? (
               <a href="/app">{t('site.cta.dashboard')}</a>
@@ -152,10 +170,32 @@ export const SiteLayout: FC<{
   title: string;
   description: string;
   current: Section;
+  /** The page's path without the language parameter; canonical and hreflang links derive from it. */
   canonicalPath: string;
+  /** schema.org data describing the page. */
+  jsonLd?: JsonLd[];
+  ogType?: 'website' | 'article';
+  /** Kept out of search results (e.g. a service that cannot be connected on this server). */
+  noindex?: boolean;
   children?: Child;
-}> = ({ ctx, title, description, current, canonicalPath, children }) => (
-  <Doc title={title} lang={ctx.lang} description={description} canonical={`${ctx.publicUrl}${canonicalPath}`}>
+}> = ({ ctx, title, description, current, canonicalPath, jsonLd, ogType, noindex, children }) => (
+  <Doc
+    title={title}
+    lang={ctx.lang}
+    description={description}
+    canonical={`${ctx.publicUrl}${localizedPath(canonicalPath, ctx.lang)}`}
+    noindex={noindex}
+    meta={{
+      alternates: noindex ? [] : alternates(ctx.publicUrl, canonicalPath),
+      ogLocale: OG_LOCALE[ctx.lang],
+      ogLocaleAlternates: SITE_LOCALES.filter((l) => l !== ctx.lang).map((l) => OG_LOCALE[l]),
+      ogType: ogType ?? 'website',
+      image: `${ctx.publicUrl}${OG_IMAGE_PATH}`,
+      imageAlt: ctx.t('site.footer.tagline'),
+      jsonLd: jsonLd ?? [],
+      verification: ctx.verification,
+    }}
+  >
     <a class="skip" href="#main">
       {ctx.t('ui.skip')}
     </a>
@@ -469,6 +509,12 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       description={t('landing.description')}
       current="home"
       canonicalPath="/"
+      jsonLd={[
+        organization(ctx.publicUrl, ctx.supportEmail),
+        website(ctx.publicUrl, t('landing.description'), ctx.lang),
+        productLd(ctx, t('landing.description')),
+        faqPage(faqItems(t, LANDING_FAQ)),
+      ]}
     >
       <section class="hero">
         <div class="wrap">
@@ -791,7 +837,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
           <div class="section-head">
             <h2>{t('landing.faq.title')}</h2>
           </div>
-          <Faq t={t} keys={['mcp', 'why', 'secrets', 'action', 'limit', 'custom', 'delete']} />
+          <Faq t={t} keys={LANDING_FAQ} />
         </div>
       </section>
 
@@ -824,6 +870,20 @@ type FaqKey =
   | 'upgrade'
   | 'many'
   | 'jobs';
+
+const LANDING_FAQ: FaqKey[] = ['mcp', 'why', 'secrets', 'action', 'limit', 'custom', 'delete'];
+const PRICING_FAQ: FaqKey[] = ['action', 'reset', 'limit', 'upgrade', 'many', 'jobs'];
+
+const faqItems = (t: Translate, keys: FaqKey[]) =>
+  keys.map((key) => ({ q: t(`faq.${key}.q`), a: t(`faq.${key}.a`) }));
+
+/** schema.org data of the product with its plans (landing and pricing pages). */
+const productLd = (ctx: PageCtx, description: string): JsonLd =>
+  softwareApplication(ctx.publicUrl, {
+    description,
+    plans: PLANS,
+    planName: (plan) => ctx.t(`plan.${plan.id}.name` as 'plan.free.name'),
+  });
 
 const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
   <div>
@@ -862,6 +922,14 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
       description={t('pricing.description')}
       current="pricing"
       canonicalPath="/pricing"
+      jsonLd={[
+        breadcrumbs(ctx.publicUrl, [
+          { name: t('crumb.home'), path: localizedPath('/', ctx.lang) },
+          { name: t('site.nav.pricing'), path: localizedPath('/pricing', ctx.lang) },
+        ]),
+        productLd(ctx, t('pricing.description')),
+        faqPage(faqItems(t, PRICING_FAQ)),
+      ]}
     >
       <section class="section">
         <div class="wrap">
@@ -956,7 +1024,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div class="section-head">
             <h2>{t('pricing.faq')}</h2>
           </div>
-          <Faq t={t} keys={['action', 'reset', 'limit', 'upgrade', 'many', 'jobs']} />
+          <Faq t={t} keys={PRICING_FAQ} />
         </div>
       </section>
     </SiteLayout>
@@ -1053,7 +1121,12 @@ export interface ServiceDetail extends PublicService {
 const connectHref = (ctx: PageCtx, path: string) =>
   ctx.user ? path : `/signup?next=${encodeURIComponent(path)}`;
 
-export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = ({ ctx, service }) => {
+export const ServiceDetailPage: FC<{
+  ctx: PageCtx;
+  service: ServiceDetail;
+  /** Links to the service's page per AI app ("Use Gmail with Claude, ChatGPT, …"). */
+  useWith?: Child;
+}> = ({ ctx, service, useWith }) => {
   const { t } = ctx;
   const meta = serviceMeta(service.id);
   const reads = service.actions.filter((a) => a.risk === 'read').length;
@@ -1075,6 +1148,13 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
       description={blurb(ctx.lang, service)}
       current="services"
       canonicalPath={`/services/${service.id}`}
+      jsonLd={[
+        breadcrumbs(ctx.publicUrl, [
+          { name: t('crumb.home'), path: localizedPath('/', ctx.lang) },
+          { name: t('site.nav.services'), path: localizedPath('/services', ctx.lang) },
+          { name: service.name, path: localizedPath(`/services/${service.id}`, ctx.lang) },
+        ]),
+      ]}
     >
       <section class="section svc-page">
         <div class="wrap">
@@ -1170,6 +1250,7 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
               </table>
             </div>
           </div>
+          {useWith}
         </div>
       </section>
     </SiteLayout>
@@ -1180,16 +1261,20 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
 // Docs: connecting AI clients
 // ---------------------------------------------------------------------------
 
-export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; headingLevel?: 2 | 3 }> = ({
-  ctx,
-  mcpUrl,
-  idPrefix,
-}) => {
+export const ClientGuides: FC<{
+  ctx: PageCtx;
+  mcpUrl: string;
+  idPrefix: string;
+  headingLevel?: 2 | 3;
+  /** Link each client to its own guide page (the public docs). */
+  guideLinks?: boolean;
+}> = ({ ctx, mcpUrl, idPrefix, guideLinks }) => {
   const { t, lang } = ctx;
   return (
     <>
       {CLIENT_GUIDES.map((g) => {
         const install = g.install?.(mcpUrl);
+        const guidePath = guideLinks ? clientGuidePath(g.id) : undefined;
         return (
           <section class="guide" id={g.id}>
             <h2>
@@ -1217,6 +1302,13 @@ export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; 
                 </li>
               ))}
             </ol>
+            {guidePath ? (
+              <p class="small">
+                <a href={localizedPath(guidePath, lang)}>
+                  {t('guide.full')}: {clientName(g, lang)} <Icon name="arrow" />
+                </a>
+              </p>
+            ) : null}
           </section>
         );
       })}
@@ -1265,6 +1357,12 @@ export const DocsPage: FC<{
             <a href="#custom">{t('docs.custom')}</a>
             <a href="#safety">{t('docs.safety')}</a>
             <a href="#api">{t('docs.api')}</a>
+            <span class="group">{t('site.nav.guides')}</span>
+            {ARTICLES.map((a) => (
+              <a href={localizedPath(`/guides/${a.slug}`, lang)}>{a.body[lang].h1}</a>
+            ))}
+            <a href={localizedPath('/faq', lang)}>{t('site.nav.faq')}</a>
+            <a href={localizedPath('/compare', lang)}>{t('site.nav.compare')}</a>
           </nav>
           <div>
             <section class="guide" id="url">
@@ -1274,7 +1372,7 @@ export const DocsPage: FC<{
               <CopyField t={t} id="docs-mcp-url" value={ctx.mcpUrl} label={t('home.mcpUrl')} />
               <p class="hint">{t('docs.urlHint')}</p>
             </section>
-            <ClientGuides ctx={ctx} mcpUrl={ctx.mcpUrl} idPrefix="docs" />
+            <ClientGuides ctx={ctx} mcpUrl={ctx.mcpUrl} idPrefix="docs" guideLinks />
             <section class="guide" id="check">
               <h2>{t('docs.check')}</h2>
               <p>{t('docs.check.text')}</p>

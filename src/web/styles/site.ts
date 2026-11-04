@@ -267,7 +267,7 @@ html:not(.js) .when-year{display:none}
 
 /* Footer */
 .site-footer{border-top:1px solid var(--border);padding:56px 0 40px;margin-top:32px}
-.footer-grid{display:grid;grid-template-columns:1.6fr repeat(3,1fr);gap:32px}
+.footer-grid{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:32px}
 .footer-grid h4{font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:4px 0 14px}
 .footer-grid a{display:block;color:var(--text);text-decoration:none;font-size:14px;padding:4px 0}
 .footer-grid a:hover{color:var(--accent-ink)}
@@ -292,4 +292,13 @@ details.more-ways{margin-top:14px}
   .compare thead th:first-child{background:var(--bg-subtle)}
   .compare tr.group th{position:static;box-shadow:none}
 }
+/* Docs and search pages (src/web/seo-pages.tsx) */
+.card.guide{padding:24px;margin:0;border-bottom:1px solid var(--border)}
+.card.guide h2,.step-card-plain h2{display:block;font-size:18px}
+.compare.vs th,.compare.vs td{text-align:left}
+.compare.vs td:first-child{font-weight:560}
+.faq-group{margin:0 0 32px}
+.faq-group h2{margin:0 0 8px}
+.prose .crumbs,.guide .crumbs{margin-bottom:16px}
+.wide-cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
 `;

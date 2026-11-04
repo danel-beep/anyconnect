@@ -89,6 +89,9 @@ const EnvSchema = z.object({
   ADMIN_SESSION_HOURS: z.coerce.number().int().min(1).max(720).default(8),
   /** Contact address shown on the website and in the legal pages. */
   SUPPORT_EMAIL: optionalString,
+  /** Ownership tokens of Google Search Console and Bing Webmaster Tools (meta tag method). */
+  GOOGLE_SITE_VERIFICATION: optionalString,
+  BING_SITE_VERIFICATION: optionalString,
   /** Requests per minute one IP address may make to /mcp without signing in. */
   MCP_ANONYMOUS_RATE_LIMIT: z.coerce.number().int().min(1).default(30),
   /** Default size budget of one tool result, in tokens (larger results are trimmed with a note). */
@@ -168,6 +171,8 @@ export interface AppConfig {
     adminAllowedIps: string[];
     adminSessionMaxAgeMs: number;
     supportEmail: string | undefined;
+    /** Search console ownership tokens, rendered as meta tags on public pages. */
+    verification: { google: string | undefined; bing: string | undefined };
     /** "Sign in with Google": absent when no Google OAuth client is configured. */
     google: { clientId: string; clientSecret: string | undefined } | undefined;
   };
@@ -340,6 +345,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       adminAllowedIps: adminAllowedIps(env.ADMIN_ALLOWED_IPS),
       adminSessionMaxAgeMs: env.ADMIN_SESSION_HOURS * 3_600_000,
       supportEmail: env.SUPPORT_EMAIL,
+      verification: { google: env.GOOGLE_SITE_VERIFICATION, bing: env.BING_SITE_VERIFICATION },
       google: googleLogin(env, source),
     },
     tools: {

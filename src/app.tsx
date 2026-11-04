@@ -13,12 +13,14 @@ import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { savedLocale } from './routes/page-helpers.js';
 import { securityRoutes } from './routes/security.js';
+import { seoRoutes } from './routes/seo.js';
 import { siteRoutes } from './routes/site.js';
 import { webRoutes } from './routes/web.js';
 import type { Services } from './services.js';
 import { pageSecurityHeaders } from './web/http.js';
 import { DEFAULT_LOCALE, translator } from './web/i18n.js';
 import { ErrorPage } from './web/pages.js';
+import { LANG_PARAM, parseLocale } from './web/seo/urls.js';
 
 export function createApp(services: Services) {
   const app = new Hono<AppEnv>();
@@ -26,7 +28,9 @@ export function createApp(services: Services) {
   app.use('*', async (c, next) => {
     const started = performance.now();
     c.set('services', services);
-    const locale = savedLocale(c) ?? DEFAULT_LOCALE;
+    // ?lang= opens a page in that language for this request (search engines, shared links); the
+    // RU/EN switch stores a choice in a cookie.
+    const locale = parseLocale(c.req.query(LANG_PARAM)) ?? savedLocale(c) ?? DEFAULT_LOCALE;
     c.set('locale', locale);
     c.set('t', translator(locale));
     await next();
@@ -51,6 +55,7 @@ export function createApp(services: Services) {
   });
 
   app.route('/', siteRoutes());
+  app.route('/', seoRoutes());
   app.route('/', oauthRoutes());
   app.route('/', loginRoutes());
   app.route('/', securityRoutes());

@@ -412,11 +412,13 @@ HTTP — `src/routes/login.tsx` и `src/routes/security.tsx`.
 копирование, фильтр каталога и подтверждения. CSP строгая: `script-src 'self'`, шрифты и стили
 свои. Тексты — в `src/web/i18n/` (EN и RU). Аудитория международная, поэтому по умолчанию сайт на
 английском (`DEFAULT_LOCALE`), а язык браузера не учитывается: русский включается переключателем
-(cookie `ac_lang`) или в настройках профиля.
+(cookie `ac_lang`) или в настройках профиля. Публичные страницы открываются на русском и по адресу
+с `?lang=ru` — так их видят поисковики (см. `docs/SEO.md`).
 
 | Раздел | Адреса | Код |
 | --- | --- | --- |
 | Сайт | `/`, `/pricing`, `/services`, `/services/:id`, `/docs`, `/privacy`, `/terms` | `routes/site.tsx`, `web/site.tsx` |
+| Документация и поиск | `/docs/:client`, `/services/:id/:client`, `/faq`, `/compare`, `/compare/:slug`, `/guides/:slug`, `/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt` | `routes/seo.tsx`, `web/seo-pages.tsx`, `web/seo/` (см. `docs/SEO.md`) |
 | Вход | `/login`, `/signup`, `/auth/google` (+ `/callback`), второй фактор | `routes/login.tsx`, `core/external-login.ts` |
 | Кабинет | `/app` (обзор), `/app/services`, `/app/accounts/:id`, `/app/apps`, `/app/activity`, `/app/rules`, `/app/billing`, `/app/settings` | `routes/app.tsx`, `web/app.tsx`, `web/account-page.tsx`, `web/rules.tsx` |
 | Админка | `/admin`, `/admin/users`, `/admin/users/:id`, `/admin/audit`, `/admin/system` | `routes/admin.tsx`, `admin/service.ts`, `web/admin.tsx` |
