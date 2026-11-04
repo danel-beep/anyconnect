@@ -118,19 +118,19 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
     const names = tools.map((t) => t.name).sort();
     // With one service everything fits the budget, setup tools included.
     expect(names).toEqual([
-      'anyconnect_add_service',
-      'anyconnect_call_tools',
-      'anyconnect_connect_account',
-      'anyconnect_list_accounts',
-      'anyconnect_remove_account',
-      'anyconnect_remove_service',
-      'anyconnect_services',
-      'anyconnect_test_account',
-      'anyconnect_update_account',
-      'anyconnect_update_settings',
       'demo_account_info',
       'demo_echo',
       'demo_fail',
+      'manyplug_add_service',
+      'manyplug_call_tools',
+      'manyplug_connect_account',
+      'manyplug_list_accounts',
+      'manyplug_remove_account',
+      'manyplug_remove_service',
+      'manyplug_services',
+      'manyplug_test_account',
+      'manyplug_update_account',
+      'manyplug_update_settings',
     ]);
 
     const echo = tools.find((t) => t.name === 'demo_echo')!;
@@ -146,7 +146,7 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
     expect(result.isError).toBeFalsy();
     expect(JSON.stringify(result.content)).toContain('Привет from account \\"Demo — second\\" (second): hi');
 
-    const listed = await client.callTool({ name: 'anyconnect_list_accounts', arguments: {} });
+    const listed = await client.callTool({ name: 'manyplug_list_accounts', arguments: {} });
     expect(JSON.stringify(listed.content)).toContain('second');
     await client.close();
   });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BRAND } from './brand.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
 
 /**
@@ -352,7 +353,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     auth: {
       requireSecondFactor: env.REQUIRE_2FA,
       rpId: new URL(publicUrl).hostname,
-      rpName: 'AnyConnect',
+      rpName: BRAND.name,
       origin: publicUrl,
     },
     oauthApps: hubOAuthApps(env, source),

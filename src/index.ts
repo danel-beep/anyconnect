@@ -28,7 +28,7 @@ async function main() {
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     logger.info(
       { port: info.port, publicUrl: config.publicUrl, mcpUrl: config.mcpUrl, version: services.version },
-      'AnyConnect hub is listening',
+      'Manyplug hub is listening',
     );
   });
 

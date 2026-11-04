@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: anyconnect
+      POSTGRES_DB: manyplug
     ports:
       - "5432:5432"
     volumes:
@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/anyconnect
+      DATABASE_URL: postgres://postgres:postgres@db:5432/manyplug
       PUBLIC_URL: http://localhost:3000
       PORT: "3000"
       NODE_ENV: development

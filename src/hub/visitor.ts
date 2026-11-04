@@ -33,8 +33,8 @@ export function buildVisitorCatalog(setup: ConnectorDefinition): VisitorCatalog 
   return {
     tools: tools.filter((t) => VISITOR_LISTED.has(t.name)),
     instructions: [
-      'AnyConnect is a hub that connects the user’s services and accounts (mail, messengers, calendars, files, tasks and more, several accounts per service) so this assistant can use them.',
-      `The user has not signed in yet. ${SERVICES} shows what can be connected. To connect an account, call ${CONNECT}: the app then asks the user to sign in to AnyConnect (or create an account) and connects. If it does not, ask the user to reconnect the AnyConnect connector in the app settings.`,
+      'Manyplug is a hub that connects the user’s services and accounts (mail, messengers, calendars, files, tasks and more, several accounts per service) so this assistant can use them.',
+      `The user has not signed in yet. ${SERVICES} shows what can be connected. To connect an account, call ${CONNECT}: the app then asks the user to sign in to Manyplug (or create an account) and connects. If it does not, ask the user to reconnect the Manyplug connector in the app settings.`,
       'Never ask for passwords or keys in the chat.',
     ].join('\n'),
   };
@@ -47,16 +47,14 @@ export async function callVisitorTool(
 ): Promise<ToolCallResult> {
   if (name !== SERVICES) {
     // The route answers 401 before this; kept so the handler is safe on its own.
-    return toTransport(
-      errorResult('Sign in to AnyConnect first: reconnect the AnyConnect connector.', 'auth'),
-    );
+    return toTransport(errorResult('Sign in to Manyplug first: reconnect the Manyplug connector.', 'auth'));
   }
   const query = typeof args.query === 'string' ? args.query : undefined;
   const services = await admin.services(undefined, query);
   return toTransport(
     dataResult({
       services: services.map(({ accounts: _accounts, custom: _custom, ...service }) => service),
-      next: `Call ${CONNECT} with a service to connect an account; the user signs in to AnyConnect first.`,
+      next: `Call ${CONNECT} with a service to connect an account; the user signs in to Manyplug first.`,
     }),
   );
 }

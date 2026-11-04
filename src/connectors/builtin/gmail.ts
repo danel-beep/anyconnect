@@ -143,13 +143,13 @@ export default defineConnector({
       ru: {
         setup: {
           oauth: {
-            summary: 'Ваш аккаунт Google. Меньше минуты, AnyConnect не видит ваш пароль.',
+            summary: 'Ваш аккаунт Google. Меньше минуты, Manyplug не видит ваш пароль.',
             steps: [
               {
                 text: 'Нажмите «Подключить» и выберите нужный аккаунт Google.',
               },
               {
-                text: 'Google покажет, что AnyConnect сможет делать с почтой: читать, разбирать, писать черновики и отправлять. Нажмите «Продолжить».',
+                text: 'Google покажет, что Manyplug сможет делать с почтой: читать, разбирать, писать черновики и отправлять. Нажмите «Продолжить».',
               },
               {
                 text: 'Вы вернётесь сюда, и ящик появится под своим адресом. Другие аккаунты Gmail добавляются так же.',
@@ -157,7 +157,7 @@ export default defineConnector({
             ],
             tips: [
               'Переименуйте аккаунты (например, «Работа» и «Личное»), чтобы говорить ИИ, какой из них нужен.',
-              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите AnyConnect в аккаунте Google, раздел «Сторонние приложения и сервисы».',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google, раздел «Сторонние приложения и сервисы».',
             ],
           },
         },
@@ -213,13 +213,13 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary: 'Your Google account. Takes under a minute, and AnyConnect never sees your password.',
+            summary: 'Your Google account. Takes under a minute, and Manyplug never sees your password.',
             steps: [
               {
                 text: 'Click Connect and choose the Google account you want to add.',
               },
               {
-                text: 'Google lists what AnyConnect may do with your mail: read, organise, draft and send. Click Continue.',
+                text: 'Google lists what Manyplug may do with your mail: read, organise, draft and send. Click Continue.',
               },
               {
                 text: 'You are back here and the mailbox appears under its address. Add more Gmail accounts the same way.',
@@ -227,7 +227,7 @@ export default defineConnector({
             ],
             tips: [
               'Rename accounts (for example Work and Personal) so you can tell the AI which one to use.',
-              'To cut access, delete the account here or remove AnyConnect in your Google Account under Third-party connections.',
+              'To cut access, delete the account here or remove Manyplug in your Google Account under Third-party connections.',
             ],
           },
         },

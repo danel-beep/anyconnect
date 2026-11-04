@@ -8,7 +8,7 @@ import type { OAuthServer } from '../oauth/server.js';
 import type { ApiTokenService } from './api-tokens.js';
 import type { Principal } from './principal.js';
 
-const PRINCIPAL = 'anyconnect.principal';
+const PRINCIPAL = 'manyplug.principal';
 
 /**
  * Accepts both kinds of bearer tokens the hub issues: OAuth access tokens (AI apps such as

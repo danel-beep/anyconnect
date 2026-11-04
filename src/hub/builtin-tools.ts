@@ -1,7 +1,8 @@
+import { BRAND } from '../brand.js';
 import type { CatalogTool, ToolAnnotations } from './catalog-types.js';
 
-/** The hub's own tools. Their names start with `anyconnect_`, which no connector can use. */
-export const BUILTIN_PREFIX = 'anyconnect_';
+/** The hub's own tools. Their names start with `manyplug_`, which no connector can use. */
+export const BUILTIN_PREFIX = `${BRAND.slug}_`;
 
 export type BuiltinToolId = 'list_accounts' | 'search_tools' | 'describe_tool' | 'call_tool' | 'call_tools';
 
@@ -42,7 +43,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolId, CatalogTool> = {
     name: `${BUILTIN_PREFIX}search_tools`,
     title: 'Find tools',
     description:
-      'Finds tools of the connected services for a task, e.g. "send telegram message" or "unpaid invoices stripe". Returns the best matches with their input schemas, so you can usually call one right away with anyconnect_call_tool.',
+      'Finds tools of the connected services for a task, e.g. "send telegram message" or "unpaid invoices stripe". Returns the best matches with their input schemas, so you can usually call one right away with manyplug_call_tool.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -60,7 +61,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolId, CatalogTool> = {
     name: `${BUILTIN_PREFIX}describe_tool`,
     title: 'Describe a tool',
     description:
-      'Returns the full description and input schema of tools by name (found with anyconnect_search_tools).',
+      'Returns the full description and input schema of tools by name (found with manyplug_search_tools).',
     inputSchema: {
       type: 'object',
       properties: { names: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 10 } },
@@ -74,7 +75,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolId, CatalogTool> = {
     name: `${BUILTIN_PREFIX}call_tool`,
     title: 'Call a tool',
     description:
-      'Calls any tool of the connected services by name (found with anyconnect_search_tools) with its arguments.',
+      'Calls any tool of the connected services by name (found with manyplug_search_tools) with its arguments.',
     inputSchema: {
       type: 'object',
       properties: {

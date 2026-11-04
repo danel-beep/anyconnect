@@ -1,4 +1,4 @@
-# AnyConnect — notes for coding agents
+# Manyplug — notes for coding agents
 
 Cloud MCP hub: AI clients (Claude, ChatGPT, Claude Code) connect once over OAuth and get tools for
 every connected service *account* (several accounts per service). TypeScript, Node 22+, Hono,
@@ -25,7 +25,7 @@ develop further. In practice:
 - `npm run dev` — run with reload (needs Postgres; `docker compose up -d db`)
 - `npm run check` — lint (Biome) + typecheck (TypeScript 7) + tests (Vitest)
 - `npm test` — integration tests need Postgres at `TEST_DATABASE_URL`
-  (default `postgres://postgres@localhost:5432/anyconnect_test`); files run sequentially
+  (default `postgres://postgres@localhost:5432/manyplug_test`); files run sequentially
 - `npm run db:generate` — create a migration after editing `src/db/schema.ts`; commit `drizzle/`
 - `npm run cli -- help` — admin CLI
 
@@ -47,4 +47,7 @@ develop further. In practice:
 - Secrets only via env vars. Credentials are encrypted with `SecretBox` (AAD = account id).
   Tokens are stored as SHA-256 hashes. Never log arguments, tokens or credentials.
 - Imports use `.js` extensions (NodeNext). Validate external input with zod.
+- The product name lives in `src/brand.ts` (`BRAND.name` / `BRAND.slug`); use it in new strings and
+  identifiers. The product was called AnyConnect until Nov 2026: crypto key-derivation labels, the
+  migration lock and Render resource names keep that name on purpose (`LEGACY_SLUGS`).
 - Tests: `test/helpers.ts` starts a real hub on a random port; `TestBrowser` walks login/consent.

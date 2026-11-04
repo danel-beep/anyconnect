@@ -86,7 +86,7 @@ export function toTransport(result: ExecResult): ToolCallResult {
 }
 
 /** `_meta` key set on results that carry third-party content. */
-export const UNTRUSTED_META = 'anyconnect/untrusted';
+export const UNTRUSTED_META = 'manyplug/untrusted';
 
 export function isUntrusted(result: ToolCallResult): boolean {
   return (result._meta as Record<string, unknown> | undefined)?.[UNTRUSTED_META] === true;

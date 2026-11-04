@@ -348,8 +348,8 @@ export default defineConnector({
               },
             ],
             tips: [
-              'Рабочий аккаунт: если Microsoft пишет, что нужно одобрение администратора, попросите IT-отдел разрешить AnyConnect.',
-              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите AnyConnect на account.microsoft.com → «Конфиденциальность» → «Приложения и службы».',
+              'Рабочий аккаунт: если Microsoft пишет, что нужно одобрение администратора, попросите IT-отдел разрешить Manyplug.',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug на account.microsoft.com → «Конфиденциальность» → «Приложения и службы».',
             ],
           },
         },
@@ -450,8 +450,8 @@ export default defineConnector({
               },
             ],
             tips: [
-              'Work accounts: if Microsoft says an admin must approve the app, ask your IT admin to allow AnyConnect.',
-              'To cut access, delete the account here or remove AnyConnect at account.microsoft.com → Privacy → Apps and services.',
+              'Work accounts: if Microsoft says an admin must approve the app, ask your IT admin to allow Manyplug.',
+              'To cut access, delete the account here or remove Manyplug at account.microsoft.com → Privacy → Apps and services.',
             ],
           },
         },

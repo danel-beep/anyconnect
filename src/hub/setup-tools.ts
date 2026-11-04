@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BRAND, LEGACY_SLUGS } from '../brand.js';
 import type {
   ActionContext,
   ActionDefinition,
@@ -14,9 +15,9 @@ import type { Principal } from '../core/principal.js';
 import type { WorkspaceAdmin } from '../core/workspace-admin.js';
 
 /**
- * The hub's own setup tools (`anyconnect_*`): after connecting the hub once, the user manages
+ * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
  * everything else from their AI assistant — connect accounts, add services, rename, disable tools,
- * change settings. They form the connector `anyconnect`, whose actions run on the workspace instead
+ * change settings. They form the connector `manyplug`, whose actions run on the workspace instead
  * of an account, so they go through the same executor stages as every other call: audit, access
  * rules, confirmation, duplicate protection.
  *
@@ -27,7 +28,11 @@ import type { WorkspaceAdmin } from '../core/workspace-admin.js';
  * not be able to lift its own restrictions.
  */
 
-export const SETUP_CONNECTOR_ID = 'anyconnect';
+export const SETUP_CONNECTOR_ID = BRAND.slug;
+
+/** Whether a connector id is the hub's own setup connector (also under the product's former name). */
+export const isSetupConnector = (id: string): boolean =>
+  id === SETUP_CONNECTOR_ID || LEGACY_SLUGS.includes(id);
 
 /** What setup actions run with (instead of an account's connector context). */
 export interface SetupContext {
@@ -80,7 +85,7 @@ const accountView = (a: {
 });
 
 const NEW_TOOLS_HINT =
-  'New tools work right away through anyconnect_search_tools and anyconnect_call_tool; some apps show them in their tool list only after reconnecting.';
+  'New tools work right away through manyplug_search_tools and manyplug_call_tool; some apps show them in their tool list only after reconnecting.';
 
 export const SETUP_ACTIONS: ActionDefinition[] = [
   setupAction({
@@ -95,7 +100,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       const services = await ctx.admin.services(ctx.principal.workspaceId, query);
       return {
         services,
-        hint: 'Connect one with anyconnect_connect_account. Any other MCP server can be added with anyconnect_add_service.',
+        hint: 'Connect one with manyplug_connect_account. Any other MCP server can be added with manyplug_add_service.',
       };
     },
   }),
@@ -117,7 +122,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       return {
         url: link.url,
         method: link.method,
-        instructions: `Ask the user to open the link and finish there${link.method === 'oauth' ? ' (sign in with the provider)' : ''}. Then check with anyconnect_list_accounts. ${NEW_TOOLS_HINT}`,
+        instructions: `Ask the user to open the link and finish there${link.method === 'oauth' ? ' (sign in with the provider)' : ''}. Then check with manyplug_list_accounts. ${NEW_TOOLS_HINT}`,
       };
     },
   }),
@@ -159,7 +164,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
         ok: test.ok,
         ...(test.message ? { message: test.message } : {}),
         ...(test.identity ? { identity: test.identity } : {}),
-        ...(test.ok ? {} : { hint: 'Reconnect it with anyconnect_connect_account and "reconnect".' }),
+        ...(test.ok ? {} : { hint: 'Reconnect it with manyplug_connect_account and "reconnect".' }),
       };
     },
   }),
@@ -201,7 +206,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
         : await ctx.admin.addService(ctx.principal.workspaceId, { kind: 'manifest', manifest: manifest! });
       return {
         added: { service: view.connectorId, name: view.name, auth: view.auth, tools: view.tools },
-        next: `Connect an account: anyconnect_connect_account with service "${view.connectorId}".`,
+        next: `Connect an account: manyplug_connect_account with service "${view.connectorId}".`,
       };
     },
   }),
@@ -248,7 +253,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
 /** The setup tools as a connector, so the catalog and the executor treat them like any other. */
 export const SETUP_CONNECTOR: ConnectorDefinition = {
   id: SETUP_CONNECTOR_ID,
-  name: 'AnyConnect',
+  name: BRAND.name,
   description: 'Setting up this hub: services, accounts and settings.',
   version: '1.0.0',
   config: z.object({}),

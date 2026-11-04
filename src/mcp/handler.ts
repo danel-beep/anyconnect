@@ -8,6 +8,7 @@ import {
   McpServer,
   type ServerContext,
 } from '@modelcontextprotocol/server';
+import { BRAND } from '../brand.js';
 import type { ConnectorDefinition } from '../connectors/sdk.js';
 import { principalFromAuthInfo } from '../core/auth.js';
 import { aiSubjectFromMeta } from '../core/principal.js';
@@ -82,8 +83,8 @@ type ToolCaller = (
 ) => Promise<ToolCallResult>;
 
 const SERVER_INFO = {
-  name: 'anyconnect',
-  title: 'AnyConnect',
+  name: BRAND.slug,
+  title: BRAND.name,
   description: 'One hub for all your services and accounts.',
 };
 

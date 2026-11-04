@@ -7,7 +7,7 @@ import { siteEn, siteRu } from './i18n/site.js';
 export type Locale = 'ru' | 'en';
 
 const coreEn = {
-  'login.title': 'Sign in to AnyConnect',
+  'login.title': 'Sign in to Manyplug',
   'login.subtitle': 'One address to connect your services to AI assistants.',
   'login.email': 'Email',
   'login.password': 'Password',
@@ -72,7 +72,7 @@ const coreEn = {
   'codes.hint':
     'Keep them somewhere safe, for example in a password manager. They are shown only once, and each code works once.',
   'codes.done': 'I have saved them',
-  'consent.title': 'Connect {client} to AnyConnect?',
+  'consent.title': 'Connect {client} to Manyplug?',
   'consent.wants': '{client} asks for access to your hub.',
   'consent.access': 'It will be able to:',
   'consent.access.mcp':
@@ -101,7 +101,7 @@ const coreEn = {
   'confirm.none': 'Nothing is waiting for confirmation.',
   'confirm.tg.ask': '🔐 Confirm the action',
   'confirm.tg.scheduled': '⏳ Runs in {seconds} s — you can still cancel',
-  'confirm.tg.linked': 'Done: confirmations from your AnyConnect hub will arrive here.',
+  'confirm.tg.linked': 'Done: confirmations from your Manyplug hub will arrive here.',
   'confirm.tg.linkFailed': 'This link is invalid or expired. Open the hub and create a new one.',
   'confirm.tg.unknown': 'Unknown or foreign request.',
   'confirm.tg.tooLate': 'Already decided or expired.',
@@ -158,7 +158,7 @@ const coreEn = {
   'error.title': 'Something went wrong',
   'error.back': 'Back to home',
   'error.csrf': 'The form expired. Go back, reload the page and try again.',
-  'home.title': 'AnyConnect',
+  'home.title': 'Manyplug',
   'home.mcpUrl': 'MCP server URL',
   'home.mcpUrlHint': 'Paste this URL into your AI app. You will be asked to sign in here and approve access.',
   'home.howClaude': 'Claude: Settings → Connectors → Add custom connector → paste the URL.',
@@ -188,7 +188,7 @@ const en = { ...coreEn, ...siteEn, ...appEn, ...authEn, ...connectEn, ...account
 export type Key = keyof typeof en;
 
 const coreRu: Record<keyof typeof coreEn, string> = {
-  'login.title': 'Вход в AnyConnect',
+  'login.title': 'Вход в Manyplug',
   'login.subtitle': 'Один адрес, чтобы подключить ваши сервисы к ИИ‑ассистентам.',
   'login.email': 'Почта',
   'login.password': 'Пароль',
@@ -254,8 +254,8 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'codes.hint':
     'Храните их в надёжном месте, например в менеджере паролей. Коды показываются только один раз, каждый срабатывает один раз.',
   'codes.done': 'Я сохранил коды',
-  'consent.title': 'Подключить {client} к AnyConnect?',
-  'consent.wants': '{client} запрашивает доступ к вашему AnyConnect.',
+  'consent.title': 'Подключить {client} к Manyplug?',
+  'consent.wants': '{client} запрашивает доступ к вашему Manyplug.',
   'consent.access': 'Приложение сможет:',
   'consent.access.mcp':
     'видеть подключённые сервисы и аккаунты (активных: {count}) и вызывать их инструменты от вашего имени',
@@ -283,8 +283,8 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'confirm.none': 'Нет действий, ожидающих подтверждения.',
   'confirm.tg.ask': '🔐 Подтвердите действие',
   'confirm.tg.scheduled': '⏳ Выполнится через {seconds} с — ещё можно отменить',
-  'confirm.tg.linked': 'Готово: подтверждения от AnyConnect будут приходить сюда.',
-  'confirm.tg.linkFailed': 'Ссылка неверная или устарела. Откройте кабинет AnyConnect и создайте новую.',
+  'confirm.tg.linked': 'Готово: подтверждения от Manyplug будут приходить сюда.',
+  'confirm.tg.linkFailed': 'Ссылка неверная или устарела. Откройте кабинет Manyplug и создайте новую.',
   'confirm.tg.unknown': 'Неизвестный или чужой запрос.',
   'confirm.tg.tooLate': 'Уже решено или истекло.',
   'confirm.client': 'Приложение',
@@ -340,7 +340,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'error.title': 'Что-то пошло не так',
   'error.back': 'На главную',
   'error.csrf': 'Форма устарела. Вернитесь назад, обновите страницу и попробуйте ещё раз.',
-  'home.title': 'AnyConnect',
+  'home.title': 'Manyplug',
   'home.mcpUrl': 'Адрес MCP-сервера',
   'home.mcpUrlHint': 'Вставьте этот адрес в ИИ-приложение. Вас попросят войти здесь и разрешить доступ.',
   'home.howClaude': 'Claude: Настройки → Коннекторы → Добавить свой коннектор → вставьте адрес.',

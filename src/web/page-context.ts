@@ -6,7 +6,7 @@ export interface PageCtx {
   lang: Locale;
   /** Current path with query, for the language switch and "next" links. */
   path: string;
-  /** Public origin, e.g. https://anyconnect.app (canonical links, Open Graph). */
+  /** Public origin, e.g. https://manyplug.app (canonical links, Open Graph). */
   publicUrl: string;
   mcpUrl: string;
   user?: { email: string; name: string | null; isAdmin: boolean } | undefined;

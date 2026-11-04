@@ -1,3 +1,4 @@
+import { BRAND, LEGACY_SLUGS } from '../brand.js';
 import { type ConnectorDefinition, connectorText, type UiLanguage } from '../connectors/sdk.js';
 import type { IconName } from './ui.js';
 
@@ -116,7 +117,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
       en: 'Any REST API from a description or OpenAPI, no code.',
     },
   },
-  anyconnect: {
+  manyplug: {
     glyph: 'settings',
     category: 'other',
     blurb: { ru: 'Настройка хаба прямо из чата.', en: 'Set up the hub from the chat.' },
@@ -145,7 +146,7 @@ export const PLANNED_SERVICES: {
 ];
 
 /** Hidden from public listings (test connector, the hub's own setup tools). */
-export const HIDDEN_SERVICES = new Set(['demo', 'anyconnect']);
+export const HIDDEN_SERVICES = new Set(['demo', BRAND.slug, ...LEGACY_SLUGS]);
 
 export function serviceMeta(id: string): ServiceMeta | undefined {
   return SERVICE_META[id];

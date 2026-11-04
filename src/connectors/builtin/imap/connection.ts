@@ -177,7 +177,7 @@ async function connect(login: ImapLogin, resolveHost: ResolveHost): Promise<Imap
     connectionTimeout: CONNECT_TIMEOUT_MS,
     greetingTimeout: CONNECT_TIMEOUT_MS,
     socketTimeout: 5 * 60_000,
-    clientInfo: { name: 'AnyConnect' },
+    clientInfo: { name: 'Manyplug' },
   });
   // Errors after connect are surfaced through the next command; never crash the process.
   client.on('error', () => {});

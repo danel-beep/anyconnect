@@ -311,7 +311,7 @@ const ui: ConnectorUi = {
               text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными календарями.',
             },
             {
-              text: 'Google попросит разрешить AnyConnect смотреть и менять события в календарях. Нажмите «Продолжить».',
+              text: 'Google попросит разрешить Manyplug смотреть и менять события в календарях. Нажмите «Продолжить».',
             },
             {
               text: 'Готово: ИИ видит все календари этого аккаунта, в том числе общие.',
@@ -370,7 +370,7 @@ const ui: ConnectorUi = {
               text: 'Click Connect and choose the Google account whose calendars you want to add.',
             },
             {
-              text: 'Google asks to let AnyConnect see and edit events in your calendars. Click Continue.',
+              text: 'Google asks to let Manyplug see and edit events in your calendars. Click Continue.',
             },
             {
               text: 'Done: the AI sees every calendar of that account, including shared ones.',

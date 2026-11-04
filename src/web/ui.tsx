@@ -1,4 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
+import { BRAND } from '../brand.js';
 import { BRAND_ICONS } from './brand-icons.js';
 import type { Translate } from './i18n.js';
 
@@ -74,7 +75,7 @@ export const Icon: FC<{ name: IconName; class?: string; label?: string }> = ({ n
   </svg>
 );
 
-/** The AnyConnect mark: an open ring (a connection) around a node, on the orange signal square. */
+/** The Manyplug mark: an open ring (a connection) around a node, on the orange signal square. */
 export const BrandMark: FC<{ class?: string }> = ({ class: cls }) => (
   <svg class={`brand-mark ${cls ?? ''}`} viewBox="0 0 32 32" aria-hidden="true">
     <rect class="bm-bg" width="32" height="32" rx="8" />
@@ -85,9 +86,9 @@ export const BrandMark: FC<{ class?: string }> = ({ class: cls }) => (
 );
 
 export const Brand: FC<{ href?: string }> = ({ href = '/' }) => (
-  <a class="brand" href={href} aria-label="AnyConnect">
+  <a class="brand" href={href} aria-label={BRAND.name}>
     <BrandMark />
-    <span>AnyConnect</span>
+    <span>{BRAND.name}</span>
   </a>
 );
 

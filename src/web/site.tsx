@@ -1,5 +1,6 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Limits, type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { BRAND } from '../brand.js';
 import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
 import {
   CATEGORY_ORDER,
@@ -136,7 +137,9 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </div>
         </div>
         <div class="footer-bottom">
-          <span>© {new Date().getUTCFullYear()} AnyConnect</span>
+          <span>
+            © {new Date().getUTCFullYear()} {BRAND.name}
+          </span>
           <span>{t('site.footer.mcp')}</span>
         </div>
       </div>
@@ -533,7 +536,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
                 <circle class="bm-dot" cx="16" cy="16" r="3.4" />
                 <circle class="bm-dot" cx="7" cy="9.6" r="2" />
               </svg>
-              <strong>AnyConnect</strong>
+              <strong>Manyplug</strong>
               <code>/mcp</code>
             </div>
             <div class="hubmap-col right">
@@ -609,7 +612,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
               <p>{t('landing.f.confirm.text')}</p>
               <div class="visual tg">
                 <div class="who">
-                  <BrandIcon slug="telegram" /> AnyConnect
+                  <BrandIcon slug="telegram" /> Manyplug
                 </div>
                 {t('landing.f.confirm.message')}
                 <div class="btns">
@@ -1236,7 +1239,7 @@ export interface LegalDoc {
 export const LegalPage: FC<{ ctx: PageCtx; doc: LegalDoc; path: string }> = ({ ctx, doc, path }) => (
   <SiteLayout
     ctx={ctx}
-    title={`${doc.title} · AnyConnect`}
+    title={`${doc.title} · ${BRAND.name}`}
     description={doc.intro}
     current="legal"
     canonicalPath={path}
