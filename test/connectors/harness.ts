@@ -87,3 +87,44 @@ export function testAccount(
     },
   };
 }
+
+export interface RecordedRequest {
+  method: string;
+  url: URL;
+  headers: Headers;
+  body: string | undefined;
+}
+
+/**
+ * A fake remote service for contract tests: `handler` answers each request (usually from recorded
+ * fixtures) and every request is kept in `calls` for assertions.
+ */
+export function fakeHttp(handler: (req: RecordedRequest) => Response | Promise<Response>): {
+  fetch: FetchLike;
+  calls: RecordedRequest[];
+} {
+  const calls: RecordedRequest[] = [];
+  const fetch: FetchLike = async (input, init) => {
+    const body = init?.body;
+    const req: RecordedRequest = {
+      method: (init?.method ?? 'GET').toUpperCase(),
+      url: new URL(input instanceof Request ? input.url : input.toString()),
+      headers: new Headers(init?.headers),
+      body:
+        typeof body === 'string'
+          ? body
+          : body instanceof Uint8Array
+            ? Buffer.from(body).toString()
+            : undefined,
+    };
+    calls.push(req);
+    return handler(req);
+  };
+  return { fetch, calls };
+}
+
+export const json = (data: unknown, init: ResponseInit = {}) =>
+  new Response(JSON.stringify(data), {
+    ...init,
+    headers: { 'content-type': 'application/json', ...(init.headers as Record<string, string> | undefined) },
+  });
