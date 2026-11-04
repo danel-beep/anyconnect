@@ -17,7 +17,13 @@ const Message = z.object({
   chat: z.object({ id: z.number() }),
 });
 
-const From = z.object({ id: z.number(), username: z.string().optional(), first_name: z.string().optional() });
+const From = z.object({
+  id: z.number(),
+  username: z.string().optional(),
+  first_name: z.string().optional(),
+  /** The language the person's Telegram app is set to (IETF tag, e.g. "en", "ru"). */
+  language_code: z.string().optional(),
+});
 
 /** The subset of a Telegram Update the hub reacts to. */
 export const TelegramUpdate = z.object({

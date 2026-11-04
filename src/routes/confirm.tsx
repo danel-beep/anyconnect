@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { actionText, connectorText } from '../connectors/sdk.js';
 import { getDefaultWorkspace } from '../core/identity.js';
 import { safeEqual } from '../lib/crypto.js';
 import { argumentFields } from '../security/confirmations.js';
@@ -23,21 +22,18 @@ export const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 export async function pendingCallView(c: AppContext, row: PendingCallRow): Promise<PendingCallView> {
   const s = c.get('services');
   const locale = c.get('locale');
-  const [d, connector, account] = await Promise.all([
-    s.confirmations.describe(row),
-    s.connectors.get(row.workspaceId, row.connectorId).catch(() => undefined),
+  const [d, account] = await Promise.all([
+    s.confirmations.describe(row, locale),
     row.accountId ? s.accounts.get(row.workspaceId, row.accountId).catch(() => undefined) : undefined,
   ]);
-  // Service and action in the page language when the connector has texts for it.
-  const action = connector?.actions.find((a) => a.name === row.action);
   return {
     id: row.id,
     status: row.status,
     client: d.client,
     connectorId: row.connectorId,
-    service: connector ? connectorText(connector, locale).name : d.service,
+    service: d.service,
     account: account?.label ?? d.account,
-    action: connector && action ? actionText(connector, action, locale).title : d.action,
+    action: d.action,
     risk: row.risk,
     reason: row.reason ?? undefined,
     fields: argumentFields(s.pendingCalls.args(row)),
@@ -147,7 +143,7 @@ export function confirmRoutes() {
     const auth = await session(c, '/confirm');
     if ('redirect' in auth) return c.redirect(auth.redirect, 303);
     if (!s.telegramBot) return c.redirect('/confirm', 303);
-    const code = await s.notificationChannels.startTelegramLink(auth.user.id);
+    const code = await s.notificationChannels.startTelegramLink(auth.user.id, c.get('locale'));
     const username = await s.telegramBot.getUsername();
     return renderList(c, `https://t.me/${username}?start=${code}`);
   });

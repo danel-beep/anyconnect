@@ -585,6 +585,8 @@ export const notificationChannels = pgTable(
     address: text(),
     /** e.g. the Telegram @username, for display. */
     label: text(),
+    /** Language of the page the chat was linked from; the user's saved language wins over it. */
+    locale: text(),
     /** SHA-256 of the one-time code of a link in progress. */
     linkCodeHash: text(),
     linkExpiresAt: timestamp({ withTimezone: true }),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { argumentFields } from '../src/security/confirmations.js';
+import { argumentFields, pickLocale } from '../src/security/confirmations.js';
 
 describe('arguments on the confirmation page', () => {
   it('shows text as written, plain lists on one line and the rest as JSON', () => {
@@ -30,5 +30,14 @@ describe('arguments on the confirmation page', () => {
     expect(long!.value.endsWith('…')).toBe(true);
     const many = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`f${i}`, i]));
     expect(argumentFields(many)).toHaveLength(30);
+  });
+});
+
+describe('pickLocale', () => {
+  it('takes the first supported language and falls back to English', () => {
+    expect(pickLocale(null, 'ru-RU')).toBe('ru');
+    expect(pickLocale('en', 'ru')).toBe('en');
+    expect(pickLocale(undefined, 'de')).toBe('en');
+    expect(pickLocale()).toBe('en');
   });
 });
