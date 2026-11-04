@@ -78,6 +78,24 @@ describe('config', () => {
     expect(config.trustProxy).toEqual({ hops: 2 });
   });
 
+  it('shares one Google client between sign-in and connected services', () => {
+    const login = { LOGIN_GOOGLE_CLIENT_ID: 'login-id', LOGIN_GOOGLE_CLIENT_SECRET: 'login-secret' };
+    expect(loadConfig({ ...base, ...login }).oauthApps.google).toEqual({
+      clientId: 'login-id',
+      clientSecret: 'login-secret',
+    });
+    // A separate services app wins; a sign-in client without a secret is not used for services.
+    const both = loadConfig({
+      ...base,
+      ...login,
+      OAUTH_APP_GOOGLE_CLIENT_ID: 'svc-id',
+      OAUTH_APP_GOOGLE_CLIENT_SECRET: 'svc-secret',
+    });
+    expect(both.oauthApps.google?.clientId).toBe('svc-id');
+    expect(both.site.google?.clientId).toBe('login-id');
+    expect(loadConfig({ ...base, LOGIN_GOOGLE_CLIENT_ID: 'x' }).oauthApps.google).toBeUndefined();
+  });
+
   it('rejects a public URL with a path', () => {
     expect(() => loadConfig({ ...base, PUBLIC_URL: 'https://hub.example.com/sub' })).toThrow(/origin/);
   });

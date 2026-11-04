@@ -185,6 +185,18 @@ export function readOAuthApps(source: NodeJS.ProcessEnv): AppConfig['oauthApps']
   return apps;
 }
 
+/**
+ * Hub-wide OAuth apps. One Google client can serve both "Sign in with Google" and connecting
+ * Gmail, Calendar and Drive (its redirect URIs include /auth/google/callback and /connect/callback),
+ * so without `OAUTH_APP_GOOGLE_*` the sign-in client (`LOGIN_GOOGLE_*`) is used for services too.
+ */
+function hubOAuthApps(env: Env, source: NodeJS.ProcessEnv): AppConfig['oauthApps'] {
+  const apps = readOAuthApps(source);
+  if (!apps.google && env.LOGIN_GOOGLE_CLIENT_ID && env.LOGIN_GOOGLE_CLIENT_SECRET)
+    apps.google = { clientId: env.LOGIN_GOOGLE_CLIENT_ID, clientSecret: env.LOGIN_GOOGLE_CLIENT_SECRET };
+  return apps;
+}
+
 /** The "Sign in with Google" client: its own variables, else the hub's Google OAuth app. */
 function googleLogin(env: Env, source: NodeJS.ProcessEnv): AppConfig['site']['google'] {
   if (env.LOGIN_GOOGLE_CLIENT_ID)
@@ -316,7 +328,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       rpName: 'AnyConnect',
       origin: publicUrl,
     },
-    oauthApps: readOAuthApps(source),
+    oauthApps: hubOAuthApps(env, source),
     jobs: { enabled: env.JOBS_ENABLED },
   };
 }
