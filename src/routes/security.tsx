@@ -35,11 +35,13 @@ async function renderSecurity(
   const s = c.get('services');
   const userId = session.user.id;
   const recent = isRecentAuth(session.authenticatedAt);
-  const [summary, passkeys, enrollment] = await Promise.all([
+  const [summary, passkeys, enrollment, sessions, channels] = await Promise.all([
     s.secondFactors.summary(userId),
     s.secondFactors.passkeys.list(userId),
     // The pending secret is shown only within the recent-sign-in window, like every change here.
     recent ? s.secondFactors.totp.pendingEnrollment(session.user) : undefined,
+    s.sessions.list(userId),
+    s.telegramBot ? s.notificationChannels.status(userId) : undefined,
   ]);
   const hasFactor = hasSecondFactor(summary);
   return renderInApp(
@@ -70,6 +72,8 @@ async function renderSecurity(
           lastUsedAt: p.lastUsedAt,
           backedUp: p.backedUp,
         })),
+        sessions: sessions.length,
+        ...(channels ? { telegram: { linked: channels.telegram.linked } } : {}),
       }}
     />,
     options.status ?? 200,

@@ -142,7 +142,7 @@ export const siteEn = {
     'Add a private MCP server by its address, or any REST API by its address and key. Both get the same rules as built-in services.',
   'landing.f.chat.title': 'Manage it from the chat',
   'landing.f.chat.text':
-    'Ask the AI to connect a new account, rename it or change when it asks you first. Anything that lowers your protection still waits for your OK.',
+    'Ask the AI to connect a new account, change when it asks you first, give a work app only some accounts or disconnect an old one. Anything that lowers your protection still waits for your OK.',
   'landing.f.chat.prompt': '“Connect my second Gmail and call it Clients”',
   'landing.f.personas.title': 'Different access for different AIs',
   'landing.f.personas.text':
@@ -525,7 +525,7 @@ export const siteRu: Record<SiteKey, string> = {
     'Добавьте закрытый MCP-сервер по адресу или любой REST API по адресу и ключу. Правила для них те же, что у встроенных сервисов.',
   'landing.f.chat.title': 'Управление прямо из чата',
   'landing.f.chat.text':
-    'Попросите ИИ подключить новый аккаунт, переименовать его или изменить, когда он спрашивает вас заранее. Всё, что ослабляет защиту, всё равно ждёт вашего согласия.',
+    'Попросите ИИ подключить новый аккаунт, изменить, когда он спрашивает вас заранее, дать рабочему приложению только часть аккаунтов или отключить старое. Всё, что ослабляет защиту, всё равно ждёт вашего согласия.',
   'landing.f.chat.prompt': '«Подключи мой второй Gmail и назови его Клиенты»',
   'landing.f.personas.title': 'Разный доступ для разных ИИ',
   'landing.f.personas.text': 'Рабочему ассистенту дайте почту и календарь, а личному только чтение.',

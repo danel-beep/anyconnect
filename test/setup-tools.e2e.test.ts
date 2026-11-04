@@ -5,6 +5,7 @@ import { ConnectorRegistry } from '../src/connectors/registry.js';
 import type { Principal } from '../src/core/principal.js';
 import { toolCalls } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
+import { base32Decode, totp } from '../src/lib/totp.js';
 import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
 
 /** Managing the hub from the chat: the `manyplug_*` setup tools run on the workspace. */
@@ -513,6 +514,35 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
       expect(after.apps).toContainEqual(expect.objectContaining({ app: 'Cursor', connected: false }));
       const rules = await hub.services.policies.listRules(workspaceId);
       expect(rules).toContainEqual(expect.objectContaining({ aiClientId: cursor.id, access: 'read' }));
+    });
+  });
+
+  describe('sign-in security from the chat', () => {
+    it('shows two-step sign-in and recovery codes with the pages to change them, read only', async () => {
+      const before = json(await call('manyplug_security'));
+      expect(before.two_step).toMatchObject({ on: false, authenticator_app: false, passkeys: 0 });
+      expect(before.advice[0]).toContain(`${hub.baseUrl}/security`);
+      expect(before.change_at).toEqual({
+        sign_in: `${hub.baseUrl}/security`,
+        browsers: `${hub.baseUrl}/app/settings#sessions`,
+      });
+      // This server has no Telegram bot, so approvals in Telegram are not mentioned.
+      expect(before).not.toHaveProperty('telegram_approvals');
+      expect(before.note).toContain('cannot be changed from the chat');
+
+      const user = (await hub.services.users.get(principal.userId))!;
+      const { totp: authenticator, recoveryCodes } = hub.services.secondFactors;
+      const { secret } = await authenticator.beginEnrollment(user);
+      expect(await authenticator.confirm(user.id, totp(base32Decode(secret), Date.now()))).toBe(true);
+      const codes = await recoveryCodes.regenerate(user.id);
+      for (const code of codes.slice(2)) expect(await recoveryCodes.consume(user.id, code)).toBe(true);
+
+      const after = json(await call('manyplug_security'));
+      expect(after.two_step).toMatchObject({ on: true, authenticator_app: true, recovery_codes_left: 2 });
+      expect(after.advice).toEqual([expect.stringContaining(`${hub.baseUrl}/security#recovery`)]);
+      // Nothing here can be changed from the chat.
+      const catalog = await hub.services.hub.getCatalog(principal);
+      expect(catalog.tools.find((t) => t.name === 'manyplug_security')?.annotations.readOnlyHint).toBe(true);
     });
   });
 });
