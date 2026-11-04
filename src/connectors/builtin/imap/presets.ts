@@ -32,8 +32,28 @@ export const PROVIDERS = {
     savesSentCopy: true,
     appPasswordHelp: 'https://myaccount.google.com/apppasswords',
   },
+  outlook: {
+    label: 'Outlook.com / Microsoft 365',
+    imap: { host: 'outlook.office365.com', port: 993, security: 'tls' },
+    smtp: { host: 'smtp.office365.com', port: 587, security: 'starttls' },
+    savesSentCopy: true,
+  },
+  icloud: {
+    label: 'iCloud Mail',
+    imap: { host: 'imap.mail.me.com', port: 993, security: 'tls' },
+    smtp: { host: 'smtp.mail.me.com', port: 587, security: 'starttls' },
+    savesSentCopy: false,
+    appPasswordHelp: 'https://account.apple.com/account/manage',
+  },
+  fastmail: {
+    label: 'Fastmail',
+    imap: { host: 'imap.fastmail.com', port: 993, security: 'tls' },
+    smtp: { host: 'smtp.fastmail.com', port: 465, security: 'tls' },
+    savesSentCopy: false,
+    appPasswordHelp: 'https://app.fastmail.com/settings/security/apps',
+  },
   yandex: {
-    label: 'Яндекс Почта',
+    label: 'Yandex Mail',
     imap: { host: 'imap.yandex.ru', port: 993, security: 'tls' },
     smtp: { host: 'smtp.yandex.ru', port: 465, security: 'tls' },
     savesSentCopy: false,
@@ -45,26 +65,6 @@ export const PROVIDERS = {
     smtp: { host: 'smtp.mail.ru', port: 465, security: 'tls' },
     savesSentCopy: false,
     appPasswordHelp: 'https://account.mail.ru/user/2-step-auth/passwords',
-  },
-  icloud: {
-    label: 'iCloud Mail',
-    imap: { host: 'imap.mail.me.com', port: 993, security: 'tls' },
-    smtp: { host: 'smtp.mail.me.com', port: 587, security: 'starttls' },
-    savesSentCopy: false,
-    appPasswordHelp: 'https://account.apple.com/account/manage',
-  },
-  outlook: {
-    label: 'Outlook.com / Microsoft 365',
-    imap: { host: 'outlook.office365.com', port: 993, security: 'tls' },
-    smtp: { host: 'smtp.office365.com', port: 587, security: 'starttls' },
-    savesSentCopy: true,
-  },
-  fastmail: {
-    label: 'Fastmail',
-    imap: { host: 'imap.fastmail.com', port: 993, security: 'tls' },
-    smtp: { host: 'smtp.fastmail.com', port: 465, security: 'tls' },
-    savesSentCopy: false,
-    appPasswordHelp: 'https://app.fastmail.com/settings/security/apps',
   },
 } as const satisfies Record<string, ProviderPreset>;
 

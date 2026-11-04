@@ -391,7 +391,7 @@ const DemoWindow: FC<{ t: Translate }> = ({ t }) => (
       <div class="call step s4">
         <span class="dot accent" />
         <span class="args">
-          <b>messages_send</b> slack:team → @ivan
+          <b>messages_send</b> slack:team → @alex
         </span>
         <span class="res wait">{t('landing.demo.confirmed')}</span>
       </div>
@@ -545,7 +545,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
               <div class="node">
                 <Icon name="mail" /> {t('landing.map.imap')}
                 <span class="accs">
-                  <span class="acc">yandex</span>
+                  <span class="acc">fastmail</span>
                 </span>
               </div>
               <div class="node">
@@ -584,7 +584,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
                     <BrandIcon slug="gmail" /> gmail:personal
                   </span>
                   <span class="chip on">
-                    <Icon name="mail" /> imap:yandex
+                    <Icon name="mail" /> imap:fastmail
                   </span>
                   <span class="chip">
                     <BrandIcon slug="googlecalendar" /> gcal:team

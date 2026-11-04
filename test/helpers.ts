@@ -127,7 +127,8 @@ export async function startTestHub(
 
 /** Minimal browser: cookie jar, manual redirects, form posts with an Origin header. */
 export class TestBrowser {
-  private readonly cookies = new Map<string, string>();
+  /** Starts as a visitor who picked Russian with the language switch (tests assert Russian texts). */
+  private readonly cookies = new Map<string, string>([['ac_lang', 'ru']]);
 
   constructor(private readonly origin: string) {}
 
@@ -135,7 +136,7 @@ export class TestBrowser {
     url: string,
     init: { method?: string; form?: Record<string, string>; json?: unknown } = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = { 'accept-language': 'ru' };
+    const headers: Record<string, string> = {};
     if (this.cookies.size) headers.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
     let body: string | undefined;
     if (init.form) {

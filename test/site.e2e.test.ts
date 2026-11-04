@@ -576,6 +576,23 @@ describe('website: public pages', () => {
     expect(evil.headers.get('location')).toBe('/');
   });
 
+  it('speaks English by default, whatever the browser language, until Russian is picked', async () => {
+    const russianBrowser = { 'accept-language': 'ru-RU,ru;q=0.9' };
+    const first = await fetch(`${hub.baseUrl}/`, { headers: russianBrowser });
+    const html = await first.text();
+    expect(html).toContain('<html lang="en"');
+    // No Russian text on the English page (search keywords in attributes stay bilingual).
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/[А-Яа-яЁё]{3}/);
+
+    const picked = await fetch(`${hub.baseUrl}/prefs/lang?to=ru&next=%2F`, {
+      headers: russianBrowser,
+      redirect: 'manual',
+    });
+    const cookie = picked.headers.getSetCookie()[0]!.split(';')[0]!;
+    const russian = await fetch(`${hub.baseUrl}/`, { headers: { ...russianBrowser, cookie } });
+    expect(await russian.text()).toContain('<html lang="ru"');
+  });
+
   it('answers unknown pages with a styled 404 and keeps robots and the sitemap', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     const missing = await fetch(`${hub.baseUrl}/no-such-page`, { headers: { accept: 'text/html' } });

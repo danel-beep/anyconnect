@@ -369,20 +369,11 @@ const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
 
 export type Translate = (key: Key, vars?: Record<string, string | number>) => string;
 
-export function pickLocale(acceptLanguage: string | undefined): Locale {
-  const preferred = (acceptLanguage ?? '')
-    .split(',')
-    .map((part) => {
-      const [tag, q] = part.trim().split(';q=');
-      return { lang: (tag ?? '').toLowerCase().split('-')[0] ?? '', q: q ? Number(q) : 1 };
-    })
-    .sort((a, b) => b.q - a.q);
-  for (const { lang } of preferred) {
-    if (lang === 'ru' || lang === 'uk' || lang === 'be' || lang === 'kk') return 'ru';
-    if (lang === 'en') return 'en';
-  }
-  return 'en';
-}
+/**
+ * The site speaks English unless the visitor picks Russian with the language switch (or saved it
+ * in their settings): the audience is international, so the browser's language does not decide.
+ */
+export const DEFAULT_LOCALE: Locale = 'en';
 
 /**
  * Plural forms in texts: `{n|день|дня|дней}` (Russian: one|few|many) or `{n|day|days}` (English:

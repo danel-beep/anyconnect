@@ -41,7 +41,6 @@ const SLUGS = [
   'youtube',
   'x',
   'perplexity',
-  'vk',
   'protonmail',
   'icloud',
   'confluence',

@@ -35,7 +35,7 @@ const security = z.enum(['tls', 'starttls']);
 
 const Config = z
   .object({
-    email: z.email().describe('Mailbox address, e.g. me@yandex.ru'),
+    email: z.email().describe('Mailbox address, e.g. me@icloud.com'),
     provider: z
       .enum(PROVIDER_IDS)
       .optional()
@@ -210,7 +210,7 @@ export default defineConnector({
   id: 'imap',
   name: 'Email (IMAP/SMTP)',
   description:
-    'Any mailbox over IMAP/SMTP: Gmail, Yandex, Mail.ru, iCloud, Outlook, Fastmail, corporate mail. Search, read, send, reply, forward, move and flag messages.',
+    'Any mailbox over IMAP/SMTP: Gmail, Outlook, iCloud, Fastmail, Yandex, company mail. Search, read, send, reply, forward, move and flag messages.',
   version: '1.0.0',
   homepage: 'https://datatracker.ietf.org/doc/html/rfc9051',
   instructions:
@@ -237,11 +237,11 @@ export default defineConnector({
             placeholder: 'Определить по адресу',
             options: {
               gmail: 'Gmail / Google Workspace',
+              outlook: 'Outlook.com / Microsoft 365',
+              icloud: 'iCloud',
+              fastmail: 'Fastmail',
               yandex: 'Яндекс Почта',
               mailru: 'Mail.ru',
-              icloud: 'iCloud',
-              outlook: 'Outlook.com / Microsoft 365',
-              fastmail: 'Fastmail',
               custom: 'Другой сервер',
             },
           },
@@ -345,11 +345,11 @@ export default defineConnector({
             placeholder: 'Detect from the address',
             options: {
               gmail: 'Gmail / Google Workspace',
+              outlook: 'Outlook.com / Microsoft 365',
+              icloud: 'iCloud',
+              fastmail: 'Fastmail',
               yandex: 'Yandex Mail',
               mailru: 'Mail.ru',
-              icloud: 'iCloud',
-              outlook: 'Outlook.com / Microsoft 365',
-              fastmail: 'Fastmail',
               custom: 'Other server',
             },
           },
