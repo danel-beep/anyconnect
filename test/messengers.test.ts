@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Principal } from '../src/core/principal.js';
@@ -72,7 +73,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   let principal: Principal;
 
   const call = async (tool: string, args: Record<string, unknown>) => {
-    const catalog = await hub.services.hub.getCatalog(principal.workspaceId);
+    const catalog = await hub.services.hub.getCatalog(principal);
     return hub.services.hub.callTool(principal, catalog, tool, args);
   };
   const json = (result: { content: { type: string; text?: string }[]; isError?: boolean }) => {
@@ -176,7 +177,8 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       direction: 'in',
       chat: 'Анна Петрова',
     });
-    expect(json(await call('telegram_search', { query: 'декабрь' })).messages).toHaveLength(0);
+    // Empty lists are left out of results (hub-wide compaction).
+    expect(json(await call('telegram_search', { query: 'декабрь' })).messages).toBeUndefined();
     expect(json(await call('telegram_search', { from: 'анна' })).messages).toHaveLength(2);
     expect(json(await call('telegram_list_chats', { query: 'петров' })).chats).toHaveLength(1);
 
@@ -205,7 +207,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     const second = json(await call('telegram_whats_new', { cursor: first.cursor }));
     expect(second.messages.map((m: { text: string }) => m.text)).toEqual(['второе']);
     const none = json(await call('telegram_whats_new', { cursor: second.cursor }));
-    expect(none.messages).toEqual([]);
+    expect(none.messages).toBeUndefined();
     expect(none.cursor).toBe(second.cursor);
   });
 
@@ -226,11 +228,18 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       reply_parameters: { message_id: 7 },
     });
 
-    // A retry of the same request by the AI client is merged, not sent again.
-    const again = json(
-      await call('telegram_send', { chat: chat.id, text: 'Да, отправлю сегодня', reply_to: incoming.id }),
-    );
-    expect(again).toMatchObject({ status: 'sent', deduplicated: true, id: sent.id });
+    // A retry of the same request by the AI client is caught by the hub's duplicate protection...
+    const again = await call('telegram_send', {
+      chat: chat.id,
+      text: 'Да, отправлю сегодня',
+      reply_to: incoming.id,
+    });
+    expect(again.content[0]).toMatchObject({ text: expect.stringContaining('Not repeated') });
+    // ...and by the outbox itself, which also covers requests that bypass the hub's window.
+    const direct = await hub.services.messaging.service
+      .forAccount(account.id)
+      .send({ chatId: chat.id, text: 'Да, отправлю сегодня', replyTo: incoming.id });
+    expect(direct).toMatchObject({ status: 'sent', deduplicated: true, messageId: sent.id });
     expect(apis.calls.filter((c) => c.path === 'sendMessage')).toHaveLength(1);
 
     const history = json(await call('telegram_read_chat', { chat: chat.id }));
@@ -378,6 +387,37 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       expect(sent.status).toBe('sent');
       const [job] = await hub.services.db.select().from(messengerOutbox);
       expect(job?.newContact).toBe(true);
+    });
+
+    it('serves the shared messages_* tools across Telegram and WhatsApp', async () => {
+      const bot = await addBot();
+      const number = await addNumber();
+      await postTelegram(bot.id, botUpdate(1, 'Когда будет доставка заказа?'));
+      await postWhatsApp(number.id, inbound('wamid.B', 'Доставка сегодня возможна?'));
+
+      const found = json(await call('messages_search', { query: 'доставка' }));
+      expect(found.items).toEqual([
+        expect.objectContaining({ service: 'whatsapp', text: 'Доставка сегодня возможна?', from: 'Иван' }),
+        expect.objectContaining({ service: 'telegram', text: 'Когда будет доставка заказа?' }),
+      ]);
+
+      const chats = JSON.stringify(json(await call('messages_list_chats', {})));
+      expect(chats).toContain('Анна Петрова');
+      expect(chats).toContain('Иван');
+
+      // A first message to a new contact is flagged as dangerous for the confirmation layer.
+      const [row] = await hub.services.db
+        .select()
+        .from(messengerChats)
+        .where(eq(messengerChats.accountId, bot.id));
+      const send = (await hub.services.connectors.get(principal.workspaceId, 'telegram'))!.actions.find(
+        (a) => a.name === 'send',
+      )!;
+      const ctx = { account: { id: bot.id } } as never;
+      expect(await send.assessRisk!({ chat: row!.id, text: 'Привет' }, ctx)).toBeUndefined();
+      expect(await send.assessRisk!({ to: '@someone', text: 'Привет' }, ctx)).toMatchObject({
+        risk: 'dangerous',
+      });
     });
   });
 });

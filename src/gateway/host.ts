@@ -172,7 +172,14 @@ export class SessionHost implements DeliveryExecutor {
   /** Claims the account and connects it with saved state. Exposed for tests. */
   async launch(accountId: string): Promise<boolean> {
     if (this.stopping || this.running.has(accountId)) return false;
-    const token = await this.deps.leases.acquire(accountId);
+    let token: number | undefined;
+    try {
+      token = await this.deps.leases.acquire(accountId);
+    } catch (error) {
+      // The account may have been deleted since the scan; the next scan decides again.
+      this.deps.logger.warn({ err: error, account: accountId }, 'could not claim a messenger account');
+      return false;
+    }
     if (token === undefined) return false;
     const running = this.track(accountId, token);
     running.done = this.connectAndWatch(running);
@@ -313,6 +320,9 @@ export class SessionHost implements DeliveryExecutor {
         failures,
         nextAttemptAt: new Date(Date.now() + delay),
       });
+    } catch (recordError) {
+      // Status could not be saved (database down, account deleted); the lease still goes back.
+      this.deps.logger.warn({ err: recordError, account: accountId }, 'could not record session status');
     } finally {
       await this.deps.leases.release(accountId, running.token).catch(() => {});
     }

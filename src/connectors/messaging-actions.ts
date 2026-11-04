@@ -59,6 +59,23 @@ export function messageItem(message: MessageView) {
   };
 }
 
+/**
+ * Canonical item shapes of the shared `messages.*` capabilities (see `capabilities.ts`): the
+ * unified cross-service tools only keep fields their schema knows, so map what differs.
+ */
+type ChatOut = ReturnType<typeof chatItem>;
+type MessageOut = ReturnType<typeof messageItem>;
+
+const canonicalChat = (chat: ChatOut) => ({ ...chat, kind: chat.kind === 'bot' ? 'direct' : chat.kind });
+
+const canonicalMessage = (message: MessageOut) =>
+  message.attachments
+    ? { ...message, attachments: message.attachments.map((a) => ({ ...a, name: a.name ?? a.kind })) }
+    : message;
+
+/** Hub chat ids look like `cht_…`; anything else passed as `chat` to messages_send is a recipient. */
+const isChatId = (value: string) => /^cht_[0-9a-z]+$/i.test(value);
+
 /** Account config field shared by all messenger connectors. */
 export const pacingConfig = z
   .object({
@@ -111,6 +128,13 @@ export function messengerActions<TConfig, TCredentials>(
         cursor: z.string().max(200).optional().describe('next_cursor from the previous call'),
       }),
       hints: { readOnly: true, idempotent: true, openWorld: false },
+      capability: {
+        id: 'messages.list_chats',
+        mapOutput: (result) => {
+          const { chats, next_cursor } = result as { chats: ChatOut[]; next_cursor?: string };
+          return { items: chats.map(canonicalChat), ...(next_cursor ? { nextCursor: next_cursor } : {}) };
+        },
+      },
       run: async (input, ctx) => {
         const page = await port.forAccount(ctx.account.id).listChats({
           ...(input.query ? { query: input.query } : {}),
@@ -138,6 +162,16 @@ export function messengerActions<TConfig, TCredentials>(
         cursor: z.string().max(200).optional().describe('next_cursor from the previous call'),
       }),
       hints: { readOnly: true, idempotent: true, openWorld: false },
+      capability: {
+        id: 'messages.search',
+        mapOutput: (result) => {
+          const { messages, next_cursor } = result as { messages: MessageOut[]; next_cursor?: string };
+          return {
+            items: messages.map(canonicalMessage),
+            ...(next_cursor ? { nextCursor: next_cursor } : {}),
+          };
+        },
+      },
       run: async (input, ctx) => {
         if (!input.query && !input.chat && !input.from && !input.since && !input.until) {
           throw new ConnectorError(
@@ -174,6 +208,21 @@ export function messengerActions<TConfig, TCredentials>(
         limit: limit(200, 30),
       }),
       hints: { readOnly: true, idempotent: true, openWorld: false },
+      capability: {
+        id: 'messages.read_chat',
+        mapOutput: (result) => {
+          const { chat, messages, next_cursor } = result as {
+            chat: ChatOut;
+            messages: MessageOut[];
+            next_cursor?: string;
+          };
+          return {
+            chat: canonicalChat(chat),
+            messages: messages.map(canonicalMessage),
+            ...(next_cursor ? { nextCursor: next_cursor } : {}),
+          };
+        },
+      },
       run: async (input, ctx) => {
         const result = await port.forAccount(ctx.account.id).readChat({
           chatId: input.chat,
@@ -232,6 +281,31 @@ export function messengerActions<TConfig, TCredentials>(
         reply_to: z.string().max(64).optional().describe('Message id to reply to (same chat)'),
       }),
       hints: { readOnly: false, destructive: false, openWorld: true },
+      capability: {
+        id: 'messages.send',
+        mapInput: ({ chat, ...rest }) =>
+          typeof chat === 'string' && !isChatId(chat) ? { ...rest, to: chat } : { ...rest, chat },
+        mapOutput: (result) => {
+          const sent = result as { status: string; [key: string]: unknown };
+          // The canonical status knows sent and queued; "uncertain" stays visible through the note.
+          return sent.status === 'sent' || sent.status === 'queued' ? sent : { ...sent, status: undefined };
+        },
+      },
+      // First contact is what gets accounts banned and what the user must approve.
+      assessRisk: async (input, ctx) => {
+        const known = input.chat
+          ? await port
+              .forAccount(ctx.account.id)
+              .isKnownContact(input.chat)
+              .catch(() => true)
+          : false;
+        return known
+          ? undefined
+          : {
+              risk: 'dangerous',
+              reason: `First message to someone who never wrote to this ${serviceName} account`,
+            };
+      },
       run: async (input, ctx) => {
         if (!input.chat && !input.to) throw new ConnectorError('invalid_input', 'Pass chat or to.');
         const result = await port.forAccount(ctx.account.id).send({

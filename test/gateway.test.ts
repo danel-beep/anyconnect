@@ -88,7 +88,7 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
   let principal: Principal;
 
   const call = async (tool: string, args: Record<string, unknown>) => {
-    const catalog = await hub.services.hub.getCatalog(principal.workspaceId);
+    const catalog = await hub.services.hub.getCatalog(principal);
     const result = await hub.services.hub.callTool(principal, catalog, tool, args);
     const text = (result.content[0] as { text?: string } | undefined)?.text ?? '';
     if (result.isError) throw new Error(text);
@@ -271,10 +271,11 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
     const chat = await call('fakechat_read_chat', { chat: chats.chats[0].id });
     expect(chat.messages.map((m: { text: string }) => m.text)).toContain('Счёт отправлю сегодня вечером');
 
-    // Same request again: merged with the first, nothing is sent twice.
-    const again = await call('fakechat_send', { to: '+79991112233', text: 'Счёт отправлю сегодня вечером' });
-    expect(again).toMatchObject({ deduplicated: true });
+    // Same request again, past the hub's duplicate check: the outbox merges it with the first.
+    const again = await hub.services.messaging.service
+      .forAccount(account.id)
+      .send({ to: '+79991112233', text: 'Счёт отправлю сегодня вечером' });
+    expect(again).toMatchObject({ status: 'sent', deduplicated: true });
     expect(log.sent.filter((j) => j.kind === 'message')).toHaveLength(1);
-    expect(account.id).toBeTruthy();
   });
 });
