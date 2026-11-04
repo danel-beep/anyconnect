@@ -200,7 +200,7 @@ export class TokenManager {
           ? {
               error: new ConnectorError(
                 'auth',
-                `${provider.name} no longer accepts this connection: ${message}`,
+                `${connector.name} no longer accepts this connection: ${message}`,
               ),
               grantInvalid: true,
               message,
@@ -208,7 +208,7 @@ export class TokenManager {
           : {
               error: new ConnectorError(
                 'upstream',
-                `Could not refresh the ${provider.name} token: ${message}`,
+                `Could not refresh the ${connector.name} token: ${message}`,
               ),
               grantInvalid: false,
               message,
