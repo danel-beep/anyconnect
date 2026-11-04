@@ -42,7 +42,8 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   pipedrive: { total: 1950, tool: 290 },
   gsheets: { total: 1910, tool: 300 },
   telegram: { total: 2050, tool: 400 },
-  whatsapp: { total: 2050, tool: 400 },
+  // Two more tools than Telegram: message templates (list_templates, send_template).
+  whatsapp: { total: 2400, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {
