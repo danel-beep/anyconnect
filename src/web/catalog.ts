@@ -78,8 +78,8 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     icon: 'telegram',
     category: 'messengers',
     blurb: {
-      ru: 'Ваш бот: чаты, поиск по переписке, ответы.',
-      en: 'Your bot: chats, message search, replies.',
+      ru: 'Ваш бот, а с Telegram Business и личные чаты: поиск по переписке, ответы.',
+      en: 'Your bot, and with Telegram Business your own chats: message search, replies.',
     },
   },
   whatsapp: {
