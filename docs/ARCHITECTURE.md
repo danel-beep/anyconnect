@@ -390,7 +390,7 @@ HTTP — `src/routes/login.tsx` и `src/routes/security.tsx`.
 | --- | --- | --- |
 | Сайт | `/`, `/pricing`, `/services`, `/services/:id`, `/docs`, `/privacy`, `/terms` | `routes/site.tsx`, `web/site.tsx` |
 | Вход | `/login`, `/signup`, `/auth/google` (+ `/callback`), второй фактор | `routes/login.tsx`, `core/external-login.ts` |
-| Кабинет | `/app` (обзор), `/app/services`, `/app/apps`, `/app/activity`, `/app/rules`, `/app/billing`, `/app/settings` | `routes/app.tsx`, `web/app.tsx`, `web/rules.tsx` |
+| Кабинет | `/app` (обзор), `/app/services`, `/app/accounts/:id`, `/app/apps`, `/app/activity`, `/app/rules`, `/app/billing`, `/app/settings` | `routes/app.tsx`, `web/app.tsx`, `web/account-page.tsx`, `web/rules.tsx` |
 | Админка | `/admin`, `/admin/users`, `/admin/users/:id`, `/admin/audit`, `/admin/system` | `routes/admin.tsx`, `admin/service.ts`, `web/admin.tsx` |
 
 **Вход через Google.** OpenID Connect с `state`, `nonce` и PKCE; ID-токен приходит напрямую от
@@ -412,6 +412,22 @@ Google по TLS. К существующему пользователю вход
 подтверждение (настройки пространства) и одно правило на ИИ-приложение или аккаунт
 (`PolicyService.setScopedRule`). Полная модель (персона × приложение × сервис × аккаунт)
 остаётся в API `/api/v1/rules`.
+
+**Страница аккаунта** (`/app/accounts/:id`): состояние и кнопки «Проверить»/«Переподключить»,
+включение и выключение отдельных действий (`settings.disabledActions`, каталог ИИ их не показывает),
+правило доступа и подтверждений только для этого аккаунта, примеры запросов и последние действия.
+Журнал `/app/activity` фильтруется по аккаунту, сервису и ошибкам (`?account=`, `?service=`,
+`?status=error`) и листается по 30 строк (`?before=<время>~<id>`); для фильтра по аккаунту есть
+индекс `tool_calls (account_id, created_at)`.
+
+**Подключение сервиса** (`/connect/:id`): форма строится из схем коннектора, рядом — инструкция
+и список того, что сможет ИИ (`connectorGuide`, см. `docs/CONNECTORS.md`). Новый аккаунт сразу
+проверяется и при ошибке не сохраняется. Если для сервиса не настроено OAuth-приложение, вместо
+ошибки показывается страница с альтернативой (например, Gmail через IMAP, `alternative` в
+`web/catalog.ts`).
+
+**Кэш стилей и скриптов.** Адреса `/assets/*.css|js` получают `?v=<хэш содержимого>`
+(`web/asset-urls.ts`), поэтому после деплоя браузер сразу берёт новые файлы.
 
 **Админка.** Доступ только у роли `admin`; остальным админка отвечает 404. Дополнительно нужен
 второй фактор, подтверждённый в текущей сессии (код из приложения, код восстановления или passkey), и вход

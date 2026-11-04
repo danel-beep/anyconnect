@@ -52,6 +52,46 @@ describe('website texts of the built-in connectors', () => {
         });
       }
 
+      it('has setup guides that match in both languages, with https links and real variants', () => {
+        const guides = LANGUAGES.map((language) => connector.ui?.locales?.[language]?.setup ?? {});
+        const ways = ['oauth', 'form'] as const;
+        // The same ways to connect are explained in every language, with the same variants.
+        for (const way of ways) {
+          const [ru, en] = guides.map((g) => g[way]);
+          expect(Boolean(ru), `${connector.id} ${way} guide in ru and en`).toBe(Boolean(en));
+          expect(Object.keys(ru?.variants ?? {}).sort()).toEqual(Object.keys(en?.variants ?? {}).sort());
+        }
+        if (guides.some((g) => g.oauth)) expect(connector.oauth, `${connector.id} oauth guide`).toBeDefined();
+        const variants = connector.ui?.setupVariants;
+        if (variants) {
+          // Variant keys are values of the field they follow (or "custom" for an unknown domain).
+          const field = fields.find((f) => f.key === variants.field);
+          expect(field?.options, `${connector.id}.${variants.field} is a select`).toBeDefined();
+          for (const key of Object.keys(variants.domains ?? {})) expect(field?.options).toContain(key);
+          for (const g of guides)
+            for (const key of Object.keys(g.form?.variants ?? {})) expect(field?.options).toContain(key);
+          if (variants.emailField) expect(keys).toContain(variants.emailField);
+        }
+        for (const g of guides)
+          for (const guide of [g.oauth, g.form]) {
+            const steps = [
+              ...(guide?.steps ?? []),
+              ...Object.values(guide?.variants ?? {}).flatMap((v) => v.steps),
+            ];
+            for (const step of steps) {
+              expect(step.text.trim()).not.toBe('');
+              if (step.link) expect(new URL(step.link.url).protocol, step.link.url).toBe('https:');
+            }
+          }
+      });
+
+      it('suggests prompts to try in both languages, or in none', () => {
+        const [ru = [], en = []] = LANGUAGES.map(
+          (language) => connector.ui?.locales?.[language]?.prompts ?? [],
+        );
+        expect(ru.length > 0, connector.id).toBe(en.length > 0);
+      });
+
       it('lists only existing fields as primary', () => {
         for (const key of connector.ui?.primaryFields ?? []) expect(keys).toContain(key);
       });

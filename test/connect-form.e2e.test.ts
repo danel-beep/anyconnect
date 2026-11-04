@@ -24,6 +24,20 @@ const tokenOrOAuth = defineConnector({
   actions: () => [],
 });
 
+/** A service that accepts only one key: its check fails for anything else. */
+const picky = defineConnector({
+  id: 'picky',
+  name: 'Picky',
+  description: 'Accepts one key only',
+  version: '1.0.0',
+  config: z.object({}),
+  credentials: z.object({ key: z.string().min(1).describe('API key') }),
+  async test(ctx) {
+    return ctx.credentials.key === 'right' ? { ok: true } : { ok: false, message: 'Key not valid' };
+  },
+  actions: () => [],
+});
+
 describe('connect form for services without OAuth', () => {
   let hub: TestHub;
   let browser: TestBrowser;
@@ -43,7 +57,8 @@ describe('connect form for services without OAuth', () => {
         .register(demo)
         .register(tokenOrOAuth)
         .register(imap)
-        .register(gmail),
+        .register(gmail)
+        .register(picky),
       seed: false,
     });
     workspaceId = (await hub.services.db.query.workspaces.findFirst())!.id;
@@ -117,6 +132,44 @@ describe('connect form for services without OAuth', () => {
     expect(account).toMatchObject({ label: 'Work', config: { greeting: 'Hi' }, status: 'active' });
   });
 
+  it('does not keep a new account whose check fails, unless asked to', async () => {
+    const { hidden } = await openForm('/connect/picky');
+    const send = (key: string, extra: Record<string, string> = {}) =>
+      browser.request('/connect/picky', {
+        form: { ...hidden, label: 'Main', 'credentials.key': key, ...extra },
+      });
+
+    const rejected = await send('wrong');
+    expect(rejected.status).toBe(400);
+    const html = await rejected.text();
+    expect(html).toContain('Picky не принял эти данные: Key not valid.');
+    expect(html).toContain('Ничего не сохранено.');
+    expect(html).toContain('name="keep" value="1"');
+    expect(html).toContain('aria-invalid="true"');
+    // The key is never sent back, and nothing is saved.
+    expect(html).not.toContain('wrong');
+    expect((await hub.services.accounts.list(workspaceId)).filter((a) => a.connectorId === 'picky')).toEqual(
+      [],
+    );
+
+    // Kept on purpose: saved, marked as failing.
+    const kept = await send('wrong', { keep: '1' });
+    expect(kept.status).toBe(200);
+    expect(await kept.text()).toContain('Подключено, но проверка не прошла');
+    const [account] = (await hub.services.accounts.list(workspaceId)).filter(
+      (a) => a.connectorId === 'picky',
+    );
+    expect(account).toMatchObject({ label: 'Main', status: 'error' });
+
+    // The right key on a fresh form connects without any warning.
+    const { hidden: again } = await openForm('/connect/picky');
+    const ok = await browser.request('/connect/picky', {
+      form: { ...again, label: 'Second', 'credentials.key': 'right' },
+    });
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).not.toContain('проверка не прошла');
+  });
+
   it('reconnects an account and keeps a secret left empty', async () => {
     const account = (await hub.services.accounts.findByName(workspaceId, 'demo', 'work'))!;
     const { html, hidden } = await openForm(`/connect/demo?account=${account.id}`);
@@ -155,7 +208,7 @@ describe('connect form for services without OAuth', () => {
     const { html } = await openForm('/connect/imap?label=Почта');
     expect(html).toContain('Подключение: Почта (IMAP/SMTP)');
     expect(html).toContain('>Адрес почты<span class="req" aria-hidden="true"> *</span></label>');
-    expect(html).toContain('>Пароль приложения *</label>');
+    expect(html).toContain('>Пароль приложения<span class="req" aria-hidden="true"> *</span></label>');
     expect(html).toContain('<option value="">Определить по адресу</option>');
     expect(html).toContain('<option value="yandex">Яндекс Почта</option>');
     expect(html).not.toContain('Imap Host');
@@ -181,7 +234,7 @@ describe('connect form for services without OAuth', () => {
     await english.login();
     await english.request('/prefs/lang?to=en&next=%2F');
     const en = await (await english.request('/connect/imap')).text();
-    expect(en).toContain('>App password *</label>');
+    expect(en).toContain('>App password<span class="req" aria-hidden="true"> *</span></label>');
     expect(en).toContain('<summary>Advanced settings</summary>');
   });
 

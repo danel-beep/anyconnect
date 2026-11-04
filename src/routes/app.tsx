@@ -41,6 +41,8 @@ import {
 } from './page-helpers.js';
 
 const DAY = 86_400_000;
+/** An account's own page in the dashboard: the only "back" address account forms may name. */
+const ACCOUNT_PAGE = /^\/app\/accounts\/[\w-]{1,64}$/;
 
 type ToolCallRow = typeof toolCalls.$inferSelect;
 
@@ -83,11 +85,13 @@ export function appRoutes() {
   /** Runs a form post: CSRF, session, then the action; errors come back as a flash note. */
   const action =
     (
-      back: string,
+      /** Where to go afterwards: a fixed page, or one picked from the posted form. */
+      to: string | ((form: Record<string, string>) => string),
       run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
     ) =>
     async (c: AppContext) => {
       const form = await bodyParams(c);
+      const back = typeof to === 'string' ? to : to(form);
       if (!csrfOk(c, form)) return csrfFailedPage(c);
       const auth = await requireApp(c, back);
       if ('redirect' in auth) return c.redirect(auth.redirect, 303);
@@ -334,20 +338,20 @@ export function appRoutes() {
 
   /** Where an account form goes back to: the account's own page when it came from there. */
   const accountBack = (form: Record<string, string>, fallback = '/app/services') =>
-    /^\/app\/accounts\/[\w-]{1,64}$/.test(form.back ?? '') ? form.back! : fallback;
+    ACCOUNT_PAGE.test(form.back ?? '') ? form.back! : fallback;
 
   const accountAction = (
     name: string,
     run: (c: AppContext, auth: AppAuth, account: AccountRow, form: Record<string, string>) => Promise<void>,
   ) =>
-    app.post(`/app/accounts/:id/${name}`, async (c) => {
-      const form = await bodyParams(c);
-      return action(accountBack(form), async (c, auth) => {
+    app.post(
+      `/app/accounts/:id/${name}`,
+      action(accountBack, async (c, auth, form) => {
         const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
         await run(c, auth, account, form);
         return undefined;
-      })(c);
-    });
+      }),
+    );
 
   /** Turns the account's actions on and off: a checked box keeps the action available to the AI. */
   accountAction('tools', async (c, auth, account, form) => {
@@ -757,26 +761,30 @@ export function appRoutes() {
 
   app.post(
     '/app/rules/scoped',
-    action('/app/rules', async (c, auth, form) => {
-      const s = c.get('services');
-      const input = z
-        .object({
-          kind: z.enum(['app', 'account']),
-          id: z.string().min(1).max(64),
-          access: z.union([z.literal(''), z.enum(ACCESS_LEVELS)]),
-          confirm: z.union([z.literal(''), z.enum(CONFIRM_LEVELS)]),
-        })
-        .parse({ kind: form.kind, id: form.id, access: form.access ?? '', confirm: form.confirm ?? '' });
-      const value = { access: input.access || null, confirm: input.confirm || null };
-      // The rule service checks that the app or account belongs to this workspace.
-      await s.policies.setScopedRule(
-        auth.workspace.id,
-        input.kind === 'app' ? { aiClientId: input.id } : { accountId: input.id },
-        value,
-      );
-      setFlash(c, 'ok', 'app.flash.rulesSaved');
-      return undefined;
-    }),
+    // An account's own page sets its rule too, and gets the user back there.
+    action(
+      (form) => accountBack(form, '/app/rules'),
+      async (c, auth, form) => {
+        const s = c.get('services');
+        const input = z
+          .object({
+            kind: z.enum(['app', 'account']),
+            id: z.string().min(1).max(64),
+            access: z.union([z.literal(''), z.enum(ACCESS_LEVELS)]),
+            confirm: z.union([z.literal(''), z.enum(CONFIRM_LEVELS)]),
+          })
+          .parse({ kind: form.kind, id: form.id, access: form.access ?? '', confirm: form.confirm ?? '' });
+        const value = { access: input.access || null, confirm: input.confirm || null };
+        // The rule service checks that the app or account belongs to this workspace.
+        await s.policies.setScopedRule(
+          auth.workspace.id,
+          input.kind === 'app' ? { aiClientId: input.id } : { accountId: input.id },
+          value,
+        );
+        setFlash(c, 'ok', 'app.flash.rulesSaved');
+        return undefined;
+      },
+    ),
   );
 
   // --- Settings -----------------------------------------------------------------
