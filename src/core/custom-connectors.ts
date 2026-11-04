@@ -7,7 +7,7 @@ import {
   type RemoteMcpTool,
 } from '../connectors/mcp-remote/connector.js';
 import { type ConnectorRegistry, type ConnectorResolver, validateConnector } from '../connectors/registry.js';
-import type { ConnectorDefinition } from '../connectors/sdk.js';
+import type { ConnectorDefinition, RiskLevel } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { customConnectors } from '../db/schema.js';
 import type { Logger } from '../logger.js';
@@ -21,6 +21,8 @@ export interface RemoteMcpDefinition {
   instructions?: string;
   url: string;
   auth: RemoteMcpAuth;
+  /** Risk the workspace set per action name (overrides the server's annotations). */
+  toolRisk?: Record<string, RiskLevel>;
 }
 
 /** Builds the connector of a stored row. Throws when the stored definition is no longer valid. */

@@ -136,6 +136,28 @@ export const ManifestResponse = z.object({
   empty: z.string().optional(),
 });
 
+/**
+ * A shared capability the action implements (see `capabilities.ts`). `input` maps the capability's
+ * canonical input to the action's input (`{{input.x}}`); `output` maps each result item (`list`
+ * capabilities) or the result (`single`) to the canonical shape (`{{item.x}}`, `{{input.x}}`).
+ * Without a template the value is passed as is.
+ */
+export const ManifestCapability = z.union([
+  z.string(),
+  z.object({
+    id: z.string(),
+    input: z.record(z.string(), z.unknown()).optional(),
+    output: z.record(z.string(), z.unknown()).optional(),
+  }),
+]);
+export type ManifestCapability = z.output<typeof ManifestCapability>;
+
+export const ManifestUndo = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('action'), action: z.string(), note: z.string().optional() }),
+  z.object({ kind: z.literal('delay'), seconds: z.number().int().min(1).max(600) }),
+  z.object({ kind: z.literal('none') }),
+]);
+
 export const ManifestAction = z.object({
   name: z.string().regex(NAME, 'use lowercase snake_case'),
   title: z.string().optional(),
@@ -149,6 +171,10 @@ export const ManifestAction = z.object({
       openWorld: z.boolean().optional(),
     })
     .optional(),
+  /** `read`, `write` or `dangerous`; derived from `hints` when omitted (see `actionRisk`). */
+  risk: z.enum(['read', 'write', 'dangerous']).optional(),
+  undo: ManifestUndo.optional(),
+  capability: z.union([ManifestCapability, z.array(ManifestCapability)]).optional(),
   request: ManifestRequest,
   response: ManifestResponse.optional(),
   /**

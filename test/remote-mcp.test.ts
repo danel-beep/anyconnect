@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { actionNamesFor, defineRemoteMcpConnector } from '../src/connectors/mcp-remote/connector.js';
 import { validateConnector } from '../src/connectors/registry.js';
+import { actionRisk } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import { ensureTestDatabase, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
@@ -180,6 +181,22 @@ describe('remote MCP servers as services', () => {
     expect(invalid.status).toBe(400);
     expect(invalid.body.error.message).toMatch(/path parameter \{id\}/);
 
+    // Editing replaces the manifest; the id is fixed and the result is validated like on add.
+    const edited = { ...manifest, actions: [{ ...manifest.actions[0]!, risk: 'read' }] };
+    expect(
+      (await api('/services/httpbin_like', { method: 'PATCH', body: { manifest: edited } })).status,
+    ).toBe(200);
+    const renamed = await api('/services/httpbin_like', {
+      method: 'PATCH',
+      body: { manifest: { ...manifest, id: 'other' } },
+    });
+    expect(renamed.status).toBe(400);
+    const broken = await api('/services/httpbin_like', {
+      method: 'PATCH',
+      body: { manifest: { ...manifest, actions: [{ ...manifest.actions[0]!, capability: 'tasks.fly' }] } },
+    });
+    expect(broken.status).toBe(400);
+
     expect((await api('/services/httpbin_like', { method: 'DELETE' })).status).toBe(204);
   });
 
@@ -224,5 +241,49 @@ describe('remote MCP servers as services', () => {
     const schema = connector.actions[0]!.inputSchema!;
     expect(Object.keys(schema.properties as object)).toEqual(['account_arg', 'fields_arg', 'q']);
     expect(schema.required).toEqual(['fields_arg']);
+  });
+
+  it('derives risk from annotations with the MCP defaults and lets the workspace override it', () => {
+    const connector = defineRemoteMcpConnector({
+      id: 'remote',
+      name: 'Remote',
+      description: 'x',
+      url: 'https://remote.example/mcp',
+      auth: { type: 'none' },
+      tools: [
+        { name: 'read', inputSchema: {}, annotations: { readOnlyHint: true } },
+        { name: 'create', inputSchema: {}, annotations: { destructiveHint: false } },
+        { name: 'unknown', inputSchema: {} },
+        { name: 'wipe', inputSchema: {}, annotations: { destructiveHint: true } },
+      ],
+      toolRisk: { wipe: 'write' },
+    });
+    expect(connector.actions.map((a) => actionRisk(a))).toEqual(['read', 'write', 'dangerous', 'write']);
+  });
+
+  it('edits a remote server: per-tool risk overrides are validated and applied', async () => {
+    const toolRisk = async () => {
+      const catalog = await hub.services.hub.getCatalog(principal);
+      return catalog.tools.find((t) => t.name === 'upstream_demo_echo')!.risk;
+    };
+    expect(await toolRisk()).toBe('read');
+    const patched = await api('/services/upstream', {
+      method: 'PATCH',
+      body: { toolRisk: { demo_echo: 'dangerous' }, description: 'The other hub' },
+    });
+    expect(patched.status).toBe(200);
+    expect(await toolRisk()).toBe('dangerous');
+    expect(
+      (await api('/services/upstream', { method: 'PATCH', body: { toolRisk: { demo_echo: null } } })).status,
+    ).toBe(200);
+    expect(await toolRisk()).toBe('read');
+
+    const unknown = await api('/services/upstream', {
+      method: 'PATCH',
+      body: { toolRisk: { nope: 'read' } },
+    });
+    expect(unknown.status).toBe(400);
+    const extra = await api('/services/upstream', { method: 'PATCH', body: { url: 'https://evil.example' } });
+    expect(extra.status).toBe(400);
   });
 });
