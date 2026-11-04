@@ -1,7 +1,5 @@
 import net from 'node:net';
 import nodemailer from 'nodemailer';
-import MailComposer from 'nodemailer/lib/mail-composer/index.js';
-import type Mail from 'nodemailer/lib/mailer/index.js';
 import { ConnectorError } from '../../sdk.js';
 import { type ResolveHost, toConnectorError, unreachableHost } from './connection.js';
 import type { ServerSettings } from './presets.js';
@@ -11,11 +9,6 @@ export interface SmtpLogin {
   user: string;
   password: string;
   allowInvalidCertificate?: boolean;
-}
-
-/** Builds the raw RFC 5322 message once, so the very same bytes are sent and saved to Sent. */
-export async function composeMessage(mail: Mail.Options): Promise<Buffer> {
-  return new MailComposer(mail).compile().build();
 }
 
 export async function sendRaw(
