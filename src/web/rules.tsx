@@ -1,9 +1,10 @@
 import type { FC } from 'hono/jsx';
 import type { AccessLevel, ConfirmLevel } from '../db/schema.js';
 import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
+import { serviceMeta } from './catalog.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { Hidden } from './ui.js';
+import { Hidden, ServiceLogo } from './ui.js';
 
 /**
  * "Rules" in the dashboard: when the AI must ask before acting, and per AI app / per account
@@ -15,6 +16,10 @@ export interface ScopedRuleView {
   id: string;
   name: string;
   detail?: string | undefined;
+  /** Accounts: their service (logo and grouping) and their own page. */
+  connectorId?: string | undefined;
+  group?: string | undefined;
+  href?: string | undefined;
   access: AccessLevel | null;
   confirm: ConfirmLevel | null;
 }
@@ -50,47 +55,66 @@ const ScopedTable: FC<{
   if (!rows.length) return <p class="muted">{empty}</p>;
   return (
     <div class="rule-list">
-      {rows.map((r) => (
-        <form method="post" action="/app/rules/scoped" class="rule-row">
-          <Hidden values={{ csrf: ctx.csrf, kind, id: r.id }} />
-          <div class="grow">
-            <strong>{r.name}</strong>
-            {r.detail ? <div class="small muted">{r.detail}</div> : null}
-          </div>
-          <div>
-            <label class="small muted" for={`access-${r.id}`}>
-              {t('app.rules.access')}
-            </label>
-            <select id={`access-${r.id}`} name="access">
-              <option value="" selected={r.access === null}>
-                {inheritAccess}
-              </option>
-              {ACCESSES.map((a) => (
-                <option value={a} selected={r.access === a}>
-                  {t(`app.rules.access.${a}` as Key)}
+      {rows.map((r, i) => (
+        <>
+          {r.group && r.group !== rows[i - 1]?.group ? <div class="acc-group">{r.group}</div> : null}
+          <form method="post" action="/app/rules/scoped" class="rule-row">
+            <Hidden values={{ csrf: ctx.csrf, kind, id: r.id }} />
+            <div class="grow rule-who">
+              {r.connectorId ? (
+                <ServiceLogo
+                  icon={serviceMeta(r.connectorId)?.icon}
+                  glyph={serviceMeta(r.connectorId)?.glyph}
+                  name={r.name}
+                  size="sm"
+                />
+              ) : null}
+              <span>
+                {r.href ? (
+                  <a class="acc-link" href={r.href}>
+                    <strong>{r.name}</strong>
+                  </a>
+                ) : (
+                  <strong>{r.name}</strong>
+                )}
+                {r.detail ? <span class="small muted">{r.detail}</span> : null}
+              </span>
+            </div>
+            <div>
+              <label class="small muted" for={`access-${r.id}`}>
+                {t('app.rules.access')}
+              </label>
+              <select id={`access-${r.id}`} name="access">
+                <option value="" selected={r.access === null}>
+                  {inheritAccess}
                 </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label class="small muted" for={`confirm-${r.id}`}>
-              {t('app.rules.confirm')}
-            </label>
-            <select id={`confirm-${r.id}`} name="confirm">
-              <option value="" selected={r.confirm === null}>
-                {inheritConfirm}
-              </option>
-              {CONFIRMS.map((c) => (
-                <option value={c} selected={r.confirm === c}>
-                  {t(`app.rules.confirmShort.${c}` as Key)}
+                {ACCESSES.map((a) => (
+                  <option value={a} selected={r.access === a}>
+                    {t(`app.rules.access.${a}` as Key)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="small muted" for={`confirm-${r.id}`}>
+                {t('app.rules.confirm')}
+              </label>
+              <select id={`confirm-${r.id}`} name="confirm">
+                <option value="" selected={r.confirm === null}>
+                  {inheritConfirm}
                 </option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" class="sm">
-            {t('app.rules.save')}
-          </button>
-        </form>
+                {CONFIRMS.map((c) => (
+                  <option value={c} selected={r.confirm === c}>
+                    {t(`app.rules.confirmShort.${c}` as Key)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="submit" class="sm">
+              {t('app.rules.save')}
+            </button>
+          </form>
+        </>
       ))}
     </div>
   );

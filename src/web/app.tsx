@@ -8,6 +8,7 @@ import type { PageCtx } from './page-context.js';
 import { PlanCard } from './site.js';
 import {
   Brand,
+  CodeBlock,
   CopyField,
   fmtAgo,
   fmtDate,
@@ -374,7 +375,7 @@ export const brokenFirst = (accounts: AccountView[]) =>
   [...accounts].sort((a, b) => Number(needsFix(b)) - Number(needsFix(a)));
 
 /** Accounts by service: services with a broken account first, then by name; broken accounts first inside. */
-const groupByService = (accounts: AccountView[]): [string, AccountView[]][] => {
+export const groupByService = (accounts: AccountView[]): [string, AccountView[]][] => {
   const groups = new Map<string, AccountView[]>();
   for (const a of brokenFirst(accounts)) groups.set(a.service, [...(groups.get(a.service) ?? []), a]);
   return [...groups.entries()].sort(
@@ -576,11 +577,7 @@ export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, co
                       </a>
                     </p>
                   ) : null}
-                  {g.code ? (
-                    <pre class="block">
-                      <code>{g.code(ctx.mcpUrl)}</code>
-                    </pre>
-                  ) : null}
+                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(ctx.mcpUrl)} /> : null}
                 </div>
               ),
             }))}
@@ -1440,6 +1437,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
                 </option>
               ))}
             </select>
+            <p class="hint">{t('app.settings.exposureHint')}</p>
             <div class="actions start">
               <button type="submit" class="primary">
                 {t('app.settings.save')}

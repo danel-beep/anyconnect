@@ -272,8 +272,11 @@ describe('data protection in the running hub', () => {
     expect(pendingId(resultText(await call('inbox_purge', { account: 'work' })))).toBe(id);
 
     const browser = await signIn();
-    const list = await browser.request('/confirm');
-    expect(await list.text()).toContain(`/confirm/${id}`);
+    const list = await (await browser.request('/confirm')).text();
+    expect(list).toContain(`/confirm/${id}`);
+    // The decision is right on the list, next to what the AI asked for.
+    expect(list).toContain('value="approve"');
+    expect(list).toContain('Разрешить');
     await decideOnWeb(browser, id, 'approve');
     await hub.services.pendingRunner.tick();
     expect(purged).toBe(1);

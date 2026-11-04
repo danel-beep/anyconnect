@@ -157,6 +157,32 @@ ul.plain.pad-x{padding:0 24px 6px}
 .rule-row{display:grid;grid-template-columns:minmax(0,1fr) 290px 290px auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
 .rule-row:first-child{border-top:0}
 .rule-row label{margin:0 0 4px;display:block}
+.rule-who{display:flex;gap:10px;align-items:center}
+/* Confirmations */
+.pending-call{display:flex;flex-direction:column;gap:12px}
+.pending-call.open{border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
+.pending-head{display:flex;gap:14px;align-items:flex-start}
+.pending-head h1,.pending-head h2{margin:0 0 2px}
+.pending-head p{margin:0}
+.pending-meta{margin:0}
+.pending-args summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.arg-list{margin:8px 0 0;border:1px solid var(--border);border-radius:10px;background:var(--code-bg);max-height:420px;overflow:auto}
+.arg-list>div{display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px;padding:10px 14px;border-top:1px solid var(--border)}
+.arg-list>div:first-child{border-top:0}
+.arg-list dt{font-size:13px;color:var(--muted)}
+.arg-list dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+@media (max-width:560px){.arg-list>div{grid-template-columns:1fr;gap:2px}}
+.pending-actions{margin:0}
+.pending-actions button svg{width:16px;height:16px}
+.empty-state{text-align:center;padding:40px 24px}
+.empty-state p{max-width:52ch;margin-left:auto;margin-right:auto}
+.empty-icon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--ok-soft,color-mix(in srgb,var(--ok) 14%,transparent));color:var(--ok);margin-bottom:10px}
+.empty-icon svg{width:22px;height:22px;stroke-width:2.4}
+.rule-who>span{display:flex;flex-direction:column;min-width:0}
+.rule-who .small{overflow-wrap:anywhere}
+.rule-list .acc-group{padding:18px 0 2px;background:none;border-top:0}
+.rule-list .acc-group:first-child{padding-top:4px}
+.rule-list .acc-group+.rule-row{border-top:0}
 @media (max-width:760px){.rule-row{grid-template-columns:1fr 1fr}.rule-row .grow{grid-column:1/-1}}
 .menu>summary:has(.menu-label){width:auto;padding:0 10px;gap:6px;grid-auto-flow:column;font-size:13px}
 @media (max-width:480px){.rule-row{grid-template-columns:1fr}.rule-row button{justify-self:start}}

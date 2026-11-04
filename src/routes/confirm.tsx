@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
+import { actionText, connectorText } from '../connectors/sdk.js';
 import { getDefaultWorkspace } from '../core/identity.js';
 import { safeEqual } from '../lib/crypto.js';
-import { previewArguments } from '../security/confirmations.js';
+import { argumentFields } from '../security/confirmations.js';
 import type { PendingCallRow } from '../security/pending-calls.js';
 import { ConfirmListPage, ConfirmPage, type PendingCallView } from '../web/confirm-pages.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
@@ -21,17 +22,25 @@ export const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
 export async function pendingCallView(c: AppContext, row: PendingCallRow): Promise<PendingCallView> {
   const s = c.get('services');
-  const d = await s.confirmations.describe(row);
+  const locale = c.get('locale');
+  const [d, connector, account] = await Promise.all([
+    s.confirmations.describe(row),
+    s.connectors.get(row.workspaceId, row.connectorId).catch(() => undefined),
+    row.accountId ? s.accounts.get(row.workspaceId, row.accountId).catch(() => undefined) : undefined,
+  ]);
+  // Service and action in the page language when the connector has texts for it.
+  const action = connector?.actions.find((a) => a.name === row.action);
   return {
     id: row.id,
     status: row.status,
     client: d.client,
-    service: d.service,
-    account: d.account,
-    action: d.action,
+    connectorId: row.connectorId,
+    service: connector ? connectorText(connector, locale).name : d.service,
+    account: account?.label ?? d.account,
+    action: connector && action ? actionText(connector, action, locale).title : d.action,
     risk: row.risk,
     reason: row.reason ?? undefined,
-    arguments: previewArguments(s.pendingCalls.args(row)),
+    fields: argumentFields(s.pendingCalls.args(row)),
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     executeAt: row.executeAt,
@@ -65,9 +74,10 @@ export function confirmRoutes() {
     const s = c.get('services');
     const auth = await session(c, '/confirm');
     if ('redirect' in auth) return c.redirect(auth.redirect, 302);
-    const [rows, channels] = await Promise.all([
+    const [rows, channels, security] = await Promise.all([
       s.pendingCalls.listOpen(auth.workspace.id),
       s.notificationChannels.status(auth.user.id),
+      s.admin.security(auth.workspace.id),
     ]);
     const calls = await Promise.all(rows.map((row) => pendingCallView(c, row)));
     return renderInApp(
@@ -79,6 +89,7 @@ export function confirmRoutes() {
         lang={c.get('locale')}
         calls={calls}
         csrf={csrfToken(c, { secure: s.config.secureCookies })}
+        rule={c.get('t')(`app.rules.confirm.${security.defaultConfirm}` as const)}
         telegram={{
           enabled: s.confirmations.telegramEnabled,
           linked: channels.telegram.linked,

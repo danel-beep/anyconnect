@@ -16,6 +16,7 @@ import {
   type AppsView,
   BillingPage,
   type CallView,
+  groupByService,
   OverviewPage,
   ServicesAppPage,
   SettingsPage,
@@ -729,13 +730,19 @@ export function appRoutes() {
               access: appRule(x.id)?.access ?? null,
               confirm: appRule(x.id)?.confirm ?? null,
             })),
-            accounts: accounts.map((a) => ({
-              id: a.id,
-              name: a.label,
-              detail: `${a.service} · ${a.connectorId}:${a.name}`,
-              access: accountRule(a.id)?.access ?? null,
-              confirm: accountRule(a.id)?.confirm ?? null,
-            })),
+            // Grouped by service, in the order of the Services page.
+            accounts: groupByService(accounts).flatMap(([service, group]) =>
+              group.map((a) => ({
+                id: a.id,
+                name: a.label,
+                detail: a.identity ?? `${a.connectorId}:${a.name}`,
+                connectorId: a.connectorId,
+                group: service,
+                href: `/app/accounts/${encodeURIComponent(a.id)}`,
+                access: accountRule(a.id)?.access ?? null,
+                confirm: accountRule(a.id)?.confirm ?? null,
+              })),
+            ),
             otherRules: rules.filter((r) => !edited.has(r.id)).length,
             flash: takeFlash(c),
           }}

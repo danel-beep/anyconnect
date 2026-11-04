@@ -11,8 +11,7 @@ export const appEn = {
   'app.nav.rules': 'Rules',
   'app.rules.sub': 'When the AI must ask you first, and what each app may do.',
   'app.rules.when': 'When to ask for your confirmation',
-  'app.rules.whenText':
-    'The AI pauses and waits for your “yes” in the dashboard (or in Telegram, if it is connected).',
+  'app.rules.whenText': 'The AI pauses and waits for your “yes” on the Confirmations page.',
   'app.rules.confirm.never': 'Never',
   'app.rules.confirm.dangerous': 'Only for risky actions',
   'app.rules.confirm.write': 'For every change',
@@ -212,7 +211,7 @@ export const appEn = {
   'app.settings.profile': 'Profile',
   'app.settings.name': 'Name',
   'app.settings.language': 'Interface language',
-  'app.settings.langAuto': 'Like my browser',
+  'app.settings.langAuto': 'As picked with the RU / EN switch',
   'app.settings.save': 'Save',
   'app.settings.signin': 'Sign-in methods',
   'app.settings.password': 'Password',
@@ -226,7 +225,9 @@ export const appEn = {
   'app.settings.listingHint':
     'Automatic shows all tools while there are few, and switches to a short list when there are many.',
   'app.settings.exposure': 'Accounts in tools',
-  'app.settings.exposure.grouped': 'One tool, account as a parameter',
+  'app.settings.exposure.grouped': 'One set per service, the AI picks the account',
+  'app.settings.exposureHint':
+    'With one set the AI names the account in each request (“search my Work mail”). Separate tools give every account its own, which makes the list longer.',
   'app.settings.exposure.per_account': 'Separate tools for each account',
   'app.settings.sessions': 'Where you are signed in',
   'app.settings.signOutOthers': 'Sign out everywhere else',
@@ -424,8 +425,7 @@ export const appRu: Record<AppKey, string> = {
   'app.nav.rules': 'Правила',
   'app.rules.sub': 'Когда ИИ должен спросить вас, и что можно каждому приложению.',
   'app.rules.when': 'Когда спрашивать ваше подтверждение',
-  'app.rules.whenText':
-    'ИИ остановится и подождёт вашего «да» в кабинете (или в Telegram, если он подключён).',
+  'app.rules.whenText': 'ИИ остановится и подождёт вашего «да» на странице «Подтверждения».',
   'app.rules.confirm.never': 'Никогда',
   'app.rules.confirm.dangerous': 'Только для рискованных действий',
   'app.rules.confirm.write': 'Для любых изменений',
@@ -623,7 +623,7 @@ export const appRu: Record<AppKey, string> = {
   'app.settings.profile': 'Профиль',
   'app.settings.name': 'Имя',
   'app.settings.language': 'Язык интерфейса',
-  'app.settings.langAuto': 'Как в браузере',
+  'app.settings.langAuto': 'Как выбрано переключателем RU / EN',
   'app.settings.save': 'Сохранить',
   'app.settings.signin': 'Способы входа',
   'app.settings.password': 'Пароль',
@@ -637,7 +637,9 @@ export const appRu: Record<AppKey, string> = {
   'app.settings.listingHint':
     'В автоматическом режиме, пока инструментов мало, видны все, а когда их много, ИИ получает короткий список.',
   'app.settings.exposure': 'Аккаунты в инструментах',
-  'app.settings.exposure.grouped': 'Один на сервис, аккаунт выбирает ИИ',
+  'app.settings.exposure.grouped': 'Один набор на сервис, аккаунт выбирает ИИ',
+  'app.settings.exposureHint':
+    'С одним набором ИИ называет аккаунт в каждом запросе («найди в рабочей почте»). Отдельные инструменты у каждого аккаунта делают список длиннее.',
   'app.settings.exposure.per_account': 'Отдельные инструменты для каждого аккаунта',
   'app.settings.sessions': 'Где выполнен вход',
   'app.settings.signOutOthers': 'Выйти на остальных устройствах',

@@ -35,6 +35,34 @@ export function previewArguments(args: Record<string, unknown>): string {
   return text.length > PREVIEW_TOTAL ? `${text.slice(0, PREVIEW_TOTAL)}…` : text;
 }
 
+const FIELD_VALUE = 4000;
+const FIELDS = 30;
+
+/**
+ * The arguments as name and value pairs for the confirmation page, so a person reads the email
+ * they approve rather than JSON: text keeps its line breaks, a list of plain values becomes one
+ * line, anything else is pretty JSON. Long values are cut; the page is a preview, not the call.
+ */
+export function argumentFields(args: Record<string, unknown>): { name: string; value: string }[] {
+  const cut = (text: string) => (text.length > FIELD_VALUE ? `${text.slice(0, FIELD_VALUE)}…` : text);
+  const plain = (v: unknown) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+  return Object.entries(args)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .slice(0, FIELDS)
+    .map(([name, value]) => ({
+      name,
+      value: cut(
+        typeof value === 'string'
+          ? value
+          : plain(value)
+            ? String(value)
+            : Array.isArray(value) && value.every(plain)
+              ? value.join(', ')
+              : JSON.stringify(value, null, 2),
+      ),
+    }));
+}
+
 const CALLBACK = /^pc:(pcl_[0-9a-z]{26}):([adc])$/;
 
 /**

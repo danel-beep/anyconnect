@@ -1,6 +1,7 @@
 import { accountEn, accountRu } from './i18n/account.js';
 import { appEn, appRu } from './i18n/app.js';
 import { authEn, authRu } from './i18n/auth.js';
+import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { siteEn, siteRu } from './i18n/site.js';
 
@@ -183,7 +184,7 @@ const coreEn = {
   'home.manageHint': 'Accounts are managed through the REST API or CLI for now; the web panel comes next.',
 } as const;
 
-const en = { ...coreEn, ...siteEn, ...appEn, ...authEn, ...connectEn, ...accountEn } as const;
+const en = { ...coreEn, ...siteEn, ...appEn, ...authEn, ...connectEn, ...accountEn, ...confirmEn } as const;
 
 export type Key = keyof typeof en;
 
@@ -365,7 +366,15 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'home.manageHint': 'Пока аккаунты управляются через REST API или CLI; веб-панель — следующий этап.',
 };
 
-const ru: Record<Key, string> = { ...coreRu, ...siteRu, ...appRu, ...authRu, ...connectRu, ...accountRu };
+const ru: Record<Key, string> = {
+  ...coreRu,
+  ...siteRu,
+  ...appRu,
+  ...authRu,
+  ...connectRu,
+  ...accountRu,
+  ...confirmRu,
+};
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
 
