@@ -133,7 +133,7 @@ export const ServiceLogo: FC<{
   size?: 'sm' | 'lg';
 }> = ({ icon, glyph, name, size }) => (
   <span
-    class={`logo-tile${size ? ` ${size}` : ''}${icon && BRAND_ICONS[icon] ? ` brand bi-${icon}` : ''}`}
+    class={`logo-tile${size ? ` ${size}` : ''}${icon && BRAND_ICONS[icon] ? ` branded bi-${icon}` : ''}`}
     aria-hidden="true"
   >
     {icon && BRAND_ICONS[icon] ? (

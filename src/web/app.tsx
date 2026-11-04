@@ -265,7 +265,8 @@ export const AccountStatus: FC<{
       class="badge bad"
       title={problemText(t, classifyProblem(a.statusMessage, a.status), a.statusMessage)}
     >
-      <span class="dot bad" /> {t(a.status === 'needs_reauth' ? 'app.acc.reauth' : 'app.acc.error')}
+      <span class="dot bad" />{' '}
+      {t(needsReconnect(classifyProblem(a.statusMessage, a.status)) ? 'app.acc.reauth' : 'app.acc.error')}
     </span>
   );
 

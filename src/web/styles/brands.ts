@@ -2,7 +2,7 @@ import { BRAND_ICONS } from '../brand-icons.js';
 import { contrastRatio, THEMES } from '../theme.js';
 
 /**
- * Brand colours for service logo tiles (`.logo-tile.brand.bi-<slug>`): the mark in the brand's
+ * Brand colours for service logo tiles (`.logo-tile.branded.bi-<slug>`): the mark in the brand's
  * colour on a light tint of it. A colour too close to the card in a theme (black marks on the dark
  * card, very light ones on white) falls back to the text colour there, so every mark stays visible.
  * Classes, not inline styles: the CSP allows only our own stylesheet.
@@ -27,7 +27,7 @@ function brandRules(): string {
 }
 
 export const BRAND_CSS = `
-.logo-tile.brand{color:var(--bf,var(--text));background:color-mix(in srgb,var(--bh) 8%,var(--card));border-color:color-mix(in srgb,var(--bh) 22%,var(--border))}
-${DARK('.logo-tile.brand{background:color-mix(in srgb,var(--bh) 14%,var(--card));border-color:color-mix(in srgb,var(--bh) 30%,var(--border))}')}
+.logo-tile.branded{color:var(--bf,var(--text));background:color-mix(in srgb,var(--bh) 8%,var(--card));border-color:color-mix(in srgb,var(--bh) 22%,var(--border))}
+${DARK('.logo-tile.branded{background:color-mix(in srgb,var(--bh) 14%,var(--card));border-color:color-mix(in srgb,var(--bh) 30%,var(--border))}')}
 ${brandRules()}
 `;
