@@ -96,6 +96,29 @@ export function setResponseHeaders(c: Context, headers: Record<string, string>):
   }
 }
 
+const DEFAULT_CSP =
+  "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/**
+ * The policy for a page that runs a payment provider's checkout script: the strict default plus the
+ * provider's script, styles, frames and API (`sources`, e.g. `https://*.paddle.com`).
+ */
+export function checkoutCsp(sources: { script: string[]; frame: string[]; connect: string[] }): string {
+  const all = (list: string[]) => list.join(' ');
+  return [
+    "default-src 'none'",
+    `script-src 'self' ${all(sources.script)}`,
+    `connect-src 'self' ${all(sources.connect)}`,
+    // Checkout overlays inject their own styles.
+    `style-src 'self' 'unsafe-inline' ${all(sources.script)}`,
+    `frame-src ${all(sources.frame)}`,
+    `img-src 'self' data: ${all(sources.connect)}`,
+    "font-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+  ].join('; ');
+}
+
 /** Strict headers for the hub's own HTML pages (login, consent, home). */
 export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler {
   return async (c, next) => {
@@ -105,8 +128,8 @@ export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler 
     setResponseHeaders(c, {
       // No form-action: Chrome applies it to the redirect after the consent form, which must reach the AI app.
       // Scripts only from our own files (/assets/webauthn.js), which call back to our own endpoints.
-      'Content-Security-Policy':
-        "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'",
+      // A page that embeds a third party (the payment provider's checkout) sets its own, wider policy.
+      'Content-Security-Policy': c.res.headers.get('Content-Security-Policy') ?? DEFAULT_CSP,
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',

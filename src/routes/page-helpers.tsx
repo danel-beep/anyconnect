@@ -42,7 +42,7 @@ export function pageCtx(c: AppContext, user?: SessionUser): PageCtx {
     google: s.externalLogin.get('google') !== undefined,
     signupsOpen: s.config.site.signups === 'open',
     supportEmail: s.config.site.supportEmail,
-    billing: s.billing !== undefined,
+    billing: s.billing.enabled,
     csrf: csrfToken(c, cookieOpts(c)),
   };
 }
@@ -162,6 +162,15 @@ const ERROR_TEXTS: Partial<Record<string, Key>> = {
   past_date: 'error.code.past_date',
   amount_required: 'error.code.amount_required',
   plan_limit: 'error.code.plan_limit',
+  payments_off: 'error.code.payments_off',
+  plan_unavailable: 'error.code.plan_unavailable',
+  special_plan: 'error.code.special_plan',
+  same_plan: 'error.code.same_plan',
+  other_provider: 'error.code.other_provider',
+  no_subscription: 'error.code.no_subscription',
+  provider_refused: 'error.code.provider_refused',
+  provider_unavailable: 'error.code.provider_unavailable',
+  paid_subscription: 'error.code.paid_subscription',
   csrf: 'error.csrf',
 };
 

@@ -1,7 +1,10 @@
 import type { McpHttpHandler } from '@modelcontextprotocol/server';
 import { AdminService } from './admin/service.js';
+import { WorkspaceBillingTools } from './billing/assistant.js';
 import { EntitlementService } from './billing/entitlements.js';
 import type { BillingProvider } from './billing/provider.js';
+import { createBillingProvider, TestBillingProvider } from './billing/providers/index.js';
+import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
 import { createBuiltinRegistry } from './connectors/index.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
@@ -80,8 +83,8 @@ export interface Services {
   usage: UsageMeter;
   /** Plans, limits and grants (billing layer). */
   entitlements: EntitlementService;
-  /** Payment provider; undefined until payments are connected (see `src/billing/provider.ts`). */
-  billing: BillingProvider | undefined;
+  /** Payments: checkout, portal, webhooks (provider-agnostic; `billing.provider` may be undefined). */
+  billing: BillingService;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -144,8 +147,10 @@ export function createServices(
     catalogFilter?: HubDeps['catalogFilter'];
     /** Tests: talk to a fake Telegram Bot API. */
     telegramFetch?: typeof fetch;
-    /** A payment provider (none is built in yet). */
+    /** A payment provider instead of the configured one (tests). */
     billing?: BillingProvider;
+    /** Tests: talk to fake payment provider APIs. */
+    billingFetch?: typeof fetch;
     /** Tests: external sign-in providers with fake endpoints. */
     loginProviders?: OidcLoginProvider[];
   } = {},
@@ -169,6 +174,22 @@ export function createServices(
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
   const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/app/billing` });
+  const billingProvider =
+    overrides.billing ??
+    createBillingProvider(config.billing, {
+      publicUrl: config.publicUrl,
+      ...(overrides.billingFetch ? { fetch: overrides.billingFetch } : {}),
+    });
+  const billing = new BillingService({
+    db,
+    entitlements,
+    config: config.billing,
+    provider: billingProvider,
+    logger,
+  });
+  if (billingProvider instanceof TestBillingProvider) {
+    billingProvider.connect((body, headers) => billing.handleWebhook(billingProvider.id, body, headers));
+  }
   const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
   const customServices = new CustomServiceManager({
     db,
@@ -273,7 +294,11 @@ export function createServices(
     connectors,
     accounts,
     logger,
-    setup: { connector: SETUP_CONNECTOR, admin },
+    setup: {
+      connector: SETUP_CONNECTOR,
+      admin,
+      billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
+    },
     rateLimiter,
     idempotency,
     toolTimeoutMs: config.toolTimeoutMs,
@@ -357,7 +382,7 @@ export function createServices(
     admin,
     usage,
     entitlements,
-    billing: overrides.billing,
+    billing,
     accounts,
     oauthApps,
     tokens,

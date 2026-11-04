@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AdminActor } from '../admin/service.js';
+import { missingPrices } from '../billing/config.js';
 import { monthPeriod } from '../billing/period.js';
 import { getPlan, METRICS, type Metric, PLANS } from '../billing/plans.js';
+import { BillingService } from '../billing/service.js';
 import type { AppConfig } from '../config.js';
 import { resolveProvider } from '../connectors/oauth/providers.js';
 import { type ConnectorDefinition, connectorText, type UiLanguage } from '../connectors/sdk.js';
@@ -267,7 +269,12 @@ export function adminRoutes() {
       if (!detail) return c.text('Not found', 404);
       const shell = await shellInfo(c, auth.workspace.id);
       const { user, summary } = detail;
-      const request = detail.workspace ? await s.entitlements.openRequest(detail.workspace.id) : undefined;
+      const [request, billingEvents] = detail.workspace
+        ? await Promise.all([
+            s.entitlements.openRequest(detail.workspace.id),
+            s.billing.recentEvents({ workspaceId: detail.workspace.id, limit: 10 }),
+          ])
+        : [undefined, []];
       const now = Date.now();
       const sub = summary?.subscription;
       return c.html(
@@ -302,7 +309,25 @@ export function adminRoutes() {
               until: sub?.currentPeriodEnd ?? null,
               provider: sub?.provider ?? null,
               note: sub?.note ?? null,
+              paid:
+                sub && BillingService.isPaidByProvider(sub)
+                  ? {
+                      provider: sub.provider,
+                      status: sub.status,
+                      externalId: sub.externalId!,
+                      interval: sub.interval,
+                      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+                    }
+                  : undefined,
             },
+            billingEvents: billingEvents.map((e) => ({
+              type: e.type,
+              outcome: e.outcome,
+              detail: e.detail,
+              planId: e.planId,
+              status: e.status,
+              at: e.occurredAt,
+            })),
             request: request
               ? { planId: request.planId, interval: request.interval, at: request.createdAt }
               : undefined,
@@ -525,6 +550,29 @@ export function adminRoutes() {
   return app;
 }
 
+/** Payments: the provider, test mode, plans without a price and where its webhooks must go. */
+function paymentsCheck(c: AppContext): SystemCheck {
+  const s = c.get('services');
+  const t = c.get('t');
+  const provider = s.billing.provider;
+  if (!provider) return { label: t('admin.sys.payments'), level: 'off', detail: t('admin.sys.paymentsOff') };
+  const missing = missingPrices(s.config.billing);
+  const webhook = `${s.config.publicUrl}/billing/webhook/${provider.id}`;
+  const parts = [
+    provider.name,
+    t('admin.sys.webhook', { url: webhook }),
+    ...(missing.length
+      ? [t('admin.sys.noPrices', { list: missing.map((m) => m.replace(':', ' / ')).join(', ') })]
+      : []),
+  ];
+  return {
+    label: t('admin.sys.payments'),
+    // Test mode on the live site, or plans that cannot be bought, are worth a look.
+    level: missing.length || (provider.testMode && s.config.isProduction) ? 'warn' : 'ok',
+    detail: parts.join(' · '),
+  };
+}
+
 /**
  * How the hub is set up, line by line, with a level each: `ok`, `warn` (a gap worth fixing on a
  * live site, counted on the overview) or `off` (optional and not used).
@@ -570,11 +618,7 @@ function systemChecks(c: AppContext, actorIp: string | null | undefined): System
       detail: `${actorIp ?? '—'}${forwarded ? ` (X-Forwarded-For: ${forwarded.slice(0, 200)})` : ''}`,
     },
     { label: t('admin.sys.adminSession'), level: 'ok', detail: t('admin.sys.hours', { n: hours }) },
-    {
-      label: t('admin.sys.payments'),
-      level: s.billing ? 'ok' : 'off',
-      detail: s.billing ? s.billing.name : t('admin.sys.paymentsOff'),
-    },
+    paymentsCheck(c),
     {
       label: t('admin.sys.telegram'),
       level: s.telegramBot ? 'ok' : 'off',

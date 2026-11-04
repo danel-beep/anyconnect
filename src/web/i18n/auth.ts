@@ -37,6 +37,17 @@ export const authEn = {
   'error.code.confirm_email': 'Type the user’s email exactly to confirm.',
   'error.code.no_workspace': 'This user has no workspace yet.',
   'error.code.unknown_plan': 'There is no such plan.',
+  'error.code.payments_off': 'Online payment is not available yet.',
+  'error.code.plan_unavailable': 'This plan cannot be bought with this billing period yet.',
+  'error.code.special_plan': 'Your workspace is on a special plan from the team, so there is nothing to buy.',
+  'error.code.same_plan': 'You are already on this plan.',
+  'error.code.other_provider':
+    'Your plan is paid through another payment provider. Cancel it there first, or write to support.',
+  'error.code.no_subscription': 'There is no paid subscription to manage.',
+  'error.code.provider_refused': 'The payment provider refused the request. Try again or write to support.',
+  'error.code.provider_unavailable': 'The payment provider is not responding. Try again in a minute.',
+  'error.code.paid_subscription':
+    'This plan is paid through the payment provider. Change or cancel it there, or add extra limits instead.',
   'error.code.unknown_limit': 'There is no such limit.',
   'error.code.bad_amount': 'The amount must be a whole number greater than zero.',
   'error.code.past_date': 'The end date must be in the future.',
@@ -86,6 +97,18 @@ export const authRu: Record<AuthKey, string> = {
   'error.code.confirm_email': 'Для подтверждения введите почту пользователя точно.',
   'error.code.no_workspace': 'У пользователя ещё нет рабочего пространства.',
   'error.code.unknown_plan': 'Такого тарифа нет.',
+  'error.code.payments_off': 'Онлайн-оплата пока недоступна.',
+  'error.code.plan_unavailable': 'Этот тариф пока нельзя купить с таким периодом оплаты.',
+  'error.code.special_plan': 'У вашего пространства особый тариф от команды, покупать ничего не нужно.',
+  'error.code.same_plan': 'У вас уже этот тариф.',
+  'error.code.other_provider':
+    'Тариф оплачивается через другую платёжную систему. Сначала отмените его там или напишите в поддержку.',
+  'error.code.no_subscription': 'Платной подписки, которой можно управлять, нет.',
+  'error.code.provider_refused':
+    'Платёжная система отклонила запрос. Попробуйте ещё раз или напишите в поддержку.',
+  'error.code.provider_unavailable': 'Платёжная система не отвечает. Попробуйте через минуту.',
+  'error.code.paid_subscription':
+    'Этот тариф оплачивается через платёжную систему. Измените или отмените его там, либо добавьте дополнительные лимиты.',
   'error.code.unknown_limit': 'Такого лимита нет.',
   'error.code.bad_amount': 'Количество должно быть целым числом больше нуля.',
   'error.code.past_date': 'Дата окончания должна быть в будущем.',
