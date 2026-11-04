@@ -156,8 +156,13 @@ async function main() {
         break;
       }
       case 'tools:list': {
-        const { workspace } = await workspaceFor(services, values.email);
-        const catalog = await services.hub.getCatalog(workspace.id);
+        const { user, workspace } = await workspaceFor(services, values.email);
+        const catalog = await services.hub.getCatalog({
+          kind: 'session',
+          userId: user.id,
+          workspaceId: workspace.id,
+          scopes: ['mcp', 'api'],
+        });
         console.log(`Exposure: ${catalog.mode}\n`);
         for (const tool of catalog.tools) console.log(`${tool.name}\n  ${tool.description}\n`);
         break;

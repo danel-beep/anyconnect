@@ -82,7 +82,7 @@ async function run(
 }
 
 const TASKS: HttpManifestInput = {
-  id: 'tasks',
+  id: 'tracker',
   name: 'Tasks',
   description: 'A fake task tracker',
   baseUrl: 'https://{{config.region}}.tasks.example/api/v1',
@@ -175,7 +175,7 @@ describe('HTTP manifest connectors', () => {
         {
           id: 'acc_1',
           workspaceId: 'w',
-          connectorId: 'tasks',
+          connectorId: 'tracker',
           name: 'work',
           label: 'Work',
           description: null,
@@ -193,12 +193,14 @@ describe('HTTP manifest connectors', () => {
         },
       ],
     });
-    const list = catalog.tools.find((t) => t.name === 'tasks_list_tasks')!;
+    const list = catalog.tools.find((t) => t.name === 'tracker_list_tasks')!;
     const props = list.inputSchema.properties as Record<string, { description?: string }>;
     expect(Object.keys(props)).toEqual(['account', 'project_id', 'done', 'cursor']);
     expect(props.project_id?.description).toBe('Project id');
     expect(list.annotations.readOnlyHint).toBe(true);
-    expect(catalog.tools.find((t) => t.name === 'tasks_delete_task')!.annotations.destructiveHint).toBe(true);
+    expect(catalog.tools.find((t) => t.name === 'tracker_delete_task')!.annotations.destructiveHint).toBe(
+      true,
+    );
     // API-key auth gets a default credentials schema.
     expect(Object.keys(connector.credentials.shape)).toEqual(['apiKey']);
   });

@@ -1,12 +1,17 @@
+import { CAPABILITY_INTERFACES, getCapability } from './capabilities.js';
 import { resolveProvider, validateProvider } from './oauth/providers.js';
-import type { ConnectorDefinition } from './sdk.js';
+import { actionCapabilities, actionRisk, type ConnectorDefinition, type RateLimitSpec } from './sdk.js';
 
 const CONNECTOR_ID = /^[a-z][a-z0-9_]{1,23}$/;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,39}$/;
-/** Tool names starting with these are reserved for the hub's own tools. */
-const RESERVED_CONNECTOR_IDS = new Set(['anyconnect', 'hub', 'mcp']);
+/** Tool names starting with these are reserved for the hub's own and unified (capability) tools. */
+const RESERVED_CONNECTOR_IDS = new Set(['anyconnect', 'hub', 'mcp', ...CAPABILITY_INTERFACES]);
 /** Injected by the hub to pick an account, so actions cannot use it as an input name. */
 export const ACCOUNT_ARGUMENT = 'account';
+/** Injected by the hub for actions that declare `response.fields`: selects result fields. */
+export const FIELDS_ARGUMENT = 'fields';
+/** Input names the hub adds itself; connectors (and remote schemas, after renaming) must not use them. */
+export const RESERVED_INPUTS: readonly string[] = [ACCOUNT_ARGUMENT, FIELDS_ARGUMENT];
 
 /**
  * Resolves which connectors (services) exist for a workspace.
@@ -62,10 +67,46 @@ export function validateConnector(connector: ConnectorDefinition): void {
     if (!action.description.trim())
       throw new Error(`Action "${connector.id}.${action.name}" needs a description`);
     const jsonProperties = (action.inputSchema?.properties ?? {}) as Record<string, unknown>;
-    if (ACCOUNT_ARGUMENT in action.input.shape || ACCOUNT_ARGUMENT in jsonProperties) {
-      throw new Error(
-        `Action "${connector.id}.${action.name}" must not define an "${ACCOUNT_ARGUMENT}" input`,
-      );
+    for (const reserved of RESERVED_INPUTS) {
+      if (reserved in action.input.shape || reserved in jsonProperties) {
+        throw new Error(`Action "${connector.id}.${action.name}" must not define an "${reserved}" input`);
+      }
     }
+  }
+  validateRateLimit(connector.id, connector.rateLimit);
+  const capabilities = new Map<string, string>();
+  for (const action of connector.actions) {
+    const where = `${connector.id}.${action.name}`;
+    validateRateLimit(where, action.rateLimit);
+    if (action.undo?.kind === 'action' && !seen.has(action.undo.action)) {
+      throw new Error(`Action "${where}" names an unknown undo action "${action.undo.action}"`);
+    }
+    if (action.undo?.kind === 'delay' && !(action.undo.seconds > 0 && action.undo.seconds <= 600)) {
+      throw new Error(`Action "${where}" has an undo delay outside 1-600 seconds`);
+    }
+    const risk = actionRisk(action);
+    for (const binding of actionCapabilities(action)) {
+      const capability = getCapability(binding.id);
+      if (!capability) throw new Error(`Action "${where}" implements unknown capability "${binding.id}"`);
+      if ((capability.risk === 'read') !== (risk === 'read')) {
+        throw new Error(
+          `Action "${where}" has risk "${risk}" but capability "${binding.id}" is ${capability.risk}-only`,
+        );
+      }
+      const other = capabilities.get(binding.id);
+      if (other) {
+        throw new Error(
+          `Capability "${binding.id}" is implemented twice in ${connector.id}: ${other}, ${action.name}`,
+        );
+      }
+      capabilities.set(binding.id, action.name);
+    }
+  }
+}
+
+function validateRateLimit(where: string, limit: RateLimitSpec | undefined): void {
+  if (!limit) return;
+  if (!(Number.isInteger(limit.requests) && limit.requests > 0 && limit.perSeconds > 0)) {
+    throw new Error(`Invalid rate limit for "${where}": requests and perSeconds must be positive`);
   }
 }

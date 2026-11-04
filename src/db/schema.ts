@@ -281,6 +281,13 @@ export const toolCalls = pgTable(
     principalId: text(),
     clientId: text(),
     status: text().$type<'ok' | 'error'>().notNull(),
+    /**
+     * Why the call ended the way it did when that is more than ok/error: `denied` (policy),
+     * `declined` (user), `deduplicated`, `rate_limited`, `timeout`, or the connector error kind.
+     */
+    outcome: text(),
+    /** Risk level of the action at call time (`read`, `write`, `dangerous`). */
+    risk: text().$type<'read' | 'write' | 'dangerous'>(),
     errorMessage: text(),
     durationMs: integer().notNull(),
     createdAt: createdAt(),

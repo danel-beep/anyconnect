@@ -32,9 +32,14 @@ develop further. In practice:
   under `src/connectors/`). Connectors do all I/O through `ctx.fetch` / `ctx.network` (hub network
   policy, test fixtures); REST services are best written as HTTP manifests. See `docs/CONNECTORS.md`.
   New service = `defineConnector({...})` in `src/connectors/builtin/`, registered in
-  `src/connectors/index.ts`. Never add an input named `account` (reserved for routing).
+  `src/connectors/index.ts`. Never add inputs named `account` or `fields` (reserved by the hub).
+  Give write actions an explicit `risk`; shared interfaces live in `src/connectors/capabilities.ts`
+  (see `docs/CONNECTORS.md`).
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.
-- `src/hub/hub.ts` executes calls; connectors throw `ConnectorError` for user-safe errors.
+- `src/hub/hub.ts` resolves calls; every connector call runs through the stage chain in
+  `src/hub/executor.ts` (audit → policy → risk → confirm → limits → idempotency → untrusted →
+  shape → invoke). New cross-cutting rules are new stages, not code in `hub.ts`.
+  Connectors throw `ConnectorError` for user-safe errors.
 - `src/oauth/server.ts` is framework-free; HTTP lives in `src/routes/`.
 - Secrets only via env vars. Credentials are encrypted with `SecretBox` (AAD = account id).
   Tokens are stored as SHA-256 hashes. Never log arguments, tokens or credentials.

@@ -11,6 +11,10 @@
  */
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import { z } from 'zod';
+import type { CapabilityId } from './capabilities.js';
+
+export type { CapabilityId } from './capabilities.js';
+export * from './shape.js';
 
 export type JsonSchema = Record<string, unknown>;
 export type AnyObjectSchema = z.ZodObject<any, any>;
@@ -26,6 +30,55 @@ export interface ActionHints {
   idempotent?: boolean;
   /** Talks to an external system (default true). */
   openWorld?: boolean;
+}
+
+/**
+ * How much harm an action can do, used by the hub's policy, confirmation and audit:
+ * - `read`: only reads data;
+ * - `write`: creates or changes something that is easy to notice and fix (send a message, add a task);
+ * - `dangerous`: hard or impossible to undo, or moves money/data out (delete, pay, share publicly).
+ */
+export type RiskLevel = 'read' | 'write' | 'dangerous';
+
+/** How the effect of an action can be undone (shown in the audit log; the panel offers "undo"). */
+export type UndoSpec =
+  /** Another action of the same connector reverses it, e.g. `delete_message` for `send_message`. */
+  | { kind: 'action'; action: string; note?: string }
+  /** The hub may hold the call for this many seconds so the user can cancel it (send with undo window). */
+  | { kind: 'delay'; seconds: number }
+  | { kind: 'none' };
+
+/** A shared interface operation the action implements; see `capabilities.ts`. */
+export interface CapabilityBinding {
+  id: CapabilityId;
+  /** Converts the capability's canonical input to this action's input (default: passed as is). */
+  mapInput?(input: Record<string, unknown>): Record<string, unknown>;
+  /** Converts this action's result to the capability's canonical output (default: used as is). */
+  mapOutput?(result: unknown, input: Record<string, unknown>): unknown;
+}
+
+/** Result of a runtime risk check, see `ActionDefinition.assessRisk`. */
+export interface RiskAssessment {
+  risk: RiskLevel;
+  /** Shown to the user when asking for confirmation, e.g. "First message to a new contact". */
+  reason: string;
+}
+
+/** Fixed-window request limit, e.g. `{ requests: 20, perSeconds: 60 }`. */
+export interface RateLimitSpec {
+  requests: number;
+  perSeconds: number;
+}
+
+/** Tells the hub how to keep the action's results compact for the AI. */
+export interface ResponseSpec {
+  /**
+   * Top-level fields of the result (or of each item for list results) the AI may select with the
+   * hub-provided `fields` argument. Declaring them adds that argument to the tool.
+   */
+  fields?: string[];
+  /** Upper bound for the result size in tokens (default: the hub's limit, ~2000 tokens). */
+  maxTokens?: number;
 }
 
 export interface AccountInfo {
@@ -181,6 +234,24 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
    */
   inputSchema?: JsonSchema;
   hints?: ActionHints;
+  /** Default: `read` if `hints.readOnly`, `dangerous` if `hints.destructive`, otherwise `write`. */
+  risk?: RiskLevel;
+  undo?: UndoSpec;
+  /** Shared interface operation(s) this action implements, e.g. `'mail.search'`. */
+  capability?: CapabilityId | CapabilityBinding | Array<CapabilityId | CapabilityBinding>;
+  response?: ResponseSpec;
+  /** Per-account limit for this action (in addition to the connector-wide `rateLimit`). */
+  rateLimit?: RateLimitSpec;
+  /**
+   * Optional runtime check that can *raise* the risk of a particular call, e.g. the first message
+   * to someone the account never talked to becomes `dangerous` and needs confirmation. Runs after
+   * the policy check and before confirmation; it can never lower the declared risk. If it throws,
+   * the call is treated as `dangerous`.
+   */
+  assessRisk?(
+    input: unknown,
+    ctx: ActionContext<TConfig, TCredentials>,
+  ): Promise<RiskAssessment | undefined> | RiskAssessment | undefined;
   run(input: unknown, ctx: ActionContext<TConfig, TCredentials>): Promise<ActionResult> | ActionResult;
 }
 
@@ -257,16 +328,21 @@ export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> 
   /** Accounts are connected through OAuth: the hub runs the flow and refreshes tokens (`ctx.oauth`). */
   oauth?: OAuthRequirement;
   actions: ActionDefinition<TConfig, TCredentials>[];
+  /** Per-account limit across all actions, e.g. the service's documented API quota. */
+  rateLimit?: RateLimitSpec;
   /** Verify that an account works (called when it is added and on demand). */
   test?(ctx: AccountContext<TConfig, TCredentials>): Promise<TestResult>;
 }
 
-type ActionSpec<TInput extends AnyObjectSchema, TConfig, TCredentials> = {
-  name: string;
-  title?: string;
-  description: string;
+type ActionSpec<TInput extends AnyObjectSchema, TConfig, TCredentials> = Omit<
+  ActionDefinition<TConfig, TCredentials>,
+  'input' | 'run' | 'assessRisk'
+> & {
   input: TInput;
-  hints?: ActionHints;
+  assessRisk?(
+    input: z.output<TInput>,
+    ctx: ActionContext<TConfig, TCredentials>,
+  ): Promise<RiskAssessment | undefined> | RiskAssessment | undefined;
   run(
     input: z.output<TInput>,
     ctx: ActionContext<TConfig, TCredentials>,
@@ -287,6 +363,7 @@ export interface ConnectorSpec<TConfig extends AnyObjectSchema, TCredentials ext
   config?: TConfig;
   credentials?: TCredentials;
   oauth?: OAuthRequirement;
+  rateLimit?: RateLimitSpec;
   actions: (
     action: ActionFactory<z.output<TConfig>, z.output<TCredentials>>,
   ) => ActionDefinition<z.output<TConfig>, z.output<TCredentials>>[];
@@ -314,10 +391,14 @@ export function defineConnector<
   TConfig extends AnyObjectSchema = EmptySchema,
   TCredentials extends AnyObjectSchema = EmptySchema,
 >(spec: ConnectorSpec<TConfig, TCredentials>): ConnectorDefinition {
-  const factory: ActionFactory<z.output<TConfig>, z.output<TCredentials>> = (action) => ({
-    ...action,
-    run: (input, ctx) => action.run(input as never, ctx),
-  });
+  const factory: ActionFactory<z.output<TConfig>, z.output<TCredentials>> = (action) => {
+    const { assessRisk } = action;
+    return {
+      ...action,
+      run: (input, ctx) => action.run(input as never, ctx),
+      ...(assessRisk ? { assessRisk: (input: unknown, ctx) => assessRisk(input as never, ctx) } : {}),
+    } as ActionDefinition<z.output<TConfig>, z.output<TCredentials>>;
+  };
   const definition: ConnectorDefinition<z.output<TConfig>, z.output<TCredentials>> = {
     id: spec.id,
     name: spec.name,
@@ -329,9 +410,29 @@ export function defineConnector<
     credentials: spec.credentials ?? z.object({}),
     ...(spec.oauth ? { oauth: spec.oauth } : {}),
     actions: spec.actions(factory),
+    rateLimit: spec.rateLimit,
     test: spec.test,
   };
   return definition as unknown as ConnectorDefinition;
+}
+
+/** The action's risk level, explicit or derived from its hints. */
+export function actionRisk(action: Pick<ActionDefinition, 'risk' | 'hints'>): RiskLevel {
+  if (action.risk) return action.risk;
+  if (action.hints?.readOnly) return 'read';
+  return action.hints?.destructive ? 'dangerous' : 'write';
+}
+
+/** Capability bindings of an action in their long form. */
+export function actionCapabilities(action: Pick<ActionDefinition, 'capability'>): CapabilityBinding[] {
+  if (!action.capability) return [];
+  const list = Array.isArray(action.capability) ? action.capability : [action.capability];
+  return list.map((entry) => (typeof entry === 'string' ? { id: entry } : entry));
+}
+
+/** Whether repeating the call with the same input is harmless (reads are always idempotent). */
+export function actionIdempotent(action: Pick<ActionDefinition, 'risk' | 'hints'>): boolean {
+  return actionRisk(action) === 'read' || action.hints?.idempotent === true;
 }
 
 /** JSON Schema for a zod schema, in the shape MCP clients expect for tool inputs. */

@@ -12,7 +12,9 @@ import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
-import { Hub } from './hub/hub.js';
+import type { StageMap } from './hub/executor.js';
+import { Hub, type HubDeps } from './hub/hub.js';
+import { type IdempotencyStore, MemoryIdempotencyStore } from './hub/idempotency.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
 import { SecretBox } from './lib/crypto.js';
@@ -57,6 +59,7 @@ export interface Services {
   verifier: HubTokenVerifier;
   sessions: SessionService;
   rateLimiter: RateLimiter;
+  idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
   close(): Promise<void>;
 }
@@ -69,6 +72,9 @@ export function createServices(
     /** Tests: fetch Client ID Metadata Documents from localhost. */
     allowPrivateNetwork?: boolean;
     fetchDocument?: typeof safeFetch;
+    /** Executor stages to add or replace (security layer: policy, confirm, untrusted). */
+    stages?: StageMap;
+    catalogFilter?: HubDeps['catalogFilter'];
   } = {},
 ): Services {
   const logger =
@@ -115,7 +121,21 @@ export function createServices(
   const jobs = new JobQueue({ connectionString: config.database.url, logger });
   for (const job of builtinJobs({ health, customServices })) jobs.register(job);
   const apiTokens = new ApiTokenService(db);
-  const hub = new Hub({ db, connectors, accounts, logger, toolTimeoutMs: config.toolTimeoutMs });
+  const rateLimiter = new RateLimiter();
+  const idempotency = new MemoryIdempotencyStore();
+  const hub = new Hub({
+    db,
+    connectors,
+    accounts,
+    logger,
+    rateLimiter,
+    idempotency,
+    toolTimeoutMs: config.toolTimeoutMs,
+    maxResultTokens: config.tools.maxResultTokens,
+    idempotencyWindowMs: config.tools.idempotencyWindowMs,
+    ...(overrides.stages ? { stages: overrides.stages } : {}),
+    ...(overrides.catalogFilter ? { catalogFilter: overrides.catalogFilter } : {}),
+  });
   const clients = new ClientRegistry(db, {
     dynamicRegistration: config.oauth.dynamicRegistration,
     metadataDocuments: config.oauth.clientMetadataDocuments,
@@ -134,7 +154,6 @@ export function createServices(
   });
   const verifier = new HubTokenVerifier(oauth, apiTokens, config.mcpUrl);
   const sessions = new SessionService(db, config.sessionTtlSeconds);
-  const rateLimiter = new RateLimiter();
   const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
 
   return {
@@ -160,6 +179,7 @@ export function createServices(
     verifier,
     sessions,
     rateLimiter,
+    idempotency,
     mcp,
     async close() {
       rateLimiter.close();

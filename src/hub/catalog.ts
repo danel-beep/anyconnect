@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto';
-import { ACCOUNT_ARGUMENT } from '../connectors/registry.js';
-import { type ConnectorDefinition, type JsonSchema, toJsonSchema } from '../connectors/sdk.js';
+import { ACCOUNT_ARGUMENT, FIELDS_ARGUMENT } from '../connectors/registry.js';
+import {
+  type ActionDefinition,
+  actionIdempotent,
+  actionRisk,
+  type ConnectorDefinition,
+  type JsonSchema,
+  type RiskLevel,
+  toJsonSchema,
+} from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import type { WorkspaceSettings } from '../db/schema.js';
 
@@ -50,7 +58,20 @@ export interface CatalogTool {
   inputSchema: JsonSchema;
   annotations: ToolAnnotations;
   target: ToolTarget;
+  /** Risk of the underlying action(s); `read` for hub tools. */
+  risk: RiskLevel;
 }
+
+/**
+ * Decides whether an account may use an action at all (policy, personas). Applied before anything
+ * else, so a denied account disappears from the `account` enum and an action without allowed
+ * accounts disappears from the catalog.
+ */
+export type CatalogAllow = (
+  connector: ConnectorDefinition,
+  action: ActionDefinition,
+  account: AccountRow,
+) => boolean;
 
 export interface CatalogService {
   connector: ConnectorDefinition;
@@ -93,17 +114,42 @@ export function describeAccount(account: CatalogAccount): string {
   return `"${account.name}" — ${account.label}${details ? ` (${details})` : ''}`;
 }
 
-function annotationsFor(
+/**
+ * MCP annotations from the action metadata. Clients use them to decide when to ask the user, so
+ * they stay conservative: a write is `destructiveHint: true` unless the connector says otherwise
+ * (explicitly via `hints.destructive: false` or by declaring `risk: 'write'`).
+ */
+export function annotationsFor(
   title: string,
-  hints: ConnectorDefinition['actions'][number]['hints'],
+  action: Pick<ActionDefinition, 'hints' | 'risk'>,
 ): ToolAnnotations {
-  const readOnly = hints?.readOnly ?? false;
+  const risk = actionRisk(action);
+  const hints = action.hints;
   return {
     title,
-    readOnlyHint: readOnly,
-    ...(readOnly ? {} : { destructiveHint: hints?.destructive ?? true }),
-    idempotentHint: hints?.idempotent ?? false,
+    readOnlyHint: risk === 'read',
+    ...(risk === 'read'
+      ? {}
+      : { destructiveHint: risk === 'dangerous' || (hints?.destructive ?? action.risk === undefined) }),
+    idempotentHint: actionIdempotent(action),
     openWorldHint: hints?.openWorld ?? true,
+  };
+}
+
+function withFieldsArgument(schema: JsonSchema, action: ActionDefinition): JsonSchema {
+  const fields = action.response?.fields;
+  if (!fields?.length) return schema;
+  const properties = (schema.properties as Record<string, unknown> | undefined) ?? {};
+  return {
+    ...schema,
+    properties: {
+      ...properties,
+      [FIELDS_ARGUMENT]: {
+        type: 'array',
+        items: { type: 'string', enum: fields },
+        description: 'Return only these fields (smaller result). Default: all.',
+      },
+    },
   };
 }
 
@@ -144,6 +190,7 @@ const LIST_ACCOUNTS_TOOL: CatalogTool = {
     openWorldHint: false,
   },
   target: { kind: 'builtin', id: 'list_accounts' },
+  risk: 'read',
 };
 
 export function buildInstructions(services: CatalogService[], mode: ExposureMode): string {
@@ -172,6 +219,7 @@ export function buildCatalog(input: {
   connectors: ConnectorDefinition[];
   accounts: AccountRow[];
   mode?: ExposureMode;
+  allow?: CatalogAllow;
 }): Catalog {
   const mode = input.mode ?? 'grouped';
   const byConnector = new Map(input.connectors.map((c) => [c.id, c]));
@@ -206,17 +254,20 @@ export function buildCatalog(input: {
     for (const action of connector.actions) {
       const eligible = usable
         .filter((a) => !a.settings.disabledActions?.includes(action.name))
+        .filter((a) => !input.allow || input.allow(connector, action, a))
         .map(toCatalogAccount);
       if (eligible.length === 0) continue;
-      const baseSchema = action.inputSchema ?? toJsonSchema(action.input);
+      const baseSchema = withFieldsArgument(action.inputSchema ?? toJsonSchema(action.input), action);
       const title = action.title ?? action.name;
+      const risk = actionRisk(action);
       if (mode === 'grouped') {
         add({
           name: makeToolName([connector.id, action.name], `${connector.id}:${action.name}`),
           title: `${connector.name}: ${title}`,
           description: `[${connector.name}] ${action.description}`,
           inputSchema: withAccountArgument(baseSchema, eligible, connector),
-          annotations: annotationsFor(`${connector.name}: ${title}`, action.hints),
+          annotations: annotationsFor(`${connector.name}: ${title}`, action),
+          risk,
           target: {
             kind: 'action',
             connectorId: connector.id,
@@ -233,7 +284,8 @@ export function buildCatalog(input: {
             title: fullTitle,
             description: `[${connector.name} — account ${describeAccount(account)}] ${action.description}`,
             inputSchema: { ...baseSchema, type: 'object' },
-            annotations: annotationsFor(fullTitle, action.hints),
+            annotations: annotationsFor(fullTitle, action),
+            risk,
             target: {
               kind: 'action',
               connectorId: connector.id,

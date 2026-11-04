@@ -205,7 +205,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
   }
 
   async function callMe() {
-    const catalog = await hub.services.hub.getCatalog(principal.workspaceId);
+    const catalog = await hub.services.hub.getCatalog(principal);
     return hub.services.hub.callTool(principal, catalog, 'fake_me', {});
   }
 
