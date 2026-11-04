@@ -6,6 +6,7 @@ import { bootstrap } from '../src/bootstrap.js';
 import { loadConfig } from '../src/config.js';
 import type { ConnectorRegistry } from '../src/connectors/registry.js';
 import { runMigrations } from '../src/db/migrate.js';
+import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
 import { createLogger } from '../src/logger.js';
 import { createServices, type Services } from '../src/services.js';
@@ -65,6 +66,7 @@ export async function startTestHub(
     fetchDocument?: typeof safeFetch;
     seed?: boolean;
     databaseUrl?: string;
+    stages?: StageMap;
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -96,6 +98,7 @@ export async function startTestHub(
     logger: createLogger({ level: 'silent' }),
     ...(options.connectors ? { connectors: options.connectors } : {}),
     ...(options.fetchDocument ? { fetchDocument: options.fetchDocument } : {}),
+    ...(options.stages ? { stages: options.stages } : {}),
   });
   await truncateAll(services);
   await bootstrap(services);

@@ -50,7 +50,7 @@ describe('remote MCP servers as services', () => {
   });
 
   async function call(name: string, args: Record<string, unknown>) {
-    const catalog = await hub.services.hub.getCatalog(principal.workspaceId);
+    const catalog = await hub.services.hub.getCatalog(principal);
     return hub.services.hub.callTool(principal, catalog, name, args);
   }
 
@@ -89,7 +89,7 @@ describe('remote MCP servers as services', () => {
     // The tool list was fetched right after the account connected.
     const services = (await api('/services')).body as { tools: number; toolsRefreshedAt: string | null }[];
     expect(services[0]!.tools).toBeGreaterThan(2);
-    const catalog = await hub.services.hub.getCatalog(principal.workspaceId);
+    const catalog = await hub.services.hub.getCatalog(principal);
     const echo = catalog.tools.find((t) => t.name === 'upstream_demo_echo')!;
     expect(echo).toBeDefined();
     // The upstream `account` argument is renamed so it does not clash with the hub's own.

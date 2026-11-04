@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { BUILTIN_PROVIDERS, resolveProvider } from '../connectors/oauth/providers.js';
-import { toJsonSchema } from '../connectors/sdk.js';
+import { actionCapabilities, actionIdempotent, actionRisk, toJsonSchema } from '../connectors/sdk.js';
 import { toAccountView } from '../core/accounts.js';
 import { toApiTokenView } from '../core/api-tokens.js';
 import { principalFromAuthInfo } from '../core/auth.js';
@@ -134,6 +134,11 @@ export function apiRoutes() {
           title: a.title,
           description: a.description,
           hints: a.hints ?? {},
+          risk: actionRisk(a),
+          idempotent: actionIdempotent(a),
+          ...(a.undo ? { undo: a.undo } : {}),
+          capabilities: actionCapabilities(a).map((b) => b.id),
+          ...(a.response?.fields ? { fields: a.response.fields } : {}),
           inputSchema: a.inputSchema ?? toJsonSchema(a.input),
         })),
       })),
@@ -261,16 +266,17 @@ export function apiRoutes() {
 
   // --- Tools as the AI sees them -------------------------------------------
   api.get('/tools', async (c) => {
-    const catalog = await c.get('services').hub.getCatalog(principal(c).workspaceId);
+    const catalog = await c.get('services').hub.getCatalog(principal(c));
     return c.json({
       exposure: catalog.mode,
       instructions: catalog.instructions,
-      tools: catalog.tools.map(({ name, title, description, inputSchema, annotations }) => ({
+      tools: catalog.tools.map(({ name, title, description, inputSchema, annotations, risk }) => ({
         name,
         title,
         description,
         inputSchema,
         annotations,
+        risk,
       })),
     });
   });
@@ -279,9 +285,11 @@ export function apiRoutes() {
     const s = c.get('services');
     const p = principal(c);
     const body = await json(c, z.object({ arguments: z.record(z.string(), z.unknown()).default({}) }));
-    const catalog = await s.hub.getCatalog(p.workspaceId);
+    const catalog = await s.hub.getCatalog(p);
     if (!catalog.tools.some((t) => t.name === c.req.param('name'))) throw notFound('Tool');
-    return c.json(await s.hub.callTool(p, catalog, c.req.param('name'), body.arguments, c.req.raw.signal));
+    return c.json(
+      await s.hub.callTool(p, catalog, c.req.param('name'), body.arguments, { signal: c.req.raw.signal }),
+    );
   });
 
   api.get('/tool-calls', async (c) => {

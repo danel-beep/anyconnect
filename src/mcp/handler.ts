@@ -45,7 +45,7 @@ export function createHubMcpHandler(deps: { hub: Hub; logger: Logger; version: s
   return createMcpHandler(
     async ({ authInfo }) => {
       const principal = principalFromAuthInfo(authInfo);
-      const catalog = await deps.hub.getCatalog(principal.workspaceId);
+      const catalog = await deps.hub.getCatalog(principal);
       const server = new McpServer(
         {
           name: 'anyconnect',
@@ -64,7 +64,8 @@ export function createHubMcpHandler(deps: { hub: Hub; logger: Logger; version: s
             inputSchema: inputValidator(tool.inputSchema),
             annotations: tool.annotations,
           },
-          (args, ctx) => deps.hub.callTool(principal, catalog, tool.name, args ?? {}, ctx.mcpReq.signal),
+          (args, ctx) =>
+            deps.hub.callTool(principal, catalog, tool.name, args ?? {}, { signal: ctx.mcpReq.signal }),
         );
       }
       return server;
