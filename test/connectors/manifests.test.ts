@@ -54,6 +54,16 @@ describe('github', () => {
     expect(call.headers.get('x-github-api-version')).toBe('2022-11-28');
   });
 
+  it('prefers the OAuth connection and needs OAuth or a token', async () => {
+    expect(github.oauth).toMatchObject({ provider: 'github', optional: true });
+    const viaOAuth = testAccount(github, { fetch: service.fetch, oauth: { accessToken: 'gho_oauth' } });
+    await github.test!(viaOAuth.ctx as never);
+    expect(service.calls.at(-1)!.headers.get('authorization')).toBe('Bearer gho_oauth');
+    await expect(testAccount(github, { fetch: service.fetch }).run('list_repos')).rejects.toMatchObject({
+      kind: 'auth',
+    });
+  });
+
   it('searches with compact items and follows Link pagination on the API origin only', async () => {
     const page = (await acc.run('search_issues', { q: 'is:open assignee:@me' })) as {
       items: unknown[];

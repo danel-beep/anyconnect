@@ -28,17 +28,23 @@ export default defineManifestConnector({
   instructions:
     'github_search_issues uses GitHub search syntax (e.g. "is:open is:pr review-requested:@me", "repo:o/r label:bug"). Issue tools also work for pull requests.',
   baseUrl: 'https://api.github.com',
-  auth: { type: 'bearer' },
+  // OAuth through the hub's GitHub app, or a personal access token without one.
+  auth: {
+    type: 'oauth2',
+    provider: 'github',
+    scopes: ['repo', 'notifications', 'read:user'],
+    token: '{{credentials.token}}',
+  },
   credentials: {
     type: 'object',
     properties: {
       token: {
         type: 'string',
         minLength: 1,
-        description: 'Personal access token: https://github.com/settings/personal-access-tokens',
+        description:
+          'Personal access token (only without OAuth): https://github.com/settings/personal-access-tokens',
       },
     },
-    required: ['token'],
   },
   headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
   rateLimit: { requests: 80, perSeconds: 60 },

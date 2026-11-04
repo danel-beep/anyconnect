@@ -158,7 +158,7 @@ export default defineConnector({
   instructions:
     'The integration only sees pages shared with it. Ids and notion.so URLs are both accepted. Database rows are pages: update them with notion_update_page.',
   credentials: Credentials,
-  oauth: { provider: 'notion', scopes: [] },
+  oauth: { provider: 'notion', scopes: [], optional: true },
   async test(ctx) {
     const { data } = await api(ctx).get<{
       name?: string;
