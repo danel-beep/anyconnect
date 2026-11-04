@@ -112,6 +112,18 @@ export interface InboundMessage {
 // ---------------------------------------------------------------------------
 
 /** One unit of work taken from the outbox by a transport. */
+/**
+ * A pre-approved message template (WhatsApp Business): the only way such a number may write first
+ * or more than 24 hours after the person last wrote.
+ */
+export interface TemplateMessage {
+  name: string;
+  /** Template language code, e.g. en_US. */
+  language: string;
+  /** Body variables in order; `name` is set for templates with named variables. */
+  parameters?: { name?: string; value: string }[];
+}
+
 export interface OutboundJob {
   /** Hub job id, stable across retries: transports derive their own idempotency ids from it. */
   id: string;
@@ -120,6 +132,8 @@ export interface OutboundJob {
   chat: { externalId: string; kind: ChatKind };
   text?: string;
   replyToExternalId?: string;
+  /** Send this template instead of free text; `text` then holds its rendered body for the hub's copy. */
+  template?: TemplateMessage;
   /** For `mark_read`: read everything up to this message (absent = the whole chat). */
   upToExternalId?: string;
 }
@@ -168,6 +182,8 @@ export interface DirectTransport<TConfig = unknown, TCredentials = unknown> {
    * the messenger deduplicates by an id the transport derives from `job.id`.
    */
   idempotentSend: boolean;
+  /** The transport can send {@link OutboundJob.template}. */
+  templates?: boolean;
   send(job: OutboundJob, ctx: AccountContext<TConfig, TCredentials>): Promise<SentReceipt | undefined>;
   download?(
     attachment: { externalId: string; locator?: unknown },
@@ -290,6 +306,8 @@ export interface SendRequest {
   to?: string;
   text: string;
   replyTo?: string;
+  /** Send a pre-approved template; `text` is its rendered body, kept in the hub's copy of the chat. */
+  template?: TemplateMessage;
   /** How long to wait for delivery before returning `queued`. */
   waitMs?: number;
 }
