@@ -12,9 +12,6 @@ import { fmtAgo, fmtDate, Hidden, Icon, ServiceLogo } from './ui.js';
  * (`/app/profiles`) and one profile with its address, settings and apps (`/app/profiles/:id`).
  */
 
-/** Forms on a profile's page (revoking an app or a token) come back to it. */
-export const PROFILE_BACK = /^\/app\/profiles\/[\w-]{1,64}$/;
-
 /** The most a profile may allow, from least to most ('none' makes no sense for a profile). */
 export const PROFILE_ACCESS = ['read', 'write', 'full'] as const satisfies readonly AccessLevel[];
 

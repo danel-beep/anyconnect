@@ -21,6 +21,7 @@ import {
   type WorkspaceAdmin,
 } from '../core/workspace-admin.js';
 import { AppError, badRequest } from '../lib/errors.js';
+import { appActions, type WorkspaceApps } from './app-tools.js';
 import { billingActions, type WorkspaceBilling } from './billing-tools.js';
 import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
 
@@ -56,6 +57,8 @@ export interface SetupContext {
   billing?: WorkspaceBilling;
   /** Access profiles (`profile-tools.ts`); absent in hubs built without the security layer. */
   profiles?: WorkspaceProfiles;
+  /** AI apps (`app-tools.ts`); absent in hubs built without the security layer. */
+  apps?: WorkspaceApps;
   signal: AbortSignal;
 }
 
@@ -426,6 +429,8 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   }),
   ...profileActions(setupAction),
   ...billingActions(setupAction),
+  // Rarely needed: listed after the rest while they fit, always found by search.
+  ...appActions(setupAction),
 ];
 
 /** The setup tools as a connector, so the catalog and the executor treat them like any other. */

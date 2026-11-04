@@ -8,6 +8,7 @@ import { runMigrations } from '../db/migrate.js';
 import { workspaces } from '../db/schema.js';
 import { generateKey } from '../lib/crypto.js';
 import { createLogger } from '../logger.js';
+import { migrationState } from '../ops/builtin-checks.js';
 import { createServices, type Services } from '../services.js';
 
 const HELP = `Manyplug admin CLI
@@ -18,6 +19,11 @@ Usage: npm run cli -- <command> [options]
   keys:rotate                            Re-wrap account data keys with the current ENCRYPTION_KEY
                                          (run after moving the old key to ENCRYPTION_KEYS_PREVIOUS)
   db:migrate                             Apply database migrations
+  db:status                              Migrations applied vs. shipped with this build
+  health                                 Run the health checks (exit code 1 when one is down)
+  jobs:list                              Background jobs and their latest runs
+  jobs:run --name JOB                    Run a background job now, in this process
+  errors:list [--q resolved]             Recent errors from the built-in error tracker
   users:create --email E --password P    Create a user with a personal workspace
   users:password --email E --password P  Set a user's password
   users:2fa:reset --email E              Remove a user's second factors (lost authenticator):
@@ -106,6 +112,50 @@ async function main() {
         await runMigrations(services.database.pool);
         console.log('Migrations applied.');
         break;
+      case 'db:status': {
+        const m = await migrationState(services.database.pool);
+        console.log(`Migrations: ${m.applied} applied, ${m.expected} in this build (${m.state}).`);
+        if (m.state === 'pending') process.exitCode = 1;
+        break;
+      }
+      case 'health': {
+        const report = await services.ops.health.run({ timeoutMs: 10_000 });
+        for (const c of report.checks) {
+          console.log(`${c.status.padEnd(8)} ${c.name.padEnd(12)} ${c.detail ?? ''} (${c.ms} ms)`);
+        }
+        console.log(`overall: ${report.status}`);
+        if (report.status === 'down') process.exitCode = 1;
+        break;
+      }
+      case 'jobs:list': {
+        const runs = new Map((await services.ops.jobRuns.list()).map((r) => [r.name, r]));
+        for (const job of services.jobs.definitionsList) {
+          const run = runs.get(job.name);
+          console.log(
+            `${job.name.padEnd(28)} ${(job.cron ?? '').padEnd(14)} ok ${run?.lastSucceededAt?.toISOString() ?? '—'}  failed ${run?.lastFailedAt?.toISOString() ?? '—'}  runs ${run?.runs ?? 0}`,
+          );
+        }
+        break;
+      }
+      case 'jobs:run': {
+        if (!values.name) throw new Error('--name JOB (see jobs:list)');
+        await services.jobs.runNow(values.name);
+        console.log(`Job ${values.name} done.`);
+        break;
+      }
+      case 'errors:list': {
+        const groups = await services.ops.errorStore.list({
+          status: values.q === 'resolved' ? 'resolved' : 'open',
+          limit: 50,
+        });
+        for (const g of groups) {
+          console.log(
+            `${g.lastSeenAt.toISOString()}  ×${g.count}  ${g.source}  ${g.type}: ${g.message.slice(0, 120)}  (ref ${g.lastRef ?? '—'})`,
+          );
+        }
+        if (groups.length === 0) console.log('No errors.');
+        break;
+      }
       case 'keys:rotate': {
         const result = await services.accounts.upgradeEncryption();
         console.log(

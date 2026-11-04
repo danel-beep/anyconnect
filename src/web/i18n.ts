@@ -1,10 +1,12 @@
 import { accountEn, accountRu } from './i18n/account.js';
 import { appEn, appRu } from './i18n/app.js';
+import { appsEn, appsRu } from './i18n/apps.js';
 import { authEn, authRu } from './i18n/auth.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { profilesEn, profilesRu } from './i18n/profiles.js';
+import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
 
 export type Locale = 'ru' | 'en';
@@ -187,6 +189,7 @@ const coreEn = {
 const en = {
   ...coreEn,
   ...siteEn,
+  ...seoEn,
   ...appEn,
   ...authEn,
   ...connectEn,
@@ -194,6 +197,7 @@ const en = {
   ...confirmEn,
   ...problemsEn,
   ...profilesEn,
+  ...appsEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -378,6 +382,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
 const ru: Record<Key, string> = {
   ...coreRu,
   ...siteRu,
+  ...seoRu,
   ...appRu,
   ...authRu,
   ...connectRu,
@@ -385,6 +390,7 @@ const ru: Record<Key, string> = {
   ...confirmRu,
   ...problemsRu,
   ...profilesRu,
+  ...appsRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

@@ -39,8 +39,15 @@ services:
         sync: false
       - key: SUPPORT_EMAIL
         sync: false
+      - key: GOOGLE_SITE_VERIFICATION
+        sync: false
+      - key: BING_SITE_VERIFICATION
+        sync: false
       - key: SIGNUPS
         value: open
+      # Optional: also send errors to Sentry (docs/OPERATIONS.md)
+      - key: SENTRY_DSN
+        sync: false
 
 databases:
   - name: anyconnect-db

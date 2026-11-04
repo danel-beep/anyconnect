@@ -99,7 +99,14 @@ function nextLink(header: string | null): string | undefined {
   if (!header) return undefined;
   for (const part of header.split(',')) {
     const match = part.match(/<([^>]+)>\s*;(.*)/);
-    if (match && /rel="?([^";]*\s)?next(\s[^";]*)?"?/i.test(match[2]!)) return match[1];
+    // Sentry always sends a next link and marks the last page with `results="false"`.
+    if (
+      match &&
+      /rel="?([^";]*\s)?next(\s[^";]*)?"?/i.test(match[2]!) &&
+      !/results="?false/i.test(match[2]!)
+    ) {
+      return match[1];
+    }
   }
   return undefined;
 }

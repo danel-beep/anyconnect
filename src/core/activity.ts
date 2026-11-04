@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { toolCalls } from '../db/schema.js';
 
@@ -17,6 +17,8 @@ export interface ActivityFilter {
   accountId?: string | undefined;
   connectorId?: string | undefined;
   status?: 'ok' | 'error' | undefined;
+  /** Calls made with these sign-ins or tokens (one AI app's, see `AiAppService.credentialIds`). */
+  principalIds?: readonly string[] | undefined;
 }
 
 /**
@@ -83,7 +85,12 @@ export class ActivityService {
     now = new Date(),
   ) {
     const conditions = [eq(toolCalls.workspaceId, workspaceId)];
-    const { accountId, connectorId, status } = opts.filter ?? {};
+    const { accountId, connectorId, status, principalIds } = opts.filter ?? {};
+    if (principalIds) {
+      // An app that never connected has no calls (an empty IN list is not valid SQL).
+      if (principalIds.length === 0) return [];
+      conditions.push(inArray(toolCalls.principalId, [...principalIds]));
+    }
     if (accountId) conditions.push(eq(toolCalls.accountId, accountId));
     if (connectorId) conditions.push(eq(toolCalls.connectorId, connectorId));
     if (status) conditions.push(eq(toolCalls.status, status));

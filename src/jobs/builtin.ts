@@ -12,6 +12,7 @@ export function builtinJobs(deps: {
       name: 'accounts.refresh_tokens',
       description: 'Refresh OAuth tokens that expire within 15 minutes',
       cron: '*/5 * * * *',
+      expectEveryMs: 20 * 60_000,
       run: async () => {
         await deps.health.refreshExpiringTokens();
       },
@@ -20,6 +21,7 @@ export function builtinJobs(deps: {
       name: 'accounts.health_check',
       description: 'Re-run the connection test of accounts not checked for a day',
       cron: '17 * * * *',
+      expectEveryMs: 3 * 3_600_000,
       run: async () => {
         await deps.health.checkStaleAccounts();
       },
@@ -28,6 +30,7 @@ export function builtinJobs(deps: {
       name: 'services.refresh_tools',
       description: 'Re-read the tool lists of remote MCP servers',
       cron: '41 4 * * *',
+      expectEveryMs: 50 * 3_600_000,
       run: async () => {
         await deps.customServices.refreshAll();
       },

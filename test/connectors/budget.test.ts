@@ -41,8 +41,22 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   intercom: { total: 1130, tool: 220 },
   pipedrive: { total: 1950, tool: 290 },
   gsheets: { total: 1910, tool: 300 },
+  monday: { total: 1970, tool: 370 },
+  freshdesk: { total: 1710, tool: 320 },
+  sentry: { total: 1260, tool: 330 },
+  figma: { total: 1610, tool: 260 },
+  wordpress: { total: 2020, tool: 300 },
+  mailchimp: { total: 1710, tool: 280 },
+  typeform: { total: 950, tool: 320 },
+  vercel: { total: 1430, tool: 270 },
+  cloudflare: { total: 1940, tool: 420 },
+  bitbucket: { total: 2220, tool: 300 },
+  brevo: { total: 1280, tool: 280 },
+  calcom: { total: 960, tool: 295 },
+  webflow: { total: 1660, tool: 270 },
   telegram: { total: 2050, tool: 400 },
-  whatsapp: { total: 2050, tool: 400 },
+  // Two more tools than Telegram: message templates (list_templates, send_template).
+  whatsapp: { total: 2400, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {
