@@ -1,5 +1,6 @@
 import type { Plan } from '../../billing/plans.js';
 import { BRAND } from '../../brand.js';
+import { OG_IMAGE_PATH } from './og-image.js';
 
 /**
  * schema.org data for search engines and AI answer engines (JSON-LD). Plain builders: pages pick
@@ -139,16 +140,23 @@ export function article(opts: {
   description: string;
   url: string;
   updated: string;
+  /** Publication date of a blog post. */
+  published?: string;
+  /** `BlogPosting` for posts; explainers and comparisons are `TechArticle`. */
+  type?: 'TechArticle' | 'BlogPosting';
   lang: string;
 }): JsonLd {
   return {
     '@context': CONTEXT,
-    '@type': 'TechArticle',
+    '@type': opts.type ?? 'TechArticle',
     headline: opts.headline,
     description: opts.description,
     url: opts.url,
+    mainEntityOfPage: opts.url,
     inLanguage: opts.lang,
+    ...(opts.published ? { datePublished: opts.published } : {}),
     dateModified: opts.updated,
+    image: `${opts.publicUrl}${OG_IMAGE_PATH}`,
     author: { '@id': `${opts.publicUrl}/#organization` },
     publisher: { '@id': `${opts.publicUrl}/#organization` },
     about: { '@id': `${opts.publicUrl}/#app` },

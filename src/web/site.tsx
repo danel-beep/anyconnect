@@ -58,7 +58,7 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
         <Brand />
         <nav class="site-nav" id="site-nav" aria-label={t('site.nav.label')}>
           {nav.map(([id, href, label]) => (
-            <a href={href} aria-current={id === current ? 'page' : undefined}>
+            <a href={localizedPath(href, ctx.lang)} aria-current={id === current ? 'page' : undefined}>
               {label}
             </a>
           ))}
@@ -124,16 +124,18 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </div>
           <div>
             <h4>{t('site.footer.product')}</h4>
-            <a href="/#features">{t('site.nav.features')}</a>
-            <a href="/services">{t('site.nav.services')}</a>
-            <a href="/pricing">{t('site.nav.pricing')}</a>
-            <a href="/docs">{t('site.nav.docs')}</a>
+            <a href={localizedPath('/#features', ctx.lang)}>{t('site.nav.features')}</a>
+            <a href={localizedPath('/services', ctx.lang)}>{t('site.nav.services')}</a>
+            <a href={localizedPath('/pricing', ctx.lang)}>{t('site.nav.pricing')}</a>
+            <a href={localizedPath('/docs', ctx.lang)}>{t('site.nav.docs')}</a>
           </div>
           <div>
             <h4>{t('site.footer.resources')}</h4>
-            <a href="/guides/what-is-mcp">{t('site.nav.whatIsMcp')}</a>
-            <a href="/faq">{t('site.nav.faq')}</a>
-            <a href="/compare">{t('site.nav.compare')}</a>
+            <a href={localizedPath('/guides/what-is-mcp', ctx.lang)}>{t('site.nav.whatIsMcp')}</a>
+            <a href={localizedPath('/faq', ctx.lang)}>{t('site.nav.faq')}</a>
+            <a href={localizedPath('/use-cases', ctx.lang)}>{t('site.nav.useCases')}</a>
+            <a href={localizedPath('/blog', ctx.lang)}>{t('site.nav.blog')}</a>
+            <a href={localizedPath('/compare', ctx.lang)}>{t('site.nav.compare')}</a>
           </div>
           <div>
             <h4>{t('site.footer.account')}</h4>
@@ -194,6 +196,7 @@ export const SiteLayout: FC<{
       imageAlt: ctx.t('site.footer.tagline'),
       jsonLd: jsonLd ?? [],
       verification: ctx.verification,
+      feed: { href: `${ctx.publicUrl}/blog/feed.xml`, title: `${BRAND.name} ${ctx.t('site.nav.blog')}` },
     }}
   >
     <a class="skip" href="#main">

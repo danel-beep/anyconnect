@@ -19,6 +19,8 @@ export interface PageMeta {
   jsonLd?: JsonLd[];
   /** Search console ownership tokens (`google-site-verification`, `msvalidate.01`). */
   verification?: { google?: string | undefined; bing?: string | undefined };
+  /** RSS feed of the site's posts, for feed readers and crawlers. */
+  feed?: { href: string; title: string };
 }
 
 /**
@@ -76,6 +78,9 @@ export const Doc: FC<{
         <meta name="google-site-verification" content={meta.verification.google} />
       ) : null}
       {meta?.verification?.bing ? <meta name="msvalidate.01" content={meta.verification.bing} /> : null}
+      {meta?.feed ? (
+        <link rel="alternate" type="application/rss+xml" title={meta.feed.title} href={meta.feed.href} />
+      ) : null}
       {meta?.jsonLd?.length ? (
         // A data block, not a script: the CSP does not apply and nothing runs.
         <script

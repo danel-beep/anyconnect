@@ -301,4 +301,19 @@ details.more-ways{margin-top:14px}
 .faq-group h2{margin:0 0 8px}
 .prose .crumbs,.guide .crumbs{margin-bottom:16px}
 .wide-cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+/* Use cases, audiences and the blog (src/web/content-pages.tsx) */
+.section-sub{margin:40px 0 14px}
+.persona-points{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.persona-points .card{margin:0}
+.persona-points h2{margin:0 0 6px}
+.link-list{padding-left:20px}
+.link-list li{margin:4px 0}
+.prose .svc-grid,.prose .prompt-list{margin:12px 0 0}
+.prose .prompt-list{padding-left:0}
+.post-list{display:grid;gap:12px;max-width:760px}
+.post-card{display:block;margin:0;color:inherit;text-decoration:none}
+.post-card:hover{border-color:var(--accent)}
+.post-card h2{margin:4px 0 6px}
+.post-card p{margin:0}
+@media (max-width:640px){.wide-cards{grid-template-columns:1fr}}
 `;

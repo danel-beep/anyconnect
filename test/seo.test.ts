@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { PLANS } from '../src/billing/plans.js';
+import { SERVICE_META } from '../src/web/catalog.js';
 import { CLIENT_GUIDES } from '../src/web/clients.js';
 import { translator } from '../src/web/i18n.js';
 import { ARTICLES } from '../src/web/seo/articles.js';
+import { BLOG_POSTS } from '../src/web/seo/blog.js';
 import { CLIENT_PAGES, clientIdBySlug } from '../src/web/seo/client-pages.js';
 import { COMPARE_PAGES } from '../src/web/seo/compare-pages.js';
 import { AI_CRAWLERS, PRIVATE_PATHS, robotsTxt, sitemapXml } from '../src/web/seo/crawlers.js';
 import { fill, planFacts } from '../src/web/seo/facts.js';
+import { rssFeed } from '../src/web/seo/feed.js';
+import { PERSONAS } from '../src/web/seo/personas.js';
 import { faqPage, serializeJsonLd, softwareApplication } from '../src/web/seo/structured-data.js';
 import type { Localized } from '../src/web/seo/types.js';
 import { alternates, localizedPath, parseLocale, withoutLang } from '../src/web/seo/urls.js';
+import { USE_CASES } from '../src/web/seo/use-cases.js';
+import { useCaseReady } from '../src/web/seo-parts.js';
+import type { PublicService } from '../src/web/site.js';
 
 /** Placeholders that the pages fill in; any other `{…}` in content would show up literally. */
 const KNOWN_PLACEHOLDERS = new Set(['count', 'from', 'freeAccounts', 'url']);
@@ -137,6 +144,9 @@ describe('docs content', () => {
     }
     for (const page of COMPARE_PAGES) sameShape(page.body);
     for (const article of ARTICLES) sameShape(article.body);
+    for (const post of BLOG_POSTS) sameShape(post.body);
+    for (const u of USE_CASES) sameShape(u.body);
+    for (const p of PERSONAS) sameShape(p.body);
     for (const guide of CLIENT_GUIDES) sameShape(guide.steps);
   });
 
@@ -145,6 +155,9 @@ describe('docs content', () => {
       ...strings(Object.values(CLIENT_PAGES)),
       ...strings(COMPARE_PAGES.map((p) => p.body)),
       ...strings(ARTICLES.map((a) => a.body)),
+      ...strings(BLOG_POSTS.map((a) => a.body)),
+      ...strings(USE_CASES.map((u) => u.body)),
+      ...strings(PERSONAS.map((p) => p.body)),
     ];
     for (const text of all)
       for (const name of placeholders(text)) expect(KNOWN_PLACEHOLDERS, text).toContain(name);
@@ -187,5 +200,69 @@ describe('docs content', () => {
     expect(text).toContain('14 дней тарифа «Pro»');
     expect(text).toContain('3 подключённых аккаунтов');
     expect(text).not.toMatch(/\{/);
+  });
+});
+
+describe('use cases, audiences and the blog', () => {
+  const unique = (slugs: string[]) => expect(new Set(slugs).size).toBe(slugs.length);
+
+  it('has unique, URL-safe slugs and dates', () => {
+    for (const list of [USE_CASES, PERSONAS, BLOG_POSTS]) {
+      unique(list.map((x) => x.slug));
+      for (const x of list) {
+        expect(x.slug).toMatch(/^[a-z0-9-]+$/);
+        expect(x.updated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      }
+    }
+    const published = BLOG_POSTS.map((p) => p.published);
+    expect([...published].sort().reverse()).toEqual(published);
+  });
+
+  it('names only services of the catalogue and workflows that exist', () => {
+    const slugs = new Set(USE_CASES.map((u) => u.slug));
+    for (const u of USE_CASES) {
+      expect(u.services.length, u.slug).toBeGreaterThan(0);
+      for (const id of [...u.services, ...(u.extras ?? [])])
+        expect(SERVICE_META[id], `${u.slug}: ${id}`).toBeDefined();
+    }
+    for (const p of PERSONAS) {
+      for (const id of p.services) expect(SERVICE_META[id], `${p.slug}: ${id}`).toBeDefined();
+      for (const slug of p.useCases) expect(slugs, `${p.slug}: ${slug}`).toContain(slug);
+    }
+  });
+
+  it('shows a workflow only when its services connect here', () => {
+    const svc = (id: string, ready: boolean) => ({ id, name: id, ready }) as PublicService;
+    const all = USE_CASES.find((u) => u.needs === 'all' && u.services.length > 1)!;
+    const any = USE_CASES.find((u) => u.needs === 'any' && u.services.length > 1)!;
+    const [first, ...rest] = all.services;
+    expect(
+      useCaseReady(
+        all,
+        all.services.map((id) => svc(id, true)),
+      ),
+    ).toBe(true);
+    expect(useCaseReady(all, [svc(first!, true), ...rest.map((id) => svc(id, false))])).toBe(false);
+    expect(useCaseReady(any, [svc(any.services[1]!, true)])).toBe(true);
+    expect(
+      useCaseReady(
+        any,
+        any.services.map((id) => svc(id, false)),
+      ),
+    ).toBe(false);
+  });
+
+  it('writes a valid RSS feed with escaped text', () => {
+    const xml = rssFeed({
+      title: 'Blog & news',
+      link: 'https://x.test/blog',
+      selfUrl: 'https://x.test/blog/feed.xml',
+      description: 'Posts <here>',
+      items: [{ title: 'A & B', url: 'https://x.test/blog/a', description: 'd', published: '2026-11-04' }],
+    });
+    expect(xml).toContain('<title>Blog &amp; news</title>');
+    expect(xml).toContain('<description>Posts &lt;here&gt;</description>');
+    expect(xml).toContain('<pubDate>Wed, 04 Nov 2026 00:00:00 GMT</pubDate>');
+    expect(xml).toContain('<guid isPermaLink="true">https://x.test/blog/a</guid>');
   });
 });

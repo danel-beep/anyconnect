@@ -100,7 +100,11 @@ export function siteRoutes() {
       <ServiceDetailPage
         ctx={ctx}
         service={service}
-        useWith={service.ready ? <UseWith ctx={ctx} service={service} /> : undefined}
+        useWith={
+          service.ready ? (
+            <UseWith ctx={ctx} service={service} services={await publicServices(c)} />
+          ) : undefined
+        }
       />,
     );
   });

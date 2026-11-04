@@ -1,20 +1,47 @@
 import type { FC } from 'hono/jsx';
-import { PLANS } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { serviceMeta } from './catalog.js';
-import { CLIENT_GUIDES, type ClientGuide, clientName } from './clients.js';
+import { type ClientGuide, clientName } from './clients.js';
 import type { Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { ARTICLES, type Article } from './seo/articles.js';
-import { CLIENT_PAGES, CLIENT_PAGES_CHECKED, type ClientPage } from './seo/client-pages.js';
+import { BLOG_POSTS, type BlogPost } from './seo/blog.js';
+import { CLIENT_PAGES_CHECKED } from './seo/client-pages.js';
 import { COMPARE_PAGES, type ComparePage } from './seo/compare-pages.js';
-import { fill, planVars } from './seo/facts.js';
-import { article as articleLd, breadcrumbs, faqPage, howTo, type JsonLd } from './seo/structured-data.js';
+import { fill } from './seo/facts.js';
+import { article as articleLd, faqPage, howTo } from './seo/structured-data.js';
 import type { QA } from './seo/types.js';
 import { localizedPath } from './seo/urls.js';
+import {
+  blogPath,
+  blurb,
+  ClientGrid,
+  ClientSteps,
+  COMBO_CLIENTS,
+  type Crumb,
+  Crumbs,
+  CtaBand,
+  clientPage,
+  clientPath,
+  comboPath,
+  contentVars,
+  crumbsLd,
+  FaqList,
+  formatDate,
+  GuideNav,
+  home,
+  ISO_MINUTES,
+  PAGE_CLIENTS,
+  RelatedUseCases,
+  readyUseCases,
+  ServiceGrid,
+  sharedFaq,
+  titleServices,
+  UseCaseCards,
+} from './seo-parts.js';
 import { PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
 import { type PublicService, type ServiceDetail, SiteLayout } from './site.js';
-import { CodeBlock, CopyField, Icon, ServiceLogo } from './ui.js';
+import { CopyField, Icon, ServiceLogo } from './ui.js';
 
 /**
  * The docs and search pages: one guide per AI client, one page per service and client ("Connect
@@ -22,204 +49,6 @@ import { CodeBlock, CopyField, Icon, ServiceLogo } from './ui.js';
  * carries schema.org data that matches what it shows, and links to its neighbours so search
  * engines and AI crawlers can reach the whole set.
  */
-
-// ---------------------------------------------------------------------------
-// Shared pieces
-// ---------------------------------------------------------------------------
-
-/** Clients that get their own pages (the generic "other clients" entry has a guide but no combos). */
-export const PAGE_CLIENTS: ClientGuide[] = CLIENT_GUIDES.filter((g) => CLIENT_PAGES[g.id]);
-export const COMBO_CLIENTS: ClientGuide[] = PAGE_CLIENTS.filter((g) => g.id !== 'other');
-
-export const clientPage = (guide: ClientGuide): ClientPage => CLIENT_PAGES[guide.id]!;
-export const clientPath = (guide: ClientGuide) => `/docs/${clientPage(guide).slug}`;
-export const comboPath = (serviceId: string, guide: ClientGuide) =>
-  `/services/${serviceId}/${clientPage(guide).slug}`;
-
-/** Service names for titles: the best-known services that connect here, in a fixed order. */
-const TITLE_SERVICES = ['gmail', 'slack', 'notion', 'github', 'gcal'];
-export function titleServices(services: PublicService[], lang: Locale, count = 3): string {
-  const ready = new Map(services.filter((s) => s.ready).map((s) => [s.id, s.name]));
-  const names = TITLE_SERVICES.flatMap((id) => (ready.has(id) ? [ready.get(id)!] : [])).slice(0, count);
-  return new Intl.ListFormat(lang, { type: 'conjunction' }).format(names);
-}
-
-const blurb = (lang: Locale, service: PublicService) => {
-  const meta = serviceMeta(service.id);
-  return meta ? meta.blurb[lang] : service.description;
-};
-
-interface Crumb {
-  name: string;
-  path: string;
-}
-
-const Crumbs: FC<{ ctx: PageCtx; items: Crumb[] }> = ({ ctx, items }) => (
-  <nav class="crumbs" aria-label="Breadcrumbs">
-    {items.map((item, i) =>
-      i === items.length - 1 ? (
-        <span aria-current="page">{item.name}</span>
-      ) : (
-        <>
-          <a href={localizedPath(item.path, ctx.lang)}>{item.name}</a>
-          {' / '}
-        </>
-      ),
-    )}
-  </nav>
-);
-
-const crumbsLd = (ctx: PageCtx, items: Crumb[]): JsonLd =>
-  breadcrumbs(
-    ctx.publicUrl,
-    items.map((i) => ({ name: i.name, path: localizedPath(i.path, ctx.lang) })),
-  );
-
-const home = (ctx: PageCtx): Crumb => ({ name: ctx.t('crumb.home'), path: '/' });
-
-const FaqList: FC<{ items: QA[] }> = ({ items }) => (
-  <div>
-    {items.map((item) => (
-      <details>
-        <summary>{item.q}</summary>
-        <div>{item.a}</div>
-      </details>
-    ))}
-  </div>
-);
-
-/** "Try it" band at the end of a page. */
-const CtaBand: FC<{ ctx: PageCtx; title?: string; text?: string }> = ({ ctx, title, text }) => (
-  <section class="section tight">
-    <div class="wrap">
-      <div class="cta-band">
-        <div>
-          <h2>{title ?? ctx.t('cta.title')}</h2>
-          <p>{text ?? ctx.t('cta.text')}</p>
-        </div>
-        <div class="hero-actions">
-          <a class="btn primary lg" href={ctx.user ? '/app' : '/signup'}>
-            {ctx.user ? ctx.t('site.cta.dashboard') : ctx.t('site.cta.start')} <Icon name="arrow" />
-          </a>
-        </div>
-      </div>
-    </div>
-  </section>
-);
-
-/** A grid of AI apps linking to their pages (`href` decides where each goes). */
-const ClientGrid: FC<{ ctx: PageCtx; clients: ClientGuide[]; href: (g: ClientGuide) => string }> = ({
-  ctx,
-  clients,
-  href,
-}) => (
-  <div class="svc-grid">
-    {clients.map((g) => (
-      <a class="svc" href={localizedPath(href(g), ctx.lang)}>
-        <ServiceLogo icon={g.icon} glyph={g.glyph} name={g.name} />
-        <span class="grow">
-          <span class="name">{clientName(g, ctx.lang)}</span>
-        </span>
-      </a>
-    ))}
-  </div>
-);
-
-/** A grid of services linking to their pages (`href` decides where each goes). */
-const ServiceGrid: FC<{ ctx: PageCtx; services: PublicService[]; href: (s: PublicService) => string }> = ({
-  ctx,
-  services,
-  href,
-}) => (
-  <div class="svc-grid">
-    {services.map((s) => {
-      const meta = serviceMeta(s.id);
-      return (
-        <a class="svc" href={localizedPath(href(s), ctx.lang)}>
-          <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={s.name} />
-          <span class="grow">
-            <span class="name">{s.name}</span>
-            <span class="meta">{blurb(ctx.lang, s)}</span>
-          </span>
-        </a>
-      );
-    })}
-  </div>
-);
-
-/** A client's own steps with its button, command or config right under the first one. */
-const ClientSteps: FC<{ ctx: PageCtx; guide: ClientGuide; idPrefix: string }> = ({
-  ctx,
-  guide,
-  idPrefix,
-}) => {
-  const install = guide.install?.(ctx.mcpUrl);
-  return (
-    <ol>
-      {guide.steps[ctx.lang].map((step, i) => (
-        <li id={`${idPrefix}step-${i + 1}`}>
-          {step}
-          {i === 0 && (install || guide.code) ? (
-            <div class="guide-do">
-              {install ? (
-                <p>
-                  <a class="btn primary" href={install.href}>
-                    {install.label[ctx.lang]}
-                  </a>
-                </p>
-              ) : null}
-              {guide.code ? (
-                <CodeBlock t={ctx.t} id={`${idPrefix}code`} code={guide.code(ctx.mcpUrl)} />
-              ) : null}
-            </div>
-          ) : null}
-        </li>
-      ))}
-    </ol>
-  );
-};
-
-/** Questions every client page answers, with the plan's real numbers. */
-function sharedFaq(t: Translate, client: string): QA[] {
-  const vars = { client, ...planVars((id) => t(`plan.${id}.name` as 'plan.free.name')) };
-  return (['free', 'accounts', 'safety', 'keys'] as const).map((k) => ({
-    q: t(`seo.faq.${k}.q`, vars),
-    a: t(`seo.faq.${k}.a`, vars),
-  }));
-}
-
-const ISO_MINUTES = (minutes: number) => `PT${minutes}M`;
-
-const formatDate = (lang: Locale, iso: string) =>
-  new Intl.DateTimeFormat(lang, { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }).format(
-    new Date(`${iso}T00:00:00Z`),
-  );
-
-/** The docs sidebar of the guide pages: every AI app, then the explainers. */
-const GuideNav: FC<{ ctx: PageCtx; current?: string }> = ({ ctx, current }) => (
-  <nav class="doc-nav" aria-label={ctx.t('docs.nav')}>
-    <span class="group">{ctx.t('docs.clients')}</span>
-    {PAGE_CLIENTS.map((g) => (
-      <a
-        href={localizedPath(clientPath(g), ctx.lang)}
-        aria-current={clientPage(g).slug === current ? 'page' : undefined}
-      >
-        {clientName(g, ctx.lang)}
-      </a>
-    ))}
-    <span class="group">{ctx.t('site.nav.guides')}</span>
-    {ARTICLES.map((a) => (
-      <a
-        href={localizedPath(`/guides/${a.slug}`, ctx.lang)}
-        aria-current={a.slug === current ? 'page' : undefined}
-      >
-        {a.body[ctx.lang].h1}
-      </a>
-    ))}
-    <a href={localizedPath('/faq', ctx.lang)}>{ctx.t('site.nav.faq')}</a>
-    <a href={localizedPath('/compare', ctx.lang)}>{ctx.t('site.nav.compare')}</a>
-  </nav>
-);
 
 // ---------------------------------------------------------------------------
 // Client guide: /docs/<client>
@@ -242,6 +71,7 @@ export const ClientGuidePage: FC<{ ctx: PageCtx; guide: ClientGuide; services: P
   const crumbs = [home(ctx), { name: t('site.nav.docs'), path: '/docs' }, { name: client, path }];
   const ready = services.filter((s) => s.ready);
   const hasCombos = COMBO_CLIENTS.includes(guide);
+  const useCases = readyUseCases(services).slice(0, 6);
   return (
     <SiteLayout
       ctx={ctx}
@@ -306,6 +136,12 @@ export const ClientGuidePage: FC<{ ctx: PageCtx; guide: ClientGuide; services: P
                   services={ready}
                   href={(s) => (hasCombos ? comboPath(s.id, guide) : `/services/${s.id}`)}
                 />
+              </section>
+            ) : null}
+            {useCases.length ? (
+              <section class="guide" id="use-cases">
+                <h2>{t('guide.useCases', { client })}</h2>
+                <UseCaseCards ctx={ctx} items={useCases} />
               </section>
             ) : null}
             <section class="guide" id="faq">
@@ -495,6 +331,12 @@ export const ServiceClientPage: FC<{
               </table>
             </div>
           </div>
+          <RelatedUseCases
+            ctx={ctx}
+            services={services}
+            serviceId={service.id}
+            title={t('combo.useCases', vars)}
+          />
           <div class="card">
             <h2 class="h3">{t('guide.faq')}</h2>
             <FaqList items={faq} />
@@ -519,12 +361,24 @@ export const ServiceClientPage: FC<{
   );
 };
 
-/** "Use Gmail with: Claude · ChatGPT · …" on a service's own page. */
-export const UseWith: FC<{ ctx: PageCtx; service: PublicService }> = ({ ctx, service }) => (
-  <div class="card">
-    <h2 class="h3">{ctx.t('combo.useWith', { service: service.name })}</h2>
-    <ClientGrid ctx={ctx} clients={COMBO_CLIENTS} href={(g) => comboPath(service.id, g)} />
-  </div>
+/** "Use Gmail with: Claude · ChatGPT · …" and what people do with it, on a service's own page. */
+export const UseWith: FC<{ ctx: PageCtx; service: PublicService; services: PublicService[] }> = ({
+  ctx,
+  service,
+  services,
+}) => (
+  <>
+    <div class="card">
+      <h2 class="h3">{ctx.t('combo.useWith', { service: service.name })}</h2>
+      <ClientGrid ctx={ctx} clients={COMBO_CLIENTS} href={(g) => comboPath(service.id, g)} />
+    </div>
+    <RelatedUseCases
+      ctx={ctx}
+      services={services}
+      serviceId={service.id}
+      title={ctx.t('combo.useCases', { service: service.name })}
+    />
+  </>
 );
 
 // ---------------------------------------------------------------------------
@@ -611,12 +465,6 @@ export const FaqPageView: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
 // Comparisons: /compare and /compare/<slug>
 // ---------------------------------------------------------------------------
 
-/** Our own numbers inside comparison texts. */
-const compareVars = (services: PublicService[]) => ({
-  count: services.filter((s) => s.ready && serviceMeta(s.id)?.category !== 'custom').length,
-  ...planVars(),
-});
-
 export const CompareIndexPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
   const { t, lang } = ctx;
   const crumbs = [home(ctx), { name: t('site.nav.compare'), path: '/compare' }];
@@ -659,7 +507,7 @@ export const CompareView: FC<{ ctx: PageCtx; page: ComparePage; services: Public
 }) => {
   const { t, lang } = ctx;
   const body = page.body[lang];
-  const vars = compareVars(services);
+  const vars = contentVars(services);
   const path = `/compare/${page.slug}`;
   const crumbs = [home(ctx), { name: t('site.nav.compare'), path: '/compare' }, { name: body.h1, path }];
   return (
@@ -753,21 +601,51 @@ export const CompareView: FC<{ ctx: PageCtx; page: ComparePage; services: Public
 };
 
 // ---------------------------------------------------------------------------
-// Explainers: /guides/<slug>
+// Explainers (/guides/<slug>) and blog posts (/blog/<slug>)
 // ---------------------------------------------------------------------------
 
-export const ArticleView: FC<{ ctx: PageCtx; article: Article; services: PublicService[] }> = ({
+/** The sidebar of blog posts: every post, newest first, then the explainers. */
+const BlogNav: FC<{ ctx: PageCtx; current?: string }> = ({ ctx, current }) => (
+  <nav class="doc-nav" aria-label={ctx.t('site.nav.blog')}>
+    <span class="group">{ctx.t('site.nav.blog')}</span>
+    {BLOG_POSTS.map((p) => (
+      <a
+        href={localizedPath(blogPath(p.slug), ctx.lang)}
+        aria-current={p.slug === current ? 'page' : undefined}
+      >
+        {p.body[ctx.lang].h1}
+      </a>
+    ))}
+    <span class="group">{ctx.t('site.nav.guides')}</span>
+    {ARTICLES.map((a) => (
+      <a href={localizedPath(`/guides/${a.slug}`, ctx.lang)}>{a.body[ctx.lang].h1}</a>
+    ))}
+    <a href={localizedPath('/use-cases', ctx.lang)}>{ctx.t('site.nav.useCases')}</a>
+  </nav>
+);
+
+const isPost = (a: Article | BlogPost): a is BlogPost => 'published' in a;
+
+/** An explainer or a blog post: the direct answer, sections, questions and where to go next. */
+export const ArticleView: FC<{ ctx: PageCtx; article: Article | BlogPost; services: PublicService[] }> = ({
   ctx,
   article,
   services,
 }) => {
   const { t, lang } = ctx;
   const body = article.body[lang];
-  const free = PLANS.find((p) => p.id === 'free');
-  const vars = { ...compareVars(services), freeAccounts: free?.limits.accounts ?? 0 };
-  const path = `/guides/${article.slug}`;
-  const crumbs = [home(ctx), { name: t('site.nav.guides'), path: '/docs' }, { name: body.h1, path }];
+  const vars = contentVars(services);
+  const post = isPost(article) ? article : undefined;
+  const path = post ? blogPath(article.slug) : `/guides/${article.slug}`;
+  const parent: Crumb = post
+    ? { name: t('site.nav.blog'), path: '/blog' }
+    : { name: t('site.nav.guides'), path: '/docs' };
+  const crumbs = [home(ctx), parent, { name: body.h1, path }];
   const url = `${ctx.publicUrl}${localizedPath(path, lang)}`;
+  const siblings = post
+    ? BLOG_POSTS.filter((p) => p !== article).slice(0, 4)
+    : ARTICLES.filter((a) => a !== article);
+  const siblingPath = (a: Article) => (post ? blogPath(a.slug) : `/guides/${a.slug}`);
   return (
     <SiteLayout
       ctx={ctx}
@@ -784,6 +662,7 @@ export const ArticleView: FC<{ ctx: PageCtx; article: Article; services: PublicS
           description: body.description,
           url,
           updated: article.updated,
+          ...(post ? { published: post.published, type: 'BlogPosting' as const } : {}),
           lang,
         }),
         faqPage(body.faq),
@@ -791,11 +670,19 @@ export const ArticleView: FC<{ ctx: PageCtx; article: Article; services: PublicS
     >
       <div class="wrap">
         <div class="doc-layout">
-          <GuideNav ctx={ctx} current={article.slug} />
+          {post ? (
+            <BlogNav ctx={ctx} current={article.slug} />
+          ) : (
+            <GuideNav ctx={ctx} current={article.slug} />
+          )}
           <article class="prose">
             <Crumbs ctx={ctx} items={crumbs} />
             <h1>{body.h1}</h1>
-            <p class="muted">{t('article.updated', { date: formatDate(lang, article.updated) })}</p>
+            <p class="muted">
+              {post
+                ? t('blog.published', { date: formatDate(lang, post.published) })
+                : t('article.updated', { date: formatDate(lang, article.updated) })}
+            </p>
             <p class="lead">{fill(body.answer, vars)}</p>
             {body.sections.map((s) => (
               <>
@@ -820,17 +707,59 @@ export const ArticleView: FC<{ ctx: PageCtx; article: Article; services: PublicS
                 <a href={localizedPath('/docs', lang)}>{t('article.connect')}</a>
               </li>
               <li>
+                <a href={localizedPath('/use-cases', lang)}>{t('article.useCases')}</a>
+              </li>
+              <li>
                 <a href={localizedPath('/services', lang)}>{t('article.services')}</a>
               </li>
-              {ARTICLES.filter((a) => a !== article).map((a) => (
+              {siblings.map((a) => (
                 <li>
-                  <a href={localizedPath(`/guides/${a.slug}`, lang)}>{a.body[lang].h1}</a>
+                  <a href={localizedPath(siblingPath(a), lang)}>{a.body[lang].h1}</a>
                 </li>
               ))}
             </ul>
           </article>
         </div>
       </div>
+      <CtaBand ctx={ctx} />
+    </SiteLayout>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Blog index: /blog
+// ---------------------------------------------------------------------------
+
+export const BlogIndexPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
+  const { t, lang } = ctx;
+  const crumbs = [home(ctx), { name: t('site.nav.blog'), path: '/blog' }];
+  return (
+    <SiteLayout
+      ctx={ctx}
+      title={t('blog.title')}
+      description={t('blog.description')}
+      current="docs"
+      canonicalPath="/blog"
+      jsonLd={[crumbsLd(ctx, crumbs)]}
+    >
+      <section class="section">
+        <div class="wrap">
+          <Crumbs ctx={ctx} items={crumbs} />
+          <div class="section-head">
+            <h1>{t('blog.h1')}</h1>
+            <p>{t('blog.lead')}</p>
+          </div>
+          <div class="post-list">
+            {BLOG_POSTS.map((p) => (
+              <a class="card post-card" href={localizedPath(blogPath(p.slug), lang)}>
+                <span class="small muted">{formatDate(lang, p.published)}</span>
+                <h2 class="h3">{p.body[lang].h1}</h2>
+                <p class="muted">{p.body[lang].description}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
       <CtaBand ctx={ctx} />
     </SiteLayout>
   );

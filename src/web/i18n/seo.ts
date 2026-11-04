@@ -138,6 +138,48 @@ export const seoEn = {
 
   'cta.title': 'Try it with your own accounts',
   'cta.text': 'Free plan, no card. Setup takes a couple of minutes.',
+
+  'site.nav.useCases': 'Use cases',
+  'site.nav.blog': 'Blog',
+  'article.useCases': 'See what people do with it',
+
+  'blog.title': 'Manyplug blog: AI assistants, MCP and your accounts',
+  'blog.description':
+    'Practical articles on connecting AI assistants like Claude and ChatGPT to email, calendars and work tools with MCP: security, setup and what to ask.',
+  'blog.h1': 'Blog',
+  'blog.lead': 'How AI assistants work with real accounts: MCP, security and practical requests.',
+  'blog.published': 'Published {date}',
+
+  'useCase.index.title': 'What you can do with AI and your accounts: use cases · Manyplug',
+  'useCase.index.description':
+    'Workflows for Claude, ChatGPT and Cursor with your email, calendar, tasks, docs, support and payments: requests to copy and how to set each one up.',
+  'useCase.index.h1': 'Use cases',
+  'useCase.index.lead':
+    'What people do once their AI assistant can reach their accounts, with requests to copy and the exact setup.',
+  'persona.index.h2': 'By role',
+  'useCase.notReady': 'The services this needs cannot be connected on this server yet.',
+  'useCase.ask': 'Ask your AI',
+  'useCase.how': 'What happens',
+  'useCase.setup': 'Set it up',
+  'useCase.step1': 'Connect your accounts',
+  'useCase.step1.all': 'Sign up and connect the services below in the dashboard, or ask the AI for a link.',
+  'useCase.step1.any':
+    'Sign up and connect the services you use from the list below, or ask the AI for a link.',
+  'useCase.step2': 'Add Manyplug to your AI app',
+  'useCase.step2.text':
+    'Paste the Manyplug address into Claude, ChatGPT, Cursor or another MCP client; each guide below has the steps.',
+  'useCase.step3': 'Ask',
+  'useCase.step3.text': 'Copy one of the requests above into a new chat.',
+  'useCase.services': 'Services it uses',
+  'useCase.clients': 'Works in these AI apps',
+  'useCase.tips': 'Tips',
+  'useCase.for': 'Useful for',
+  'useCase.others': 'More use cases',
+  'persona.jobs': 'What you can do',
+  'persona.services': 'Services you will want',
+  'persona.others': 'Manyplug for other roles',
+  'combo.useCases': 'What people do with {service}',
+  'guide.useCases': 'What to ask {client} next',
 } as const;
 
 export type SeoKey = keyof typeof seoEn;
@@ -278,4 +320,46 @@ export const seoRu: Record<SeoKey, string> = {
 
   'cta.title': 'Попробуйте со своими аккаунтами',
   'cta.text': 'Бесплатный тариф, без карты. Настройка занимает пару минут.',
+
+  'site.nav.useCases': 'Сценарии',
+  'site.nav.blog': 'Блог',
+  'article.useCases': 'Что с этим делают другие',
+
+  'blog.title': 'Блог Manyplug: ИИ-ассистенты, MCP и ваши аккаунты',
+  'blog.description':
+    'Практичные статьи о том, как подключить ИИ-ассистентов вроде Claude и ChatGPT к почте, календарям и рабочим сервисам через MCP: безопасность, настройка и что спрашивать.',
+  'blog.h1': 'Блог',
+  'blog.lead': 'Как ИИ-ассистенты работают с настоящими аккаунтами: MCP, безопасность и практичные просьбы.',
+  'blog.published': 'Опубликовано {date}',
+
+  'useCase.index.title': 'Что можно делать с ИИ и вашими аккаунтами: сценарии · Manyplug',
+  'useCase.index.description':
+    'Сценарии для Claude, ChatGPT и Cursor с почтой, календарём, задачами, документами, поддержкой и платежами: готовые просьбы и настройка каждого.',
+  'useCase.index.h1': 'Сценарии',
+  'useCase.index.lead':
+    'Что делают люди, когда ИИ-ассистент видит их аккаунты: готовые просьбы и точная настройка.',
+  'persona.index.h2': 'По ролям',
+  'useCase.notReady': 'Нужные для этого сервисы пока нельзя подключить на этом сервере.',
+  'useCase.ask': 'Спросите ИИ',
+  'useCase.how': 'Что происходит',
+  'useCase.setup': 'Как настроить',
+  'useCase.step1': 'Подключите аккаунты',
+  'useCase.step1.all': 'Зарегистрируйтесь и подключите сервисы ниже в панели или попросите ссылку у ИИ.',
+  'useCase.step1.any':
+    'Зарегистрируйтесь и подключите те сервисы из списка ниже, которыми пользуетесь, или попросите ссылку у ИИ.',
+  'useCase.step2': 'Добавьте Manyplug в приложение ИИ',
+  'useCase.step2.text':
+    'Вставьте адрес Manyplug в Claude, ChatGPT, Cursor или другой MCP-клиент; в каждом гайде ниже есть шаги.',
+  'useCase.step3': 'Спросите',
+  'useCase.step3.text': 'Скопируйте одну из просьб выше в новый чат.',
+  'useCase.services': 'Какие сервисы нужны',
+  'useCase.clients': 'Работает в этих приложениях ИИ',
+  'useCase.tips': 'Советы',
+  'useCase.for': 'Кому пригодится',
+  'useCase.others': 'Ещё сценарии',
+  'persona.jobs': 'Что можно делать',
+  'persona.services': 'Какие сервисы подключить',
+  'persona.others': 'Manyplug для других ролей',
+  'combo.useCases': 'Что делают с {service}',
+  'guide.useCases': 'Что спросить у {client}',
 };

@@ -94,7 +94,7 @@ describe('docs and search pages', () => {
     // A service whose sign-in app is missing here stays out of search results.
     const outlook = await page('/services/outlook/claude');
     expect(outlook).toContain('<meta name="robots" content="noindex, nofollow"/>');
-    expect(outlook).not.toContain('rel="alternate"');
+    expect(outlook).not.toContain('rel="alternate" hreflang');
 
     expect((await get('/services/gmail/unknown')).status).toBe(404);
     expect((await get('/services/demo/claude')).status).toBe(404);
@@ -128,6 +128,48 @@ describe('docs and search pages', () => {
       expect((await get(path)).status).toBe(404);
   });
 
+  it('renders use cases with requests, setup and links to services and audiences', async () => {
+    const index = await page('/use-cases');
+    expect(index).toContain('href="/use-cases/summarize-inbox"');
+    expect(index).toContain('href="/for/freelancers"');
+
+    const html = await page('/use-cases/summarize-inbox');
+    expect(types(html)).toEqual(['BreadcrumbList', 'HowTo', 'TechArticle', 'FAQPage']);
+    expect(html).toContain('href="/services/gmail"');
+    expect(html).toContain('href="/docs/claude"');
+    expect(html).toContain('href="/for/freelancers"');
+    expect(html).not.toContain('noindex');
+
+    const ru = await page('/for/developers?lang=ru');
+    expect(ru).toContain('<html lang="ru"');
+    expect(ru).toContain('href="/use-cases/weekly-dev-report?lang=ru"');
+    expect(ru).toContain('href="/faq?lang=ru"');
+
+    for (const path of ['/use-cases/nope', '/for/nope', '/blog/nope'])
+      expect((await get(path)).status).toBe(404);
+  });
+
+  it('renders the blog, its posts and its feed', async () => {
+    const index = await page('/blog');
+    expect(index).toContain('href="/blog/remote-vs-local-mcp-servers"');
+    expect(index).toContain('type="application/rss+xml"');
+
+    const post = await page('/blog/too-many-mcp-tools');
+    const ld = jsonLd(post);
+    expect(ld.map((x) => x['@type'])).toEqual(['BreadcrumbList', 'BlogPosting', 'FAQPage']);
+    expect(ld[1]!.datePublished).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    const feed = await get('/blog/feed.xml');
+    expect(feed.headers.get('content-type')).toContain('application/rss+xml');
+    expect(await feed.text()).toContain(`<link>${hub.baseUrl}/blog/mcp-oauth-explained</link>`);
+  });
+
+  it('links service and client pages to the use cases they appear in', async () => {
+    expect(await page('/services/gmail')).toContain('href="/use-cases/summarize-inbox"');
+    expect(await page('/services/gmail/claude')).toContain('href="/use-cases/summarize-inbox"');
+    expect(await page('/docs/cursor')).toContain('href="/use-cases/');
+  });
+
   it('describes the product on the landing and pricing pages', async () => {
     const landing = await page('/');
     expect(types(landing)).toEqual(['Organization', 'WebSite', 'SoftwareApplication', 'FAQPage']);
@@ -148,6 +190,11 @@ describe('what crawlers read', () => {
       '/faq',
       '/compare/composio',
       '/guides/multiple-accounts',
+      '/use-cases',
+      '/use-cases/summarize-inbox',
+      '/for/agencies',
+      '/blog',
+      '/blog/mcp-oauth-explained',
     ])
       expect(xml).toContain(`<loc>${hub.baseUrl}${path}</loc>`);
     expect(xml).toContain(`<loc>${hub.baseUrl}/services/gmail/chatgpt?lang=ru</loc>`);
@@ -169,9 +216,13 @@ describe('what crawlers read', () => {
     expect(short).toContain(`(${hub.baseUrl}/docs/chatgpt)`);
     expect(short).toContain(`${hub.baseUrl}/llms-full.txt`);
     expect(short).not.toContain('Outlook](');
+    expect(short).toContain(`(${hub.baseUrl}/use-cases/summarize-inbox)`);
+    expect(short).toContain(`(${hub.baseUrl}/blog/prompt-injection-email-ai)`);
 
     const full = await (await get('/llms-full.txt')).text();
     expect(full).toContain('### Gmail');
+    expect(full).toContain('## Summarize your inbox with AI');
+    expect(full).toContain('## OAuth for MCP: why your AI should never see your password');
     expect(full).toContain('claude mcp add --transport http');
     expect(full).toContain('risky, asks first by default');
     expect(full).not.toMatch(/\{(count|freeAccounts|from)\}/);
