@@ -42,4 +42,5 @@ export type IdPrefix =
   | 'acc' // connected service account
   | 'cli' // OAuth client (dynamic registration)
   | 'grt' // OAuth grant (an AI client connected to a workspace)
-  | 'pat'; // personal access token
+  | 'pat' // personal access token
+  | 'oap'; // OAuth app of a service provider (bring your own app)

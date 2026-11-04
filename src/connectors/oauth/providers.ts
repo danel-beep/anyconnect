@@ -80,7 +80,7 @@ export const BUILTIN_PROVIDERS: Record<string, OAuthProviderSpec> = {
   },
 };
 
-const PROVIDER_ID = /^[a-z][a-z0-9_-]{1,39}$/;
+const PROVIDER_ID = /^[a-z][a-z0-9_]{1,39}$/;
 
 /** Resolves the provider of an OAuth requirement (built-in id or inline spec). */
 export function resolveProvider(requirement: OAuthRequirement): OAuthProviderSpec {

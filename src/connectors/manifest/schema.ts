@@ -60,6 +60,11 @@ export const ManifestAuth = z.discriminatedUnion('type', [
     provider: z.union([z.string(), ProviderSpec]),
     scopes: z.array(z.string()).default([]),
     authorizeParams: z.record(z.string(), z.string()).optional(),
+    /**
+     * Alternative to OAuth: a personal token sent as `Bearer` when the account has no OAuth
+     * connection, e.g. `{{credentials.token}}`. Makes OAuth optional for the connector.
+     */
+    token: z.string().optional(),
   }),
 ]);
 export type ManifestAuth = z.output<typeof ManifestAuth>;

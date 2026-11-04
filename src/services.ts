@@ -5,8 +5,14 @@ import type { ConnectorRegistry } from './connectors/registry.js';
 import { AccountService } from './core/accounts.js';
 import { ApiTokenService } from './core/api-tokens.js';
 import { HubTokenVerifier } from './core/auth.js';
+import { ConnectService } from './core/connect.js';
+import { AccountHealthService } from './core/health.js';
+import { OAuthAppService } from './core/oauth-apps.js';
+import { TokenManager } from './core/oauth-tokens.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import { Hub } from './hub/hub.js';
+import { builtinJobs } from './jobs/builtin.js';
+import { JobQueue } from './jobs/queue.js';
 import { SecretBox } from './lib/crypto.js';
 import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
@@ -30,6 +36,15 @@ export interface Services {
   network: NetworkPolicy;
   connectors: ConnectorRegistry;
   accounts: AccountService;
+  /** OAuth apps of service providers (hub-wide from env, or the user's own). */
+  oauthApps: OAuthAppService;
+  /** OAuth tokens of connected accounts. */
+  tokens: TokenManager;
+  /** "Connect an account" OAuth flows. */
+  connect: ConnectService;
+  health: AccountHealthService;
+  /** Background jobs; started by `startJobs()` in processes that run them. */
+  jobs: JobQueue;
   apiTokens: ApiTokenService;
   hub: Hub;
   clients: ClientRegistry;
@@ -61,7 +76,23 @@ export function createServices(
   const network = createNetworkPolicy({
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
-  const accounts = new AccountService(db, connectors, secrets, network);
+  const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
+  const tokens = new TokenManager({ db, secrets, apps: oauthApps, fetch: network.fetch, logger });
+  const accounts = new AccountService(db, connectors, secrets, network, tokens);
+  const connect = new ConnectService({
+    db,
+    secrets,
+    connectors,
+    accounts,
+    apps: oauthApps,
+    tokens,
+    fetch: network.fetch,
+    redirectUri: `${config.publicUrl}/connect/callback`,
+    logger,
+  });
+  const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
+  const jobs = new JobQueue({ connectionString: config.database.url, logger });
+  for (const job of builtinJobs({ health })) jobs.register(job);
   const apiTokens = new ApiTokenService(db);
   const hub = new Hub({ db, connectors, accounts, logger, toolTimeoutMs: config.toolTimeoutMs });
   const clients = new ClientRegistry(db, {
@@ -95,6 +126,11 @@ export function createServices(
     network,
     connectors,
     accounts,
+    oauthApps,
+    tokens,
+    connect,
+    health,
+    jobs,
     apiTokens,
     hub,
     clients,
@@ -105,6 +141,7 @@ export function createServices(
     mcp,
     async close() {
       rateLimiter.close();
+      await jobs.stop();
       await mcp.close();
       await network.close();
       await database.close();

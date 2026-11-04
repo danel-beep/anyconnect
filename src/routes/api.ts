@@ -2,11 +2,14 @@ import { verifyBearerToken } from '@modelcontextprotocol/server';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { BUILTIN_PROVIDERS, resolveProvider } from '../connectors/oauth/providers.js';
 import { toJsonSchema } from '../connectors/sdk.js';
 import { toAccountView } from '../core/accounts.js';
 import { toApiTokenView } from '../core/api-tokens.js';
 import { principalFromAuthInfo } from '../core/auth.js';
+import { StartConnectInput } from '../core/connect.js';
 import { getDefaultWorkspace, getUser, getWorkspace } from '../core/identity.js';
+import { CreateOAuthAppInput } from '../core/oauth-apps.js';
 import type { Principal } from '../core/principal.js';
 import { workspaces } from '../db/schema.js';
 import { AppError, badRequest, notFound, unauthorized } from '../lib/errors.js';
@@ -168,6 +171,65 @@ export function apiRoutes() {
   api.delete('/accounts/:id', async (c) => {
     await c.get('services').accounts.delete(principal(c).workspaceId, c.req.param('id'));
     return c.body(null, 204);
+  });
+
+  // --- Connecting accounts through OAuth (the hub is the OAuth client) ------
+  api.get('/oauth/providers', async (c) => {
+    const s = c.get('services');
+    const connectors = await s.connectors.list(principal(c).workspaceId);
+    const apps = await s.oauthApps.list(principal(c).workspaceId);
+    const providers = new Map<
+      string,
+      { id: string; name: string; appSetupUrl?: string; connectors: string[] }
+    >();
+    for (const connector of connectors) {
+      if (!connector.oauth) continue;
+      const provider = resolveProvider(connector.oauth);
+      const entry = providers.get(provider.id) ?? {
+        id: provider.id,
+        name: provider.name,
+        ...(provider.appSetupUrl ? { appSetupUrl: provider.appSetupUrl } : {}),
+        connectors: [],
+      };
+      entry.connectors.push(connector.id);
+      providers.set(provider.id, entry);
+    }
+    return c.json({
+      redirectUri: s.connect.redirectUri,
+      providers: [...providers.values()].map((p) => ({
+        ...p,
+        apps: apps.filter((a) => a.providerId === p.id).map((a) => a.id),
+      })),
+    });
+  });
+
+  api.get('/oauth/apps', async (c) => {
+    const s = c.get('services');
+    return c.json(await s.oauthApps.list(principal(c).workspaceId));
+  });
+
+  api.post('/oauth/apps', async (c) => {
+    const s = c.get('services');
+    const body = await json(c, CreateOAuthAppInput);
+    const workspaceId = principal(c).workspaceId;
+    const known = new Set(Object.keys(BUILTIN_PROVIDERS));
+    for (const connector of await s.connectors.list(workspaceId)) {
+      if (connector.oauth) known.add(resolveProvider(connector.oauth).id);
+    }
+    return c.json(await s.oauthApps.create(workspaceId, body, known), 201);
+  });
+
+  api.delete('/oauth/apps/:id', async (c) => {
+    await c.get('services').oauthApps.delete(principal(c).workspaceId, c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  /** Starts connecting (or re-connecting) an account; open `authorizationUrl` in the browser. */
+  api.post('/connect', async (c) => {
+    const s = c.get('services');
+    const p = principal(c);
+    const body = await json(c, StartConnectInput);
+    return c.json(await s.connect.start({ workspaceId: p.workspaceId, userId: p.userId }, body), 201);
   });
 
   api.post('/accounts/:id/test', async (c) => {
