@@ -33,6 +33,8 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   trello: { total: 1800, tool: 300 },
   airtable: { total: 1800, tool: 370 },
   hubspot: { total: 1700, tool: 270 },
+  telegram: { total: 2050, tool: 400 },
+  whatsapp: { total: 2050, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {

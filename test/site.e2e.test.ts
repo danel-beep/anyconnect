@@ -678,7 +678,7 @@ describe('website: public pages', () => {
     expect(await page('/docs')).toMatch(/<li>[^<]*Todoist[^<]*: paste an app password or API key/);
     // The grid holds what connects today; planned services wait in one row, and any MCP server has a card.
     const services = await page('/services');
-    expect(services).toMatch(/<li data-search="Telegram"><span class="road">/);
+    expect(services).toMatch(/<li data-search="Discord"><span class="road">/);
     expect(services).toContain('href="/docs#custom"');
     expect(services).not.toContain('svc soon');
   });

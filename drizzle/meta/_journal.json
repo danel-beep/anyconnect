@@ -78,6 +78,13 @@
       "when": 1793814719913,
       "tag": "0010_billing_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793827115052,
+      "tag": "0011_messengers",
+      "breakpoints": true
     }
   ]
 }

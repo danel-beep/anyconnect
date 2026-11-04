@@ -6,7 +6,8 @@ import type { BillingProvider } from './billing/provider.js';
 import { createBillingProvider, TestBillingProvider } from './billing/providers/index.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
-import { createBuiltinRegistry } from './connectors/index.js';
+import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
+import type { MessagingPort } from './connectors/messaging.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { actionText, connectorText } from './connectors/sdk.js';
 import { AccountKeyring } from './core/account-keys.js';
@@ -41,6 +42,7 @@ import { RateLimiter } from './lib/rate-limit.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
 import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
+import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { AiClientService } from './security/clients.js';
@@ -129,6 +131,7 @@ export interface Services {
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
+  messaging: Messaging;
   /** /mcp for apps that have not signed in yet; absent when `MCP_ANONYMOUS` is off. */
   visitorMcp?: McpHttpHandler;
   close(): Promise<void>;
@@ -138,7 +141,7 @@ export function createServices(
   config: AppConfig,
   overrides: {
     logger?: Logger;
-    connectors?: ConnectorRegistry;
+    connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     /** Tests: fetch Client ID Metadata Documents from localhost. */
     allowPrivateNetwork?: boolean;
     fetchDocument?: typeof safeFetch;
@@ -162,10 +165,20 @@ export function createServices(
   const db = database.db;
   const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
   const customStore = new CustomConnectorStore(db, logger);
-  const connectors = new WorkspaceConnectorResolver(
-    overrides.connectors ?? createBuiltinRegistry(),
-    customStore,
-  );
+  // Built-in connectors get ports to hub subsystems that are built after them (they need the registry).
+  let messaging: Messaging | undefined;
+  const messagingPort: MessagingPort = {
+    forAccount: (accountId) => {
+      if (!messaging) throw new Error('messaging is not initialized');
+      return messaging.service.forAccount(accountId);
+    },
+  };
+  const builtinDeps: BuiltinDeps = { messaging: messagingPort };
+  const builtin =
+    typeof overrides.connectors === 'function'
+      ? overrides.connectors(builtinDeps)
+      : (overrides.connectors ?? createBuiltinRegistry(builtinDeps));
+  const connectors = new WorkspaceConnectorResolver(builtin, customStore);
   const network = createNetworkPolicy({
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
@@ -217,6 +230,16 @@ export function createServices(
   const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
   const jobs = new JobQueue({ connectionString: config.database.url, logger });
   for (const job of builtinJobs({ health, customServices })) jobs.register(job);
+  messaging = createMessaging({
+    publicUrl: config.publicUrl,
+    gatewayConfig: config.gateway,
+    db,
+    secrets,
+    accounts,
+    connectors,
+    builtin,
+    logger,
+  });
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
@@ -413,8 +436,10 @@ export function createServices(
     rateLimiter,
     idempotency,
     mcp,
+    messaging,
     ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
+      await messaging?.stop();
       await pendingRunner.stop();
       rateLimiter.close();
       await jobs.stop();
