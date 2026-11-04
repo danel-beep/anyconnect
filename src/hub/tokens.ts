@@ -28,15 +28,13 @@ export interface ListedTool {
   annotations?: unknown;
 }
 
-/** Approximate tokens a client spends on a `tools/list` result (what goes into the model context). */
+/**
+ * Approximate tokens the tool list costs in the model context. Clients pass a tool to the model as
+ * name + description + input schema (Anthropic `tools`, OpenAI `functions`); `title` and
+ * `annotations` stay in the client UI, so they are not counted.
+ */
 export function toolListTokens(tools: readonly ListedTool[]): number {
   return estimateTokens(
-    tools.map(({ name, title, description, inputSchema, annotations }) => ({
-      name,
-      title,
-      description,
-      inputSchema,
-      annotations,
-    })),
+    tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
   );
 }

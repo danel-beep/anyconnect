@@ -61,6 +61,8 @@ const EnvSchema = z.object({
   TOOL_RESULT_MAX_TOKENS: z.coerce.number().int().min(200).default(2000),
   /** How long a successful write is remembered to suppress accidental duplicates (0 disables). */
   IDEMPOTENCY_WINDOW_SECONDS: z.coerce.number().int().min(0).default(300),
+  /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
+  TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -101,7 +103,7 @@ export interface AppConfig {
   oauthApps: Record<string, { clientId: string; clientSecret: string | undefined }>;
   /** Run background jobs (pg-boss) in this process. */
   jobs: { enabled: boolean };
-  tools: { maxResultTokens: number; idempotencyWindowMs: number };
+  tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -211,6 +213,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     tools: {
       maxResultTokens: env.TOOL_RESULT_MAX_TOKENS,
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
+      listTokenBudget: env.TOOL_LIST_TOKEN_BUDGET,
     },
   };
 }

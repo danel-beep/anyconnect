@@ -19,10 +19,8 @@
  */
 import { z } from 'zod';
 
-const isoDateTime = (what: string) =>
-  z.string().describe(`${what}, ISO 8601 (e.g. 2026-11-04 or 2026-11-04T09:00:00+03:00)`);
-const limit = (max: number, fallback: number) =>
-  z.number().int().min(1).max(max).default(fallback).describe(`Maximum number of results (1-${max})`);
+const isoDateTime = (what: string) => z.string().describe(`${what} (ISO 8601 date or date-time)`);
+const limit = (max: number, fallback: number) => z.number().int().min(1).max(max).default(fallback);
 const id = z.string().describe('Item id on its service; pass it back to other tools of the same account');
 const url = z.string().optional().describe('Link that opens the item in the service');
 
@@ -147,8 +145,10 @@ export interface CapabilityDefinition {
   input: z.ZodObject<any>;
   /** Item schema (`list`) or result schema (`single`). */
   output: z.ZodObject<any>;
-  /** Field used to sort merged items (newest first). */
+  /** Field used to sort merged items. */
   sortBy?: string;
+  /** Default `desc` (newest first); `asc` for things that are upcoming (events, due tasks). */
+  sortOrder?: 'asc' | 'desc';
 }
 
 function capability<const T extends CapabilityDefinition>(definition: T): T {
@@ -284,6 +284,7 @@ export const CAPABILITIES = {
     }),
     output: EventItem,
     sortBy: 'start',
+    sortOrder: 'asc',
   }),
   'calendar.create_event': capability({
     id: 'calendar.create_event',
@@ -340,6 +341,7 @@ export const CAPABILITIES = {
     }),
     output: TaskItem,
     sortBy: 'due',
+    sortOrder: 'asc',
   }),
   'tasks.create': capability({
     id: 'tasks.create',
