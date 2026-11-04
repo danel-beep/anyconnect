@@ -240,7 +240,20 @@ function verifySignature(body: string, header: string | undefined, appSecret: st
   return secretsEqual(header?.toLowerCase(), expected);
 }
 
+const MEDIA_TYPES = { photo: 'image', video: 'video', audio: 'audio', document: 'document' } as const;
+
 function messageContent(job: OutboundJob) {
+  if (job.file) {
+    const type = MEDIA_TYPES[job.file.kind];
+    return {
+      type,
+      [type]: {
+        link: job.file.url,
+        ...(job.text && type !== 'audio' ? { caption: job.text } : {}),
+        ...(type === 'document' && job.file.name ? { filename: job.file.name } : {}),
+      },
+    };
+  }
   if (!job.template) return { type: 'text', text: { body: job.text, preview_url: false } };
   const parameters = job.template.parameters ?? [];
   return {
@@ -485,6 +498,8 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
   // No idempotency key in the Cloud API: an interrupted send is reported, never repeated.
   idempotentSend: false,
   templates: true,
+  files: true,
+  captionless: ['audio'],
 
   async send(job, ctx) {
     if (job.kind === 'mark_read') {

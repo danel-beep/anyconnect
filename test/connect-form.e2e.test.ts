@@ -143,7 +143,7 @@ describe('connect form for services without OAuth', () => {
         ...TestBrowser.hiddenInputs(retry),
         label: 'Work',
         'config.greeting': 'Hi',
-        'credentials.secret': 's3',
+        'credentials.secret': 'secret-s3-value',
       },
     });
     expect(done.status).toBe(200);
@@ -202,7 +202,7 @@ describe('connect form for services without OAuth', () => {
     const account = (await hub.services.accounts.findByName(workspaceId, 'demo', 'work'))!;
     const { html, hidden } = await openForm(`/connect/demo?account=${account.id}`);
     expect(html).toContain('value="Hi"');
-    expect(html).not.toContain('s3');
+    expect(html).not.toContain('secret-s3-value');
     const saved = await browser.request('/connect/demo', {
       form: { ...hidden, 'config.greeting': 'Hello again', 'credentials.secret': '' },
     });
@@ -213,7 +213,7 @@ describe('connect form for services without OAuth', () => {
       signal: AbortSignal.timeout(5000),
       logger: hub.services.logger,
     });
-    expect(ctx.credentials).toEqual({ secret: 's3' });
+    expect(ctx.credentials).toEqual({ secret: 'secret-s3-value' });
   });
 
   it('offers the form for optional OAuth when the hub has no app', async () => {
