@@ -4,6 +4,7 @@ import pg from 'pg';
 import { createApp } from '../src/app.js';
 import { bootstrap } from '../src/bootstrap.js';
 import { loadConfig } from '../src/config.js';
+import type { BuiltinDeps } from '../src/connectors/index.js';
 import type { ConnectorRegistry } from '../src/connectors/registry.js';
 import type { OidcLoginProvider } from '../src/core/external-login.js';
 import { runMigrations } from '../src/db/migrate.js';
@@ -66,7 +67,7 @@ export interface TestHub {
 export async function startTestHub(
   options: {
     env?: Record<string, string>;
-    connectors?: ConnectorRegistry;
+    connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     fetchDocument?: typeof safeFetch;
     seed?: boolean;
     stages?: StageMap;
@@ -216,4 +217,9 @@ function decodeEntities(value: string): string {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&');
+}
+
+/** Tool results with third-party content arrive wrapped in ⟦untrusted⟧ markers; returns the inside. */
+export function unwrapUntrusted(text: string): string {
+  return text.replace(/^⟦untrusted (\w+) source="[^"]*"⟧\n([\s\S]*)\n⟦\/untrusted \1⟧$/, '$2');
 }

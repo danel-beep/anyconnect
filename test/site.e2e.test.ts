@@ -269,6 +269,11 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     await oidc.signIn(browser, { sub: 'g-lim', email: 'lim@example.com' });
     const user = await userByEmail('lim@example.com');
     const ws = await workspaceOf(user.id);
+    // Past the 14-day Pro trial, in the first step down (500 actions, Free accounts).
+    await hub.services.database.pool.query(
+      `UPDATE workspaces SET created_at = now() - interval '20 days' WHERE id = $1`,
+      [ws.id],
+    );
     const { token } = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: user.id, name: 't' });
     const api = async (path: string, method = 'GET', body?: unknown) => {
       const response = await fetch(`${hub.baseUrl}/api/v1${path}`, {
@@ -298,7 +303,7 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     });
     expect(fourth.status).toBe(402);
 
-    // Free plan with the sign-up bonus: 500 actions a month. Use them all up.
+    // Free plan in its first step down: 500 actions a month. Use them all up.
     const today = new Date().toISOString().slice(0, 10);
     await hub.services.database.pool.query(
       `INSERT INTO usage_counters (workspace_id, day, caller, connector_id, action, calls)
@@ -766,7 +771,7 @@ describe('website: public pages', () => {
     expect(await page('/docs')).toMatch(/<li>[^<]*Todoist[^<]*: paste an app password or API key/);
     // The grid holds what connects today; planned services wait in one row, and any MCP server has a card.
     const services = await page('/services');
-    expect(services).toMatch(/<li data-search="Telegram"><span class="road">/);
+    expect(services).toMatch(/<li data-search="Discord"><span class="road">/);
     expect(services).toContain('href="/docs#custom"');
     expect(services).not.toContain('svc soon');
   });
