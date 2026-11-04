@@ -11,17 +11,18 @@ import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-
 import { CustomServiceManager } from './core/custom-services.js';
 import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
-import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { TokenManager } from './core/oauth-tokens.js';
 import { PasskeyService } from './core/passkeys.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
 import { TotpService } from './core/totp.js';
+import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
 import { type IdempotencyStore, MemoryIdempotencyStore } from './hub/idempotency.js';
 import { SETUP_CONNECTOR } from './hub/setup-tools.js';
+import { PgUsageMeter, type UsageMeter } from './hub/usage.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
 import { SecretBox } from './lib/crypto.js';
@@ -68,6 +69,8 @@ export interface Services {
   customServices: CustomServiceManager;
   /** Workspace administration (what the setup tools and the panel do for the user). */
   admin: WorkspaceAdmin;
+  /** Usage counters per workspace, AI account and action. */
+  usage: UsageMeter;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -233,8 +236,10 @@ export function createServices(
     publicUrl: config.publicUrl,
     logger,
   });
+  const usage = new PgUsageMeter(db);
   const hub = new Hub({
     db,
+    meter: usage,
     connectors,
     accounts,
     logger,
@@ -296,6 +301,7 @@ export function createServices(
     connectors,
     customServices,
     admin,
+    usage,
     accounts,
     oauthApps,
     tokens,

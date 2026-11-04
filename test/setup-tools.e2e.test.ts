@@ -133,4 +133,12 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
       .where(eq(toolCalls.toolName, 'anyconnect_remove_account'));
     expect(declined[0]).toMatchObject({ outcome: 'declined', risk: 'dangerous' });
   });
+
+  it('counts executed calls as usage, but not refused ones', async () => {
+    const usage = await hub.services.usage.list(workspaceId, '2000-01-01');
+    const actions = usage.filter((r) => r.connectorId === 'anyconnect').map((r) => r.action);
+    expect(actions).toContain('update_account');
+    expect(actions).not.toContain('remove_account');
+    expect(usage.every((r) => r.caller === `user:${principal.userId}`)).toBe(true);
+  });
 });

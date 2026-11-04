@@ -193,6 +193,24 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       'demo_echo:ok',
     ]);
     expect(calls.every((c) => c.accountId && c.principalType === 'oauth' && c.clientId)).toBe(true);
+
+    // Usage is counted per AI account when the client sends one (ChatGPT's `openai/subject`), hashed.
+    const chatgpt = await connectWithOAuth(hub, new MemoryOAuthProvider());
+    await chatgpt.callTool({
+      name: 'demo_account_info',
+      arguments: { account: 'main' },
+      _meta: { 'openai/subject': 'user-raw-id-42' },
+    });
+    await chatgpt.close();
+    const [latest] = await hub.services.hub.recentToolCalls(workspace.id, { limit: 1 });
+    expect(latest!.aiSubject).toMatch(/^openai:[0-9a-f]{32}$/);
+    expect(JSON.stringify(latest)).not.toContain('user-raw-id-42');
+    const usage = await hub.services.usage.list(workspace.id, '2000-01-01');
+    const byCaller = (caller: string) => usage.filter((r) => r.caller === caller);
+    expect(byCaller(latest!.aiSubject!)).toEqual([
+      expect.objectContaining({ connectorId: 'demo', action: 'account_info', calls: 1, errors: 0 }),
+    ]);
+    expect(usage.find((r) => r.action === 'fail')).toMatchObject({ calls: 1, errors: 1 });
   });
 
   it('identifies clients by a Client ID Metadata Document instead of registering them', async () => {

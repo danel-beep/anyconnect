@@ -9,6 +9,7 @@ import {
   type ServerContext,
 } from '@modelcontextprotocol/server';
 import { principalFromAuthInfo } from '../core/auth.js';
+import { aiSubjectFromMeta } from '../core/principal.js';
 import type { Interaction } from '../hub/executor.js';
 import type { Hub, ToolCallResult } from '../hub/hub.js';
 import type { Logger } from '../logger.js';
@@ -101,13 +102,16 @@ export function createHubMcpHandler(deps: { hub: Hub; logger: Logger; version: s
             inputSchema: inputValidator(tool.inputSchema),
             annotations: tool.annotations,
           },
-          async (args, ctx) =>
-            toMcpResult(
-              await deps.hub.callTool(principal, catalog, tool.name, args ?? {}, {
+          async (args, ctx) => {
+            const aiSubject = aiSubjectFromMeta(ctx.mcpReq._meta as Record<string, unknown> | undefined);
+            const caller = aiSubject ? { ...principal, aiSubject } : principal;
+            return toMcpResult(
+              await deps.hub.callTool(caller, catalog, tool.name, args ?? {}, {
                 signal: ctx.mcpReq.signal,
                 interaction: interactionOf(ctx.mcpReq),
               }),
-            ),
+            );
+          },
         );
       }
       return server;

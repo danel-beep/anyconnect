@@ -11,6 +11,7 @@ import { StartConnectInput } from '../core/connect.js';
 import { getDefaultWorkspace, getUser, getWorkspace } from '../core/identity.js';
 import { CreateOAuthAppInput } from '../core/oauth-apps.js';
 import { workspaces } from '../db/schema.js';
+import { utcDay } from '../hub/usage.js';
 import { AppError, notFound, unauthorized } from '../lib/errors.js';
 import { json, principal } from './api-helpers.js';
 import { securityRoutes } from './api-security.js';
@@ -255,6 +256,17 @@ export function apiRoutes() {
   api.post('/accounts/:id/test', async (c) => {
     const s = c.get('services');
     return c.json(await s.accounts.test(principal(c).workspaceId, c.req.param('id'), s.logger));
+  });
+
+  // --- Usage ---------------------------------------------------------------
+  /** Executed calls per day, caller (AI account or app connection) and action; `?days=` (1–90, default 30). */
+  api.get('/usage', async (c) => {
+    const s = c.get('services');
+    const days = Math.min(Math.max(Number(c.req.query('days')) || 30, 1), 90);
+    const since = utcDay(new Date(Date.now() - (days - 1) * 86_400_000));
+    const rows = await s.usage.list(principal(c).workspaceId, since);
+    const total = rows.reduce((n, r) => n + r.calls, 0);
+    return c.json({ since, total, rows });
   });
 
   // --- Tools as the AI sees them -------------------------------------------

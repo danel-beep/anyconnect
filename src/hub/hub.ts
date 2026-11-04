@@ -55,6 +55,7 @@ import {
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
+import type { UsageMeter } from './usage.js';
 
 export type { ToolCallResult } from './result.js';
 
@@ -78,6 +79,8 @@ export interface HubDeps {
   idempotencyWindowMs: number;
   /** Token budget for `tools/list`; above it the catalog switches to discovery (setting `auto`). */
   toolListTokenBudget?: number;
+  /** Counts executed calls (stage `meter`); without it nothing is counted. */
+  meter?: UsageMeter;
   /** Replaces built-in stages or fills the policy / confirm / untrusted slots. */
   stages?: StageMap;
   /**
@@ -137,6 +140,7 @@ export class Hub {
           idempotency: deps.idempotency,
           idempotencyWindowMs: deps.idempotencyWindowMs,
           maxResultTokens: deps.maxResultTokens,
+          ...(deps.meter ? { meter: deps.meter } : {}),
         }),
         ...deps.stages,
       },

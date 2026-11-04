@@ -31,6 +31,7 @@ export async function recordToolCall(db: Db, logger: Logger, entry: AuditEntry):
       principalType: entry.principal.kind,
       principalId: entry.principal.credentialId ?? null,
       clientId: entry.principal.clientId ?? null,
+      aiSubject: entry.principal.aiSubject ?? null,
       status: failed ? 'error' : 'ok',
       outcome: entry.outcome ?? (failed ? (entry.result.error?.kind ?? 'error') : null),
       risk: entry.risk,

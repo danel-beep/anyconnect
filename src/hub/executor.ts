@@ -25,6 +25,8 @@ import type { ExecResult } from './result.js';
 export const STAGE_ORDER = [
   /** Records every unit in `tool_calls`, including denials (outermost, so it sees everything). */
   'audit',
+  /** Counts executed calls per workspace, AI account and action (plans and limits build on it). */
+  'meter',
   /** Who may do what: client × account × risk (implemented in the security layer). */
   'policy',
   /** Lets the action raise the risk of this particular call (`assessRisk`), e.g. a new recipient. */

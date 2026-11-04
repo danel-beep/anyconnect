@@ -3,10 +3,12 @@ import type { RateLimiter } from '../../lib/rate-limit.js';
 import type { Logger } from '../../logger.js';
 import type { StageMap } from '../executor.js';
 import type { IdempotencyStore } from '../idempotency.js';
+import type { UsageMeter } from '../usage.js';
 import { auditStage } from './audit.js';
 import { confirmFloorStage } from './confirm-floor.js';
 import { idempotencyStage } from './idempotency.js';
 import { limitsStage } from './limits.js';
+import { meterStage } from './meter.js';
 import { riskStage } from './risk.js';
 import { shapeStage } from './shape.js';
 
@@ -24,9 +26,11 @@ export function defaultStages(deps: {
   idempotency: IdempotencyStore;
   idempotencyWindowMs: number;
   maxResultTokens: number;
+  meter?: UsageMeter;
 }): StageMap {
   return {
     audit: auditStage(deps),
+    ...(deps.meter ? { meter: meterStage({ meter: deps.meter, logger: deps.logger }) } : {}),
     risk: riskStage,
     confirm: confirmFloorStage,
     limits: limitsStage({ rateLimiter: deps.rateLimiter }),
