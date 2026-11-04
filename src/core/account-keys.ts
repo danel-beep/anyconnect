@@ -5,7 +5,7 @@ import { DataKey, type KeyWrapper, type SecretBox } from '../lib/crypto.js';
  *
  * Every account has its own random data key (DEK). The DEK is stored wrapped by the master key
  * (`accounts.data_key_encrypted`, AAD = `account:<id>:dek`) and encrypts the account's secrets
- * (credentials today; cached messages and other per-account data later), always with the account
+ * (credentials, OAuth tokens; cached messages and other per-account data later), always with the account
  * id in the AAD so a ciphertext copied to another row does not decrypt.
  *
  * Accounts created before envelope encryption have credentials encrypted directly with the master
@@ -19,6 +19,7 @@ export interface AccountKeyMaterial {
 
 export const dataKeyContext = (accountId: string) => `account:${accountId}:dek`;
 export const credentialsContext = (accountId: string) => `account:${accountId}:credentials`;
+export const oauthTokensContext = (accountId: string) => `account:${accountId}:oauth`;
 
 export class AccountKeyring {
   constructor(
@@ -52,10 +53,23 @@ export class AccountKeyring {
   }
 
   decryptCredentials<T = unknown>(account: AccountKeyMaterial, envelope: string): T {
-    if (DataKey.isEnvelope(envelope)) {
-      return this.openKey(account).decryptJson<T>(envelope, credentialsContext(account.id));
-    }
-    return this.legacy.decryptJson<T>(envelope, credentialsContext(account.id));
+    return this.decryptSecret<T>(account, envelope, credentialsContext(account.id));
+  }
+
+  /**
+   * Encrypts any other per-account secret (e.g. OAuth tokens) with the account's data key. The
+   * context must name the account so the ciphertext only opens for it. An account without a data
+   * key yet (not upgraded) falls back to the master key until it is upgraded.
+   */
+  encryptSecret(account: AccountKeyMaterial, value: unknown, context: string): string {
+    return account.dataKeyEncrypted
+      ? this.openKey(account).encryptJson(value, context)
+      : this.legacy.encryptJson(value, context);
+  }
+
+  decryptSecret<T = unknown>(account: AccountKeyMaterial, envelope: string, context: string): T {
+    if (DataKey.isEnvelope(envelope)) return this.openKey(account).decryptJson<T>(envelope, context);
+    return this.legacy.decryptJson<T>(envelope, context);
   }
 
   /** True when the stored credentials predate envelope encryption. */

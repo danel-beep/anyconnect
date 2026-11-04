@@ -133,8 +133,9 @@ export function createServices(
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
-  const tokens = new TokenManager({ db, secrets, apps: oauthApps, fetch: network.fetch, logger });
-  const accounts = new AccountService(db, connectors, new AccountKeyring(secrets, secrets), network, tokens);
+  const keyring = new AccountKeyring(secrets, secrets);
+  const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
+  const accounts = new AccountService(db, connectors, keyring, network, tokens);
   const customServices = new CustomServiceManager({
     db,
     store: customStore,

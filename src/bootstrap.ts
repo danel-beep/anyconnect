@@ -16,9 +16,11 @@ export async function bootstrap(services: Services): Promise<void> {
   if (encryption.upgraded || encryption.rewrapped) {
     logger.info(encryption, 'account encryption upgraded');
   }
-  if (encryption.failed) {
+  const oauthTokens = await services.tokens.upgradeEncryption();
+  if (oauthTokens.upgraded) logger.info(oauthTokens, 'account OAuth tokens moved to account keys');
+  if (encryption.failed || oauthTokens.failed) {
     logger.error(
-      { failed: encryption.failed },
+      { failed: encryption.failed + oauthTokens.failed },
       'some account secrets cannot be decrypted with the configured keys (check ENCRYPTION_KEYS_PREVIOUS)',
     );
   }

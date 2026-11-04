@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AccountKeyring, credentialsContext } from '../src/core/account-keys.js';
+import { AccountKeyring, credentialsContext, oauthTokensContext } from '../src/core/account-keys.js';
 import { AccountService } from '../src/core/accounts.js';
 import { getDefaultWorkspace } from '../src/core/identity.js';
-import { accounts } from '../src/db/schema.js';
+import { accountOauth, accounts } from '../src/db/schema.js';
 import { generateKey, SecretBox } from '../src/lib/crypto.js';
 import { createLogger } from '../src/logger.js';
 import { ADMIN, resetDatabase, startTestHub, TEST_KEY, type TestHub } from './helpers.js';
@@ -86,6 +86,48 @@ describe('per-account envelope encryption', () => {
     expect(upgraded.updatedAt.getTime()).toBe(legacy.updatedAt.getTime());
     // Running again is a no-op.
     expect(await s.accounts.upgradeEncryption()).toEqual({ upgraded: 0, rewrapped: 0, failed: 0 });
+  });
+
+  it('moves OAuth tokens stored under the master key to the account key', async () => {
+    const s = hub.services;
+    const row = await s.accounts.create(workspaceId, {
+      connectorId: 'demo',
+      label: 'OAuth',
+      credentials: { secret: 'x' },
+    });
+    const tokens = { accessToken: 'at-legacy', tokenType: 'Bearer', scopes: ['read'] };
+    await s.db.insert(accountOauth).values({
+      accountId: row.id,
+      providerId: 'google',
+      appRef: 'env:google',
+      tokensEncrypted: s.secrets.encryptJson(tokens, oauthTokensContext(row.id)),
+      scopes: ['read'],
+    });
+    expect((await s.tokens.load(row.id))?.tokens).toEqual(tokens);
+
+    expect(await s.tokens.upgradeEncryption()).toEqual({ upgraded: 1, failed: 0 });
+    const [stored] = await s.db.select().from(accountOauth).where(eq(accountOauth.accountId, row.id));
+    expect(stored!.tokensEncrypted).toMatch(/^d1\./);
+    expect((await s.tokens.load(row.id))?.tokens).toEqual(tokens);
+    // Another account's key does not open them.
+    const other = await rowOf(
+      (
+        await s.accounts.create(workspaceId, {
+          connectorId: 'demo',
+          label: 'Other',
+          credentials: { secret: 'y' },
+        })
+      ).id,
+    );
+    expect(() => s.secrets.decryptJson(stored!.tokensEncrypted, oauthTokensContext(row.id))).toThrow();
+    expect(() =>
+      new AccountKeyring(s.secrets, s.secrets).decryptSecret(
+        other,
+        stored!.tokensEncrypted,
+        oauthTokensContext(row.id),
+      ),
+    ).toThrow();
+    expect(await s.tokens.upgradeEncryption()).toEqual({ upgraded: 0, failed: 0 });
   });
 
   it('rotates the master key by re-wrapping data keys only', async () => {
