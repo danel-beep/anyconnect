@@ -248,7 +248,18 @@ export interface UsageView {
   actions: { used: number; limit: number | null };
   accounts: { used: number; limit: number | null };
   resetsAt: Date;
-  introUntil?: Date | undefined;
+  /** The start in force: a trial of another plan or a step down (see `Plan.start`). */
+  phase?: { kind: 'trial' | 'step'; asPlan?: string | undefined; until: Date } | undefined;
+  /** The whole published start: dates and the actions limit of each phase, then the plan's own. */
+  schedule?: {
+    kind: 'trial' | 'step';
+    from: Date;
+    until: Date;
+    actions: number | null;
+    asPlan?: string | undefined;
+  }[];
+  /** The plan's own actions limit, after the start. */
+  planLimitActions?: number | null;
 }
 
 export const AccountStatus: FC<{
@@ -380,9 +391,14 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
           </div>
           <Meter used={usage.accounts.used} limit={usage.accounts.limit} label={t('app.usage.accounts')} />
           <div class="sub">
-            {usage.introUntil
-              ? t('app.usage.intro', { date: fmtDate(lang, usage.introUntil) })
-              : t('app.usage.accountsHint')}
+            {usage.phase?.kind === 'trial'
+              ? t('app.usage.trial', {
+                  plan: t(`plan.${usage.phase.asPlan ?? 'pro'}.name` as 'plan.free.name'),
+                  date: fmtDate(lang, usage.phase.until),
+                })
+              : usage.phase
+                ? t('app.usage.step', { date: fmtDate(lang, usage.phase.until) })
+                : t('app.usage.accountsHint')}
           </div>
         </div>
         {extra}
@@ -1367,6 +1383,53 @@ const PaidSubscription: FC<{ ctx: PageCtx; paid: NonNullable<BillingView['paid']
   );
 };
 
+/** The published start of a free workspace: trial, steps down, then the plan's own limit. */
+const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) => {
+  const { t, lang } = ctx;
+  const schedule = usage.schedule ?? [];
+  const now = Date.now();
+  const actions = (n: number | null) =>
+    n === null ? t('plan.metric.actions.unlimited') : t('plan.metric.actions', { n: fmtNumber(lang, n) });
+  const last = schedule[schedule.length - 1];
+  return (
+    <div class="start-schedule">
+      <h3>{t('app.billing.start')}</h3>
+      <ol class="plain">
+        {schedule.map((p) => {
+          const current = p.from.getTime() <= now && now < p.until.getTime();
+          return (
+            <li class={current ? 'current' : p.until.getTime() <= now ? 'past' : undefined}>
+              <span>
+                {p.kind === 'trial'
+                  ? t('app.billing.startTrial', {
+                      plan: t(`plan.${p.asPlan ?? 'pro'}.name` as 'plan.free.name'),
+                    })
+                  : actions(p.actions)}
+                {current ? <span class="badge accent">{t('app.billing.startNow')}</span> : null}
+              </span>
+              <span class="small muted">
+                {t('app.billing.startDates', {
+                  from: fmtDate(lang, p.from),
+                  until: fmtDate(lang, new Date(p.until.getTime() - 86_400_000)),
+                })}
+              </span>
+            </li>
+          );
+        })}
+        {last ? (
+          <li class={last.until.getTime() <= now ? 'current' : undefined}>
+            <span>{actions(usage.planLimitActions ?? null)}</span>
+            <span class="small muted">
+              {t('app.billing.startAfter', { date: fmtDate(lang, last.until) })}
+            </span>
+          </li>
+        ) : null}
+      </ol>
+      <p class="hint">{t('app.billing.startHint')}</p>
+    </div>
+  );
+};
+
 export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView }> = ({
   ctx,
   shell,
@@ -1425,6 +1488,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
         </p>
         {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
+        {!view.paid && view.usage.schedule?.length ? <StartSchedule ctx={ctx} usage={view.usage} /> : null}
         <p class="hint">{t('app.usage.actionsHint')}</p>
         {view.grants.length ? (
           <>
