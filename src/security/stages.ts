@@ -234,6 +234,20 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     // 2. The same call was already held back: report where it stands (or wait a bit more).
     const repeat = await pending.findRepeat(call.principal, call.tool.name, call.account.id, input.args);
     if (repeat) {
+      // The chat client retried without an answer: ask the same question again.
+      if (
+        repeat.status === 'awaiting_confirmation' &&
+        call.interaction?.canAsk &&
+        repeat.channels.includes('elicitation')
+      ) {
+        call.audit.outcome = 'awaiting_confirmation';
+        return {
+          content: [
+            { type: 'text', text: pendingText(repeat, 'This action needs the user’s confirmation.') },
+          ],
+          question: await question(call, repeat),
+        };
+      }
       const current = pending.isFinal(repeat)
         ? repeat
         : ((await pending.waitForOutcome(repeat.id, deps.waitMs, call.signal)) ?? repeat);

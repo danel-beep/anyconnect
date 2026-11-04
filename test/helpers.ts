@@ -52,6 +52,8 @@ export async function startTestHub(
     fetchDocument?: typeof safeFetch;
     seed?: boolean;
     stages?: StageMap;
+    /** A fake Telegram Bot API (set TELEGRAM_BOT_TOKEN in `env` too). */
+    telegramFetch?: typeof fetch;
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -83,6 +85,7 @@ export async function startTestHub(
     ...(options.connectors ? { connectors: options.connectors } : {}),
     ...(options.fetchDocument ? { fetchDocument: options.fetchDocument } : {}),
     ...(options.stages ? { stages: options.stages } : {}),
+    ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
   });
   await truncateAll(services);
   await bootstrap(services);
