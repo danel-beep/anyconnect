@@ -317,7 +317,8 @@ npm run db:generate  # после изменения src/db/schema.ts — соз
 npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 
-Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Мониторинг, логи, ошибки и
+фоновые задачи: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Безопасность
 

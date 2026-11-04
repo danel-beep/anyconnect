@@ -44,6 +44,7 @@ export type AppSection =
   | 'admin'
   | 'admin-users'
   | 'admin-audit'
+  | 'admin-errors'
   | 'admin-system';
 
 export interface ShellInfo {
@@ -74,6 +75,7 @@ const NAV: {
   { id: 'admin', href: '/admin', icon: 'chart', key: 'admin.nav.overview', group: 'admin' },
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
   { id: 'admin-audit', href: '/admin/audit', icon: 'book', key: 'admin.nav.audit', group: 'admin' },
+  { id: 'admin-errors', href: '/admin/errors', icon: 'alert', key: 'admin.nav.errors', group: 'admin' },
   { id: 'admin-system', href: '/admin/system', icon: 'layers', key: 'admin.nav.system', group: 'admin' },
 ];
 
