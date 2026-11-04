@@ -420,7 +420,7 @@ export const ServiceUnavailablePage: FC<{ t: Translate; lang: string; view: Serv
               </a>
             ) : null}
             {view.isAdmin ? (
-              <a class={view.alternative ? 'btn' : 'btn primary'} href="/admin/system">
+              <a class={view.alternative ? 'btn' : 'btn primary'} href="/admin/system#apps">
                 {t('connect.unavailableSetup')}
               </a>
             ) : null}

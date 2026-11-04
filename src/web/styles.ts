@@ -1,5 +1,6 @@
 import { FONT_FACES, MONO, SANS } from './assets.js';
 import { APP_SHELL_CSS } from './styles/app.js';
+import { BRAND_CSS } from './styles/brands.js';
 import { CONNECT_CSS } from './styles/connect.js';
 import { SITE_CSS } from './styles/site.js';
 import { THEMES, themeCss } from './theme.js';
@@ -157,7 +158,8 @@ html:not(.js) .tabs-nojs-title{display:block;margin-top:20px}
 
 /* Service logos */
 .logo-tile{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);flex:none}
-.logo-tile svg{width:20px;height:20px;fill:currentColor}
+.logo-tile svg{width:20px;height:20px}
+.logo-tile svg:not([fill=none]){fill:currentColor}
 .logo-tile.sm{width:32px;height:32px;border-radius:8px}
 .logo-tile.sm svg{width:16px;height:16px}
 .logo-tile.lg{width:56px;height:56px;border-radius:14px}
@@ -218,4 +220,12 @@ ul.codes code{font-size:15px}
 `;
 
 /** Served at /assets/app.css (no inline styles, so the CSP can forbid them). Colors come from `theme.ts`. */
-export const APP_CSS = [FONT_FACES, themeCss(), BASE_CSS, SITE_CSS, APP_SHELL_CSS, CONNECT_CSS].join('\n');
+export const APP_CSS = [
+  FONT_FACES,
+  themeCss(),
+  BASE_CSS,
+  SITE_CSS,
+  APP_SHELL_CSS,
+  CONNECT_CSS,
+  BRAND_CSS,
+].join('\n');

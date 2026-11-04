@@ -176,7 +176,7 @@ ul.plain.pad-x{padding:0 24px 6px}
 .pending-actions button svg{width:16px;height:16px}
 .empty-state{text-align:center;padding:40px 24px}
 .empty-state p{max-width:52ch;margin-left:auto;margin-right:auto}
-.empty-icon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--ok-soft,color-mix(in srgb,var(--ok) 14%,transparent));color:var(--ok);margin-bottom:10px}
+.empty-icon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--ok-soft);color:var(--ok);margin-bottom:10px}
 .empty-icon svg{width:22px;height:22px;stroke-width:2.4}
 .rule-who>span{display:flex;flex-direction:column;min-width:0}
 .rule-who .small{overflow-wrap:anywhere}
@@ -239,5 +239,12 @@ a.acc-more:hover{color:var(--text);background:var(--bg-subtle)}
 .attention ul{list-style:none;margin:8px 0 0;padding:0}
 .attention li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:6px 0;border-top:1px solid var(--danger-soft)}
 .attention li .btn{margin-left:auto}
+.plan-request{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start;justify-content:space-between;border-color:var(--accent);background:var(--accent-soft)}
+.plan-request p{margin:0;flex:1 1 280px}
+.d-block{display:block}
+.dot.off{background:var(--border-strong)}
+#apps li{align-items:flex-start;gap:16px}
+#apps li>.right{max-width:55%}
+@media (max-width:640px){#apps li{flex-direction:column;gap:4px}#apps li>.right{max-width:none;text-align:left}}
 .page-head .row>form.inline{display:flex}
 `;

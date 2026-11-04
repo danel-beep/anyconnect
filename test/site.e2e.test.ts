@@ -502,8 +502,24 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const overview = await (await admin.request('/admin')).text();
     expect(overview).toContain('Запросы тарифа');
     expect(overview).toContain('payer@example.com');
+    // The admin sidebar counts the request; the user's page has the plan form filled in for it.
+    expect(overview).toMatch(/href="\/admin"[\s\S]*?<span class="count"[^>]*><span aria-hidden="true">1</);
     const userPage = `/admin/users/${user.id}`;
-    const { csrf: adminCsrf } = await hiddenOf(admin, userPage);
+    const detail = await (await admin.request(userPage)).text();
+    expect(detail).toContain('<option value="pro" selected="">');
+    expect(detail).toMatch(/name="until" value="\d{4}-\d\d-\d\d"/);
+    const { csrf: adminCsrf } = TestBrowser.hiddenInputs(detail);
+
+    // Declining closes it without touching the plan, and the admin log says so.
+    const declined = await admin.request(`${userPage}/request/decline`, { form: { csrf: adminCsrf! } });
+    expect(declined.status).toBe(303);
+    expect(await hub.services.entitlements.openRequest(ws.id)).toBeUndefined();
+    expect((await hub.services.entitlements.summary(ws.id)).plan.id).toBe('free');
+    expect(await (await admin.request('/admin/audit')).text()).toContain('Запрос тарифа отклонён');
+    expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+
+    // Setting a plan closes an open request too.
+    await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });
     await admin.request(`${userPage}/plan`, { form: { csrf: adminCsrf!, plan: 'pro', until: '', note: '' } });
     expect(await hub.services.entitlements.openRequest(ws.id)).toBeUndefined();
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');

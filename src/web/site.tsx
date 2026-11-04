@@ -777,7 +777,8 @@ type FaqKey =
   | 'delete'
   | 'reset'
   | 'upgrade'
-  | 'many';
+  | 'many'
+  | 'jobs';
 
 const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
   <div>
@@ -885,7 +886,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div class="section-head">
             <h2>{t('pricing.faq')}</h2>
           </div>
-          <Faq t={t} keys={['action', 'reset', 'limit', 'upgrade', 'many']} />
+          <Faq t={t} keys={['action', 'reset', 'limit', 'upgrade', 'many', 'jobs']} />
         </div>
       </section>
     </SiteLayout>

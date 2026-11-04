@@ -166,6 +166,9 @@ export const siteEn = {
   'faq.many.q': 'Is there a limit on accounts per service?',
   'faq.many.a':
     'No. Within your plan’s total, all accounts can be of the same service, for example ten Gmail inboxes.',
+  'faq.jobs.q': 'What are scheduled tasks?',
+  'faq.jobs.a':
+    'Work the AI sets up to run on its own, for example a morning summary of new mail or a weekly report. They are coming soon; the plan shows how many you will be able to keep.',
 
   'plan.free.name': 'Free',
   'plan.free.for': 'Try it out with a couple of services',
@@ -185,8 +188,8 @@ export const siteEn = {
   'plan.metric.messengers': 'Messenger accounts: up to {n} (soon)',
   'plan.metric.messengers.none': 'Messengers from the Personal plan',
   'plan.metric.messengers.unlimited': 'Unlimited messenger accounts',
-  'plan.metric.backgroundJobs': 'Background jobs: up to {n}',
-  'plan.metric.backgroundJobs.unlimited': 'Unlimited background jobs',
+  'plan.metric.backgroundJobs': 'Scheduled tasks: up to {n} (soon)',
+  'plan.metric.backgroundJobs.unlimited': 'Unlimited scheduled tasks (soon)',
   'plan.metric.historyDays': 'Activity history: {n} {n|day|days}',
   'plan.metric.historyDays.unlimited': 'Activity history kept forever',
   'plan.metric.seats': 'Team members: up to {n}',
@@ -223,7 +226,7 @@ export const siteEn = {
   'pricing.row.actions': 'AI actions a month',
   'pricing.row.accounts': 'Connected accounts',
   'pricing.row.messengers': 'Messenger accounts (soon)',
-  'pricing.row.backgroundJobs': 'Background jobs',
+  'pricing.row.backgroundJobs': 'Scheduled tasks (soon)',
   'pricing.row.historyDays': 'Activity history',
   'pricing.row.seats': 'Team members',
   'pricing.row.security': 'Encryption, confirmations, access rules',
@@ -488,6 +491,9 @@ export const siteRu: Record<SiteKey, string> = {
   'faq.many.q': 'Есть ли ограничение на аккаунты одного сервиса?',
   'faq.many.a':
     'Нет. В пределах общего лимита тарифа все аккаунты могут быть одного сервиса, например десять ящиков Gmail.',
+  'faq.jobs.q': 'Что такое задачи по расписанию?',
+  'faq.jobs.a':
+    'Дела, которые ИИ настраивает выполнять самостоятельно: например, утреннюю сводку новых писем или отчёт раз в неделю. Они скоро появятся; в тарифе указано, сколько их можно будет держать.',
 
   'plan.free.name': 'Бесплатный',
   'plan.free.for': 'Попробовать с парой сервисов',
@@ -507,8 +513,8 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.metric.messengers': 'Аккаунтов мессенджеров: до {n} (скоро)',
   'plan.metric.messengers.none': 'Мессенджеры — с тарифа «Личный»',
   'plan.metric.messengers.unlimited': 'Мессенджеры без ограничений',
-  'plan.metric.backgroundJobs': 'Фоновых задач: до {n}',
-  'plan.metric.backgroundJobs.unlimited': 'Фоновые задачи без ограничений',
+  'plan.metric.backgroundJobs': 'Задач по расписанию: до {n} (скоро)',
+  'plan.metric.backgroundJobs.unlimited': 'Задачи по расписанию без ограничений (скоро)',
   'plan.metric.historyDays': 'История действий: {n} {n|день|дня|дней}',
   'plan.metric.historyDays.unlimited': 'История хранится бессрочно',
   'plan.metric.seats': 'Участников: до {n}',
@@ -545,7 +551,7 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.row.actions': 'Действия ИИ в месяц',
   'pricing.row.accounts': 'Подключённые аккаунты',
   'pricing.row.messengers': 'Аккаунты мессенджеров (скоро)',
-  'pricing.row.backgroundJobs': 'Фоновые задачи',
+  'pricing.row.backgroundJobs': 'Задачи по расписанию (скоро)',
   'pricing.row.historyDays': 'История действий',
   'pricing.row.seats': 'Участники',
   'pricing.row.security': 'Шифрование, подтверждения, правила доступа',

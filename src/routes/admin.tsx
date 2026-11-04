@@ -3,6 +3,9 @@ import { z } from 'zod';
 import type { AdminActor } from '../admin/service.js';
 import { monthPeriod } from '../billing/period.js';
 import { getPlan, METRICS, type Metric, PLANS } from '../billing/plans.js';
+import type { AppConfig } from '../config.js';
+import { resolveProvider } from '../connectors/oauth/providers.js';
+import { type ConnectorDefinition, connectorText, type UiLanguage } from '../connectors/sdk.js';
 import { isRecentAuth, isStrongAuth } from '../core/auth-methods.js';
 import { AppError } from '../lib/errors.js';
 import { IpAllowlist } from '../lib/ip-allowlist.js';
@@ -12,6 +15,8 @@ import {
   AdminSystemPage,
   AdminUserPage,
   AdminUsersPage,
+  type OAuthAppView,
+  type SystemCheck,
 } from '../web/admin.js';
 import { clientIp } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
@@ -41,6 +46,36 @@ type Gate = { ok: AppAuth & { actor: AdminActor } } | { response: Response };
  * 5. form posts: CSRF token + Origin check and a per-admin rate limit; every change goes to the admin log.
  * Admins never see credentials, tool arguments or results, only counts and metadata.
  */
+/**
+ * The hub's OAuth apps by provider, for the System page: which services each one opens, whether it
+ * is configured and which variables set it. Services that also take an API key work meanwhile.
+ */
+export function oauthApps(
+  connectors: readonly ConnectorDefinition[],
+  configured: AppConfig['oauthApps'],
+  language: UiLanguage,
+): OAuthAppView[] {
+  const byProvider = new Map<string, OAuthAppView>();
+  for (const connector of connectors) {
+    if (!connector.oauth) continue;
+    const provider = resolveProvider(connector.oauth);
+    const app = byProvider.get(provider.id) ?? {
+      provider: provider.id,
+      name: provider.name,
+      services: [],
+      configured: Boolean(configured[provider.id]),
+      envVar: `OAUTH_APP_${provider.id.toUpperCase()}`,
+      formFallback: true,
+    };
+    app.services.push(connectorText(connector, language).name);
+    app.formFallback &&= Boolean(connector.oauth.optional);
+    byProvider.set(provider.id, app);
+  }
+  return [...byProvider.values()].sort(
+    (a, b) => Number(a.configured) - Number(b.configured) || a.name.localeCompare(b.name),
+  );
+}
+
 export function adminRoutes() {
   const app = new Hono<AppEnv>();
   let allowlist: IpAllowlist | undefined;
@@ -230,6 +265,7 @@ export function adminRoutes() {
       if (!detail) return c.text('Not found', 404);
       const shell = await shellInfo(c, auth.workspace.id);
       const { user, summary } = detail;
+      const request = detail.workspace ? await s.entitlements.openRequest(detail.workspace.id) : undefined;
       const now = Date.now();
       const sub = summary?.subscription;
       return c.html(
@@ -265,6 +301,9 @@ export function adminRoutes() {
               provider: sub?.provider ?? null,
               note: sub?.note ?? null,
             },
+            request: request
+              ? { planId: request.planId, interval: request.interval, at: request.createdAt }
+              : undefined,
             usage: summary
               ? {
                   actions: summary.used.actions,
@@ -355,25 +394,25 @@ export function adminRoutes() {
       const off = (envVar: string) => `${no} · ${t('admin.sys.setVar', { name: envVar })}`;
       const hours = Math.round(cfg.site.adminSessionMaxAgeMs / 3_600_000);
       const forwarded = c.req.header('x-forwarded-for');
-      const checks = [
+      const checks: SystemCheck[] = [
         {
           label: t('admin.sys.google'),
-          ok: Boolean(cfg.site.google),
+          level: cfg.site.google ? 'ok' : 'warn',
           detail: cfg.site.google ? yes : off('LOGIN_GOOGLE_CLIENT_ID'),
         },
         {
           label: t('admin.sys.signups'),
-          ok: cfg.site.signups === 'open',
+          level: cfg.site.signups === 'open' ? 'ok' : 'off',
           detail: t(cfg.site.signups === 'open' ? 'admin.sys.open' : 'admin.sys.closed'),
         },
         {
           label: t('admin.sys.require2fa'),
-          ok: cfg.auth.requireSecondFactor,
+          level: cfg.auth.requireSecondFactor ? 'ok' : 'off',
           detail: cfg.auth.requireSecondFactor ? t('admin.sys.yes') : t('admin.sys.no'),
         },
         {
           label: t('admin.sys.allowlist'),
-          ok: cfg.site.adminAllowedIps.length > 0,
+          level: cfg.site.adminAllowedIps.length > 0 ? 'ok' : 'off',
           detail: cfg.site.adminAllowedIps.length
             ? cfg.site.adminAllowedIps.join(', ')
             : off('ADMIN_ALLOWED_IPS'),
@@ -381,28 +420,29 @@ export function adminRoutes() {
         {
           // Lets the owner check the proxy settings (TRUST_PROXY) before relying on the IP allowlist.
           label: t('admin.sys.yourIp'),
-          ok: true,
+          level: 'ok',
           detail: `${auth.actor.ip ?? '—'}${forwarded ? ` (X-Forwarded-For: ${forwarded.slice(0, 200)})` : ''}`,
         },
-        { label: t('admin.sys.adminSession'), ok: true, detail: t('admin.sys.hours', { n: hours }) },
+        { label: t('admin.sys.adminSession'), level: 'ok', detail: t('admin.sys.hours', { n: hours }) },
         {
           label: t('admin.sys.payments'),
-          ok: Boolean(s.billing),
+          level: s.billing ? 'ok' : 'off',
           detail: s.billing ? s.billing.name : t('admin.sys.paymentsOff'),
         },
         {
           label: t('admin.sys.telegram'),
-          ok: Boolean(s.telegramBot),
+          level: s.telegramBot ? 'ok' : 'off',
           detail: s.telegramBot ? yes : off('TELEGRAM_BOT_TOKEN'),
         },
         {
           label: t('admin.sys.support'),
-          ok: Boolean(cfg.site.supportEmail),
+          level: cfg.site.supportEmail ? 'ok' : 'warn',
           detail: cfg.site.supportEmail ?? off('SUPPORT_EMAIL'),
         },
         {
           label: t('admin.sys.https'),
-          ok: cfg.secureCookies,
+          // Plain http is expected on a laptop, not on the live site.
+          level: cfg.secureCookies ? 'ok' : cfg.env === 'production' ? 'warn' : 'off',
           detail: cfg.secureCookies ? t('admin.sys.yes') : t('admin.sys.httpsOff'),
         },
       ];
@@ -410,7 +450,15 @@ export function adminRoutes() {
         <AdminSystemPage
           ctx={pageCtx(c, auth.user)}
           shell={shell}
-          view={{ version: s.version, env: cfg.env, publicUrl: cfg.publicUrl, database, checks }}
+          view={{
+            version: s.version,
+            env: cfg.env,
+            publicUrl: cfg.publicUrl,
+            database,
+            checks,
+            redirectUri: `${cfg.publicUrl}/connect/callback`,
+            apps: oauthApps(s.connectors.builtin.all(), cfg.oauthApps, c.get('locale')),
+          }}
         />,
       );
     }),
@@ -435,6 +483,15 @@ export function adminRoutes() {
         .get('services')
         .adminPanel.setPlan(actor, userId, { planId: input.plan, periodEnd, note: input.note || undefined });
       setFlash(c, 'ok', 'admin.flash.planSet');
+    }),
+  );
+
+  app.post(
+    '/admin/users/:id/request/decline',
+    change(async (c, actor, userId) => {
+      await c.get('services').adminPanel.declinePlanRequest(actor, userId);
+      setFlash(c, 'ok', 'admin.flash.requestDeclined');
+      return undefined;
     }),
   );
 

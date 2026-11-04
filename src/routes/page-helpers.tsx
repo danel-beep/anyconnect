@@ -9,7 +9,7 @@ import type { Key, Locale } from '../web/i18n.js';
 import type { PageCtx } from '../web/page-context.js';
 import { ErrorPage } from '../web/pages.js';
 import type { SessionUser, WebSession } from '../web/sessions.js';
-import { type AppContext, currentSession, loginUrl, secondFactorRedirect } from './context.js';
+import { type AppContext, currentSession, currentUser, loginUrl, secondFactorRedirect } from './context.js';
 
 /** Remembers the chosen interface language (set by the RU/EN switch and the profile form). */
 export const LANG_COOKIE = 'ac_lang';
@@ -71,15 +71,18 @@ export async function requireApp(c: AppContext, next: string): Promise<AppAuth |
 /** Sidebar data: the plan name, calls waiting for a confirmation and accounts that need a fix. */
 export async function shellInfo(c: AppContext, workspaceId: string): Promise<ShellInfo> {
   const s = c.get('services');
-  const [subscription, open, accounts] = await Promise.all([
+  const user = await currentUser(c);
+  const [subscription, open, accounts, planRequests] = await Promise.all([
     s.entitlements.subscription(workspaceId),
     s.pendingCalls.listOpen(workspaceId),
     s.accounts.list(workspaceId),
+    user?.role === 'admin' ? s.entitlements.countOpenRequests() : undefined,
   ]);
   return {
     planId: s.entitlements.planFor(subscription).id,
     pendingConfirmations: open.filter((row) => row.status === 'awaiting_confirmation').length,
     brokenAccounts: accounts.filter((a) => a.enabled && a.status !== 'active').length,
+    planRequests,
   };
 }
 

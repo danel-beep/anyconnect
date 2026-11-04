@@ -358,6 +358,15 @@ export class AdminService {
     );
   }
 
+  /** Closes the user's open plan request without changing the plan (e.g. no payment came). */
+  async declinePlanRequest(actor: AdminActor, userId: string): Promise<void> {
+    const workspaceId = await this.workspaceOf(userId);
+    const request = await this.deps.entitlements.openRequest(workspaceId);
+    if (!request) return;
+    await this.deps.entitlements.closeRequests(workspaceId);
+    await this.log(actor, 'plan.request.decline', { userId, workspaceId }, { plan: request.planId });
+  }
+
   async grantLimit(
     actor: AdminActor,
     userId: string,

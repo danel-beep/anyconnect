@@ -49,6 +49,8 @@ export interface ShellInfo {
   pendingConfirmations: number;
   /** Turned-on accounts that stopped working (shown on Services, so they get fixed). */
   brokenAccounts: number;
+  /** Admins only: plan requests waiting for an answer. */
+  planRequests?: number | undefined;
 }
 
 const NAV: {
@@ -120,6 +122,12 @@ export const AppShell: FC<{
                     <span class="count">
                       <span aria-hidden="true">{shell.pendingConfirmations}</span>
                       <span class="sr-only">{t('app.nav.pending', { n: shell.pendingConfirmations })}</span>
+                    </span>
+                  ) : null}
+                  {n.id === 'admin' && shell.planRequests ? (
+                    <span class="count" title={t('admin.nav.requests', { n: shell.planRequests })}>
+                      <span aria-hidden="true">{shell.planRequests}</span>
+                      <span class="sr-only">{t('admin.nav.requests', { n: shell.planRequests })}</span>
                     </span>
                   ) : null}
                   {n.id === 'services' && shell.brokenAccounts > 0 ? (
@@ -796,7 +804,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                           {t('app.services.useAlt', { alternative: s.alternative.service })}
                         </a>
                       ) : null}
-                      {ctx.user?.isAdmin ? <a href="/admin/system">{t('app.services.setUp')}</a> : null}
+                      {ctx.user?.isAdmin ? <a href="/admin/system#apps">{t('app.services.setUp')}</a> : null}
                     </span>
                   )}
                 </div>
