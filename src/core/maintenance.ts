@@ -12,7 +12,8 @@ import {
   webauthnChallenges,
   webSessions,
 } from '../db/schema.js';
-import type { Logger } from '../logger.js';
+import type { PgErrorStore } from '../ops/error-store.js';
+import type { ErrorReporter } from '../ops/errors.js';
 
 const DAY = 86_400_000;
 
@@ -49,8 +50,22 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
   await db.delete(toolCalls).where(lt(toolCalls.createdAt, new Date(now - retention * DAY)));
 }
 
-export function scheduleMaintenance(db: Db, logger: Logger, intervalMs = 60 * 60_000): () => void {
-  const run = () => runMaintenance(db).catch((err) => logger.warn({ err }, 'maintenance failed'));
+export function scheduleMaintenance(
+  deps: {
+    db: Db;
+    ops: { errors: ErrorReporter; errorStore: PgErrorStore };
+    config: { ops: { errorRetentionDays: number } };
+  },
+  intervalMs = 60 * 60_000,
+): () => void {
+  const run = async () => {
+    try {
+      await runMaintenance(deps.db);
+      await deps.ops.errorStore.prune(deps.config.ops.errorRetentionDays);
+    } catch (error) {
+      deps.ops.errors.capture(error, { source: 'maintenance' });
+    }
+  };
   const first = setTimeout(run, 30_000);
   const timer = setInterval(run, intervalMs);
   first.unref();

@@ -123,6 +123,9 @@ export class MessagingService implements MessagingPort {
 
       send: async (request) => {
         const resolved = await requireResolved();
+        if (request.template && (resolved.transport.kind !== 'direct' || !resolved.transport.templates)) {
+          throw new ConnectorError('invalid_input', 'This account cannot send message templates.');
+        }
         let chat: StoredChat;
         if (request.chatId) chat = await requireChat(request.chatId);
         else if (request.to) {
@@ -159,7 +162,11 @@ export class MessagingService implements MessagingPort {
           accountId,
           chatId: chat.id,
           kind: 'message',
-          payload: { text: request.text, ...(replyToExternalId ? { replyToExternalId } : {}) },
+          payload: {
+            text: request.text,
+            ...(replyToExternalId ? { replyToExternalId } : {}),
+            ...(request.template ? { template: request.template } : {}),
+          },
           newContact: !chat.hasInbound,
         });
         this.deps.onEnqueued?.(accountId);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { type BillingConfig, BillingConfigError, readBillingConfig } from './billing/config.js';
 import { BRAND } from './brand.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
+import { parseSentryDsn } from './ops/sentry.js';
 
 /**
  * All runtime configuration comes from environment variables (12-factor).
@@ -115,6 +116,18 @@ const EnvSchema = z.object({
   GATEWAY_URL: optionalString,
   /** Shared secret between the hub and the gateway. */
   GATEWAY_TOKEN: optionalString,
+  /**
+   * Also send unexpected errors to Sentry or a Sentry-compatible service (GlitchTip, Bugsink):
+   * the project's DSN. Errors are always kept in the built-in tracker (admin panel → Errors).
+   */
+  SENTRY_DSN: optionalString,
+  /** Environment name in Sentry (default: NODE_ENV). */
+  SENTRY_ENVIRONMENT: optionalString,
+  /** Days an error group is kept after it was last seen. */
+  ERROR_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /** Commit of the running build; set by Render. Shown in the admin panel and sent with errors. */
+  RENDER_GIT_COMMIT: optionalString,
+  RENDER_INSTANCE_ID: optionalString,
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -194,6 +207,16 @@ export interface AppConfig {
   gateway: { url: string; token: string } | undefined;
   /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
   billing: BillingConfig;
+  /** Error tracking and build identity (see `src/ops/`). */
+  ops: {
+    sentryDsn: string | undefined;
+    environment: string;
+    errorRetentionDays: number;
+    /** Short commit of the running build, when the platform tells us. */
+    commit: string | undefined;
+    /** Instance name for logs and Sentry (several instances behind one service). */
+    instance: string | undefined;
+  };
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -387,7 +410,25 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     jobs: { enabled: env.JOBS_ENABLED },
     gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
     billing: billingConfig(source, isProduction),
+    ops: {
+      sentryDsn: sentryDsn(env.SENTRY_DSN),
+      environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
+      errorRetentionDays: env.ERROR_RETENTION_DAYS,
+      commit: env.RENDER_GIT_COMMIT?.slice(0, 7),
+      instance: env.RENDER_INSTANCE_ID,
+    },
   };
+}
+
+/** SENTRY_DSN is checked at start, so a typo shows up in the deploy log instead of losing errors. */
+function sentryDsn(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    parseSentryDsn(value);
+  } catch (error) {
+    throw new ConfigError((error as Error).message);
+  }
+  return value;
 }
 
 function billingConfig(source: NodeJS.ProcessEnv, isProduction: boolean): BillingConfig {

@@ -134,11 +134,12 @@ Paddle или Stripe подключаются переменными `BILLING_PR
 
 ### Gmail, Календарь и Диск
 
-1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API** и **Google Drive
-   API** (APIs & Services → Library).
+1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API**, **Google Drive
+   API** и **Google Sheets API** (APIs & Services → Library).
 2. Google Auth Platform → **Data Access** → добавьте доступы коннекторов:
    `https://www.googleapis.com/auth/gmail.modify`, `https://www.googleapis.com/auth/calendar`,
-   `https://www.googleapis.com/auth/drive`.
+   `https://www.googleapis.com/auth/drive`, `https://www.googleapis.com/auth/spreadsheets`,
+   `https://www.googleapis.com/auth/drive.metadata.readonly`.
 3. Пока приложение не прошло проверку Google, при подключении пользователи видят предупреждение
    «Google hasn't verified this app» (Advanced → Go to Manyplug), и подключиться могут не больше
    100 человек. Для себя и первых пользователей этого достаточно.
@@ -319,7 +320,8 @@ npm run db:generate  # после изменения src/db/schema.ts — соз
 npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 
-Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Мониторинг, логи, ошибки и
+фоновые задачи: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Безопасность
 
