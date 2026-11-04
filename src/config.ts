@@ -108,6 +108,10 @@ const EnvSchema = z.object({
   JOBS_ENABLED: bool(true),
   /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
   TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
+  /** Internal URL of the messenger gateway (Render private service), e.g. http://anyconnect-gateway:10000. */
+  GATEWAY_URL: optionalString,
+  /** Shared secret between the hub and the gateway. */
+  GATEWAY_TOKEN: optionalString,
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -181,6 +185,8 @@ export interface AppConfig {
   oauthApps: Record<string, { clientId: string; clientSecret: string | undefined }>;
   /** Run background jobs (pg-boss) in this process. */
   jobs: { enabled: boolean };
+  /** The messenger gateway, when deployed. */
+  gateway: { url: string; token: string } | undefined;
   /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
   billing: BillingConfig;
 }
@@ -253,6 +259,18 @@ function normalizePublicUrl(raw: string): string {
     throw new ConfigError('PUBLIC_URL must be an origin without a path, e.g. https://hub.example.com');
   }
   return url.origin;
+}
+
+function gatewayConfig(url: string | undefined, token: string | undefined): AppConfig['gateway'] {
+  if (!url && !token) return undefined;
+  if (!url || !token) throw new ConfigError('GATEWAY_URL and GATEWAY_TOKEN must be set together');
+  if (token.length < 32) throw new ConfigError('GATEWAY_TOKEN must be at least 32 characters');
+  try {
+    new URL(url);
+  } catch {
+    throw new ConfigError(`GATEWAY_URL is not a valid URL: ${url}`);
+  }
+  return { url: url.replace(/\/+$/, ''), token };
 }
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -361,6 +379,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     oauthApps: hubOAuthApps(env, source),
     jobs: { enabled: env.JOBS_ENABLED },
+    gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
     billing: billingConfig(source, isProduction),
   };
 }

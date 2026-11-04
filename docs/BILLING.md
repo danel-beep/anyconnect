@@ -56,7 +56,8 @@ production запрещён (сервер не стартует).
 ## Paddle: подключение
 
 1. Paddle → **Catalog → Products**: продукты Personal, Pro, Business, у каждого две цены
-   (месяц и год; суммы из `src/billing/plans.ts`: $5/$48, $12/$115, $29/$279). Id цен (`pri_…`)
+   (месяц и год; суммы из `src/billing/plans.ts`: $5/$50, $12/$120, $29/$290; год = два месяца
+   в подарок). Пробный период в Paddle не нужен: 14 дней Pro даёт сам хаб (см. ниже). Id цен (`pri_…`)
    → `PADDLE_PRICE_PERSONAL_MONTH`, `PADDLE_PRICE_PERSONAL_YEAR` и т. д.
 2. **Developer tools → Authentication**: API key (права на transactions, subscriptions, customers)
    → `PADDLE_API_KEY`; client-side token → `PADDLE_CLIENT_TOKEN`.
@@ -85,3 +86,14 @@ production запрещён (сервер не стартует).
 Реализовать `BillingProvider` в `src/billing/providers/<id>.ts`, добавить настройки в
 `src/billing/config.ts` и ветку в `createBillingProvider` (`providers/index.ts`), тесты по образцу
 `test/billing-providers.test.ts`. Остальное (кабинет, ИИ, админка, лимиты) менять не нужно.
+
+## Старт бесплатного тарифа
+
+Новое пространство на Free получает 14 дней Pro без карты (без облачного WhatsApp), затем
+лимит действий снижается по опубликованному графику: до 30-го дня 500 в месяц, до 60-го — 300,
+дальше обычные 150. Аккаунты после пробного периода — как у Free (3). График задаётся полем
+`start` тарифа в `src/billing/plans.ts`, даты считает чистая функция `startSchedule`
+(`src/billing/start.ts`), так что сайт, кабинет и AI (`manyplug_plan` → `start`) показывают одно
+и то же. Действия, сделанные в пробный период, не списываются с первого месяца после него
+(`Entitlements.countFrom`). Добавка «облачный WhatsApp» ($5 за номер) появится вместе с
+мессенджерами.

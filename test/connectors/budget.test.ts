@@ -33,6 +33,16 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   trello: { total: 1800, tool: 300 },
   airtable: { total: 1800, tool: 370 },
   hubspot: { total: 1700, tool: 270 },
+  confluence: { total: 1250, tool: 270 },
+  gitlab: { total: 2300, tool: 350 },
+  clickup: { total: 1620, tool: 340 },
+  calendly: { total: 920, tool: 260 },
+  zendesk: { total: 1430, tool: 290 },
+  intercom: { total: 1130, tool: 220 },
+  pipedrive: { total: 1950, tool: 290 },
+  gsheets: { total: 1910, tool: 300 },
+  telegram: { total: 2050, tool: 400 },
+  whatsapp: { total: 2050, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {

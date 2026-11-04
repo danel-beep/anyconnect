@@ -1,15 +1,19 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client.js';
-import { accounts, personas } from '../db/schema.js';
+import { accounts, apiTokens, oauthGrants, personas } from '../db/schema.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
+import { slugify } from '../lib/slug.js';
 import { ACCESS_LEVELS } from './policy.js';
 
 export type PersonaRow = typeof personas.$inferSelect;
 
 /** URL segment of a persona's MCP endpoint: `/mcp/<slug>`. */
 export const PERSONA_SLUG = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+/** Personas per workspace: plenty for work / personal / per-client splits, bounded for the policy checks. */
+export const MAX_PERSONAS = 20;
 
 export const CreatePersonaInput = z.object({
   slug: z.string().regex(PERSONA_SLUG, 'use 1-32 lowercase letters, digits or "-"'),
@@ -115,6 +119,16 @@ export class PersonaService {
     return row;
   }
 
+  /** A free address for a new persona, made from its name ("Рабочий ИИ" → "rabochiy-ii"). */
+  async freeSlug(workspaceId: string, name: string): Promise<string> {
+    const base = slugify(name, 28, '-') || 'profile';
+    const taken = new Set((await this.list(workspaceId)).map((p) => p.slug));
+    if (!taken.has(base)) return base;
+    for (let n = 2; ; n++) {
+      if (!taken.has(`${base}-${n}`)) return `${base}-${n}`;
+    }
+  }
+
   private async checkAccounts(workspaceId: string, ids: string[]): Promise<string[]> {
     const unique = [...new Set(ids)];
     if (unique.length === 0) return [];
@@ -130,6 +144,9 @@ export class PersonaService {
 
   async create(workspaceId: string, raw: CreatePersonaInput): Promise<PersonaRow> {
     const input = parse(CreatePersonaInput, raw);
+    if ((await this.list(workspaceId)).length >= MAX_PERSONAS) {
+      throw badRequest(`A workspace can have up to ${MAX_PERSONAS} access profiles`);
+    }
     if (await this.bySlug(workspaceId, input.slug)) {
       throw conflict(`A persona with the address "${input.slug}" already exists`);
     }
@@ -164,6 +181,42 @@ export class PersonaService {
       .where(and(eq(personas.workspaceId, workspaceId), eq(personas.id, id)))
       .returning();
     return row!;
+  }
+
+  /** How many AI apps (OAuth grants) and personal tokens use each persona's address now. */
+  async connections(workspaceId: string): Promise<Map<string, { apps: number; tokens: number }>> {
+    const [grants, tokens] = await Promise.all([
+      this.db
+        .select({ personaId: oauthGrants.personaId })
+        .from(oauthGrants)
+        .where(
+          and(
+            eq(oauthGrants.workspaceId, workspaceId),
+            isNotNull(oauthGrants.personaId),
+            isNull(oauthGrants.revokedAt),
+          ),
+        ),
+      this.db
+        .select({ personaId: apiTokens.personaId })
+        .from(apiTokens)
+        .where(
+          and(
+            eq(apiTokens.workspaceId, workspaceId),
+            isNotNull(apiTokens.personaId),
+            isNull(apiTokens.revokedAt),
+            or(isNull(apiTokens.expiresAt), gt(apiTokens.expiresAt, new Date())),
+          ),
+        ),
+    ]);
+    const counts = new Map<string, { apps: number; tokens: number }>();
+    const entry = (id: string) => {
+      const found = counts.get(id) ?? { apps: 0, tokens: 0 };
+      counts.set(id, found);
+      return found;
+    };
+    for (const g of grants) entry(g.personaId!).apps++;
+    for (const t of tokens) entry(t.personaId!).tokens++;
+    return counts;
   }
 
   /** Deleting a persona disconnects every app and token bound to its URL. */

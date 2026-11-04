@@ -51,6 +51,10 @@ export type IdPrefix =
   | 'pky' // passkey (WebAuthn credential)
   | 'oap' // OAuth app of a service provider (bring your own app)
   | 'svc' // user-defined service (remote MCP server, HTTP manifest)
+  | 'cht' // messenger chat
+  | 'msg' // messenger message
+  | 'out' // messenger outbox job
+  | 'lgn' // messenger login flow
   | 'lim' // limit grant (extra limits on top of a plan)
   | 'adm' // admin audit log entry
   | 'preq'; // plan request (manual upgrades before payments)

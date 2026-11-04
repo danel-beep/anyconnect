@@ -39,6 +39,10 @@ develop further. In practice:
   `src/connectors/index.ts`. Never add inputs named `account` or `fields` (reserved by the hub).
   Give write actions an explicit `risk`; shared interfaces live in `src/connectors/capabilities.ts`
   (see `docs/CONNECTORS.md`).
+- Messengers (`docs/MESSENGERS.md`): connectors declare `messenger` and use `messengerActions`;
+  storage, search, outbox and pacing live in `src/messaging/`; long-lived sessions run in the
+  gateway process (`src/gateway/`, `node dist/gateway/index.js`) behind `SessionDriver`. Message
+  content is always encrypted; external ids are stored only as keyed hashes.
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.
 - `src/hub/hub.ts` resolves calls; every connector call runs through the stage chain in
   `src/hub/executor.ts` (audit → meter → policy → risk → confirm → limits → idempotency → untrusted →

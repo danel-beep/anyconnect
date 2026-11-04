@@ -23,6 +23,7 @@ async function main() {
   const stopMaintenance = scheduleMaintenance(services.db, logger);
   services.pendingRunner.start();
   if (config.jobs.enabled) await services.jobs.start();
+  services.messaging.start();
 
   const app = createApp(services);
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
