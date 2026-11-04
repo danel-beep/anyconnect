@@ -8,6 +8,7 @@ import { HubTokenVerifier } from './core/auth.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import { Hub } from './hub/hub.js';
 import { SecretBox } from './lib/crypto.js';
+import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
@@ -25,6 +26,8 @@ export interface Services {
   database: Database;
   db: Db;
   secrets: SecretBox;
+  /** Outbound network for connectors (`ctx.fetch`, `ctx.network`). */
+  network: NetworkPolicy;
   connectors: ConnectorRegistry;
   accounts: AccountService;
   apiTokens: ApiTokenService;
@@ -55,7 +58,10 @@ export function createServices(
   const db = database.db;
   const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
   const connectors = overrides.connectors ?? createBuiltinRegistry();
-  const accounts = new AccountService(db, connectors, secrets);
+  const network = createNetworkPolicy({
+    allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
+  });
+  const accounts = new AccountService(db, connectors, secrets, network);
   const apiTokens = new ApiTokenService(db);
   const hub = new Hub({ db, connectors, accounts, logger, toolTimeoutMs: config.toolTimeoutMs });
   const clients = new ClientRegistry(db, {
@@ -86,6 +92,7 @@ export function createServices(
     database,
     db,
     secrets,
+    network,
     connectors,
     accounts,
     apiTokens,
@@ -99,6 +106,7 @@ export function createServices(
     async close() {
       rateLimiter.close();
       await mcp.close();
+      await network.close();
       await database.close();
     },
   };

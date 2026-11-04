@@ -125,12 +125,13 @@ export function apiRoutes() {
         homepage: connector.homepage,
         configSchema: toJsonSchema(connector.config),
         credentialsSchema: toJsonSchema(connector.credentials),
+        auth: connector.oauth ? 'oauth2' : 'credentials',
         actions: connector.actions.map((a) => ({
           name: a.name,
           title: a.title,
           description: a.description,
           hints: a.hints ?? {},
-          inputSchema: toJsonSchema(a.input),
+          inputSchema: a.inputSchema ?? toJsonSchema(a.input),
         })),
       })),
     );

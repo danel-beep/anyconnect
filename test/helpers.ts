@@ -71,6 +71,8 @@ export async function startTestHub(
     MIGRATE_ON_START: 'false',
     SEED_DEMO_ACCOUNTS: options.seed === false ? 'false' : 'true',
     LOG_LEVEL: 'silent',
+    // Test services (fake APIs, a second hub) listen on localhost.
+    ALLOW_PRIVATE_NETWORK: 'true',
     ...options.env,
   });
   const services = createServices(config, {

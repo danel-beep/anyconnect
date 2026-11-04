@@ -9,6 +9,7 @@
  * This module deliberately has no imports from the rest of the app so it can later be published
  * as a standalone package for third-party connectors.
  */
+import type { LookupAddress, LookupOptions } from 'node:dns';
 import { z } from 'zod';
 
 export type JsonSchema = Record<string, unknown>;
@@ -45,6 +46,44 @@ export interface ConnectorLogger {
   error(obj: object | string, msg?: string): void;
 }
 
+/** The WHATWG `fetch` signature. */
+export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
+/** `dns.lookup`-compatible function, accepted by `net`, `tls`, `pg`, `imapflow`, `nodemailer`... */
+export type LookupFunction = (
+  hostname: string,
+  options: LookupOptions,
+  callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,
+) => void;
+
+/** Network access that follows the hub's outbound policy (no private addresses in production). */
+export interface NetworkAccess {
+  /** Pass to socket libraries (`lookup` option) so raw TCP connections obey the same policy as `fetch`. */
+  lookup: LookupFunction;
+  /**
+   * Throws when a host is an IP literal the policy forbids. Socket libraries skip `lookup` for IP
+   * literals, so call this with the configured host before connecting.
+   */
+  assertHostAllowed(host: string): void;
+}
+
+/** The account's OAuth access token, kept fresh by the hub (see `ConnectorDefinition.oauth`). */
+export interface OAuthAccess {
+  accessToken: string;
+  /** Usually `Bearer`. */
+  tokenType: string;
+  /** Scopes actually granted (may be fewer than requested). */
+  scopes: string[];
+  expiresAt?: Date | undefined;
+  /** Non-secret fields of the token response, e.g. Slack `team`, Salesforce `instance_url`. */
+  extra: Record<string, unknown>;
+  /**
+   * Forces a refresh, e.g. after the service answered 401, and returns the new access token.
+   * Concurrent calls share one refresh. Throws `ConnectorError('auth')` when the grant is gone.
+   */
+  refresh(): Promise<string>;
+}
+
 export interface AccountContext<TConfig, TCredentials> {
   account: AccountInfo;
   config: TConfig;
@@ -54,9 +93,24 @@ export interface AccountContext<TConfig, TCredentials> {
   /** Aborted when the AI client cancels the call or the tool timeout is reached. */
   signal: AbortSignal;
   logger: ConnectorLogger;
+  /**
+   * HTTP transport to use for every outbound request. The hub injects one that enforces its network
+   * policy; tests inject recorded fixtures. Never use the global `fetch` in a connector.
+   */
+  fetch: FetchLike;
+  /** For connectors that open raw sockets (IMAP, SMTP, databases). */
+  network: NetworkAccess;
+  /** Present for connectors that declare `oauth`, once the account is connected. */
+  oauth?: OAuthAccess | undefined;
 }
 
 export type ActionContext<TConfig, TCredentials> = AccountContext<TConfig, TCredentials>;
+
+/** Returns the OAuth access of an account or fails with a clear "reconnect" error. */
+export function requireOAuth(ctx: { oauth?: OAuthAccess | undefined }): OAuthAccess {
+  if (!ctx.oauth) throw new ConnectorError('auth', 'The account is not connected yet');
+  return ctx.oauth;
+}
 
 const RAW_RESULT = Symbol.for('anyconnect.rawToolResult');
 
@@ -121,6 +175,11 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
   description: string;
   /** Input arguments. Use `.describe()` on fields — descriptions are shown to the AI. */
   input: AnyObjectSchema;
+  /**
+   * JSON Schema shown to the AI instead of the one generated from `input`. For actions whose schema
+   * comes from elsewhere verbatim (a remote MCP server, an HTTP manifest); `input` still validates.
+   */
+  inputSchema?: JsonSchema;
   hints?: ActionHints;
   run(input: unknown, ctx: ActionContext<TConfig, TCredentials>): Promise<ActionResult> | ActionResult;
 }
@@ -130,6 +189,48 @@ export interface TestResult {
   message?: string;
   /** e.g. the email address of the mailbox; shown to the user and the AI. */
   identity?: string;
+}
+
+/**
+ * How an OAuth-connected service authorizes. Endpoints live in a provider (see
+ * `connectors/oauth/providers.ts`), so one OAuth app can serve several connectors
+ * (Gmail, Calendar and Drive share `google`).
+ */
+export interface OAuthRequirement {
+  /** A built-in provider id (`google`, `microsoft`, ...) or a full provider description. */
+  provider: string | OAuthProviderSpec;
+  /** Scopes requested when an account is connected. */
+  scopes: string[];
+  /** Extra query parameters for the authorization request of this connector. */
+  authorizeParams?: Record<string, string>;
+}
+
+/** Endpoints and quirks of an OAuth 2 authorization server. Plain data, so it can live in JSON too. */
+export interface OAuthProviderSpec {
+  /** Stable key; OAuth apps (client id/secret) are stored per provider. */
+  id: string;
+  name: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  revocationUrl?: string;
+  /** Send a PKCE S256 challenge (default true). */
+  pkce?: boolean;
+  /** How the client authenticates at the token endpoint (default `client_secret_post`). */
+  clientAuth?: 'client_secret_basic' | 'client_secret_post';
+  /** Encoding of token requests (default `form`). */
+  tokenRequestFormat?: 'form' | 'json';
+  /** Default ' '. */
+  scopeSeparator?: string;
+  /** Query parameter that carries scopes (default `scope`; Slack user tokens use `user_scope`). */
+  scopeParam?: string;
+  /** Scopes always requested, e.g. `offline_access` for refresh tokens. */
+  baseScopes?: string[];
+  /** Extra query parameters for every authorization request, e.g. Google `access_type=offline`. */
+  authorizeParams?: Record<string, string>;
+  /** Dot path to the object holding `access_token` etc. when it is nested (Slack: `authed_user`). */
+  tokenPath?: string;
+  /** Where the user creates an OAuth app for this provider (shown in the panel). */
+  appSetupUrl?: string;
 }
 
 export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> {
@@ -146,6 +247,8 @@ export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> 
   config: AnyObjectSchema;
   /** Secret per-account credentials (encrypted at rest, never shown again after saving). */
   credentials: AnyObjectSchema;
+  /** Accounts are connected through OAuth: the hub runs the flow and refreshes tokens (`ctx.oauth`). */
+  oauth?: OAuthRequirement;
   actions: ActionDefinition<TConfig, TCredentials>[];
   /** Verify that an account works (called when it is added and on demand). */
   test?(ctx: AccountContext<TConfig, TCredentials>): Promise<TestResult>;
@@ -176,6 +279,7 @@ export interface ConnectorSpec<TConfig extends AnyObjectSchema, TCredentials ext
   homepage?: string;
   config?: TConfig;
   credentials?: TCredentials;
+  oauth?: OAuthRequirement;
   actions: (
     action: ActionFactory<z.output<TConfig>, z.output<TCredentials>>,
   ) => ActionDefinition<z.output<TConfig>, z.output<TCredentials>>[];
@@ -216,6 +320,7 @@ export function defineConnector<
     homepage: spec.homepage,
     config: spec.config ?? z.object({}),
     credentials: spec.credentials ?? z.object({}),
+    ...(spec.oauth ? { oauth: spec.oauth } : {}),
     actions: spec.actions(factory),
     test: spec.test,
   };

@@ -66,7 +66,7 @@ type LookupCallback = (
   family?: number,
 ) => void;
 
-function guardedLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback): void {
+export function guardedLookup(hostname: string, options: dns.LookupOptions, callback: LookupCallback): void {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) return callback(err, '');
     const list = addresses as dns.LookupAddress[];

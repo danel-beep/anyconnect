@@ -7,6 +7,7 @@ import { type AccountSettings, accounts } from '../db/schema.js';
 import type { SecretBox } from '../lib/crypto.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
+import type { NetworkPolicy } from '../lib/network.js';
 import { slugify } from '../lib/slug.js';
 
 export type AccountRow = typeof accounts.$inferSelect;
@@ -104,6 +105,7 @@ export class AccountService {
     private readonly db: Db,
     private readonly connectors: ConnectorResolver,
     private readonly secrets: SecretBox,
+    private readonly network: NetworkPolicy,
   ) {}
 
   async list(workspaceId: string): Promise<AccountRow[]> {
@@ -290,6 +292,8 @@ export class AccountService {
       },
       signal: options.signal,
       logger: options.logger,
+      fetch: this.network.fetch,
+      network: { lookup: this.network.lookup, assertHostAllowed: this.network.assertHostAllowed },
     };
   }
 

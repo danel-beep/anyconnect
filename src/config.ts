@@ -50,6 +50,11 @@ const EnvSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(90),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).default(30),
   TOOL_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
+  /**
+   * Let connectors reach private/loopback addresses (self-hosted services on a LAN, local tests).
+   * Off by default: in the cloud it would expose internal services to anyone who can add an account.
+   */
+  ALLOW_PRIVATE_NETWORK: bool(false),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -80,6 +85,8 @@ export interface AppConfig {
   };
   sessionTtlSeconds: number;
   toolTimeoutMs: number;
+  /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
+  allowPrivateNetwork: boolean;
 }
 
 export class ConfigError extends Error {
@@ -171,5 +178,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     sessionTtlSeconds: env.SESSION_TTL_DAYS * 86_400,
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
+    allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
   };
 }
