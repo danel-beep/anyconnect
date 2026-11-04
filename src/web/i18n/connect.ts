@@ -8,6 +8,7 @@ export const connectEn = {
   'connect.formLabelHint':
     'Shown to you and the AI, e.g. “Work” or “Personal”. Handy when you connect several accounts.',
   'connect.howTo': 'Where to get it',
+  'connect.seeSteps': 'Steps',
   'connect.canDo': 'What the AI will be able to do',
   'connect.canDoSummary':
     '{n} {n|action|actions}: {read} only {read|reads|read}, {write} {write|makes|make} changes. You can turn any of them off later.',
@@ -45,6 +46,7 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
   'connect.formLabelHint':
     'Его видите вы и ИИ, например «Работа» или «Личное». Удобно, когда аккаунтов несколько.',
   'connect.howTo': 'Где это взять',
+  'connect.seeSteps': 'Как получить',
   'connect.canDo': 'Что сможет ИИ',
   'connect.canDoSummary':
     '{n} {n|действие|действия|действий}: {read} только {read|читает|читают|читают}, {write} {write|вносит|вносят|вносят} изменения. Любое можно отключить позже.',

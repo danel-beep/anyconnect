@@ -7,10 +7,12 @@ import { MONO } from '../assets.js';
 export const CONNECT_CSS = `
 .nowrap-row{flex-wrap:nowrap;gap:16px;align-items:center}
 .connect-head .logo-tile{flex:none}
+@media (max-width:600px){.connect-head .logo-tile.lg{width:44px;height:44px;border-radius:12px}.connect-head .logo-tile.lg svg{width:22px;height:22px}}
 .connect-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:16px;align-items:start}
 .connect-grid>.card,.connect-aside>.card{margin:0}
 .connect-aside{display:flex;flex-direction:column;gap:16px}
-@media (max-width:1000px){.connect-grid{grid-template-columns:1fr}.connect-aside{display:contents}.guide-card{order:-1}}
+.to-guide{display:none;margin-left:auto;white-space:nowrap}
+@media (max-width:1000px){.connect-grid{grid-template-columns:1fr}.connect-aside{display:contents}.to-guide{display:inline}}
 .connect-form-card{padding:24px 26px}
 .connect-form-card form>.field:first-of-type label{margin-top:4px}
 .field label .req{color:var(--accent-ink)}

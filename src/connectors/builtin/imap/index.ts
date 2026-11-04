@@ -217,7 +217,7 @@ export default defineConnector({
   id: 'imap',
   name: 'Email (IMAP/SMTP)',
   description:
-    'Any mailbox over IMAP/SMTP: Gmail, iCloud, Fastmail or your company mail. Search, read, send, reply, forward, move and flag messages.',
+    'Any mailbox over IMAP/SMTP: Gmail, iCloud, Yahoo, Fastmail or your company mail. Search, read, send, reply, forward, move and flag messages.',
   version: '1.0.0',
   homepage: 'https://datatracker.ietf.org/doc/html/rfc9051',
   instructions:
@@ -317,6 +317,24 @@ export default defineConnector({
                   },
                 ],
               },
+              yahoo: {
+                title: 'Yahoo Mail',
+                steps: [
+                  {
+                    text: 'Откройте Account security в аккаунте Yahoo и выберите Generate app password. Если Yahoo попросит, сначала включите двухэтапную проверку.',
+                    link: {
+                      label: 'Открыть безопасность Yahoo',
+                      url: 'https://login.yahoo.com/account/security',
+                    },
+                  },
+                  {
+                    text: 'Назовите приложение Manyplug, нажмите Generate и скопируйте пароль.',
+                  },
+                  {
+                    text: 'Вставьте его в форму. Пароль от Yahoo здесь не подойдёт.',
+                  },
+                ],
+              },
               yandex: {
                 title: 'Яндекс Почта',
                 steps: [
@@ -358,7 +376,7 @@ export default defineConnector({
                 title: 'Другой сервер',
                 steps: [
                   {
-                    text: 'Узнайте адреса и порты серверов IMAP и SMTP в справке почтового сервиса или у администратора почты.',
+                    text: 'Узнайте адреса и порты серверов IMAP и SMTP в справке почтового сервиса или у администратора почты. Например, у Zoho это imap.zoho.com и smtp.zoho.com (для аккаунтов в ЕС — zoho.eu), а IMAP включается в настройках Zoho Mail.',
                   },
                   {
                     text: 'В форме выберите «Другой сервер» и заполните их в разделе «Дополнительные настройки».',
@@ -369,7 +387,10 @@ export default defineConnector({
                 ],
               },
             },
-            tips: ['Несколько ящиков? Подключите каждый: ИИ ищет в одном или сразу во всех.'],
+            tips: [
+              'Несколько ящиков? Подключите каждый: ИИ ищет в одном или сразу во всех.',
+              'Proton Mail даёт IMAP только через приложение Proton Mail Bridge на вашем компьютере, поэтому из облака его пока не подключить.',
+            ],
           },
         },
         prompts: [
@@ -392,6 +413,7 @@ export default defineConnector({
               outlook: 'Outlook.com / Microsoft 365',
               icloud: 'iCloud',
               fastmail: 'Fastmail',
+              yahoo: 'Yahoo Mail',
               yandex: 'Яндекс Почта',
               mailru: 'Mail.ru',
               custom: 'Другой сервер',
@@ -571,6 +593,24 @@ export default defineConnector({
                   },
                 ],
               },
+              yahoo: {
+                title: 'Yahoo Mail',
+                steps: [
+                  {
+                    text: 'Open Account security in your Yahoo account and choose Generate app password. If Yahoo asks, turn on 2-step verification first.',
+                    link: {
+                      label: 'Open Yahoo account security',
+                      url: 'https://login.yahoo.com/account/security',
+                    },
+                  },
+                  {
+                    text: 'Name the app Manyplug, click Generate and copy the password.',
+                  },
+                  {
+                    text: 'Paste it into the form. Your regular Yahoo password does not work here.',
+                  },
+                ],
+              },
               yandex: {
                 title: 'Yandex Mail',
                 steps: [
@@ -612,7 +652,7 @@ export default defineConnector({
                 title: 'Other server',
                 steps: [
                   {
-                    text: 'Find the IMAP and SMTP server names and ports in your provider’s help or ask your mail admin.',
+                    text: 'Find the IMAP and SMTP server names and ports in your provider’s help or ask your mail admin. For Zoho, for example, they are imap.zoho.com and smtp.zoho.com (zoho.eu for EU accounts), and IMAP is turned on in Zoho Mail settings.',
                   },
                   {
                     text: 'In the form, choose Other server and fill them in under Advanced settings.',
@@ -623,7 +663,10 @@ export default defineConnector({
                 ],
               },
             },
-            tips: ['Several mailboxes? Connect each one; the AI can search them one by one or all at once.'],
+            tips: [
+              'Several mailboxes? Connect each one; the AI can search them one by one or all at once.',
+              'Proton Mail offers IMAP only through the Proton Mail Bridge app on your own computer, so it cannot be connected from the cloud yet.',
+            ],
           },
         },
         prompts: [
@@ -643,6 +686,7 @@ export default defineConnector({
               outlook: 'Outlook.com / Microsoft 365',
               icloud: 'iCloud',
               fastmail: 'Fastmail',
+              yahoo: 'Yahoo Mail',
               yandex: 'Yandex Mail',
               mailru: 'Mail.ru',
               custom: 'Other server',

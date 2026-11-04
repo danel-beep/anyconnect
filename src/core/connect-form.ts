@@ -48,12 +48,16 @@ function humanize(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function kindOf(schema: JsonSchema, group: FormField['group']): FormFieldKind {
+/** Sign-in names kept with the secrets but not secret themselves: shown as typed, not hidden. */
+const PLAIN_CREDENTIALS = /^(username|user|login|email)$/i;
+
+function kindOf(schema: JsonSchema, group: FormField['group'], key: string): FormFieldKind {
   if (Array.isArray(schema.enum)) return 'select';
   const type = Array.isArray(schema.type) ? schema.type.find((t) => t !== 'null') : schema.type;
   if (type === 'boolean') return 'boolean';
   if (type === 'number' || type === 'integer') return 'number';
-  if (type === 'string' || type === undefined) return group === 'credentials' ? 'secret' : 'text';
+  if (type === 'string' || type === undefined)
+    return group === 'credentials' && !PLAIN_CREDENTIALS.test(key) ? 'secret' : 'text';
   return 'json'; // objects and arrays: rare, entered as JSON
 }
 
@@ -72,7 +76,7 @@ function fieldsOf(
   const properties = (schema.properties ?? {}) as Record<string, JsonSchema>;
   const required = new Set((schema.required as string[] | undefined) ?? []);
   return Object.entries(properties).map(([key, property]) => {
-    let kind = kindOf(property, group);
+    let kind = kindOf(property, group, key);
     // An optional yes/no setting without a default means "let the connector decide" (e.g. a mail
     // provider preset): a checkbox could only say yes or no, so it becomes a three-way choice.
     const tristate = kind === 'boolean' && !required.has(key) && property.default === undefined;
@@ -178,6 +182,9 @@ export function readConnectForm(
       } catch {
         values.problems[field.name] = 'not valid JSON';
       }
+    } else if (field.inputType === 'url' && !/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
+      // "api.example.com" means the https address.
+      values[field.group][field.key] = `https://${text}`;
     } else {
       // Secrets are kept exactly as typed (a key may legitimately end with a space-like character).
       values[field.group][field.key] = field.kind === 'secret' ? (raw ?? '') : text;
