@@ -57,7 +57,10 @@ async function main() {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch((error: unknown) => {
+  // Only the error's name and stack: thrown objects can carry config or query parameters.
+  console.error(
+    error instanceof Error ? (error.stack ?? `${error.name}: ${error.message}`) : 'gateway failed',
+  );
   process.exit(1);
 });
