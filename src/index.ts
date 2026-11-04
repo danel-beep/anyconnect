@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { bootstrap } from './bootstrap.js';
 import { ConfigError, loadConfig } from './config.js';
 import { scheduleMaintenance } from './core/maintenance.js';
+import { installProcessHandlers } from './ops/process.js';
 import { createServices } from './services.js';
 
 async function main() {
@@ -19,15 +20,17 @@ async function main() {
 
   const services = createServices(config);
   const { logger } = services;
+  installProcessHandlers({ logger, errors: services.ops.errors });
   await bootstrap(services);
-  const stopMaintenance = scheduleMaintenance(services.db, logger);
+  const stopMaintenance = scheduleMaintenance(services);
   services.pendingRunner.start();
   if (config.jobs.enabled) await services.jobs.start();
+  services.messaging.start();
 
   const app = createApp(services);
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
     logger.info(
-      { port: info.port, publicUrl: config.publicUrl, mcpUrl: config.mcpUrl, version: services.version },
+      { port: info.port, publicUrl: config.publicUrl, mcpUrl: config.mcpUrl, release: services.ops.release },
       'Manyplug hub is listening',
     );
   });

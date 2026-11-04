@@ -74,6 +74,22 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'messengers',
     blurb: { ru: 'Каналы, поиск по сообщениям, отправка.', en: 'Channels, message search, posting.' },
   },
+  telegram: {
+    icon: 'telegram',
+    category: 'messengers',
+    blurb: {
+      ru: 'Ваш бот: чаты, поиск по переписке, ответы.',
+      en: 'Your bot: chats, message search, replies.',
+    },
+  },
+  whatsapp: {
+    icon: 'whatsapp',
+    category: 'messengers',
+    blurb: {
+      ru: 'Номер WhatsApp Business через официальный API: чаты, поиск, ответы.',
+      en: 'A WhatsApp Business number through the official API: chats, search, replies.',
+    },
+  },
   gcal: {
     icon: 'googlecalendar',
     category: 'calendar',
@@ -149,6 +165,81 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'crm',
     blurb: { ru: 'Контакты, компании и сделки.', en: 'Contacts, companies and deals.' },
   },
+  confluence: {
+    icon: 'confluence',
+    category: 'docs',
+    blurb: { ru: 'Поиск и чтение страниц, новые страницы.', en: 'Search and read pages, write new ones.' },
+  },
+  gsheets: {
+    icon: 'googlesheets',
+    category: 'docs',
+    blurb: { ru: 'Чтение и запись ячеек, новые строки.', en: 'Read and write cells, append rows.' },
+  },
+  clickup: {
+    icon: 'clickup',
+    category: 'tasks',
+    blurb: { ru: 'Ваши задачи, списки, статусы.', en: 'Your tasks, lists and statuses.' },
+  },
+  gitlab: {
+    icon: 'gitlab',
+    category: 'dev',
+    blurb: { ru: 'Задачи и merge request’ы.', en: 'Issues and merge requests.' },
+  },
+  calendly: {
+    icon: 'calendly',
+    category: 'calendar',
+    blurb: { ru: 'Записи на встречи и ссылки для записи.', en: 'Booked meetings and booking links.' },
+  },
+  zendesk: {
+    icon: 'zendesk',
+    category: 'crm',
+    blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
+  },
+  intercom: {
+    icon: 'intercom',
+    category: 'crm',
+    blurb: { ru: 'Разговоры с клиентами и контакты.', en: 'Customer conversations and contacts.' },
+  },
+  pipedrive: {
+    glyph: 'users',
+    category: 'crm',
+    blurb: { ru: 'Сделки, люди и организации.', en: 'Deals, people and organizations.' },
+  },
+  freshdesk: {
+    glyph: 'users',
+    category: 'crm',
+    blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
+  },
+  mailchimp: {
+    icon: 'mailchimp',
+    category: 'crm',
+    blurb: { ru: 'Подписчики, теги, отчёты рассылок.', en: 'Subscribers, tags, campaign reports.' },
+  },
+  monday: {
+    glyph: 'grid',
+    category: 'tasks',
+    blurb: { ru: 'Доски, элементы, статусы и апдейты.', en: 'Boards, items, statuses and updates.' },
+  },
+  sentry: {
+    icon: 'sentry',
+    category: 'dev',
+    blurb: { ru: 'Ошибки, стек вызовов, решение проблем.', en: 'Errors, stack traces, resolving issues.' },
+  },
+  figma: {
+    icon: 'figma',
+    category: 'docs',
+    blurb: { ru: 'Файлы, фреймы, экспорт, комментарии.', en: 'Files, frames, exports, comments.' },
+  },
+  typeform: {
+    icon: 'typeform',
+    category: 'docs',
+    blurb: { ru: 'Формы и ответы на них.', en: 'Forms and their responses.' },
+  },
+  wordpress: {
+    icon: 'wordpress',
+    category: 'docs',
+    blurb: { ru: 'Записи, черновики, публикация, комментарии.', en: 'Posts, drafts, publishing, comments.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',
@@ -171,10 +262,6 @@ export const PLANNED_SERVICES: {
   glyph?: IconName;
   category: ServiceCategory;
 }[] = [
-  { name: 'Telegram', icon: 'telegram', category: 'messengers' },
-  { name: 'WhatsApp', icon: 'whatsapp', category: 'messengers' },
-  { name: 'Zendesk', icon: 'zendesk', category: 'crm' },
-  { name: 'Intercom', icon: 'intercom', category: 'crm' },
   { name: 'Shopify', icon: 'shopify', category: 'payments' },
   { name: 'Dropbox', icon: 'dropbox', category: 'files' },
   { name: 'Discord', icon: 'discord', category: 'messengers' },

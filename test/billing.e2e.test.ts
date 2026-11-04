@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { getPlan } from '../src/billing/plans.js';
 import { PaddleProvider } from '../src/billing/providers/paddle.js';
 import { hmacHex } from '../src/billing/providers/signature.js';
 import type { Principal } from '../src/core/principal.js';
@@ -202,7 +203,7 @@ describe('payments with the test provider', () => {
     expect(link.url).toBe(`${hub.baseUrl}/app/billing?plan=pro&interval=year`);
     const page = await (await browser.request('/app/billing?plan=pro&interval=year')).text();
     expect(page).toContain('Подключить тариф «Про»');
-    expect(page).toContain('$115 в год');
+    expect(page).toContain('$120 в год');
     expect((await tool('manyplug_buy_plan', { plan: 'unlimited' })).isError).toBe(true);
 
     await buy('pro', 'year');
@@ -214,6 +215,42 @@ describe('payments with the test provider', () => {
     const pending = await tool('manyplug_cancel_plan');
     expect(JSON.stringify(pending)).toMatch(/confirm/i);
     expect((await sub()).cancelAtPeriodEnd).toBe(false);
+  });
+
+  it('starts a new free workspace on a Pro trial, then steps down on the published dates', async () => {
+    const ent = async () => hub.services.entitlements.entitlements(workspaceId);
+    const pool = hub.services.database.pool;
+    const age = (days: number) =>
+      pool.query(`UPDATE workspaces SET created_at = now() - make_interval(days => $2) WHERE id = $1`, [
+        workspaceId,
+        days,
+      ]);
+    try {
+      await age(2);
+      expect((await ent()).phase?.kind).toBe('trial');
+      expect((await ent()).limits.actions).toBe(getPlan('pro').limits.actions);
+      const status = json(await tool('manyplug_plan'));
+      expect(status.start.now).toBe('pro trial');
+      expect(status.start.schedule.map((p: any) => p.actions_per_month)).toEqual([
+        getPlan('pro').limits.actions,
+        500,
+        300,
+      ]);
+      expect(status.start.after_that.actions_per_month).toBe(150);
+      expect(await (await browser.request('/app/billing')).text()).toContain('start-schedule');
+
+      await age(20);
+      expect((await ent()).limits.actions).toBe(500);
+      await age(45);
+      expect((await ent()).limits.actions).toBe(300);
+      await age(90);
+      const done = await ent();
+      expect(done.phase).toBeUndefined();
+      expect(done.limits.actions).toBe(150);
+      expect(done.countFrom).toBe(done.period.start);
+    } finally {
+      await age(0);
+    }
   });
 });
 

@@ -12,6 +12,7 @@
 import type { LookupAddress, LookupOptions } from 'node:dns';
 import { z } from 'zod';
 import type { CapabilityId } from './capabilities.js';
+import type { MessengerSpec } from './messaging.js';
 
 export type { CapabilityId, CapabilityInput, CapabilityOutput } from './capabilities.js';
 export * from './shape.js';
@@ -461,6 +462,8 @@ export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> 
   rateLimit?: RateLimitSpec;
   /** Verify that an account works (called when it is added and on demand). */
   test?(ctx: AccountContext<TConfig, TCredentials>): Promise<TestResult>;
+  /** Present for chat services: how messages are delivered (see `messaging.ts`). */
+  messenger?: MessengerSpec<TConfig, TCredentials>;
   /** Website texts in other languages and the layout of the connect form. */
   ui?: ConnectorUi;
 }
@@ -505,6 +508,7 @@ export interface ConnectorSpec<TConfig extends AnyObjectSchema, TCredentials ext
     action: ActionFactory<z.output<TConfig>, z.output<TCredentials>>,
   ) => ActionDefinition<z.output<TConfig>, z.output<TCredentials>>[];
   test?(ctx: AccountContext<z.output<TConfig>, z.output<TCredentials>>): Promise<TestResult>;
+  messenger?: MessengerSpec<z.output<TConfig>, z.output<TCredentials>>;
   /** Website texts and form layout; field keys are checked against `config` and `credentials`. */
   ui?: ConnectorUi<FieldKey<TConfig, TCredentials>>;
 }
@@ -551,6 +555,7 @@ export function defineConnector<
     actions: spec.actions(factory),
     rateLimit: spec.rateLimit,
     test: spec.test,
+    messenger: spec.messenger,
     ...(spec.ui ? { ui: spec.ui as ConnectorUi } : {}),
   };
   return definition as unknown as ConnectorDefinition;

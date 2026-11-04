@@ -3,6 +3,7 @@ import { type BillingConfig, BillingConfigError, readBillingConfig } from './bil
 import { BRAND } from './brand.js';
 import { CLIENT_POLICY_IDS } from './hub/client-policies.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
+import { parseSentryDsn } from './ops/sentry.js';
 
 /**
  * All runtime configuration comes from environment variables (12-factor).
@@ -109,6 +110,22 @@ const EnvSchema = z.object({
   JOBS_ENABLED: bool(true),
   /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
   TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
+  /** Internal URL of the messenger gateway (Render private service), e.g. http://anyconnect-gateway:10000. */
+  GATEWAY_URL: optionalString,
+  /** Shared secret between the hub and the gateway. */
+  GATEWAY_TOKEN: optionalString,
+  /**
+   * Also send unexpected errors to Sentry or a Sentry-compatible service (GlitchTip, Bugsink):
+   * the project's DSN. Errors are always kept in the built-in tracker (admin panel → Errors).
+   */
+  SENTRY_DSN: optionalString,
+  /** Environment name in Sentry (default: NODE_ENV). */
+  SENTRY_ENVIRONMENT: optionalString,
+  /** Days an error group is kept after it was last seen. */
+  ERROR_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /** Commit of the running build; set by Render. Shown in the admin panel and sent with errors. */
+  RENDER_GIT_COMMIT: optionalString,
+  RENDER_INSTANCE_ID: optionalString,
   /**
    * AI app directory rules the hub enforces for clients of those apps (comma separated ids from
    * `src/hub/client-policies.ts`: `claude`, `chatgpt`; `none` for no rules). Default `claude`.
@@ -193,8 +210,20 @@ export interface AppConfig {
   oauthApps: Record<string, { clientId: string; clientSecret: string | undefined }>;
   /** Run background jobs (pg-boss) in this process. */
   jobs: { enabled: boolean };
+  /** The messenger gateway, when deployed. */
+  gateway: { url: string; token: string } | undefined;
   /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
   billing: BillingConfig;
+  /** Error tracking and build identity (see `src/ops/`). */
+  ops: {
+    sentryDsn: string | undefined;
+    environment: string;
+    errorRetentionDays: number;
+    /** Short commit of the running build, when the platform tells us. */
+    commit: string | undefined;
+    /** Instance name for logs and Sentry (several instances behind one service). */
+    instance: string | undefined;
+  };
   /** Listing in AI app directories (see `docs/DIRECTORIES.md`). */
   directories: {
     /** Enforced directory rules (ids of `CLIENT_POLICIES` in `src/hub/client-policies.ts`). */
@@ -316,6 +345,18 @@ function normalizePublicUrl(raw: string): string {
   return url.origin;
 }
 
+function gatewayConfig(url: string | undefined, token: string | undefined): AppConfig['gateway'] {
+  if (!url && !token) return undefined;
+  if (!url || !token) throw new ConfigError('GATEWAY_URL and GATEWAY_TOKEN must be set together');
+  if (token.length < 32) throw new ConfigError('GATEWAY_TOKEN must be at least 32 characters');
+  try {
+    new URL(url);
+  } catch {
+    throw new ConfigError(`GATEWAY_URL is not a valid URL: ${url}`);
+  }
+  return { url: url.replace(/\/+$/, ''), token };
+}
+
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.safeParse(source);
   if (!parsed.success) {
@@ -432,7 +473,15 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     oauthApps: hubOAuthApps(env, source),
     jobs: { enabled: env.JOBS_ENABLED },
+    gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
     billing: billingConfig(source, isProduction),
+    ops: {
+      sentryDsn: sentryDsn(env.SENTRY_DSN),
+      environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
+      errorRetentionDays: env.ERROR_RETENTION_DAYS,
+      commit: env.RENDER_GIT_COMMIT?.slice(0, 7),
+      instance: env.RENDER_INSTANCE_ID,
+    },
     directories: {
       clientPolicies: clientPolicies(env.CLIENT_POLICIES),
       reviewAccount:
@@ -442,6 +491,17 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       wellKnown: readWellKnownFiles(source),
     },
   };
+}
+
+/** SENTRY_DSN is checked at start, so a typo shows up in the deploy log instead of losing errors. */
+function sentryDsn(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    parseSentryDsn(value);
+  } catch (error) {
+    throw new ConfigError((error as Error).message);
+  }
+  return value;
 }
 
 function billingConfig(source: NodeJS.ProcessEnv, isProduction: boolean): BillingConfig {

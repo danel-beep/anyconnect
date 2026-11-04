@@ -9,6 +9,8 @@ import type { SessionUser, WebSession } from '../web/sessions.js';
 export interface AppEnv {
   Variables: {
     services: Services;
+    /** Id of this request in the logs, error reports and the `X-Request-Id` header. */
+    requestId: string;
     locale: Locale;
     t: Translate;
     principal?: Principal;

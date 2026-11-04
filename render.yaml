@@ -41,6 +41,9 @@ services:
         sync: false
       - key: SIGNUPS
         value: open
+      # Optional: also send errors to Sentry (docs/OPERATIONS.md)
+      - key: SENTRY_DSN
+        sync: false
       # AI app directories (docs/DIRECTORIES.md)
       - key: CLIENT_POLICIES
         value: claude

@@ -202,7 +202,7 @@ export function buildInstructions(
   lines.push(`Call ${BUILTIN_TOOLS.list_accounts.name} for details of all connected accounts.`);
   if (setup) {
     lines.push(
-      `The user manages this hub from the chat: manyplug_services lists what can be connected, manyplug_connect_account returns a link to connect an account (never ask for passwords or keys in the chat), manyplug_update_account / manyplug_remove_account / manyplug_add_service / manyplug_update_settings change the setup, manyplug_rules / manyplug_set_rule show and change what each AI app may do and when it asks first.${executors ? ' Find them with manyplug_search_tools if they are not listed.' : ''}`,
+      `The user manages this hub from the chat: manyplug_services lists what can be connected, manyplug_connect_account returns a link to connect an account (never ask for passwords or keys in the chat), manyplug_update_account / manyplug_remove_account / manyplug_add_service / manyplug_update_settings change the setup, manyplug_rules / manyplug_set_rule show and change what each AI app may do and when it asks first, manyplug_access_profiles and friends give an AI app its own address with only some accounts.${executors ? ' Find them with manyplug_search_tools if they are not listed.' : ''}`,
     );
   }
   const active = services.filter((s) => s.accounts.some((a) => a.enabled));

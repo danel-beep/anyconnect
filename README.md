@@ -55,6 +55,11 @@ ChatGPT / Claude / Claude Code / Cursor
   `GET /api/v1/usage`. На этапе 1 только считает, ничего не ограничивает.
 - Страницы входа и согласия (RU/EN), главная страница с адресом MCP и списком подключений,
   REST API `/api/v1`, CLI, личные токены для клиентов со статическими заголовками.
+- **Telegram и WhatsApp**: боты Telegram (Bot API) и номера WhatsApp Business (Cloud API)
+  подключаются как обычные аккаунты, переписка хранится в хабе зашифрованной и ищется
+  мгновенно, отправка идёт через очередь с темпом «как человек» и без дублей. Для личного
+  Telegram и WhatsApp через официальное приложение есть шлюз постоянных сессий
+  (`docs/MESSENGERS.md`).
 - Встроенный тестовый сервис **Demo** с двумя аккаунтами, чтобы сразу проверить подключение.
 - **Готовые сервисы**: почта IMAP/SMTP (Яндекс, Mail.ru, Gmail, iCloud, любой сервер), Gmail,
   Outlook (почта и календарь), Google Calendar, Google Drive, Slack, Notion, GitHub, Todoist, Stripe
@@ -62,8 +67,8 @@ ChatGPT / Claude / Claude Code / Cursor
 - Docker, Render Blueprint, CI (lint, типы, больше 350 тестов включая сквозной OAuth через официальный
   MCP-клиент, сборка Docker).
 
-Дальше по плану: Telegram и WhatsApp → веб-панель → подключение любого API без программирования
-(по OpenAPI).
+Дальше по плану: личный Telegram и WhatsApp через шлюз → веб-панель → подключение любого API без
+программирования (по OpenAPI).
 
 ## Быстрый старт локально
 
@@ -129,11 +134,12 @@ Paddle или Stripe подключаются переменными `BILLING_PR
 
 ### Gmail, Календарь и Диск
 
-1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API** и **Google Drive
-   API** (APIs & Services → Library).
+1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API**, **Google Drive
+   API** и **Google Sheets API** (APIs & Services → Library).
 2. Google Auth Platform → **Data Access** → добавьте доступы коннекторов:
    `https://www.googleapis.com/auth/gmail.modify`, `https://www.googleapis.com/auth/calendar`,
-   `https://www.googleapis.com/auth/drive`.
+   `https://www.googleapis.com/auth/drive`, `https://www.googleapis.com/auth/spreadsheets`,
+   `https://www.googleapis.com/auth/drive.metadata.readonly`.
 3. Пока приложение не прошло проверку Google, при подключении пользователи видят предупреждение
    «Google hasn't verified this app» (Advanced → Go to Manyplug), и подключиться могут не больше
    100 человек. Для себя и первых пользователей этого достаточно.
@@ -317,7 +323,8 @@ npm run db:generate  # после изменения src/db/schema.ts — соз
 npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 
-Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Мониторинг, логи, ошибки и
+фоновые задачи: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Безопасность
 

@@ -43,6 +43,8 @@ export const APP_SHELL_CSS = `
 .stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums}
 .stat .sub{font-size:12.5px;color:var(--muted)}
 .stat .meter{margin-top:10px}
+a.stat{color:inherit;text-decoration:none}
+a.stat:hover{border-color:var(--border-strong)}
 @media (max-width:1000px){.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:520px){.stats{grid-template-columns:1fr 1fr}}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -121,6 +123,11 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .paid-sub .actions{margin-top:8px;flex-wrap:wrap}
 .billing-events{margin:12px 0}
 .billing-events li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.start-schedule{margin:12px 0}
+.start-schedule li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.start-schedule li.past{opacity:.55}
+.start-schedule li.current{font-weight:600}
+.start-schedule .badge{margin-left:8px}
 .plan-mini .plan{padding:18px;gap:10px}
 .plan-mini .price .amount{font-size:28px}
 .plan.current{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
@@ -281,4 +288,12 @@ select.narrow{max-width:320px}
 .lock-group:disabled .card{opacity:.6}
 .chart{position:relative}
 .chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13.5px}
+.error-list>li+li{border-top:1px solid var(--border)}
+.error-head{display:flex;gap:12px 16px;justify-content:space-between;align-items:flex-start}
+.error-head>div{min-width:0}
+.error-message{margin:6px 0 4px;overflow-wrap:anywhere}
+.filter-links{gap:8px;margin-bottom:16px}
+.filter-links a[aria-current]{border-color:var(--accent);color:var(--accent-ink)}
+.jobs-table td{vertical-align:top}
+@media (max-width:640px){.error-head{flex-direction:column}}
 `;

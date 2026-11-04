@@ -20,6 +20,7 @@ import { oauthClients, toolCalls } from '../db/schema.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
+import type { ErrorReporter } from '../ops/errors.js';
 import type { WorkspaceBilling } from './billing-tools.js';
 import { BUILTIN_TOOLS, MAX_BATCH_CALLS } from './builtin-tools.js';
 import {
@@ -45,6 +46,7 @@ import {
 } from './executor.js';
 import type { IdempotencyStore } from './idempotency.js';
 import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
+import type { WorkspaceProfiles } from './profile-tools.js';
 import type { QuotaGate } from './quota.js';
 import {
   carryUntrusted,
@@ -76,6 +78,8 @@ export interface HubDeps {
   logger: Logger;
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
+  /** Where unexpected failures go (error tracker); without it they are only logged. */
+  errors?: Pick<ErrorReporter, 'capture'>;
   toolTimeoutMs: number;
   /** Result size budget in tokens (default for actions that do not set their own). */
   maxResultTokens: number;
@@ -93,7 +97,12 @@ export interface HubDeps {
    * The hub's setup tools (`manyplug_*`, connector `manyplug`) and the workspace operations they
    * run. Without it the AI cannot manage the hub from the chat.
    */
-  setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin; billing?: WorkspaceBilling };
+  setup?: {
+    connector: ConnectorDefinition;
+    admin: WorkspaceAdmin;
+    billing?: WorkspaceBilling;
+    profiles?: WorkspaceProfiles;
+  };
   /**
    * Directory rules enforced for clients of known AI apps (ids from `client-policies.ts`, config
    * `CLIENT_POLICIES`). Default: none.
@@ -761,6 +770,7 @@ export class Hub {
       principal,
       admin: setup.admin,
       ...(setup.billing ? { billing: setup.billing } : {}),
+      ...(setup.profiles ? { profiles: setup.profiles } : {}),
       signal,
     };
     const call: CallContext = {
@@ -911,10 +921,10 @@ export class Hub {
         'auth',
       );
     }
-    return this.toErrorResult(error, toolName);
+    return this.toErrorResult(error, toolName, connector.id);
   }
 
-  private toErrorResult(error: unknown, toolName: string): ExecResult {
+  private toErrorResult(error: unknown, toolName: string, connectorId?: string): ExecResult {
     if (error instanceof ConnectorError) {
       const retry = error.options.retryAfterSeconds
         ? ` Retry after ${error.options.retryAfterSeconds} s.`
@@ -922,8 +932,16 @@ export class Hub {
       return errorResult(`${error.message}${retry}`, error.kind, error.options.retryAfterSeconds);
     }
     if (error instanceof AppError) return errorResult(appErrorText(error));
-    const ref = Math.random().toString(36).slice(2, 10);
-    this.deps.logger.error({ err: error, tool: toolName, ref }, 'tool call failed');
+    let ref: string;
+    if (this.deps.errors) {
+      ref = this.deps.errors.capture(error, {
+        source: 'tool',
+        context: { tool: toolName, ...(connectorId ? { connector: connectorId } : {}) },
+      });
+    } else {
+      ref = Math.random().toString(36).slice(2, 10);
+      this.deps.logger.error({ err: error, tool: toolName, ref }, 'tool call failed');
+    }
     return errorResult(`Internal error while running ${toolName} (ref ${ref}).`, 'internal');
   }
 

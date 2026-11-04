@@ -21,7 +21,26 @@ export class WorkspaceBillingTools implements WorkspaceBilling {
     const limit = (v: number | null) => v ?? 'unlimited';
     return {
       plan: summary.plan.id,
-      ...(summary.intro ? { intro_limits_until: iso(summary.intro.until) } : {}),
+      ...(summary.phase
+        ? {
+            // The published start: the AI can tell the user exactly when limits change.
+            start: {
+              now: summary.phase.kind === 'trial' ? `${summary.phase.asPlan} trial` : 'step down',
+              until: iso(summary.phase.until),
+              schedule: summary.schedule.map((p) => ({
+                from: iso(p.from),
+                until: iso(p.until),
+                ...(p.asPlan ? { limits_of_plan: p.asPlan } : {}),
+                actions_per_month: limit(p.limits.actions),
+                accounts: limit(p.limits.accounts),
+              })),
+              after_that: {
+                actions_per_month: limit(summary.plan.limits.actions),
+                accounts: limit(summary.plan.limits.accounts),
+              },
+            },
+          }
+        : {}),
       usage: {
         actions_this_month: summary.used.actions,
         actions_limit: limit(summary.limits.actions),

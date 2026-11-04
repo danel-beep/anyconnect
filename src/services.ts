@@ -6,7 +6,8 @@ import type { BillingProvider } from './billing/provider.js';
 import { createBillingProvider, TestBillingProvider } from './billing/providers/index.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
-import { createBuiltinRegistry } from './connectors/index.js';
+import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
+import type { MessagingPort } from './connectors/messaging.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { actionText, connectorText } from './connectors/sdk.js';
 import { AccountKeyring } from './core/account-keys.js';
@@ -41,8 +42,11 @@ import { RateLimiter } from './lib/rate-limit.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
 import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
+import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
+import { createOps, type Ops, watchJobs } from './ops/index.js';
+import { WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
@@ -68,6 +72,8 @@ export interface Services {
   config: AppConfig;
   version: string;
   logger: Logger;
+  /** Error tracking, health checks, job run history. */
+  ops: Ops;
   database: Database;
   db: Db;
   secrets: SecretBox;
@@ -129,6 +135,7 @@ export interface Services {
   rateLimiter: RateLimiter;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
+  messaging: Messaging;
   /** /mcp for apps that have not signed in yet; absent when `MCP_ANONYMOUS` is off. */
   visitorMcp?: McpHttpHandler;
   close(): Promise<void>;
@@ -138,7 +145,7 @@ export function createServices(
   config: AppConfig,
   overrides: {
     logger?: Logger;
-    connectors?: ConnectorRegistry;
+    connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     /** Tests: fetch Client ID Metadata Documents from localhost. */
     allowPrivateNetwork?: boolean;
     fetchDocument?: typeof safeFetch;
@@ -153,6 +160,8 @@ export function createServices(
     billingFetch?: typeof fetch;
     /** Tests: external sign-in providers with fake endpoints. */
     loginProviders?: OidcLoginProvider[];
+    /** Tests: a fake Sentry. */
+    sentryFetch?: typeof fetch;
   } = {},
 ): Services {
   const logger =
@@ -160,12 +169,29 @@ export function createServices(
     createLogger({ level: config.logLevel, pretty: !config.isProduction && process.stdout.isTTY === true });
   const database = createDatabase(config.database.url, { poolMax: config.database.poolMax });
   const db = database.db;
+  const ops = createOps({
+    config,
+    version: VERSION,
+    logger,
+    database,
+    ...(overrides.sentryFetch ? { sentryFetch: overrides.sentryFetch } : {}),
+  });
   const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
   const customStore = new CustomConnectorStore(db, logger);
-  const connectors = new WorkspaceConnectorResolver(
-    overrides.connectors ?? createBuiltinRegistry(),
-    customStore,
-  );
+  // Built-in connectors get ports to hub subsystems that are built after them (they need the registry).
+  let messaging: Messaging | undefined;
+  const messagingPort: MessagingPort = {
+    forAccount: (accountId) => {
+      if (!messaging) throw new Error('messaging is not initialized');
+      return messaging.service.forAccount(accountId);
+    },
+  };
+  const builtinDeps: BuiltinDeps = { messaging: messagingPort };
+  const builtin =
+    typeof overrides.connectors === 'function'
+      ? overrides.connectors(builtinDeps)
+      : (overrides.connectors ?? createBuiltinRegistry(builtinDeps));
+  const connectors = new WorkspaceConnectorResolver(builtin, customStore);
   const network = createNetworkPolicy({
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
@@ -215,8 +241,25 @@ export function createServices(
     logger,
   });
   const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
-  const jobs = new JobQueue({ connectionString: config.database.url, logger });
+  const jobs = new JobQueue({
+    connectionString: config.database.url,
+    logger,
+    monitor: ops.jobRuns,
+    onError: (error, job) => ops.errors.capture(error, { source: 'job', context: { job } }),
+  });
   for (const job of builtinJobs({ health, customServices })) jobs.register(job);
+  messaging = createMessaging({
+    publicUrl: config.publicUrl,
+    gatewayConfig: config.gateway,
+    db,
+    secrets,
+    keyring,
+    accounts,
+    connectors,
+    builtin,
+    logger,
+  });
+  watchJobs(ops, jobs);
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
@@ -298,9 +341,11 @@ export function createServices(
       connector: SETUP_CONNECTOR,
       admin,
       billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
+      profiles: new WorkspaceProfileTools(personas),
     },
     rateLimiter,
     idempotency,
+    errors: ops.errors,
     toolTimeoutMs: config.toolTimeoutMs,
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
@@ -380,6 +425,7 @@ export function createServices(
     config,
     version: VERSION,
     logger,
+    ops,
     database,
     db,
     secrets,
@@ -420,14 +466,17 @@ export function createServices(
     rateLimiter,
     idempotency,
     mcp,
+    messaging,
     ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
+      await messaging?.stop();
       await pendingRunner.stop();
       rateLimiter.close();
       await jobs.stop();
       await mcp.close();
       await visitorMcp?.close();
       await network.close();
+      await ops.close();
       await database.close();
     },
   };
