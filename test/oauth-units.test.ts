@@ -78,6 +78,22 @@ describe('config', () => {
     expect(config.trustProxy).toEqual({ hops: 2 });
   });
 
+  it('treats the Render URL and LEGACY_PUBLIC_URLS as former hosts once PUBLIC_URL is set', () => {
+    const config = loadConfig({
+      ...base,
+      RENDER: 'true',
+      RENDER_EXTERNAL_URL: 'https://anyconnect.onrender.com',
+      PUBLIC_URL: 'https://manyplug.com',
+      LEGACY_PUBLIC_URLS: 'https://old.example.com/, https://manyplug.com',
+    });
+    expect(config.publicUrl).toBe('https://manyplug.com');
+    expect(config.legacyHosts).toEqual(['old.example.com', 'anyconnect.onrender.com']);
+    expect(loadConfig({ ...base, RENDER_EXTERNAL_URL: 'https://a.onrender.com' }).legacyHosts).toEqual([]);
+    expect(() => loadConfig({ ...base, LEGACY_PUBLIC_URLS: 'https://x.example.com/path' })).toThrow(
+      /LEGACY_PUBLIC_URLS/,
+    );
+  });
+
   it('shares one Google client between sign-in and connected services', () => {
     const login = { LOGIN_GOOGLE_CLIENT_ID: 'login-id', LOGIN_GOOGLE_CLIENT_SECRET: 'login-secret' };
     expect(loadConfig({ ...base, ...login }).oauthApps.google).toEqual({
