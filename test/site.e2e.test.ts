@@ -542,13 +542,13 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const first = await (await browser.request('/app/activity')).text();
     // A tool the service does not list is shown by its name in words; the exact name is the tooltip.
     expect(first).toContain('>Call 1<');
-    expect(first).toContain('title=\"demo_call_1\"');
-    expect(first).not.toContain('title=\"demo_call_31\"');
+    expect(first).toContain('title="demo_call_1"');
+    expect(first).not.toContain('title="demo_call_31"');
     const more = first.match(/href="(\/app\/activity\?before=[^"#]+)#log"/)![1]!.replaceAll('&amp;', '&');
     const second = await (await browser.request(more)).text();
-    expect(second).toContain('title=\"demo_call_31\"');
-    expect(second).toContain('title=\"demo_call_35\"');
-    expect(second).not.toContain('title=\"demo_call_30\"');
+    expect(second).toContain('title="demo_call_31"');
+    expect(second).toContain('title="demo_call_35"');
+    expect(second).not.toContain('title="demo_call_30"');
     expect(second).not.toContain('?before=');
   });
 
@@ -662,6 +662,21 @@ describe('website: public pages', () => {
     // Only same-site paths are followed.
     const evil = await browser.request('/prefs/lang?to=ru&next=https%3A%2F%2Fevil.example');
     expect(evil.headers.get('location')).toBe('/');
+  });
+
+  it('says how each service connects on this server and lists the rest as coming next', async () => {
+    const page = async (path: string) => (await fetch(`${hub.baseUrl}${path}`)).text();
+    // No Todoist app on this hub: the personal token is the way in, and its page says so.
+    const todoist = await page('/services/todoist');
+    expect(todoist).toContain('API key or app password');
+    expect(todoist).not.toContain('Sign in with Todoist');
+    // The docs name what connects through the form here, not a fixed list.
+    expect(await page('/docs')).toMatch(/<li>[^<]*Todoist: paste an app password or API key/);
+    // The grid holds what connects today; planned services wait in one row, and any MCP server has a card.
+    const services = await page('/services');
+    expect(services).toMatch(/<li data-search="Telegram"><span class="road">/);
+    expect(services).toContain('href="/docs#custom"');
+    expect(services).not.toContain('svc soon');
   });
 
   it('speaks English by default, whatever the browser language, until Russian is picked', async () => {

@@ -20,7 +20,6 @@ export const siteEn = {
   'site.cta.start': 'Get started',
   'site.cta.startShort': 'Start',
   'site.cta.google': 'Continue with Google',
-  'site.services.soon': 'Coming soon',
   'site.footer.tagline':
     'One MCP address for all your services and accounts. Works with Claude, ChatGPT, Cursor and other AI clients.',
   'site.footer.product': 'Product',
@@ -34,7 +33,7 @@ export const siteEn = {
 
   'landing.title': 'Manyplug: connect all your services to AI in one step',
   'landing.description':
-    'One MCP address for Gmail, Outlook, Slack, Notion, GitHub and more. Any number of accounts per service, encrypted keys, confirmations for risky actions.',
+    'One MCP address for Gmail, Slack, Notion, GitHub and more. Several accounts per service, encrypted keys, and risky actions wait for your OK.',
   'landing.eyebrow': 'MCP hub for Claude, ChatGPT and Cursor',
   'landing.h1a': 'Your mail, tasks and docs,',
   'site.services.soonShort': 'soon',
@@ -43,7 +42,7 @@ export const siteEn = {
   'landing.h1b': 'in any AI assistant.',
   'landing.h1c': '',
   'landing.lead':
-    'Connect Gmail, Slack, Notion and a dozen other services once, and Claude, ChatGPT or Cursor can search, read and reply for you. As many accounts per service as you have; sending and deleting wait for your “yes”.',
+    'Connect Gmail, Slack, Notion and other services once, and Claude, ChatGPT or Cursor can search, read and reply for you. Keep several accounts per service; sending and other risky actions wait for your “yes”.',
   'landing.how': 'How it works',
   'landing.note.free': 'Free plan, no time limit',
   'landing.note.card': 'No card required',
@@ -78,7 +77,7 @@ export const siteEn = {
   'landing.map.api': 'Your API',
   'landing.features.eyebrow': 'What you get',
   'landing.features.title': 'Built for real work, not a demo',
-  'landing.f.accounts.title': 'Unlimited accounts per service',
+  'landing.f.accounts.title': 'Several accounts per service',
   'landing.f.accounts.text':
     'Work and personal Gmail, three Slack workspaces, a client’s Notion. The AI can search one account or all of them at once.',
   'landing.f.accounts.query': 'invoice',
@@ -98,7 +97,7 @@ export const siteEn = {
     'Mail, chats and calendars share common tools, so the AI does not relearn every service.',
   'landing.f.api.title': 'Your own MCP servers and APIs',
   'landing.f.api.text':
-    'Add a private MCP server or describe a REST API. It gets the same protection as built-in services.',
+    'Add a private MCP server by its address, or any REST API by its address and key. Both get the same rules as built-in services.',
   'landing.f.chat.title': 'Manage it from the chat',
   'landing.f.chat.text': 'Ask the AI to connect a new account, rename it or show today’s usage.',
   'landing.f.chat.prompt': '“Connect my second Gmail and call it Clients”',
@@ -108,7 +107,7 @@ export const siteEn = {
   'landing.f.personas.read': 'read only',
   'landing.f.personas.confirm': 'confirm sending',
   'landing.services.eyebrow': 'Services',
-  'landing.services.title': 'Popular services are ready to go',
+  'landing.services.title': 'Ready to connect',
   'landing.services.lead': 'Not on the list? Any IMAP mailbox, any MCP server and any REST API connect too.',
   'landing.services.all': 'All services',
   'landing.security.eyebrow': 'Security',
@@ -147,13 +146,13 @@ export const siteEn = {
     'In the hub’s database, encrypted with a separate key per account. The AI only sees tool results, never keys. You can disconnect any account at any moment, and its credentials are deleted.',
   'faq.action.q': 'What counts as an action?',
   'faq.action.a':
-    'One call of a service tool by the AI: a search, reading an email, creating a task. Hub housekeeping (listing accounts, connecting a new one) is free.',
+    'One call of a service tool by the AI: a search, reading an email, creating a task. “Find the ACME invoice and send it to Alex” takes about three. Hub housekeeping (listing accounts, connecting a new one) is free.',
   'faq.limit.q': 'What happens when I run out of actions?',
   'faq.limit.a':
     'The AI gets a polite message that the monthly limit is reached and nothing breaks. Your accounts and settings stay. The counter resets on the 1st of the month, or you can switch to a bigger plan.',
   'faq.custom.q': 'Can I connect a service that is not on the list?',
   'faq.custom.a':
-    'Yes. Any mailbox connects over IMAP, any MCP server by its address, and any REST API through a short description. Tell us which service you want built in and we will prioritise it.',
+    'Yes. Any mailbox connects over IMAP, any MCP server by its address, and any REST API by its address and key. Tell us which service you want built in and we will prioritise it.',
   'faq.delete.q': 'How do I delete my data?',
   'faq.delete.a':
     'Settings → Delete account. Accounts, keys, tokens and history are removed right away. You can also disconnect separate services or AI apps.',
@@ -203,7 +202,11 @@ export const siteEn = {
   'pricing.h1': 'Simple plans that grow with you',
   'pricing.lead': 'All services and security features are in every plan. Pick by how much you use AI.',
   'pricing.paymentsSoon':
-    'Online payment is coming soon. Until then, write to us and we will switch your plan by hand.',
+    'Online payment is coming soon. Until then, choose a plan in the dashboard and we switch it for you by hand.',
+  'pricing.paymentsAsk': 'Questions: {email}',
+  'pricing.soon': 'Coming soon',
+  'pricing.actionHint':
+    'An action is one thing the AI does in a service: a search, reading an email, adding a task. “Find the ACME invoice and send it to Alex” takes about three.',
   'pricing.interval': 'Billing period',
   'pricing.monthly': 'Monthly',
   'pricing.yearly': 'Yearly',
@@ -225,8 +228,8 @@ export const siteEn = {
   'pricing.faq': 'Pricing questions',
   'pricing.row.actions': 'AI actions a month',
   'pricing.row.accounts': 'Connected accounts',
-  'pricing.row.messengers': 'Messenger accounts (soon)',
-  'pricing.row.backgroundJobs': 'Scheduled tasks (soon)',
+  'pricing.row.messengers': 'Telegram and WhatsApp accounts',
+  'pricing.row.backgroundJobs': 'Scheduled tasks',
   'pricing.row.historyDays': 'Activity history',
   'pricing.row.seats': 'Team members',
   'pricing.row.security': 'Encryption, confirmations, access rules',
@@ -249,7 +252,10 @@ export const siteEn = {
   'services.title': 'Services · Manyplug',
   'services.description': 'Services you can connect to Claude, ChatGPT and Cursor through Manyplug.',
   'services.h1': 'Services you can connect',
-  'services.lead': 'Each one supports several accounts. More are added every month.',
+  'services.lead': 'Each one takes several accounts. What we are building next is listed at the end.',
+  'services.roadmap': 'Coming next',
+  'services.mcp.name': 'Your MCP server',
+  'services.mcp.text': 'Any remote MCP server, by its address',
   'services.search': 'Find a service',
   'services.none':
     'Nothing found. Any mailbox connects over IMAP, and any service with an API or MCP server can be added as your own.',
@@ -300,15 +306,27 @@ export const siteEn = {
     'Same address for every client. Access is granted per app and can be revoked in the dashboard.',
   'docs.services.text':
     'Services are connected in the dashboard, or right from the chat: ask the AI to connect one and open the link it gives you.',
-  'docs.services.oauth': 'Google, Microsoft, Slack, Notion, GitHub: sign in on the service’s page.',
-  'docs.services.form':
-    'IMAP mail, Todoist, Stripe and similar: paste an app password or API key into our form.',
+  'docs.services.oauth': '{services}: sign in on the service’s own page.',
+  'docs.services.form': '{services}: paste an app password or API key into our form.',
   'docs.services.chat': 'Several accounts of one service are fine. Name them so the AI can tell them apart.',
-  'docs.custom.text': 'Under Services → Your own you can add:',
-  'docs.custom.mcp': 'any remote MCP server by its address, with an optional bearer token;',
-  'docs.custom.http': 'a REST API described as a short manifest (operations, parameters, auth).',
+  'docs.check': 'Check that it works',
+  'docs.check.text':
+    'In a new chat, ask: “Which accounts can you use in Manyplug?” The AI should name your connected accounts. If something is off:',
+  'docs.check.signin':
+    'The client cannot connect or keeps asking to sign in: remove Manyplug from the client, add it again and allow access once more.',
+  'docs.check.tools':
+    'The AI does not see Manyplug: turn it on in the chat’s tools menu, or start a new chat after adding it.',
+  'docs.check.accounts':
+    'The AI sees Manyplug but no accounts: connect a service in the dashboard, or ask the AI to connect one.',
+  'docs.check.blocked': 'An action is refused or waits for you: your rules ask first or do not allow it.',
+  'docs.custom.text': 'Services that are not on the list can be added too:',
+  'docs.custom.mcp':
+    'any remote MCP server by its address: in the dashboard under Services → Your own MCP servers. Sign-in is worked out automatically, or you paste a token;',
+  'docs.custom.http':
+    'any REST/JSON API through the HTTP API service: its address and key. The AI can also describe an API as a manifest (operations, parameters, sign-in) and add it from the chat.',
   'docs.safety.text':
-    'Write actions such as sending or deleting can require your confirmation in the dashboard or in Telegram. Each AI app can be limited to certain accounts or to reading only. Turn on two-step verification for your Manyplug account.',
+    'Risky actions such as sending or deleting wait for your OK in the dashboard. Each AI app can be limited to certain accounts or to reading only. Turn on two-step verification for your Manyplug account.',
+  'docs.safety.telegram': 'Approvals can also come to Telegram: link the bot on the Confirmations page.',
   'docs.safety.link': 'Set up two-step verification',
   'docs.safety.rules': 'Rules for apps and accounts',
   'docs.api': 'API',
@@ -340,7 +358,6 @@ export const siteRu: Record<SiteKey, string> = {
   'site.cta.start': 'Начать бесплатно',
   'site.cta.startShort': 'Начать',
   'site.cta.google': 'Продолжить с Google',
-  'site.services.soon': 'Скоро',
   'site.footer.tagline':
     'Один MCP-адрес для всех ваших сервисов и аккаунтов. Работает с Claude, ChatGPT, Cursor и другими ИИ.',
   'site.footer.product': 'Продукт',
@@ -354,7 +371,7 @@ export const siteRu: Record<SiteKey, string> = {
 
   'landing.title': 'Manyplug: все ваши сервисы в ИИ за один шаг',
   'landing.description':
-    'Один MCP-адрес для Gmail, Outlook, Slack, Notion, GitHub и других сервисов. Сколько угодно аккаунтов, зашифрованные ключи, подтверждение опасных действий.',
+    'Один MCP-адрес для Gmail, Slack, Notion, GitHub и других сервисов. Несколько аккаунтов в каждом сервисе, зашифрованные ключи, а рискованные действия ждут вашего согласия.',
   'landing.eyebrow': 'MCP-хаб для Claude, ChatGPT и Cursor',
   'landing.h1a': 'Ваша почта, задачи и документы —',
   'site.services.soonShort': 'скоро',
@@ -363,7 +380,7 @@ export const siteRu: Record<SiteKey, string> = {
   'landing.h1b': 'в любом ИИ‑ассистенте.',
   'landing.h1c': '',
   'landing.lead':
-    'Подключите Gmail, Slack, Notion и ещё десяток сервисов один раз, и Claude, ChatGPT или Cursor будут искать, читать и отвечать за вас. Сколько угодно аккаунтов в каждом сервисе, а отправка и удаление — только после вашего «да».',
+    'Подключите Gmail, Slack, Notion и другие сервисы один раз, и Claude, ChatGPT или Cursor будут искать, читать и отвечать за вас. В каждом сервисе можно держать несколько аккаунтов, а отправка и другие рискованные действия ждут вашего «да».',
   'landing.how': 'Как это работает',
   'landing.note.free': 'Бесплатный тариф без срока',
   'landing.note.card': 'Карта не нужна',
@@ -400,7 +417,7 @@ export const siteRu: Record<SiteKey, string> = {
   'landing.map.api': 'Ваш API',
   'landing.features.eyebrow': 'Возможности',
   'landing.features.title': 'Сделано для реальной работы, а не для демо',
-  'landing.f.accounts.title': 'Сколько угодно аккаунтов в одном сервисе',
+  'landing.f.accounts.title': 'Несколько аккаунтов в одном сервисе',
   'landing.f.accounts.text':
     'Рабочий и личный Gmail, три пространства Slack, Notion клиента. ИИ ищет в одном аккаунте или сразу во всех.',
   'landing.f.accounts.query': 'счёт',
@@ -420,7 +437,7 @@ export const siteRu: Record<SiteKey, string> = {
     'У почты, чатов и календарей единые инструменты, и ИИ не переучивается под каждый сервис.',
   'landing.f.api.title': 'Свои MCP-серверы и API',
   'landing.f.api.text':
-    'Добавьте закрытый MCP-сервер или опишите REST API. Защита будет та же, что у встроенных сервисов.',
+    'Добавьте закрытый MCP-сервер по адресу или любой REST API по адресу и ключу. Правила для них те же, что у встроенных сервисов.',
   'landing.f.chat.title': 'Управление прямо из чата',
   'landing.f.chat.text':
     'Попросите ИИ подключить новый аккаунт, переименовать его или показать расход за сегодня.',
@@ -430,7 +447,7 @@ export const siteRu: Record<SiteKey, string> = {
   'landing.f.personas.read': 'только чтение',
   'landing.f.personas.confirm': 'отправка с подтверждением',
   'landing.services.eyebrow': 'Сервисы',
-  'landing.services.title': 'Популярные сервисы уже готовы',
+  'landing.services.title': 'Готовы к подключению',
   'landing.services.lead':
     'Нет в списке? Подключаются и любая почта по IMAP, и любой MCP-сервер, и любой REST API.',
   'landing.services.all': 'Все сервисы',
@@ -472,13 +489,13 @@ export const siteRu: Record<SiteKey, string> = {
     'В базе Manyplug, зашифрованные отдельным ключом для каждого аккаунта. ИИ видит только результаты инструментов, но не ключи. Любой аккаунт можно отключить в любой момент, и его данные для входа удаляются.',
   'faq.action.q': 'Что считается действием?',
   'faq.action.a':
-    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются.',
+    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. «Найди счёт ACME и отправь его Алексу» — это около трёх действий. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются.',
   'faq.limit.q': 'Что будет, если действия закончатся?',
   'faq.limit.a':
     'ИИ получит вежливое сообщение, что месячный лимит исчерпан, и ничего не сломается. Аккаунты и настройки сохранятся. Счётчик обнулится 1-го числа, или можно перейти на тариф побольше.',
   'faq.custom.q': 'Можно подключить сервис, которого нет в списке?',
   'faq.custom.a':
-    'Да. Любая почта подключается по IMAP, любой MCP-сервер по адресу, а любой REST API по короткому описанию. Напишите, какой сервис добавить, и мы поставим его в план.',
+    'Да. Любая почта подключается по IMAP, любой MCP-сервер по адресу, а любой REST API по адресу и ключу. Напишите, какой сервис добавить, и мы поставим его в план.',
   'faq.delete.q': 'Как удалить мои данные?',
   'faq.delete.a':
     'Настройки → Удалить аккаунт. Аккаунты, ключи, токены и история удаляются сразу. Можно также отключать отдельные сервисы или ИИ-приложения.',
@@ -528,7 +545,12 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.h1': 'Понятные тарифы, которые растут вместе с вами',
   'pricing.lead':
     'Все сервисы и функции защиты есть в каждом тарифе. Выбирайте по тому, сколько вы пользуетесь ИИ.',
-  'pricing.paymentsSoon': 'Онлайн-оплата скоро появится. А пока напишите нам, и мы переключим тариф вручную.',
+  'pricing.paymentsSoon':
+    'Онлайн-оплата скоро появится. А пока выберите тариф в кабинете, и мы переключим его вручную.',
+  'pricing.paymentsAsk': 'Вопросы: {email}',
+  'pricing.soon': 'Скоро',
+  'pricing.actionHint':
+    'Действие — это один шаг ИИ в сервисе: поиск, чтение письма, новая задача. «Найди счёт ACME и отправь его Алексу» — около трёх действий.',
   'pricing.interval': 'Период оплаты',
   'pricing.monthly': 'Помесячно',
   'pricing.yearly': 'За год',
@@ -550,8 +572,8 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.faq': 'Вопросы об оплате',
   'pricing.row.actions': 'Действия ИИ в месяц',
   'pricing.row.accounts': 'Подключённые аккаунты',
-  'pricing.row.messengers': 'Аккаунты мессенджеров (скоро)',
-  'pricing.row.backgroundJobs': 'Задачи по расписанию (скоро)',
+  'pricing.row.messengers': 'Аккаунты Telegram и WhatsApp',
+  'pricing.row.backgroundJobs': 'Задачи по расписанию',
   'pricing.row.historyDays': 'История действий',
   'pricing.row.seats': 'Участники',
   'pricing.row.security': 'Шифрование, подтверждения, правила доступа',
@@ -575,7 +597,10 @@ export const siteRu: Record<SiteKey, string> = {
   'services.description': 'Сервисы, которые можно подключить к Claude, ChatGPT и Cursor через Manyplug.',
   'services.h1': 'Что можно подключить',
   'services.lead':
-    'В каждом сервисе можно держать несколько аккаунтов. Новые сервисы добавляются каждый месяц.',
+    'В каждом сервисе можно держать несколько аккаунтов. Что мы делаем дальше, показано в конце списка.',
+  'services.roadmap': 'Скоро',
+  'services.mcp.name': 'Свой MCP-сервер',
+  'services.mcp.text': 'Любой удалённый MCP-сервер по адресу',
   'services.search': 'Найти сервис',
   'services.none':
     'Ничего не нашлось. Любую почту можно подключить по IMAP, а сервис с API или MCP-сервером — как свой.',
@@ -627,16 +652,30 @@ export const siteRu: Record<SiteKey, string> = {
     'Адрес одинаковый для всех клиентов. Доступ выдаётся каждому приложению отдельно, отозвать его можно в кабинете.',
   'docs.services.text':
     'Сервисы подключаются в кабинете или прямо из чата: попросите ИИ подключить сервис и откройте ссылку, которую он даст.',
-  'docs.services.oauth': 'Google, Microsoft, Slack, Notion, GitHub: вход на странице сервиса.',
-  'docs.services.form':
-    'Почта по IMAP, Todoist, Stripe и похожие: пароль приложения или API-ключ в нашей форме.',
+  'docs.services.oauth': '{services}: вход на странице самого сервиса.',
+  'docs.services.form': '{services}: пароль приложения или API-ключ в нашей форме.',
   'docs.services.chat':
     'Несколько аккаунтов одного сервиса — нормально. Дайте им имена, чтобы ИИ их различал.',
-  'docs.custom.text': 'В разделе «Сервисы → Свои» можно добавить:',
-  'docs.custom.mcp': 'любой удалённый MCP-сервер по адресу, при необходимости с токеном;',
-  'docs.custom.http': 'REST API в виде короткого описания (операции, параметры, авторизация).',
+  'docs.check': 'Проверьте, что всё работает',
+  'docs.check.text':
+    'В новом чате спросите: «Какие аккаунты тебе доступны в Manyplug?» ИИ должен назвать подключённые аккаунты. Если что-то не так:',
+  'docs.check.signin':
+    'Клиент не подключается или снова и снова просит войти: удалите Manyplug в клиенте, добавьте заново и ещё раз разрешите доступ.',
+  'docs.check.tools':
+    'ИИ не видит Manyplug: включите его в меню инструментов чата или начните новый чат после добавления.',
+  'docs.check.accounts':
+    'ИИ видит Manyplug, но не видит аккаунтов: подключите сервис в кабинете или попросите ИИ подключить его.',
+  'docs.check.blocked':
+    'Действие отклонено или ждёт вас: ваши правила требуют подтверждения или не разрешают его.',
+  'docs.custom.text': 'Сервисы, которых нет в списке, тоже можно добавить:',
+  'docs.custom.mcp':
+    'любой удалённый MCP-сервер по адресу: в кабинете, в разделе «Сервисы → Свои MCP-серверы». Вход настраивается сам, или вы вставляете токен;',
+  'docs.custom.http':
+    'любой REST/JSON API через сервис HTTP API: его адрес и ключ. ИИ также может описать API манифестом (операции, параметры, вход) и добавить его из чата.',
   'docs.safety.text':
-    'Действия с записью, например отправка или удаление, могут требовать вашего подтверждения в кабинете или в Telegram. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение. Включите двухэтапную проверку для своего аккаунта Manyplug.',
+    'Рискованные действия, например отправка или удаление, ждут вашего согласия в кабинете. Каждому ИИ-приложению можно оставить только часть аккаунтов или только чтение. Включите двухэтапную проверку для своего аккаунта Manyplug.',
+  'docs.safety.telegram':
+    'Подтверждения могут приходить и в Telegram: подключите бота на странице «Подтверждения».',
   'docs.safety.link': 'Включить двухэтапную проверку',
   'docs.safety.rules': 'Правила для приложений и аккаунтов',
   'docs.api': 'API',

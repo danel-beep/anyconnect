@@ -67,6 +67,15 @@ var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelecto
 /* Filter forms apply as soon as a choice changes (the button stays for keyboards and no-JS) */
 $$('form[data-autosubmit]').forEach(function(f){f.addEventListener('change',function(){f.submit()})});
 
+/* Docs: the side menu marks the section being read */
+(function(){var spy=d.querySelector('.doc-nav');
+if(!spy||!('IntersectionObserver' in window))return;var links={},seen={};
+$$('a[href^="#"]',spy).forEach(function(a){links[a.getAttribute('href').slice(1)]=a});
+var io=new IntersectionObserver(function(es){es.forEach(function(e){seen[e.target.id]=e.isIntersecting});
+var cur=null;for(var id in links){if(seen[id]){cur=id;break}}if(!cur)return;
+for(var k in links){if(k===cur)links[k].setAttribute('aria-current','location');else links[k].removeAttribute('aria-current')}},{rootMargin:'-80px 0px -60% 0px'});
+for(var id in links){var el=d.getElementById(id);if(el)io.observe(el)}})();
+
 /* Setup guide: opens the steps for the provider picked in the form, or the one the address points to */
 $$('[data-guide]').forEach(function(g){var domains={};try{domains=JSON.parse(g.getAttribute('data-guide-domains')||'{}')}catch(e){}
 var fieldName=g.getAttribute('data-guide-field'),mailName=g.getAttribute('data-guide-email');

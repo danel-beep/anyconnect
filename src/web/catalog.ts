@@ -114,8 +114,8 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     glyph: 'braces',
     category: 'custom',
     blurb: {
-      ru: 'Любой REST API по описанию или OpenAPI — без кода.',
-      en: 'Any REST API from a description or OpenAPI, no code.',
+      ru: 'Любой REST/JSON API по адресу и ключу, без кода.',
+      en: 'Any REST/JSON API by its address and key, no code.',
     },
   },
   manyplug: {
