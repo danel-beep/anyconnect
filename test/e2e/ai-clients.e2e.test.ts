@@ -27,6 +27,8 @@ describe('AI clients connect end to end', () => {
   let google: FakeGoogle;
   let mailbox: GoogleUser;
   let workspaceId: string;
+  /** The owner's own browser, signed in once (the dashboard, confirmation pages). */
+  let owner: TestBrowser;
 
   beforeAll(async () => {
     await resetDatabase();
@@ -42,10 +44,10 @@ describe('AI clients connect end to end', () => {
     workspaceId = (await hub.services.db.query.workspaces.findFirst())!.id;
 
     // The owner (password account with the demo accounts) connects one Gmail mailbox.
-    const browser = new TestBrowser(hub.baseUrl, internet.fetch);
-    expect((await browser.login()).status).toBe(303);
+    owner = new TestBrowser(hub.baseUrl, internet.fetch);
+    expect((await owner.login()).status).toBe(303);
     google.signedIn = mailbox;
-    const { response } = await browser.walk('/connect/gmail?label=Work&name=work');
+    const { response } = await owner.walk('/connect/gmail?label=Work&name=work');
     expect(response.status).toBe(200);
   });
 
@@ -197,9 +199,7 @@ describe('AI clients connect end to end', () => {
         const held = await callAnyway(client, 'gmail_send', args);
         expect(textOf(held)).toContain('/confirm/pcl_');
         expect(mailbox.sent).toHaveLength(before);
-        const browser = new TestBrowser(hub.baseUrl);
-        await browser.login();
-        await approveOnWeb(browser, textOf(held));
+        await approveOnWeb(owner, textOf(held));
         await hub.services.pendingRunner.tick();
         expect(mailbox.sent).toHaveLength(before + 1);
         const delivered = await callAnyway(client, 'gmail_send', args);
@@ -223,14 +223,42 @@ describe('AI clients connect end to end', () => {
 
     it('loses access when the user disconnects it on the dashboard', async () => {
       const grant = (await grantOf(client))!;
-      const browser = new TestBrowser(hub.baseUrl);
-      await browser.login();
-      const page = await (await browser.request('/app/apps')).text();
+      const page = await (await owner.request('/app/apps')).text();
       expect(page).toContain(`/grants/${grant.id}/revoke`);
       const { csrf } = TestBrowser.hiddenInputs(page);
-      const revoked = await browser.request(`/grants/${grant.id}/revoke`, { form: { csrf: csrf! } });
+      const revoked = await owner.request(`/grants/${grant.id}/revoke`, { form: { csrf: csrf! } });
       expect(revoked.status).toBe(303);
       await expect(client.open()).rejects.toBeInstanceOf(UnauthorizedError);
+    });
+
+    it('comes back as the same app with its rules when the user adds it again', async () => {
+      // The user had made this app read-only before disconnecting it.
+      const before = (await hub.services.aiClients.list(workspaceId)).find(
+        (c) => c.name === profile.expectedName,
+      )!;
+      await hub.services.policies.setScopedRule(
+        workspaceId,
+        { aiClientId: before.id },
+        { access: 'read', confirm: null },
+      );
+
+      // Adding it again is a fresh start for the app: new registration (or document fetch), new tokens.
+      // The browser is still signed in, so the consent screen opens right away.
+      const again = new SimulatedAiClient(profile, hub.mcpUrl);
+      await again.connect(async (url) => {
+        const { response } = await owner.walk(url);
+        expect(response.status).toBe(200);
+        return allow(owner, response, profile);
+      });
+      try {
+        const grant = (await grantOf(again))!;
+        expect(grant.aiClientId).toBe(before.id);
+        const names = await again.toolNames();
+        expect(names).toContain('gmail_search');
+        expect(names).not.toContain('gmail_send');
+      } finally {
+        await again.close();
+      }
     });
   });
 
