@@ -12,7 +12,7 @@ import { getDefaultWorkspace, getUser, getWorkspace } from '../core/identity.js'
 import { CreateOAuthAppInput } from '../core/oauth-apps.js';
 import { workspaces } from '../db/schema.js';
 import { utcDay } from '../hub/usage.js';
-import { AppError, notFound, unauthorized } from '../lib/errors.js';
+import { AppError, badRequest, notFound, unauthorized } from '../lib/errors.js';
 import { json, principal } from './api-helpers.js';
 import { securityRoutes } from './api-security.js';
 import { type AppEnv, currentSession, secondFactorRedirect } from './context.js';
@@ -256,6 +256,35 @@ export function apiRoutes() {
   api.post('/accounts/:id/test', async (c) => {
     const s = c.get('services');
     return c.json(await s.accounts.test(principal(c).workspaceId, c.req.param('id'), s.logger));
+  });
+
+  // --- Messenger accounts ----------------------------------------------------
+  /** Webhook URL and token to paste into the messenger's settings, and the connection status. */
+  api.get('/accounts/:id/messenger', async (c) => {
+    const s = c.get('services');
+    const row = await s.accounts.get(principal(c).workspaceId, c.req.param('id'));
+    const resolved = await s.messaging.service.resolve(row.id);
+    if (!resolved) throw badRequest('This account is not a messenger');
+    const messaging = s.messaging.service.forAccount(row.id);
+    const state = await s.messaging.accounts.get(row.id);
+    return c.json({
+      transport: resolved.transport.kind,
+      ...(resolved.transport.kind === 'direct' && resolved.transport.webhook
+        ? { webhook: { url: messaging.webhook().url, token: messaging.webhook().secret } }
+        : {}),
+      session: await messaging.session(),
+      sendPausedUntil: state?.sendPausedUntil?.toISOString() ?? null,
+      sendPauseReason: state?.sendPauseReason ?? null,
+    });
+  });
+
+  /** Lifts a sending pause (after a spam warning or a long flood wait) once the user decides to. */
+  api.post('/accounts/:id/messenger/resume-sending', async (c) => {
+    const s = c.get('services');
+    const row = await s.accounts.get(principal(c).workspaceId, c.req.param('id'));
+    await s.messaging.accounts.resumeSending(row.id);
+    s.messaging.dispatcher.kick();
+    return c.json({ ok: true });
   });
 
   // --- Usage ---------------------------------------------------------------

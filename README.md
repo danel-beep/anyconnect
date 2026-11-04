@@ -55,6 +55,11 @@ ChatGPT / Claude / Claude Code / Cursor
   `GET /api/v1/usage`. На этапе 1 только считает, ничего не ограничивает.
 - Страницы входа и согласия (RU/EN), главная страница с адресом MCP и списком подключений,
   REST API `/api/v1`, CLI, личные токены для клиентов со статическими заголовками.
+- **Telegram и WhatsApp**: боты Telegram (Bot API) и номера WhatsApp Business (Cloud API)
+  подключаются как обычные аккаунты, переписка хранится в хабе зашифрованной и ищется
+  мгновенно, отправка идёт через очередь с темпом «как человек» и без дублей. Для личного
+  Telegram и WhatsApp через официальное приложение есть шлюз постоянных сессий
+  (`docs/MESSENGERS.md`).
 - Встроенный тестовый сервис **Demo** с двумя аккаунтами, чтобы сразу проверить подключение.
 - **Готовые сервисы**: почта IMAP/SMTP (Яндекс, Mail.ru, Gmail, iCloud, любой сервер), Gmail,
   Outlook (почта и календарь), Google Calendar, Google Drive, Slack, Notion, GitHub, Todoist, Stripe
@@ -62,8 +67,8 @@ ChatGPT / Claude / Claude Code / Cursor
 - Docker, Render Blueprint, CI (lint, типы, больше 350 тестов включая сквозной OAuth через официальный
   MCP-клиент, сборка Docker).
 
-Дальше по плану: Telegram и WhatsApp → веб-панель → подключение любого API без программирования
-(по OpenAPI).
+Дальше по плану: личный Telegram и WhatsApp через шлюз → веб-панель → подключение любого API без
+программирования (по OpenAPI).
 
 ## Быстрый старт локально
 

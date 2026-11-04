@@ -8,6 +8,7 @@ import { canonicalHost } from './routes/canonical-host.js';
 import { confirmRoutes } from './routes/confirm.js';
 import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
+import { hookRoutes } from './routes/hooks.js';
 import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
@@ -60,6 +61,7 @@ export function createApp(services: Services) {
   app.route('/', loginRoutes());
   app.route('/', securityRoutes());
   app.route('/', mcpRoutes());
+  app.route('/', hookRoutes());
   app.route('/api/v1', apiRoutes());
   app.route('/', confirmRoutes());
   app.route('/', connectRoutes());
