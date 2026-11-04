@@ -203,6 +203,11 @@ export interface OAuthRequirement {
   scopes: string[];
   /** Extra query parameters for the authorization request of this connector. */
   authorizeParams?: Record<string, string>;
+  /**
+   * Accounts may skip OAuth and use credentials instead (a personal access token / API key): handy
+   * for personal use, no OAuth app needed. The connector then checks `ctx.oauth ?? ctx.credentials`.
+   */
+  optional?: boolean;
 }
 
 /** Endpoints and quirks of an OAuth 2 authorization server. Plain data, so it can live in JSON too. */

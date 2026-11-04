@@ -21,7 +21,7 @@ export async function resetDatabase(): Promise<void> {
   const pool = new pg.Pool({ connectionString: TEST_DATABASE_URL, max: 1 });
   try {
     await pool.query(
-      'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;',
+      'DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS pgboss CASCADE; CREATE SCHEMA public;',
     );
     await runMigrations(pool);
   } finally {
@@ -31,7 +31,7 @@ export async function resetDatabase(): Promise<void> {
 
 export async function truncateAll(services: Services): Promise<void> {
   await services.database.pool.query(`
-    TRUNCATE tool_calls, accounts, api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants,
+    TRUNCATE tool_calls, account_oauth, oauth_connect_states, oauth_apps, accounts, api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants,
              oauth_clients, web_sessions, workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
 }
 
@@ -73,6 +73,7 @@ export async function startTestHub(
     LOG_LEVEL: 'silent',
     // Test services (fake APIs, a second hub) listen on localhost.
     ALLOW_PRIVATE_NETWORK: 'true',
+    JOBS_ENABLED: 'false',
     ...options.env,
   });
   const services = createServices(config, {

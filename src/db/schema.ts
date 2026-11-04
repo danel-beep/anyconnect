@@ -259,6 +259,8 @@ export const accounts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
+    /** Last connection test (on creation, on demand, by the periodic health check). */
+    checkedAt: timestamp({ withTimezone: true }),
   },
   (t) => [uniqueIndex().on(t.workspaceId, t.connectorId, t.name), index().on(t.workspaceId)],
 );
@@ -284,4 +286,91 @@ export const toolCalls = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index().on(t.workspaceId, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
+// The hub as an OAuth client of connected services
+// ---------------------------------------------------------------------------
+
+/**
+ * An OAuth app (client id + secret) registered by the user at a provider ("bring your own app").
+ * Hub-wide default apps come from env vars (`OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET`) and are not
+ * stored here.
+ */
+export const oauthApps = pgTable(
+  'oauth_apps',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** OAuth provider id, e.g. `google`. */
+    providerId: text().notNull(),
+    label: text().notNull(),
+    clientId: text().notNull(),
+    /** Encrypted with the SecretBox (AAD = app id). Null for public clients. */
+    clientSecretEncrypted: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.workspaceId, t.providerId)],
+);
+
+/** OAuth tokens of a connected account. Kept apart from connector credentials: the hub owns them. */
+export const accountOauth = pgTable(
+  'account_oauth',
+  {
+    accountId: text()
+      .primaryKey()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    providerId: text().notNull(),
+    /** Which app issued the tokens: `env:<provider>` or an `oauth_apps` id. Refreshes must use it. */
+    appRef: text().notNull(),
+    /** Encrypted token set (AAD = account id). */
+    tokensEncrypted: text().notNull(),
+    /** Access token expiry; null when the token does not expire. */
+    expiresAt: timestamp({ withTimezone: true }),
+    scopes: text().array().notNull().default(sql`'{}'::text[]`),
+    refreshedAt: timestamp({ withTimezone: true }),
+    lastError: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.expiresAt)],
+);
+
+export interface ConnectDraft {
+  name?: string;
+  label?: string;
+  description?: string;
+  config?: Record<string, unknown>;
+}
+
+/** A pending "connect account" OAuth flow, single use, short-lived. */
+export const oauthConnectStates = pgTable(
+  'oauth_connect_states',
+  {
+    /** SHA-256 of the `state` parameter. */
+    stateHash: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    connectorId: text().notNull(),
+    /** Set when re-connecting an existing account. */
+    accountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Fields of the account to create once the flow succeeds. */
+    draft: jsonb().$type<ConnectDraft>().notNull().default({}),
+    appRef: text().notNull(),
+    /** Encrypted PKCE verifier (AAD = state hash). */
+    codeVerifierEncrypted: text(),
+    redirectUri: text().notNull(),
+    /** Hub-relative path to return to afterwards. */
+    returnTo: text(),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
 );

@@ -108,6 +108,9 @@ REST API (`Authorization: Bearer ac_pat_...`):
 | GET/POST | `/api/v1/accounts` | список / добавить аккаунт (ключи шифруются, наружу не отдаются) |
 | GET/PATCH/DELETE | `/api/v1/accounts/:id` | аккаунт: переименовать, выключить, скрыть действия, сменить ключи |
 | POST | `/api/v1/accounts/:id/test` | проверить подключение |
+| POST | `/api/v1/connect` | начать подключение аккаунта через OAuth, ответ — `authorizationUrl` |
+| GET | `/api/v1/oauth/providers` | OAuth-провайдеры, redirect URI для их консолей, настроенные приложения |
+| GET/POST/DELETE | `/api/v1/oauth/apps[/:id]` | свои OAuth-приложения (client id + secret) |
 | GET | `/api/v1/tools` | инструменты так, как их видит ИИ |
 | POST | `/api/v1/tools/:name/call` | вызвать инструмент (для отладки) |
 | GET/DELETE | `/api/v1/grants[/:id]` | подключённые ИИ-приложения |
@@ -115,14 +118,32 @@ REST API (`Authorization: Bearer ac_pat_...`):
 | GET | `/api/v1/tool-calls` | журнал вызовов |
 | PATCH | `/api/v1/workspace` | настройки, например `{"settings":{"toolExposure":"per_account"}}` |
 
+### Подключение через OAuth (Google, Microsoft, Slack, Notion, GitHub, Todoist…)
+
+1. Зарегистрируйте OAuth-приложение у провайдера с redirect URI `https://<хаб>/connect/callback`
+   (один адрес на все сервисы; точный адрес — в `GET /api/v1/oauth/providers`).
+2. Передайте его хабу: переменными окружения `OAUTH_APP_GOOGLE_CLIENT_ID` /
+   `OAUTH_APP_GOOGLE_CLIENT_SECRET` (для всего хаба) или через `POST /api/v1/oauth/apps`
+   (своё приложение в пространстве, секрет шифруется).
+3. Откройте в браузере `https://<хаб>/connect/<сервис>?label=Рабочая` и разрешите доступ. Аккаунт
+   появится с адресом почты из проверки подключения. Повторное подключение того же аккаунта:
+   `/connect/<сервис>?account=<id>`.
+
+Дальше хаб сам обновляет токены (заранее, фоновой задачей, и при ответе 401), а если провайдер
+отозвал доступ, помечает аккаунт «нужно переподключить». Сервисы, где можно обойтись личным токеном
+(GitHub, Todoist, Notion, Slack), принимают его в `credentials.token` без OAuth-приложения.
+
 ## Как добавить сервис
 
-Коннектор описывает сервис и его действия. Про MCP, аккаунты, шифрование и HTTP он не знает:
+Подробное руководство — [docs/CONNECTORS.md](docs/CONNECTORS.md). REST-сервисы проще всего
+описывать HTTP-манифестом, без кода. Кодовый коннектор описывает сервис и его действия; про MCP,
+аккаунты, шифрование и сеть он не знает:
 
 ```ts
 // src/connectors/builtin/weather.ts
 import { z } from 'zod';
-import { ConnectorError, defineConnector } from '../sdk.js';
+import { HttpClient } from '../http/client.js';
+import { defineConnector } from '../sdk.js';
 
 export default defineConnector({
   id: 'weather',
@@ -137,12 +158,12 @@ export default defineConnector({
       input: z.object({ city: z.string().describe('City name') }),
       hints: { readOnly: true },
       run: async ({ city }, ctx) => {
-        const res = await fetch(`https://api.example/forecast?q=${encodeURIComponent(city)}`, {
+        // ctx.fetch: сетевая политика хаба; HttpClient сам превращает 401/404/429 в ошибки хаба.
+        const api = new HttpClient(ctx, {
+          baseUrl: 'https://api.example',
           headers: { authorization: `Bearer ${ctx.credentials.apiKey}` },
-          signal: ctx.signal,
         });
-        if (res.status === 401) throw new ConnectorError('auth', 'API key was rejected');
-        return res.json();
+        return (await api.get('/forecast', { q: city })).data;
       },
     }),
   ],
