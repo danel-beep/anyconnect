@@ -2,6 +2,8 @@ import demo from './builtin/demo.js';
 import github from './builtin/github.js';
 import http from './builtin/http.js';
 import imap from './builtin/imap/index.js';
+import notion from './builtin/notion/index.js';
+import slack from './builtin/slack.js';
 import stripe from './builtin/stripe.js';
 import todoist from './builtin/todoist.js';
 import { ConnectorRegistry } from './registry.js';
@@ -14,7 +16,9 @@ export function createBuiltinRegistry(): ConnectorRegistry {
     .register(http)
     .register(github)
     .register(todoist)
-    .register(stripe);
+    .register(stripe)
+    .register(slack)
+    .register(notion);
 }
 
 export type { ConnectorResolver } from './registry.js';
