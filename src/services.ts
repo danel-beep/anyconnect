@@ -192,8 +192,10 @@ export function createServices(
     row: Parameters<ConfirmationCenter['describe']>[0],
   ): Promise<CallDescription> => {
     const [connector, account, client] = await Promise.all([
-      connectors.get(row.workspaceId, row.connectorId),
-      accounts.get(row.workspaceId, row.accountId).catch(() => undefined),
+      row.connectorId === SETUP_CONNECTOR.id
+        ? SETUP_CONNECTOR
+        : connectors.get(row.workspaceId, row.connectorId),
+      row.accountId ? accounts.get(row.workspaceId, row.accountId).catch(() => undefined) : undefined,
       row.principal.aiClientId
         ? aiClients.get(row.workspaceId, row.principal.aiClientId).catch(() => undefined)
         : undefined,
@@ -202,7 +204,7 @@ export function createServices(
     return {
       service: connector?.name ?? row.connectorId,
       action: action?.title ?? row.action,
-      account: account ? `${account.label} (${account.name})` : row.accountId,
+      account: account ? `${account.label} (${account.name})` : (row.accountId ?? 'settings'),
       client: client?.name ?? (row.principal.kind === 'api_token' ? 'API token' : 'AI app'),
       risk: row.risk,
       reason: row.reason ?? undefined,

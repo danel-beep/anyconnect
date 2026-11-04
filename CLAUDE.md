@@ -37,7 +37,7 @@ develop further. In practice:
   (see `docs/CONNECTORS.md`).
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.
 - `src/hub/hub.ts` resolves calls; every connector call runs through the stage chain in
-  `src/hub/executor.ts` (audit → policy → risk → confirm → limits → idempotency → untrusted →
+  `src/hub/executor.ts` (audit → meter → policy → risk → confirm → limits → idempotency → untrusted →
   shape → invoke). New cross-cutting rules are new stages, not code in `hub.ts`.
   Connectors throw `ConnectorError` for user-safe errors.
 - `src/oauth/server.ts` is framework-free; HTTP lives in `src/routes/`.

@@ -16,7 +16,7 @@ import type { ExecResult } from './result.js';
  * fan-out, a unified capability tool or a `call_tools` batch — runs as one *unit* (one action on one
  * account) through the same ordered chain of stages:
  *
- *   audit → policy → confirm → limits → idempotency → untrusted → shape → invoke
+ *   audit → meter → policy → risk → confirm → limits → idempotency → untrusted → shape → invoke
  *
  * Each stage is a middleware `(call, next) => result`: it may inspect the call, short-circuit with
  * its own result (a policy denial), call `next()` more than once (a retry) or post-process the
@@ -103,6 +103,8 @@ export interface CallContext {
   audit: AuditRecord;
   /** Per-call scratch space for stages to hand data to later stages (e.g. policy → confirm). */
   locals: Record<string, unknown>;
+  /** Set by the executor once the call reaches the service (after every stage let it through). */
+  invoked?: boolean;
   interaction?: Interaction;
   /** Already approved by the user (e.g. a stored call approved in Telegram): `confirm` lets it pass. */
   preApproved?: boolean;
@@ -147,7 +149,10 @@ export class Executor {
     const stages = this.chain.filter((stage) => !skip.has(stage.name));
     const dispatch = (index: number): Promise<ExecResult> => {
       const stage = stages[index];
-      if (!stage) return this.invoke(call);
+      if (!stage) {
+        call.invoked = true;
+        return this.invoke(call);
+      }
       // A stage may call next() more than once (a retry); each call re-runs the inner stages.
       return stage.run(call, () => dispatch(index + 1));
     };

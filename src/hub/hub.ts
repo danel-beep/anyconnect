@@ -293,11 +293,25 @@ export class Hub {
    */
   async runApproved(
     principal: Principal,
-    target: { toolName: string; connectorId: string; action: string; accountId: string },
+    /** `accountId` null: a setup tool acting on the workspace. */
+    target: { toolName: string; connectorId: string; action: string; accountId: string | null },
     args: Record<string, unknown>,
   ): Promise<ExecResult> {
     try {
       const catalog = await this.getCatalog(principal);
+      if (target.accountId === null) {
+        const tool = catalog.tools.find(
+          (t) =>
+            t.target.kind === 'workspace' &&
+            t.target.connectorId === target.connectorId &&
+            t.target.action === target.action,
+        );
+        if (!tool) {
+          return errorResult('This action is no longer available, so nothing was done.', 'permission');
+        }
+        const outcome = await this.runWorkspaceTool(principal, catalog, tool, args, {}, true);
+        return 'rejected' in outcome ? outcome.rejected : outcome.result;
+      }
       const candidates = catalog.tools.filter(
         (t) =>
           t.target.kind === 'action' &&
@@ -697,6 +711,8 @@ export class Hub {
     tool: CatalogTool,
     args: Record<string, unknown>,
     options: CallOptions,
+    /** The user already approved this call (see `runApproved`). */
+    preApproved = false,
   ): Promise<{ result: ExecResult } | { rejected: ExecResult }> {
     if (tool.target.kind !== 'workspace') throw new Error('not a workspace tool');
     const setup = this.deps.setup;
@@ -734,6 +750,7 @@ export class Hub {
       audit: {},
       locals: {},
       ...(options.interaction ? { interaction: options.interaction } : {}),
+      ...(preApproved ? { preApproved } : {}),
     };
     return { result: await this.executor.execute(call) };
   }

@@ -486,9 +486,8 @@ export const pendingCalls = pgTable(
     toolName: text().notNull(),
     connectorId: text().notNull(),
     action: text().notNull(),
-    accountId: text()
-      .notNull()
-      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Null for a setup tool, which acts on the workspace. */
+    accountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
     risk: text().$type<RiskLevel>().notNull(),
     /** Why the call is risky, when the action explained it (e.g. "first message to a new contact"). */
     reason: text(),

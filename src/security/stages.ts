@@ -8,7 +8,7 @@ import { type ExecResult, errorResult, type HubQuestion, markUntrusted } from '.
 import { hmac, safeEqual } from '../lib/crypto.js';
 import type { ConfirmationCenter } from './confirmations.js';
 import type { PendingCallInput, PendingCallRow, PendingCallService, StoredResult } from './pending-calls.js';
-import { accessAllows, type PolicyDecision } from './policy.js';
+import { accessAllows, type PolicyDecision, type PolicyTarget } from './policy.js';
 import type { CallerPolicy, PolicyService } from './policy-service.js';
 
 /**
@@ -39,10 +39,11 @@ function policyLoader(policies: PolicyService) {
 function denial(call: CallContext, decision: PolicyDecision): ExecResult {
   call.audit.outcome = 'denied';
   call.audit.policyRules = decision.ruleIds;
+  const where = call.account ? `${call.connector.name} account "${call.account.name}"` : 'the hub settings';
   const what =
     decision.reason === 'persona'
-      ? `Account "${call.account.name}" is not available through this connection.`
-      : `The user's access rules do not allow ${call.risk === 'read' ? 'reading' : 'this action'} on ${call.connector.name} account "${call.account.name}" for this app.`;
+      ? `${call.account ? `Account "${call.account.name}"` : 'The hub settings'} ${call.account ? 'is' : 'are'} not available through this connection.`
+      : `The user's access rules do not allow ${call.risk === 'read' ? 'reading' : 'this action'} on ${where} for this app.`;
   return errorResult(`${what} Do not retry; tell the user if they asked for it.`, 'permission');
 }
 
@@ -51,10 +52,15 @@ export function createCatalogFilter(policies: PolicyService) {
     const policy = await policies.forPrincipal(principal);
     return (connector, action, account) =>
       accessAllows(
-        policy.decide({ connectorId: connector.id, accountId: account.id }, 'read').access,
+        policy.decide({ connectorId: connector.id, accountId: account?.id ?? null }, 'read').access,
         actionRisk(action),
       );
   };
+}
+
+/** What access rules are checked against: the call's account, or the workspace for setup tools. */
+function targetOf(call: CallContext): PolicyTarget {
+  return { connectorId: call.connector.id, accountId: call.account?.id ?? null };
 }
 
 export function policyStage(policies: PolicyService): Middleware {
@@ -62,7 +68,7 @@ export function policyStage(policies: PolicyService): Middleware {
   return async (call, next) => {
     const policy = await load(call.principal);
     call.locals[POLICY] = policy;
-    const decision = policy.decide({ connectorId: call.connector.id, accountId: call.account.id }, call.risk);
+    const decision = policy.decide(targetOf(call), call.risk);
     if (!decision.allowed) return denial(call, decision);
     return next();
   };
@@ -174,7 +180,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
 
   return async (call, next) => {
     const policy = (call.locals[POLICY] as CallerPolicy | undefined) ?? (await load(call.principal));
-    const target = { connectorId: call.connector.id, accountId: call.account.id };
+    const target = targetOf(call);
     // The risk stage may have raised the risk after the policy stage: check access again.
     const decision = policy.decide(target, call.risk);
     if (!decision.allowed) return denial(call, decision);
@@ -182,7 +188,9 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
 
     const declaredDelay = call.meta.undo?.kind === 'delay' ? call.meta.undo.seconds : 0;
     const undoWindowSeconds = call.risk === 'read' ? 0 : Math.max(decision.undoWindowSeconds, declaredDelay);
-    if (!decision.confirm && undoWindowSeconds === 0) return next();
+    // Actions that delete data or widen access always need the user, whatever the rules say.
+    const confirm = decision.confirm || call.action.requiresConfirmation === true;
+    if (!confirm && undoWindowSeconds === 0) return next();
 
     const riskReason = typeof call.locals.riskReason === 'string' ? call.locals.riskReason : undefined;
     const input: PendingCallInput = {
@@ -190,7 +198,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       toolName: call.tool.name,
       connectorId: call.connector.id,
       action: call.action.name,
-      accountId: call.account.id,
+      accountId: target.accountId,
       risk: call.risk,
       reason: riskReason,
       // Hub options are part of the call: the approved call later runs exactly as requested.
@@ -232,7 +240,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     }
 
     // 2. The same call was already held back: report where it stands (or wait a bit more).
-    const repeat = await pending.findRepeat(call.principal, call.tool.name, call.account.id, input.args);
+    const repeat = await pending.findRepeat(call.principal, call.tool.name, target.accountId, input.args);
     if (repeat) {
       // The chat client retried without an answer: ask the same question again.
       if (
@@ -255,7 +263,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     }
 
     // 3. Only an undo window: schedule it and tell the user how to cancel.
-    if (!decision.confirm) {
+    if (!confirm) {
       const row = await pending.schedule({
         ...input,
         channels: await center.channelsFor(call.principal.userId),
@@ -293,5 +301,6 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
 export const untrustedStage: Middleware = async (call, next) => {
   const result = await next();
   if (call.action.hints?.openWorld === false) return result;
-  return markUntrusted(result, `${call.connector.name} · ${call.account.name}`);
+  const source = call.account ? `${call.connector.name} · ${call.account.name}` : call.connector.name;
+  return markUntrusted(result, source);
 };

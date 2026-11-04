@@ -300,6 +300,7 @@ oauth: { provider: 'google', scopes: ['https://www.googleapis.com/auth/gmail.mod
 | `response.fields` | Поля результата, которые ИИ может выбрать аргументом `fields` (хаб добавит его сам) | аргумента нет |
 | `response.maxTokens` | Свой бюджет размера ответа | `TOOL_RESULT_MAX_TOKENS` (2000) |
 | `rateLimit` | Лимит на аккаунт для действия `{ requests, perSeconds }`; у коннектора — общий лимит на аккаунт | — |
+| `requiresConfirmation` | Пользователь подтверждает каждый вызов, и правила доступа это не отключают. Для действий, которые удаляют данные без возврата или открывают новый путь для данных (так помечены, например, `anyconnect_remove_account` и `anyconnect_add_service`) | `false` |
 
 Правила, которые проверяет реестр при старте:
 

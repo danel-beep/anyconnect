@@ -23,7 +23,11 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
 
   beforeAll(async () => {
     await resetDatabase();
-    hub = await startTestHub({ connectors: new ConnectorRegistry().register(demo), seed: false });
+    hub = await startTestHub({
+      connectors: new ConnectorRegistry().register(demo),
+      seed: false,
+      env: { CONFIRMATION_WAIT_SECONDS: '0' },
+    });
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
     const user = (await hub.services.db.query.users.findFirst())!;
     workspaceId = workspace.id;
@@ -97,17 +101,51 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
   });
 
   it('never removes data or adds a service without the user’s confirmation', async () => {
+    // Even a rule that turns confirmations off cannot lift it for setup actions.
+    await hub.services.policies.createRule(workspaceId, { connectorId: 'anyconnect', confirm: 'never' });
+
     const removal = await call('anyconnect_remove_account', { account: 'demo:personal' });
-    expect(removal.isError).toBe(true);
-    expect(text(removal)).toContain('confirmation');
+    expect(text(removal)).toContain('/confirm/');
     expect(await hub.services.accounts.findByName(workspaceId, 'demo', 'personal')).toBeDefined();
 
     const added = await call('anyconnect_add_service', {
       mcp_url: 'https://example.com/mcp',
       name: 'Example',
     });
-    expect(added.isError).toBe(true);
+    expect(text(added)).toContain('/confirm/');
     expect(await hub.services.customServices.list(workspaceId)).toEqual([]);
+
+    const open = await hub.services.pendingCalls.listOpen(workspaceId);
+    expect(open.map((r) => [r.connectorId, r.action, r.accountId]).sort()).toEqual([
+      ['anyconnect', 'add_service', null],
+      ['anyconnect', 'remove_account', null],
+    ]);
+    const addRow = open.find((r) => r.action === 'add_service')!;
+    await hub.services.pendingCalls.decide(addRow.id, false, 'web');
+    expect(
+      text(await call('anyconnect_add_service', { mcp_url: 'https://example.com/mcp', name: 'Example' })),
+    ).toContain('declined');
+  });
+
+  it('runs a confirmed setup action once the user approves it', async () => {
+    const [row] = await hub.services.pendingCalls.listOpen(workspaceId);
+    expect(row).toMatchObject({ action: 'remove_account', accountId: null });
+    await hub.services.pendingCalls.decide(row!.id, true, 'web');
+    await hub.services.pendingRunner.tick();
+    expect(await hub.services.accounts.findByName(workspaceId, 'demo', 'personal')).toBeUndefined();
+    // The AI repeats the call and gets the result of the approved run.
+    const repeat = await call('anyconnect_remove_account', { account: 'demo:personal' });
+    expect(json(repeat)).toEqual({ removed: 'demo:personal' });
+  });
+
+  it('keeps setup out of reach of a persona connection', async () => {
+    const persona = await hub.services.personas.create(workspaceId, {
+      name: 'Work',
+      slug: 'work',
+      accountIds: [],
+    });
+    const catalog = await hub.services.hub.getCatalog({ ...principal, personaId: persona.id });
+    expect(catalog.tools.filter((t) => t.target.kind === 'workspace')).toEqual([]);
   });
 
   it('changes hub settings', async () => {
@@ -131,14 +169,16 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
       .select()
       .from(toolCalls)
       .where(eq(toolCalls.toolName, 'anyconnect_remove_account'));
-    expect(declined[0]).toMatchObject({ outcome: 'declined', risk: 'dangerous' });
+    expect(declined.map((r) => r.outcome)).toContain('awaiting_confirmation');
+    expect(declined.every((r) => r.risk === 'dangerous' && r.accountId === null)).toBe(true);
   });
 
   it('counts executed calls as usage, but not refused ones', async () => {
     const usage = await hub.services.usage.list(workspaceId, '2000-01-01');
     const actions = usage.filter((r) => r.connectorId === 'anyconnect').map((r) => r.action);
     expect(actions).toContain('update_account');
-    expect(actions).not.toContain('remove_account');
+    expect(actions).toContain('remove_account'); // ran once the user approved it
+    expect(actions).not.toContain('add_service');
     expect(usage.every((r) => r.caller === `user:${principal.userId}`)).toBe(true);
   });
 });

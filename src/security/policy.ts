@@ -62,7 +62,8 @@ export interface PolicySubject {
 
 export interface PolicyTarget {
   connectorId: string;
-  accountId: string;
+  /** Null for the hub's setup tools, which act on the workspace rather than an account. */
+  accountId: string | null;
 }
 
 export interface PolicyDecision {
@@ -121,7 +122,11 @@ export function accountPolicy(
   settings: SecuritySettings = {},
 ): Omit<PolicyDecision, 'allowed' | 'confirm'> & { confirmLevel: ConfirmLevel } {
   const defaults = { ...DEFAULT_SECURITY, ...settings };
-  if (subject.persona && !subject.persona.accountIds.includes(target.accountId)) {
+  // A persona sees only its accounts, never the hub's setup: it must not widen its own access.
+  if (
+    subject.persona &&
+    (target.accountId === null || !subject.persona.accountIds.includes(target.accountId))
+  ) {
     return {
       access: 'none',
       confirmLevel: defaults.defaultConfirm,
