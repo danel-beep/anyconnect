@@ -205,6 +205,41 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'crm',
     blurb: { ru: 'Сделки, люди и организации.', en: 'Deals, people and organizations.' },
   },
+  freshdesk: {
+    glyph: 'users',
+    category: 'crm',
+    blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
+  },
+  mailchimp: {
+    icon: 'mailchimp',
+    category: 'crm',
+    blurb: { ru: 'Подписчики, теги, отчёты рассылок.', en: 'Subscribers, tags, campaign reports.' },
+  },
+  monday: {
+    glyph: 'grid',
+    category: 'tasks',
+    blurb: { ru: 'Доски, элементы, статусы и апдейты.', en: 'Boards, items, statuses and updates.' },
+  },
+  sentry: {
+    icon: 'sentry',
+    category: 'dev',
+    blurb: { ru: 'Ошибки, стек вызовов, решение проблем.', en: 'Errors, stack traces, resolving issues.' },
+  },
+  figma: {
+    icon: 'figma',
+    category: 'docs',
+    blurb: { ru: 'Файлы, фреймы, экспорт, комментарии.', en: 'Files, frames, exports, comments.' },
+  },
+  typeform: {
+    icon: 'typeform',
+    category: 'docs',
+    blurb: { ru: 'Формы и ответы на них.', en: 'Forms and their responses.' },
+  },
+  wordpress: {
+    icon: 'wordpress',
+    category: 'docs',
+    blurb: { ru: 'Записи, черновики, публикация, комментарии.', en: 'Posts, drafts, publishing, comments.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',
