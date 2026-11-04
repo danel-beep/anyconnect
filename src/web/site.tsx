@@ -1,5 +1,6 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Limits, type Metric, PLANS, type Plan } from '../billing/plans.js';
+import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
 import {
   CATEGORY_ORDER,
   PLANNED_SERVICES,
@@ -11,6 +12,7 @@ import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
+import { PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
 import {
   Brand,
   BrandIcon,
@@ -966,13 +968,34 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
 };
 
 export interface ServiceDetail extends PublicService {
-  homepage?: string | undefined;
-  actions: { name: string; title: string; description: string; risk: 'read' | 'write' | 'dangerous' }[];
+  actions: { name: string; title: string; description: string; risk: RiskLevel }[];
+  /** Setup steps for the way this service connects here (provider sign-in or the form). */
+  guide?: SetupGuide | undefined;
+  /** Requests to try with the AI. */
+  prompts: string[];
+  /** Another way in while the service cannot be connected here (e.g. Gmail over IMAP). */
+  alternative?: { service: string; url: string } | undefined;
 }
+
+/** Where the "Connect" button leads: the connect page, through sign-up for visitors. */
+const connectHref = (ctx: PageCtx, path: string) =>
+  ctx.user ? path : `/signup?next=${encodeURIComponent(path)}`;
 
 export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = ({ ctx, service }) => {
   const { t } = ctx;
   const meta = serviceMeta(service.id);
+  const reads = service.actions.filter((a) => a.risk === 'read').length;
+  const target = service.ready
+    ? {
+        url: `/connect/${encodeURIComponent(service.id)}`,
+        label: t('service.connectCta', { service: service.name }),
+      }
+    : service.alternative
+      ? {
+          url: service.alternative.url,
+          label: t('service.altCta', { alternative: service.alternative.service }),
+        }
+      : undefined;
   return (
     <SiteLayout
       ctx={ctx}
@@ -981,7 +1004,7 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
       current="services"
       canonicalPath={`/services/${service.id}`}
     >
-      <section class="section">
+      <section class="section svc-page">
         <div class="wrap">
           <p class="crumbs">
             <a href="/services">{t('site.nav.services')}</a> / {service.name}
@@ -989,76 +1012,71 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
           <div class="svc-hero">
             <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={service.name} size="lg" />
             <div class="grow">
-              <h2 class="section-title">{service.name}</h2>
+              <h1 class="section-title">{t('service.h1', { service: service.name })}</h1>
               <p class="lead">{blurb(ctx.lang, service)}</p>
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="card">
-              <h3>{t('service.how')}</h3>
-              <p class="muted">{t(`service.connect.${service.connect}`)}</p>
-              {service.ready ? (
-                <ol class="bullets">
-                  <li>{t('service.step1')}</li>
-                  <li>{t('service.step2', { service: service.name })}</li>
-                  <li>{t('service.step3')}</li>
-                </ol>
-              ) : null}
-              {service.ready ? null : (
-                <div class="notice info">
-                  {t('service.notReady', { service: service.name })}
-                  {service.id === 'gmail' || service.id === 'outlook' ? ` ${t('service.viaImap')}` : null}
-                </div>
-              )}
-              <div class="actions start">
-                {service.ready ? (
-                  <a
-                    class="btn primary"
-                    href={
-                      ctx.user
-                        ? `/app/services#add-${service.id}`
-                        : `/signup?next=${encodeURIComponent('/app/services')}`
-                    }
-                  >
-                    {t('service.connectCta', { service: service.name })}
-                  </a>
-                ) : service.id === 'gmail' || service.id === 'outlook' ? (
-                  <a
-                    class="btn primary"
-                    href={
-                      ctx.user
-                        ? '/app/services#add-imap'
-                        : `/signup?next=${encodeURIComponent('/app/services')}`
-                    }
-                  >
-                    {t('service.imapCta')}
-                  </a>
-                ) : null}
-                {service.homepage ? (
-                  <a class="btn ghost" href={service.homepage} rel="noopener noreferrer" target="_blank">
-                    {t('service.homepage')} <Icon name="external" />
-                  </a>
-                ) : null}
-              </div>
-            </div>
-            <div class="card">
-              <h3>{t('service.prompts')}</h3>
-              <ul class="bullets muted">
-                <li>{t('service.prompt1', { service: service.name })}</li>
-                <li>{t('service.prompt2', { service: service.name })}</li>
+              <ul class="svc-facts">
+                <li>
+                  <Icon name={service.connect === 'oauth' ? 'lock' : 'key'} />
+                  {t(`service.fact.${service.connect}`, { service: service.name })}
+                </li>
+                <li>
+                  <Icon name="check" />
+                  {t('service.fact.tools', { n: service.actions.length, read: reads })}
+                </li>
+                <li>
+                  <Icon name="users" />
+                  {t('service.fact.accounts')}
+                </li>
               </ul>
+            </div>
+            {target ? (
+              <div class="svc-cta">
+                <a class="btn primary lg" href={connectHref(ctx, target.url)}>
+                  {target.label} <Icon name="arrow" />
+                </a>
+                {ctx.user ? null : <span class="small muted">{t('service.ctaNote')}</span>}
+              </div>
+            ) : null}
+          </div>
+          {service.ready ? null : (
+            <div class="notice info">
+              {t('service.notReady', { service: service.name })}{' '}
+              {service.alternative
+                ? t('service.notReadyAlt', {
+                    service: service.name,
+                    alternative: service.alternative.service,
+                  })
+                : null}
+            </div>
+          )}
+          <div class="svc-detail-grid">
+            <div class="card">
+              <h2 class="h3">{t('service.how')}</h2>
+              {service.guide ? (
+                <SetupGuideView t={t} guide={service.guide} />
+              ) : (
+                <p class="muted">{t(`service.connect.${service.connect}`)}</p>
+              )}
+            </div>
+            <div class="card">
+              <h2 class="h3">{t('service.prompts')}</h2>
+              {service.prompts.length ? (
+                <PromptList t={t} prompts={service.prompts} idPrefix="ask" />
+              ) : (
+                <p class="muted">{t('service.promptsNone', { service: service.name })}</p>
+              )}
               <p class="small muted">{t('service.multi')}</p>
             </div>
           </div>
           <div class="card flush">
             <div class="card-head pad">
-              <h3>{t('service.tools', { n: service.actions.length })}</h3>
+              <h2 class="h3">{t('service.tools', { n: service.actions.length })}</h2>
+              <p class="small muted">{t('service.toolsNote')}</p>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="tools-table stack-sm">
                 <thead>
                   <tr>
-                    <th>{t('service.tool')}</th>
                     <th>{t('service.does')}</th>
                     <th>{t('service.risk')}</th>
                   </tr>
@@ -1066,19 +1084,13 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
                 <tbody>
                   {service.actions.map((a) => (
                     <tr>
-                      <td class="nowrap">
-                        <code>{`${service.id}_${a.name}`}</code>
-                      </td>
                       <td>
                         <strong>{a.title}</strong>
                         <div class="small muted">{a.description}</div>
+                        <code class="tool-id">{`${service.id}_${a.name}`}</code>
                       </td>
-                      <td>
-                        <span
-                          class={`badge ${a.risk === 'dangerous' ? 'bad' : a.risk === 'write' ? 'accent' : ''}`}
-                        >
-                          {t(`risk.${a.risk}`)}
-                        </span>
+                      <td class="nowrap">
+                        <RiskBadge t={t} risk={a.risk} />
                       </td>
                     </tr>
                   ))}

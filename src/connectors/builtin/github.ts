@@ -253,11 +253,57 @@ const manifest = defineManifestConnector({
 const ui: ConnectorUi = {
   locales: {
     ru: {
+      setup: {
+        oauth: {
+          summary: 'Ваш аккаунт GitHub. Меньше минуты.',
+          steps: [
+            {
+              text: 'Нажмите «Подключить» и войдите в GitHub.',
+            },
+            {
+              text: 'Нажмите Authorize: AnyConnect получит доступ к репозиториям, задачам, pull request’ам и уведомлениям.',
+            },
+            {
+              text: 'Для репозиториев организации может понадобиться одобрение владельца: GitHub покажет кнопку Request рядом с организацией.',
+            },
+          ],
+        },
+        form: {
+          summary: 'Персональный токен с точными правами (fine-grained). Около двух минут.',
+          steps: [
+            {
+              text: 'Откройте GitHub → Settings → Developer settings → Fine-grained tokens и нажмите Generate new token.',
+              link: {
+                label: 'Создать токен на GitHub',
+                url: 'https://github.com/settings/personal-access-tokens/new',
+              },
+            },
+            {
+              text: 'Назовите его AnyConnect, выберите срок действия и в Repository access — репозитории, с которыми будет работать ИИ.',
+            },
+            {
+              text: 'В Permissions поставьте Issues и Pull requests на Read and write, Contents — на Read-only.',
+            },
+            {
+              text: 'Нажмите Generate token, скопируйте его (github_pat_…) и вставьте в форму.',
+            },
+          ],
+          tips: [
+            'Когда срок токена истечёт, у аккаунта появится «Войти заново»: создайте новый токен и вставьте его через «Переподключить».',
+          ],
+        },
+      },
+      prompts: [
+        'Какие pull request’ы ждут моего ревью?',
+        'Перескажи открытые задачи с меткой bug в acme/web.',
+        'Заведи задачу в acme/api: «Ошибки лимита на /export» — с тем, что мы сейчас обсудили.',
+        'Какие уведомления GitHub пришли сегодня?',
+      ],
       description: 'Репозитории, задачи, пулл-реквесты и уведомления GitHub.',
       fields: {
         token: {
           label: 'Персональный токен доступа',
-          hint: 'Нужен, только если не входить через GitHub. Создать токен можно на github.com/settings/personal-access-tokens.',
+          hint: 'Создать токен можно на github.com/settings/personal-access-tokens.',
         },
       },
       actions: {
@@ -298,10 +344,56 @@ const ui: ConnectorUi = {
       },
     },
     en: {
+      setup: {
+        oauth: {
+          summary: 'Your GitHub account. Takes under a minute.',
+          steps: [
+            {
+              text: 'Click Connect and sign in to GitHub.',
+            },
+            {
+              text: 'Click Authorize: AnyConnect gets access to your repositories, issues, pull requests and notifications.',
+            },
+            {
+              text: 'Organisation repositories may need an owner’s approval: GitHub shows a Request button next to the organisation.',
+            },
+          ],
+        },
+        form: {
+          summary: 'A fine-grained personal access token. Takes about two minutes.',
+          steps: [
+            {
+              text: 'Open GitHub → Settings → Developer settings → Fine-grained tokens and click Generate new token.',
+              link: {
+                label: 'Create a token on GitHub',
+                url: 'https://github.com/settings/personal-access-tokens/new',
+              },
+            },
+            {
+              text: 'Name it AnyConnect, choose an expiry and, under Repository access, the repositories the AI may use.',
+            },
+            {
+              text: 'Under Permissions, set Issues and Pull requests to Read and write, and Contents to Read-only.',
+            },
+            {
+              text: 'Click Generate token, copy it (github_pat_…) and paste it into the form.',
+            },
+          ],
+          tips: [
+            'When the token expires, the account shows “Sign in again”: create a new token and paste it with Reconnect.',
+          ],
+        },
+      },
+      prompts: [
+        'Which pull requests are waiting for my review?',
+        'Summarise open issues labelled bug in acme/web.',
+        'Open an issue in acme/api: “Rate limit errors on /export”, with what we just discussed.',
+        'What GitHub notifications did I get today?',
+      ],
       fields: {
         token: {
           label: 'Personal access token',
-          hint: 'Only if you do not sign in with GitHub. Create one at github.com/settings/personal-access-tokens.',
+          hint: 'Create one at github.com/settings/personal-access-tokens.',
         },
       },
       actions: {

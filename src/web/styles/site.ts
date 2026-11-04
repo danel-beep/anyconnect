@@ -223,6 +223,31 @@ html:not(.js) .when-year{display:none}
 /* Service page */
 .svc-hero{display:flex;gap:20px;align-items:center;margin:8px 0 28px}
 .svc-hero .lead{margin:0}
+.svc-page{padding-top:48px}
+.svc-page .svc-hero{align-items:flex-start;flex-wrap:wrap}
+.svc-hero .section-title{font-size:clamp(26px,3.2vw,36px)}
+.svc-facts{list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;padding:0;margin:14px 0 0;font-size:14px;color:var(--muted)}
+.svc-facts li{display:flex;align-items:center;gap:7px}
+.svc-facts svg{width:16px;height:16px;color:var(--accent-ink);flex:none}
+.svc-cta{display:flex;flex-direction:column;align-items:center;gap:8px;margin-left:auto;padding-top:6px}
+.svc-cta span{text-align:center}
+.svc-detail-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:16px;align-items:start;margin:0 0 16px}
+.svc-detail-grid>.card{margin:0}
+.svc-detail-grid h2{margin-bottom:8px}
+.tools-table td{vertical-align:top}
+.tools-table td:last-child{width:1%;text-align:right}
+.tools-table th:last-child{text-align:right}
+.tool-id{display:inline-block;margin-top:6px;font-size:11.5px;color:var(--muted);background:none;border:0;padding:0}
+.card-head.pad p{margin:4px 0 0}
+@media (max-width:900px){.svc-detail-grid{grid-template-columns:1fr}.svc-cta{margin-left:0;align-items:stretch;width:100%}.svc-cta .btn{width:100%}}
+@media (max-width:640px){
+  .svc-page{padding-top:28px}
+  table.stack-sm,table.stack-sm tbody{display:block}
+  table.stack-sm thead{display:none}
+  table.stack-sm tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 16px;border-top:1px solid var(--border)}
+  table.stack-sm td{border:0;padding:0}
+  .card.flush table.stack-sm td:first-child,.card.flush table.stack-sm td:last-child{padding:0}
+}
 .section-title{font-size:clamp(28px,3.6vw,40px);letter-spacing:-.03em;margin:0 0 6px;line-height:1.1}
 .card-head.pad{padding:20px 24px 4px;margin:0}
 .logo-g{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#fff;flex:none}

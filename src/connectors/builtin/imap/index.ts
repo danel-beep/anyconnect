@@ -28,7 +28,14 @@ import {
   searchFolder,
   toSearchObject,
 } from './mailbox.js';
-import { guessProvider, PROVIDER_IDS, PROVIDERS, type Security, type ServerSettings } from './presets.js';
+import {
+  guessProvider,
+  PROVIDER_DOMAINS,
+  PROVIDER_IDS,
+  PROVIDERS,
+  type Security,
+  type ServerSettings,
+} from './presets.js';
 import { sendRaw } from './smtp.js';
 
 const security = z.enum(['tls', 'starttls']);
@@ -210,7 +217,7 @@ export default defineConnector({
   id: 'imap',
   name: 'Email (IMAP/SMTP)',
   description:
-    'Any mailbox over IMAP/SMTP: Gmail, Outlook, iCloud, Fastmail, Yandex, company mail. Search, read, send, reply, forward, move and flag messages.',
+    'Any mailbox over IMAP/SMTP: Gmail, iCloud, Fastmail or your company mail. Search, read, send, reply, forward, move and flag messages.',
   version: '1.0.0',
   homepage: 'https://datatracker.ietf.org/doc/html/rfc9051',
   instructions:
@@ -224,11 +231,156 @@ export default defineConnector({
   },
   ui: {
     primaryFields: ['email', 'password', 'provider'],
+    // The app password steps follow the chosen provider, or the one the address points to.
+    setupVariants: { field: 'provider', emailField: 'email', domains: PROVIDER_DOMAINS },
     locales: {
       ru: {
+        setup: {
+          form: {
+            summary: 'Адрес почты и пароль приложения. Около двух минут.',
+            variantsTitle: 'Пароль приложения: шаги для вашего сервиса',
+            steps: [
+              {
+                text: 'Введите адрес почты в форме.',
+              },
+              {
+                text: 'Создайте пароль приложения в настройках безопасности почты: шаги для вашего сервиса — прямо здесь.',
+              },
+              {
+                text: 'Вставьте его в форму и нажмите «Подключить». AnyConnect сразу проверит ящик.',
+              },
+            ],
+            variants: {
+              gmail: {
+                title: 'Gmail / Google Workspace',
+                steps: [
+                  {
+                    text: 'Включите двухэтапную аутентификацию в аккаунте Google, если она ещё не включена.',
+                    link: {
+                      label: 'Открыть двухэтапную аутентификацию',
+                      url: 'https://myaccount.google.com/signinoptions/twosv',
+                    },
+                  },
+                  {
+                    text: 'Откройте «Пароли приложений», введите название AnyConnect и нажмите «Создать».',
+                    link: {
+                      label: 'Открыть пароли приложений',
+                      url: 'https://myaccount.google.com/apppasswords',
+                    },
+                  },
+                  {
+                    text: 'Скопируйте пароль из 16 букв и вставьте в форму. Пробелы не важны.',
+                  },
+                ],
+              },
+              outlook: {
+                title: 'Outlook.com / Microsoft 365',
+                steps: [
+                  {
+                    text: 'Аккаунты Microsoft больше не принимают пароли по IMAP. Подключите вместо этого сервис Outlook: он входит через Microsoft.',
+                  },
+                ],
+              },
+              icloud: {
+                title: 'iCloud Mail',
+                steps: [
+                  {
+                    text: 'Войдите в аккаунт Apple и откройте «Вход и безопасность» → «Пароли приложений».',
+                    link: {
+                      label: 'Открыть аккаунт Apple',
+                      url: 'https://account.apple.com/account/manage',
+                    },
+                  },
+                  {
+                    text: 'Нажмите «+», назовите пароль AnyConnect и скопируйте его (xxxx-xxxx-xxxx-xxxx).',
+                  },
+                  {
+                    text: 'В форме укажите адрес @icloud.com, а не почту аккаунта Apple, если они отличаются.',
+                  },
+                ],
+              },
+              fastmail: {
+                title: 'Fastmail',
+                steps: [
+                  {
+                    text: 'Откройте Settings → Privacy & Security → Manage app passwords and access, затем New app password.',
+                    link: {
+                      label: 'Открыть пароли приложений Fastmail',
+                      url: 'https://app.fastmail.com/settings/security/apps',
+                    },
+                  },
+                  {
+                    text: 'Выберите доступ Mail (IMAP/SMTP), назовите пароль AnyConnect и нажмите Generate.',
+                  },
+                  {
+                    text: 'Скопируйте пароль и вставьте в форму.',
+                  },
+                ],
+              },
+              yandex: {
+                title: 'Яндекс Почта',
+                steps: [
+                  {
+                    text: 'В настройках Яндекс Почты откройте «Почтовые программы» и разрешите доступ по IMAP с паролями приложений.',
+                    link: {
+                      label: 'Открыть настройки почтовых программ',
+                      url: 'https://mail.yandex.ru/#setup/client',
+                    },
+                  },
+                  {
+                    text: 'Откройте Яндекс ID → «Безопасность» → «Пароли приложений», выберите «Почта», назовите AnyConnect и создайте.',
+                    link: {
+                      label: 'Открыть пароли приложений',
+                      url: 'https://id.yandex.ru/security/app-passwords',
+                    },
+                  },
+                  {
+                    text: 'Скопируйте пароль и вставьте в форму.',
+                  },
+                ],
+              },
+              mailru: {
+                title: 'Mail.ru',
+                steps: [
+                  {
+                    text: 'Откройте аккаунт Mail.ru → «Безопасность» → «Пароли для внешних приложений» и добавьте пароль.',
+                    link: {
+                      label: 'Открыть пароли для внешних приложений',
+                      url: 'https://account.mail.ru/user/2-step-auth/passwords',
+                    },
+                  },
+                  {
+                    text: 'Назовите его AnyConnect, выберите полный доступ к ящику (IMAP, SMTP), скопируйте пароль и вставьте в форму.',
+                  },
+                ],
+              },
+              custom: {
+                title: 'Другой сервер',
+                steps: [
+                  {
+                    text: 'Узнайте адреса и порты серверов IMAP и SMTP в справке почтового сервиса или у администратора почты.',
+                  },
+                  {
+                    text: 'В форме выберите «Другой сервер» и заполните их в разделе «Дополнительные настройки».',
+                  },
+                  {
+                    text: 'Используйте пароль приложения, если сервис их выдаёт, иначе — пароль ящика.',
+                  },
+                ],
+              },
+            },
+            tips: ['Несколько ящиков? Подключите каждый: ИИ ищет в одном или сразу во всех.'],
+          },
+        },
+        prompts: [
+          'Покажи непрочитанные письма за сегодня в рабочей почте.',
+          'Найди подтверждение брони отеля в Лиссабоне.',
+          'Ответь на последнее письмо Тома, что я участвую.',
+          'Перенеси рассылки за прошлую неделю в архив.',
+        ],
         name: 'Почта (IMAP/SMTP)',
         description:
-          'Любой почтовый ящик по IMAP/SMTP: Gmail, Яндекс Почта, Mail.ru, iCloud, Outlook, Fastmail, корпоративная почта. Поиск, чтение, отправка, ответы, пересылка, папки и отметки.',
+          'Любой почтовый ящик по IMAP/SMTP: Gmail, Яндекс Почта, Mail.ru, iCloud, Fastmail или корпоративная почта. Поиск, чтение, отправка, ответы, пересылка, папки и отметки.',
         fields: {
           email: { label: 'Адрес почты', placeholder: 'me@yandex.ru' },
           provider: {
@@ -337,6 +489,149 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          form: {
+            summary: 'Your email address and an app password. Takes about two minutes.',
+            variantsTitle: 'App password: steps for your provider',
+            steps: [
+              {
+                text: 'Enter your email address in the form.',
+              },
+              {
+                text: 'Create an app password in your mail account’s security settings: the steps for your provider are right here.',
+              },
+              {
+                text: 'Paste it into the form and click Connect. AnyConnect checks the mailbox right away.',
+              },
+            ],
+            variants: {
+              gmail: {
+                title: 'Gmail / Google Workspace',
+                steps: [
+                  {
+                    text: 'Turn on 2-Step Verification for your Google account, if it is not on yet.',
+                    link: {
+                      label: 'Open 2-Step Verification',
+                      url: 'https://myaccount.google.com/signinoptions/twosv',
+                    },
+                  },
+                  {
+                    text: 'Open App passwords, type AnyConnect as the app name and click Create.',
+                    link: {
+                      label: 'Open App passwords',
+                      url: 'https://myaccount.google.com/apppasswords',
+                    },
+                  },
+                  {
+                    text: 'Copy the 16-letter password and paste it into the form. Spaces do not matter.',
+                  },
+                ],
+              },
+              outlook: {
+                title: 'Outlook.com / Microsoft 365',
+                steps: [
+                  {
+                    text: 'Microsoft accounts no longer accept passwords over IMAP. Connect the Outlook service instead: it signs in with Microsoft.',
+                  },
+                ],
+              },
+              icloud: {
+                title: 'iCloud Mail',
+                steps: [
+                  {
+                    text: 'Sign in to your Apple Account and open Sign-In and Security → App-Specific Passwords.',
+                    link: {
+                      label: 'Open Apple Account',
+                      url: 'https://account.apple.com/account/manage',
+                    },
+                  },
+                  {
+                    text: 'Click Add (+), name it AnyConnect and copy the password (xxxx-xxxx-xxxx-xxxx).',
+                  },
+                  {
+                    text: 'In the form, use your @icloud.com address, not the Apple Account email, if they differ.',
+                  },
+                ],
+              },
+              fastmail: {
+                title: 'Fastmail',
+                steps: [
+                  {
+                    text: 'Open Settings → Privacy & Security → Manage app passwords and access, then New app password.',
+                    link: {
+                      label: 'Open Fastmail app passwords',
+                      url: 'https://app.fastmail.com/settings/security/apps',
+                    },
+                  },
+                  {
+                    text: 'Choose access to Mail (IMAP/SMTP), name it AnyConnect and click Generate.',
+                  },
+                  {
+                    text: 'Copy the password and paste it into the form.',
+                  },
+                ],
+              },
+              yandex: {
+                title: 'Yandex Mail',
+                steps: [
+                  {
+                    text: 'In Yandex Mail settings, open Email clients and allow access via IMAP with app passwords.',
+                    link: {
+                      label: 'Open mail client settings',
+                      url: 'https://mail.yandex.ru/#setup/client',
+                    },
+                  },
+                  {
+                    text: 'Open Yandex ID → Security → App passwords, choose Mail, name it AnyConnect and create it.',
+                    link: {
+                      label: 'Open app passwords',
+                      url: 'https://id.yandex.ru/security/app-passwords',
+                    },
+                  },
+                  {
+                    text: 'Copy the password and paste it into the form.',
+                  },
+                ],
+              },
+              mailru: {
+                title: 'Mail.ru',
+                steps: [
+                  {
+                    text: 'Open Mail.ru account → Security → Passwords for external apps and add one.',
+                    link: {
+                      label: 'Open passwords for external apps',
+                      url: 'https://account.mail.ru/user/2-step-auth/passwords',
+                    },
+                  },
+                  {
+                    text: 'Name it AnyConnect, choose full access to the mailbox (IMAP, SMTP), copy the password and paste it into the form.',
+                  },
+                ],
+              },
+              custom: {
+                title: 'Other server',
+                steps: [
+                  {
+                    text: 'Find the IMAP and SMTP server names and ports in your provider’s help or ask your mail admin.',
+                  },
+                  {
+                    text: 'In the form, choose Other server and fill them in under Advanced settings.',
+                  },
+                  {
+                    text: 'Use an app password if your provider offers them, otherwise the mailbox password.',
+                  },
+                ],
+              },
+            },
+            tips: ['Several mailboxes? Connect each one; the AI can search them one by one or all at once.'],
+          },
+        },
+        prompts: [
+          'Show today’s unread emails in my Fastmail.',
+          'Find the hotel booking confirmation for Lisbon.',
+          'Reply to Tom’s last email that I am in.',
+          'Move last week’s newsletters to Archive.',
+        ],
         fields: {
           email: { label: 'Email address', placeholder: 'me@example.com' },
           provider: {

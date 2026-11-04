@@ -530,6 +530,72 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(second).not.toContain('?before=');
   });
 
+  it("shows an account's own page: actions on and off, its rule and its own activity", async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-acc', email: 'acc@example.com' });
+    const ws = await workspaceOf((await userByEmail('acc@example.com')).id);
+    const create = (name: string, label: string) =>
+      hub.services.accounts.create(ws.id, { connectorId: 'demo', name, label, credentials: { secret: 's' } });
+    const home = await create('home', 'Home');
+    const work = await create('work', 'Work');
+    await hub.services.database.pool.query(
+      `INSERT INTO tool_calls (workspace_id, account_id, connector_id, action, tool_name, principal_type, status, duration_ms, created_at)
+       VALUES ($1, $2, 'demo', 'echo', 'demo_echo', 'api_token', 'ok', 5, now() - interval '3 minutes'),
+              ($1, $2, 'demo', 'fail', 'demo_fail', 'api_token', 'error', 5, now() - interval '2 minutes'),
+              ($1, $3, 'demo', 'account_info', 'demo_account_info', 'api_token', 'ok', 5, now() - interval '1 minute')`,
+      [ws.id, home.id, work.id],
+    );
+    const base = `/app/accounts/${home.id}`;
+
+    const page = await (await browser.request(base)).text();
+    expect(page).toContain('<h1>Home</h1>');
+    expect(page).toContain('name="on.echo" checked=""');
+    // Its own activity only, by the action's title.
+    expect(page).toContain('title="demo_fail">Имитация ошибки<');
+    expect(page).not.toContain('title="demo_account_info"');
+    expect(page).toContain(`href="/app/activity?account=${home.id}"`);
+
+    // Unchecked boxes turn actions off; the AI's catalog follows.
+    const { csrf } = TestBrowser.hiddenInputs(page);
+    const saved = await browser.request(`${base}/tools`, { form: { csrf: csrf!, 'on.echo': 'on' } });
+    expect(saved.status).toBe(303);
+    expect(saved.headers.get('location')).toBe('/app/services');
+    expect((await hub.services.accounts.get(ws.id, home.id)).settings.disabledActions).toEqual([
+      'account_info',
+      'fail',
+    ]);
+    const after = await (await browser.request(base)).text();
+    expect(after).toContain('name="on.echo" checked=""');
+    expect(after).toMatch(/name="on\.fail"\/>/);
+
+    // Forms on the page come back to it; a foreign "back" falls back to the list.
+    const rule = await browser.request('/app/rules/scoped', {
+      form: { csrf: csrf!, kind: 'account', id: home.id, access: 'read', confirm: '', back: base },
+    });
+    expect(rule.headers.get('location')).toBe(base);
+    expect(await hub.services.policies.listRules(ws.id)).toEqual([
+      expect.objectContaining({ accountId: home.id, access: 'read' }),
+    ]);
+    const renamed = await browser.request(`${base}/rename`, {
+      form: { csrf: csrf!, label: 'Home mail', back: 'https://evil.example/' },
+    });
+    expect(renamed.headers.get('location')).toBe('/app/services');
+
+    // The activity log filters by account, by service and by errors, and keeps the filter when paging.
+    const log = async (query: string) => (await browser.request(`/app/activity${query}`)).text();
+    const all = await log('');
+    expect(all).toContain('title="demo_echo">Эхо<');
+    expect(all).toContain('title="demo_account_info">Об аккаунте<');
+    const ofHome = await log(`?account=${home.id}`);
+    expect(ofHome).toContain('title="demo_fail"');
+    expect(ofHome).not.toContain('title="demo_account_info"');
+    const errors = await log('?status=error');
+    expect(errors).toContain('title="demo_fail"');
+    expect(errors).not.toContain('title="demo_echo"');
+    // An unknown account is ignored instead of showing an empty log.
+    expect(await log('?account=nope')).toContain('title="demo_account_info"');
+  });
+
   it('gives the custom MCP form back as filled when the address is wrong', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await oidc.signIn(browser, { sub: 'g-c', email: 'custom@example.com' });

@@ -22,6 +22,8 @@ export interface ProviderPreset {
   savesSentCopy: boolean;
   /** Where the user creates the app password; shown in the account form. */
   appPasswordHelp?: string;
+  /** Address domains of the provider: the provider is guessed from them when the user leaves it empty. */
+  domains: readonly string[];
 }
 
 export const PROVIDERS = {
@@ -31,12 +33,14 @@ export const PROVIDERS = {
     smtp: { host: 'smtp.gmail.com', port: 465, security: 'tls' },
     savesSentCopy: true,
     appPasswordHelp: 'https://myaccount.google.com/apppasswords',
+    domains: ['gmail.com', 'googlemail.com'],
   },
   outlook: {
     label: 'Outlook.com / Microsoft 365',
     imap: { host: 'outlook.office365.com', port: 993, security: 'tls' },
     smtp: { host: 'smtp.office365.com', port: 587, security: 'starttls' },
     savesSentCopy: true,
+    domains: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'],
   },
   icloud: {
     label: 'iCloud Mail',
@@ -44,6 +48,7 @@ export const PROVIDERS = {
     smtp: { host: 'smtp.mail.me.com', port: 587, security: 'starttls' },
     savesSentCopy: false,
     appPasswordHelp: 'https://account.apple.com/account/manage',
+    domains: ['icloud.com', 'me.com', 'mac.com'],
   },
   fastmail: {
     label: 'Fastmail',
@@ -51,6 +56,7 @@ export const PROVIDERS = {
     smtp: { host: 'smtp.fastmail.com', port: 465, security: 'tls' },
     savesSentCopy: false,
     appPasswordHelp: 'https://app.fastmail.com/settings/security/apps',
+    domains: ['fastmail.com', 'fastmail.fm'],
   },
   yandex: {
     label: 'Yandex Mail',
@@ -58,6 +64,7 @@ export const PROVIDERS = {
     smtp: { host: 'smtp.yandex.ru', port: 465, security: 'tls' },
     savesSentCopy: false,
     appPasswordHelp: 'https://id.yandex.ru/security/app-passwords',
+    domains: ['yandex.ru', 'yandex.com', 'yandex.by', 'yandex.kz', 'yandex.ua', 'ya.ru', 'narod.ru'],
   },
   mailru: {
     label: 'Mail.ru',
@@ -65,6 +72,7 @@ export const PROVIDERS = {
     smtp: { host: 'smtp.mail.ru', port: 465, security: 'tls' },
     savesSentCopy: false,
     appPasswordHelp: 'https://account.mail.ru/user/2-step-auth/passwords',
+    domains: ['mail.ru', 'inbox.ru', 'list.ru', 'bk.ru', 'internet.ru'],
   },
 } as const satisfies Record<string, ProviderPreset>;
 
@@ -74,11 +82,13 @@ export const PROVIDER_IDS = [...(Object.keys(PROVIDERS) as (keyof typeof PROVIDE
 /** Guess the provider from the address (used as the default when the user leaves it empty). */
 export function guessProvider(email: string): ProviderId {
   const domain = email.split('@')[1]?.toLowerCase() ?? '';
-  if (['gmail.com', 'googlemail.com'].includes(domain)) return 'gmail';
-  if (/^(yandex\.(ru|com|by|kz|ua)|ya\.ru|narod\.ru)$/.test(domain)) return 'yandex';
-  if (['mail.ru', 'inbox.ru', 'list.ru', 'bk.ru', 'internet.ru'].includes(domain)) return 'mailru';
-  if (['icloud.com', 'me.com', 'mac.com'].includes(domain)) return 'icloud';
-  if (['outlook.com', 'hotmail.com', 'live.com', 'msn.com'].includes(domain)) return 'outlook';
-  if (['fastmail.com', 'fastmail.fm'].includes(domain)) return 'fastmail';
-  return 'custom';
+  const found = (Object.keys(PROVIDERS) as (keyof typeof PROVIDERS)[]).find((id) =>
+    (PROVIDERS[id].domains as readonly string[]).includes(domain),
+  );
+  return found ?? 'custom';
 }
+
+/** Address domains per provider, for the connect form to pick the right setup steps as the user types. */
+export const PROVIDER_DOMAINS: Record<string, string[]> = Object.fromEntries(
+  Object.entries(PROVIDERS).map(([id, preset]) => [id, [...preset.domains]]),
+);

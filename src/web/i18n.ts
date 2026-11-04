@@ -1,5 +1,7 @@
+import { accountEn, accountRu } from './i18n/account.js';
 import { appEn, appRu } from './i18n/app.js';
 import { authEn, authRu } from './i18n/auth.js';
+import { connectEn, connectRu } from './i18n/connect.js';
 import { siteEn, siteRu } from './i18n/site.js';
 
 export type Locale = 'ru' | 'en';
@@ -122,9 +124,9 @@ const coreEn = {
   'confirm.status.denied': '❌ Denied',
   'confirm.status.cancelled': '↩️ Cancelled',
   'confirm.status.expired': '⌛ Expired without an answer',
-  'risk.read': 'read',
-  'risk.write': 'changes data',
-  'risk.dangerous': 'dangerous',
+  'risk.read': 'Reads',
+  'risk.write': 'Makes changes',
+  'risk.dangerous': 'Sensitive',
   'home.telegram': 'Telegram for confirmations',
   'home.telegramLinked': 'Linked: {label}',
   'home.telegramNotLinked': 'Not linked: confirmations only via the web page.',
@@ -137,18 +139,18 @@ const coreEn = {
   'connect.created': '{service} account “{label}” is connected.',
   'connect.reconnected': '{service} account “{label}” is reconnected.',
   'connect.identity': 'Signed in as {identity}.',
-  'connect.aiHint': 'AI apps connected to the hub see it on their next request.',
-  'connect.testFailed': 'The connection works, but the check failed: {message}',
+  'connect.aiHint': 'Your connected AI apps see it on their next request.',
+  'connect.testFailed': 'Reason: {message}. Open the account settings to fix it.',
   'connect.formTitle': 'Connect {service}',
   'connect.back': 'Back to services',
   'connect.formLabelPlaceholder': 'For example, Work',
-  'connect.formReconnect': 'Reconnecting “{label}”. Leave a secret empty to keep the stored one.',
-  'connect.formLabel': 'Account name for you and the AI (e.g. “Work”)',
+  'connect.formReconnect': 'Leave a key or password empty to keep the one already saved.',
+  'connect.formLabel': 'Account name',
   'connect.formAdvanced': 'Advanced settings',
   'connect.formAuto': 'Automatic',
   'connect.formYes': 'Yes',
   'connect.formNo': 'No',
-  'connect.formSecrets': 'Keys and passwords are encrypted on the hub and never shown to the AI.',
+  'connect.formSecrets': 'Keys and passwords are stored encrypted and are never shown to the AI.',
   'connect.formSubmit': 'Connect',
   'connect.formReconnectSubmit': 'Save',
   'connect.formUseOAuth': 'Sign in with the provider instead',
@@ -181,7 +183,7 @@ const coreEn = {
   'home.manageHint': 'Accounts are managed through the REST API or CLI for now; the web panel comes next.',
 } as const;
 
-const en = { ...coreEn, ...siteEn, ...appEn, ...authEn } as const;
+const en = { ...coreEn, ...siteEn, ...appEn, ...authEn, ...connectEn, ...accountEn } as const;
 
 export type Key = keyof typeof en;
 
@@ -304,9 +306,9 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'confirm.status.denied': '❌ Отклонено',
   'confirm.status.cancelled': '↩️ Отменено',
   'confirm.status.expired': '⌛ Истекло без ответа',
-  'risk.read': 'чтение',
-  'risk.write': 'изменение',
-  'risk.dangerous': 'опасное',
+  'risk.read': 'Читает',
+  'risk.write': 'Вносит изменения',
+  'risk.dangerous': 'Чувствительное',
   'home.telegram': 'Telegram для подтверждений',
   'home.telegramLinked': 'Подключён: {label}',
   'home.telegramNotLinked': 'Не подключён: подтверждения только через веб-страницу.',
@@ -319,13 +321,13 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'connect.created': 'Аккаунт {service} «{label}» подключён.',
   'connect.reconnected': 'Аккаунт {service} «{label}» переподключён.',
   'connect.identity': 'Вход выполнен как {identity}.',
-  'connect.aiHint': 'Подключённые ИИ-приложения увидят его при следующем запросе.',
-  'connect.testFailed': 'Доступ получен, но проверка не прошла: {message}',
+  'connect.aiHint': 'Ваши ИИ-приложения увидят его при следующем запросе.',
+  'connect.testFailed': 'Причина: {message}. Исправить можно в настройках аккаунта.',
   'connect.formTitle': 'Подключение: {service}',
   'connect.back': 'К сервисам',
   'connect.formLabelPlaceholder': 'Например, Работа',
-  'connect.formReconnect': 'Переподключение «{label}». Пустое поле ключа оставит сохранённый.',
-  'connect.formLabel': 'Название аккаунта для вас и ИИ (например, «Работа»)',
+  'connect.formReconnect': 'Оставьте ключ или пароль пустым, чтобы сохранить прежний.',
+  'connect.formLabel': 'Название аккаунта',
   'connect.formAdvanced': 'Дополнительные настройки',
   'connect.formAuto': 'Автоматически',
   'connect.formYes': 'Да',
@@ -363,7 +365,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'home.manageHint': 'Пока аккаунты управляются через REST API или CLI; веб-панель — следующий этап.',
 };
 
-const ru: Record<Key, string> = { ...coreRu, ...siteRu, ...appRu, ...authRu };
+const ru: Record<Key, string> = { ...coreRu, ...siteRu, ...appRu, ...authRu, ...connectRu, ...accountRu };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };
 

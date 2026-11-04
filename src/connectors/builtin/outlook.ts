@@ -333,6 +333,32 @@ export default defineConnector({
   ui: {
     locales: {
       ru: {
+        setup: {
+          oauth: {
+            summary: 'Аккаунт Microsoft: Outlook.com, Hotmail или рабочий Microsoft 365. Меньше минуты.',
+            steps: [
+              {
+                text: 'Нажмите «Подключить» и войдите в нужный аккаунт Microsoft.',
+              },
+              {
+                text: 'Microsoft попросит разрешить доступ к почте и календарю. Нажмите «Принять».',
+              },
+              {
+                text: 'Готово: ИИ работает с этим ящиком и его календарями.',
+              },
+            ],
+            tips: [
+              'Рабочий аккаунт: если Microsoft пишет, что нужно одобрение администратора, попросите IT-отдел разрешить AnyConnect.',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите AnyConnect на account.microsoft.com → «Конфиденциальность» → «Приложения и службы».',
+            ],
+          },
+        },
+        prompts: [
+          'Какие важные письма пришли сегодня утром?',
+          'Ответь Сэму, что пришлю презентацию завтра.',
+          'Какие у меня встречи в среду?',
+          'Поставь 30 минут с Катей в пятницу после обеда.',
+        ],
         description:
           'Почта и календарь Outlook и Microsoft 365: поиск, чтение, отправка, ответы, пересылка, папки и события.',
         fields: {
@@ -408,6 +434,33 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          oauth: {
+            summary:
+              'Your Microsoft account: Outlook.com, Hotmail or work Microsoft 365. Takes under a minute.',
+            steps: [
+              {
+                text: 'Click Connect and sign in with the Microsoft account you want to add.',
+              },
+              {
+                text: 'Microsoft asks to allow access to your mail and calendar. Click Accept.',
+              },
+              {
+                text: 'Done: the AI can work with this mailbox and its calendars.',
+              },
+            ],
+            tips: [
+              'Work accounts: if Microsoft says an admin must approve the app, ask your IT admin to allow AnyConnect.',
+              'To cut access, delete the account here or remove AnyConnect at account.microsoft.com → Privacy → Apps and services.',
+            ],
+          },
+        },
+        prompts: [
+          'What important emails came in this morning?',
+          'Reply to Sam that I will send the deck tomorrow.',
+          'What meetings do I have on Wednesday?',
+          'Book 30 minutes with Kate on Friday afternoon.',
+        ],
         fields: {
           timeZone: {
             label: 'Time zone',

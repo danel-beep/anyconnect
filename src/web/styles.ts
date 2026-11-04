@@ -1,5 +1,6 @@
 import { FONT_FACES, MONO, SANS } from './assets.js';
 import { APP_SHELL_CSS } from './styles/app.js';
+import { CONNECT_CSS } from './styles/connect.js';
 import { SITE_CSS } from './styles/site.js';
 import { THEMES, themeCss } from './theme.js';
 
@@ -217,4 +218,4 @@ ul.codes code{font-size:15px}
 `;
 
 /** Served at /assets/app.css (no inline styles, so the CSP can forbid them). Colors come from `theme.ts`. */
-export const APP_CSS = [FONT_FACES, themeCss(), BASE_CSS, SITE_CSS, APP_SHELL_CSS].join('\n');
+export const APP_CSS = [FONT_FACES, themeCss(), BASE_CSS, SITE_CSS, APP_SHELL_CSS, CONNECT_CSS].join('\n');

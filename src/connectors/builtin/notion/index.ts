@@ -182,12 +182,58 @@ export default defineConnector({
   ui: {
     locales: {
       ru: {
+        setup: {
+          oauth: {
+            summary: 'Ваше пространство Notion. Около минуты.',
+            steps: [
+              {
+                text: 'Нажмите «Подключить» и войдите в Notion.',
+              },
+              {
+                text: 'Выберите пространство, затем страницы, к которым AnyConnect получит доступ (Select pages). ИИ увидит только их и всё, что внутри.',
+              },
+              {
+                text: 'Понадобятся ещё страницы? На странице в Notion откройте ••• → Connections и добавьте AnyConnect.',
+              },
+            ],
+          },
+          form: {
+            summary: 'Секрет внутренней интеграции Notion. Около двух минут.',
+            steps: [
+              {
+                text: 'Откройте интеграции Notion и нажмите New integration.',
+                link: {
+                  label: 'Открыть интеграции Notion',
+                  url: 'https://www.notion.so/profile/integrations',
+                },
+              },
+              {
+                text: 'Назовите её AnyConnect, выберите пространство, оставьте тип Internal и нажмите Save.',
+              },
+              {
+                text: 'Скопируйте Internal Integration Secret (начинается с ntn_) и вставьте в форму.',
+              },
+              {
+                text: 'В Notion откройте каждую нужную страницу или базу, нажмите ••• → Connections и добавьте интеграцию.',
+              },
+            ],
+            tips: [
+              'ИИ видит только страницы, открытые интеграции: начните с нужных и добавляйте остальные когда угодно.',
+            ],
+          },
+        },
+        prompts: [
+          'Найди в Notion наш чек-лист онбординга и перескажи его.',
+          'Добавь строку в «Контент-план»: «Пост о запуске», статус «Черновик», срок пятница.',
+          'Что изменилось на странице Roadmap за эту неделю?',
+          'Допиши заметки с сегодняшней встречи на страницу «Синк команды».',
+        ],
         description:
           'Страницы и базы данных Notion: поиск, чтение страниц в Markdown, выборки из баз, создание и изменение.',
         fields: {
           token: {
             label: 'Секрет интеграции (ntn_…)',
-            hint: 'Нужен, только если не входить через Notion. Создайте внутреннюю интеграцию на notion.so/profile/integrations и откройте ей доступ к нужным страницам.',
+            hint: 'Создайте внутреннюю интеграцию на notion.so/profile/integrations и откройте ей доступ к нужным страницам.',
           },
         },
         actions: {
@@ -219,10 +265,56 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          oauth: {
+            summary: 'Your Notion workspace. Takes about a minute.',
+            steps: [
+              {
+                text: 'Click Connect and sign in to Notion.',
+              },
+              {
+                text: 'Pick the workspace, then choose the pages AnyConnect may use (Select pages). The AI sees only those pages and everything inside them.',
+              },
+              {
+                text: 'Need more pages later? On a page in Notion, open ••• → Connections and add AnyConnect.',
+              },
+            ],
+          },
+          form: {
+            summary: 'An internal integration secret from Notion. Takes about two minutes.',
+            steps: [
+              {
+                text: 'Open Notion integrations and click New integration.',
+                link: {
+                  label: 'Open Notion integrations',
+                  url: 'https://www.notion.so/profile/integrations',
+                },
+              },
+              {
+                text: 'Name it AnyConnect, pick your workspace, keep the type Internal and click Save.',
+              },
+              {
+                text: 'Copy the Internal Integration Secret (starts with ntn_) and paste it into the form.',
+              },
+              {
+                text: 'In Notion, open each page or database the AI should see, click ••• → Connections and add the integration.',
+              },
+            ],
+            tips: [
+              'The AI only sees pages shared with the integration, so start with the ones you need and add more any time.',
+            ],
+          },
+        },
+        prompts: [
+          'Find our onboarding checklist in Notion and summarise it.',
+          'Add a row to Content calendar: “Launch post”, status Draft, due Friday.',
+          'What changed on the Roadmap page this week?',
+          'Append today’s meeting notes to the “Team sync” page.',
+        ],
         fields: {
           token: {
             label: 'Integration secret (ntn_…)',
-            hint: 'Only if you do not sign in with Notion. Create an internal integration at notion.so/profile/integrations and give it access to the pages you need.',
+            hint: 'Create an internal integration at notion.so/profile/integrations and give it access to the pages you need.',
           },
         },
         actions: {

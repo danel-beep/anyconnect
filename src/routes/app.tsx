@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isMetric, type Metric } from '../billing/plans.js';
-import { connectorText } from '../connectors/sdk.js';
+import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
 import type { toolCalls } from '../db/schema.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
 import { ACCESS_LEVELS, CONFIRM_LEVELS } from '../security/policy.js';
+import { AccountPage } from '../web/account-page.js';
 import {
   type AccountView,
   ActivityPage,
@@ -20,6 +21,7 @@ import {
   SettingsPage,
   type UsageView,
 } from '../web/app.js';
+import { serviceAlternative } from '../web/catalog.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
 import { fmtAgo, fmtDate } from '../web/ui.js';
@@ -39,6 +41,8 @@ import {
 } from './page-helpers.js';
 
 const DAY = 86_400_000;
+/** An account's own page in the dashboard: the only "back" address account forms may name. */
+const ACCOUNT_PAGE = /^\/app\/accounts\/[\w-]{1,64}$/;
 
 type ToolCallRow = typeof toolCalls.$inferSelect;
 
@@ -81,11 +85,13 @@ export function appRoutes() {
   /** Runs a form post: CSRF, session, then the action; errors come back as a flash note. */
   const action =
     (
-      back: string,
+      /** Where to go afterwards: a fixed page, or one picked from the posted form. */
+      to: string | ((form: Record<string, string>) => string),
       run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
     ) =>
     async (c: AppContext) => {
       const form = await bodyParams(c);
+      const back = typeof to === 'string' ? to : to(form);
       if (!csrfOk(c, form)) return csrfFailedPage(c);
       const auth = await requireApp(c, back);
       if ('redirect' in auth) return c.redirect(auth.redirect, 303);
@@ -127,7 +133,9 @@ export function appRoutes() {
       .map((a) =>
         accountView(
           a,
-          byId.get(a.connectorId)?.name ?? a.connectorId,
+          byId.has(a.connectorId)
+            ? connectorText(byId.get(a.connectorId)!, c.get('locale')).name
+            : a.connectorId,
           Boolean(byId.get(a.connectorId)?.oauth),
         ),
       );
@@ -147,6 +155,17 @@ export function appRoutes() {
       if (r.principalType === 'api_token' && r.principalId) return tokens.get(r.principalId) ?? null;
       return null;
     };
+    const [connectors, accounts] = await Promise.all([
+      s.connectors.list(workspaceId),
+      s.accounts.list(workspaceId),
+    ]);
+    const connectorById = new Map(connectors.map((x) => [x.id, x]));
+    const labels = new Map(accounts.map((a) => [a.id, a.label]));
+    const titleOf = (r: ToolCallRow): string => {
+      const connector = r.connectorId ? connectorById.get(r.connectorId) : undefined;
+      const action = connector?.actions.find((a) => a.name === r.action);
+      return connector && action ? actionText(connector, action, c.get('locale')).title : r.toolName;
+    };
     return rows.map((r) => ({
       toolName: r.toolName,
       connectorId: r.connectorId ?? '',
@@ -155,6 +174,8 @@ export function appRoutes() {
       createdAt: r.createdAt,
       durationMs: r.durationMs,
       client: clientOf(r),
+      title: titleOf(r),
+      account: r.accountId ? (labels.get(r.accountId) ?? null) : null,
     }));
   };
 
@@ -190,7 +211,7 @@ export function appRoutes() {
             usage,
             apps: grants.length,
             calls7d,
-            accounts: accounts.slice(0, 6),
+            accounts,
             recent: await callViews(c, ws, recentRows),
           }}
         />,
@@ -228,10 +249,14 @@ export function appRoutes() {
                 description: e.description,
                 connect: e.connect,
                 ready: e.ready,
-                setupVar: e.setupVar,
                 custom: e.custom,
                 accounts: e.accounts,
-              })),
+                alternative: e.ready
+                  ? undefined
+                  : serviceAlternative(e.service, s.connectors.builtin.all(), c.get('locale')),
+              }))
+              // What can be connected now comes first; services waiting for setup go last.
+              .sort((a, b) => Number(b.ready) - Number(a.ready)),
             custom: custom.map((x) => ({
               connectorId: x.connectorId,
               name: x.name,
@@ -256,17 +281,88 @@ export function appRoutes() {
     }),
   );
 
+  // --- One account ------------------------------------------------------------
+  app.get(
+    '/app/accounts/:id',
+    page('/app/services', async (c, auth) => {
+      const s = c.get('services');
+      const ws = auth.workspace.id;
+      const locale = c.get('locale');
+      const row = await s.accounts.get(ws, c.req.param('id')!);
+      const [connector, rules, security, entitlements, shell] = await Promise.all([
+        s.connectors.get(ws, row.connectorId),
+        s.policies.listRules(ws),
+        s.admin.security(ws),
+        s.entitlements.entitlements(ws),
+        shellInfo(c, ws),
+      ]);
+      const calls = await s.activity.recent(ws, {
+        limit: 10,
+        sinceDays: entitlements.limits.historyDays,
+        filter: { accountId: row.id },
+      });
+      const rule = rules.find(
+        (r) =>
+          r.accountId === row.id && r.aiClientId === null && r.personaId === null && r.connectorId === null,
+      );
+      const disabled = new Set(row.settings.disabledActions ?? []);
+      return c.html(
+        <AccountPage
+          ctx={pageCtx(c, auth.user)}
+          shell={shell}
+          view={{
+            account: accountView(
+              row,
+              connector ? connectorText(connector, locale).name : row.connectorId,
+              Boolean(connector?.oauth),
+            ),
+            createdAt: row.createdAt,
+            tools: (connector?.actions ?? []).map((a) => ({
+              name: a.name,
+              ...actionText(connector!, a, locale),
+              risk: actionRisk(a),
+              enabled: !disabled.has(a.name),
+            })),
+            rule: { access: rule?.access ?? null, confirm: rule?.confirm ?? null },
+            defaults: { access: security.defaultAccess, confirm: security.defaultConfirm },
+            prompts: connector
+              ? connectorGuide(connector, locale, connector.oauth ? 'oauth' : 'form').prompts
+              : [],
+            calls: await callViews(c, ws, calls),
+            flash: takeFlash(c),
+          }}
+        />,
+      );
+    }),
+  );
+
+  /** Where an account form goes back to: the account's own page when it came from there. */
+  const accountBack = (form: Record<string, string>, fallback = '/app/services') =>
+    ACCOUNT_PAGE.test(form.back ?? '') ? form.back! : fallback;
+
   const accountAction = (
     name: string,
     run: (c: AppContext, auth: AppAuth, account: AccountRow, form: Record<string, string>) => Promise<void>,
   ) =>
     app.post(
       `/app/accounts/:id/${name}`,
-      action('/app/services', async (c, auth, form) => {
+      action(accountBack, async (c, auth, form) => {
         const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
         await run(c, auth, account, form);
+        return undefined;
       }),
     );
+
+  /** Turns the account's actions on and off: a checked box keeps the action available to the AI. */
+  accountAction('tools', async (c, auth, account, form) => {
+    const s = c.get('services');
+    const connector = await s.connectors.get(auth.workspace.id, account.connectorId);
+    const disabledActions = (connector?.actions ?? [])
+      .map((a) => a.name)
+      .filter((name) => form[`on.${name}`] !== 'on');
+    await s.accounts.update(auth.workspace.id, account.id, { settings: { disabledActions } });
+    setFlash(c, 'ok', 'app.flash.toolsSaved', { label: account.label });
+  });
 
   accountAction('test', async (c, auth, account) => {
     const { test } = await c.get('services').admin.testAccount(auth.workspace.id, account.id);
@@ -438,15 +534,39 @@ export function appRoutes() {
           ? { at: new Date(cursor[1]!), id: Number(cursor[2]) }
           : undefined;
       const PAGE = 30;
-      const [summary, found, connectors, shell] = await Promise.all([
+      const [connectors, accounts] = await Promise.all([s.connectors.list(ws), accountsOf(c, ws)]);
+      // Filters from the address; unknown values are ignored rather than showing an empty log.
+      const filter = {
+        account: accounts.find((a) => a.id === c.req.query('account'))?.id,
+        service: connectors.find((x) => x.id === c.req.query('service'))?.id,
+        errors: c.req.query('status') === 'error',
+      };
+      const [summary, found, shell] = await Promise.all([
         s.activity.summary(ws, days),
-        s.activity.recent(ws, { limit: PAGE + 1, sinceDays: historyDays, before }),
-        s.connectors.list(ws),
+        s.activity.recent(ws, {
+          limit: PAGE + 1,
+          sinceDays: historyDays,
+          before,
+          filter: {
+            accountId: filter.account,
+            connectorId: filter.service,
+            status: filter.errors ? 'error' : undefined,
+          },
+        }),
         shellInfo(c, ws),
       ]);
-      const names = new Map(connectors.map((x) => [x.id, x.name]));
+      const names = new Map(connectors.map((x) => [x.id, connectorText(x, c.get('locale')).name]));
       const rows = found.slice(0, PAGE);
       const last = rows.at(-1);
+      const logUrl = (extra: Record<string, string> = {}) => {
+        const query = new URLSearchParams({
+          ...(filter.account ? { account: filter.account } : {}),
+          ...(filter.service ? { service: filter.service } : {}),
+          ...(filter.errors ? { status: 'error' } : {}),
+          ...extra,
+        }).toString();
+        return `/app/activity${query ? `?${query}` : ''}#log`;
+      };
       return c.html(
         <ActivityPage
           ctx={pageCtx(c, auth.user)}
@@ -464,9 +584,18 @@ export function appRoutes() {
             historyDays,
             more:
               found.length > PAGE && last
-                ? `/app/activity?before=${encodeURIComponent(`${last.createdAt.toISOString()}~${last.id}`)}#log`
+                ? logUrl({ before: `${last.createdAt.toISOString()}~${last.id}` })
                 : undefined,
+            newest: logUrl(),
             paged: Boolean(before),
+            filters: {
+              accounts: accounts.map((a) => ({ id: a.id, label: a.label, service: a.service })),
+              services: [...new Set(accounts.map((a) => a.connectorId))].map((id) => ({
+                id,
+                name: names.get(id) ?? id,
+              })),
+              ...filter,
+            },
           }}
         />,
       );
@@ -632,26 +761,30 @@ export function appRoutes() {
 
   app.post(
     '/app/rules/scoped',
-    action('/app/rules', async (c, auth, form) => {
-      const s = c.get('services');
-      const input = z
-        .object({
-          kind: z.enum(['app', 'account']),
-          id: z.string().min(1).max(64),
-          access: z.union([z.literal(''), z.enum(ACCESS_LEVELS)]),
-          confirm: z.union([z.literal(''), z.enum(CONFIRM_LEVELS)]),
-        })
-        .parse({ kind: form.kind, id: form.id, access: form.access ?? '', confirm: form.confirm ?? '' });
-      const value = { access: input.access || null, confirm: input.confirm || null };
-      // The rule service checks that the app or account belongs to this workspace.
-      await s.policies.setScopedRule(
-        auth.workspace.id,
-        input.kind === 'app' ? { aiClientId: input.id } : { accountId: input.id },
-        value,
-      );
-      setFlash(c, 'ok', 'app.flash.rulesSaved');
-      return undefined;
-    }),
+    // An account's own page sets its rule too, and gets the user back there.
+    action(
+      (form) => accountBack(form, '/app/rules'),
+      async (c, auth, form) => {
+        const s = c.get('services');
+        const input = z
+          .object({
+            kind: z.enum(['app', 'account']),
+            id: z.string().min(1).max(64),
+            access: z.union([z.literal(''), z.enum(ACCESS_LEVELS)]),
+            confirm: z.union([z.literal(''), z.enum(CONFIRM_LEVELS)]),
+          })
+          .parse({ kind: form.kind, id: form.id, access: form.access ?? '', confirm: form.confirm ?? '' });
+        const value = { access: input.access || null, confirm: input.confirm || null };
+        // The rule service checks that the app or account belongs to this workspace.
+        await s.policies.setScopedRule(
+          auth.workspace.id,
+          input.kind === 'app' ? { aiClientId: input.id } : { accountId: input.id },
+          value,
+        );
+        setFlash(c, 'ok', 'app.flash.rulesSaved');
+        return undefined;
+      },
+    ),
   );
 
   // --- Settings -----------------------------------------------------------------

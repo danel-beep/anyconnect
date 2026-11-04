@@ -297,6 +297,31 @@ export default defineConnector({
   ui: {
     locales: {
       ru: {
+        setup: {
+          oauth: {
+            summary: 'Ваше пространство Slack. Меньше минуты.',
+            steps: [
+              {
+                text: 'Нажмите «Подключить». Откроется Slack: проверьте название пространства в правом верхнем углу и при необходимости смените его.',
+              },
+              {
+                text: 'Нажмите «Разрешить». ИИ действует от вашего имени: видит каналы, где вы состоите, и пишет как вы.',
+              },
+              {
+                text: 'Несколько пространств? Подключите каждое и назовите так, чтобы ИИ их различал.',
+              },
+            ],
+            tips: [
+              'В некоторых пространствах приложения разрешает администратор. Если Slack попросит одобрения, отправьте запрос прямо на той странице.',
+            ],
+          },
+        },
+        prompts: [
+          'О чём меня спрашивали в Slack сегодня?',
+          'Перескажи, что было в #product с понедельника.',
+          'Напиши в #releases: «Деплой готов».',
+          'Найди сообщение, где Алекс делился планом на четвёртый квартал.',
+        ],
         description:
           'Slack от вашего имени: поиск сообщений, каналы, личные сообщения и ветки, отправка сообщений.',
         fields: {
@@ -332,6 +357,31 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          oauth: {
+            summary: 'Your Slack workspace. Takes under a minute.',
+            steps: [
+              {
+                text: 'Click Connect. Slack opens: check the workspace name in the top-right corner and switch it if needed.',
+              },
+              {
+                text: 'Click Allow. The AI acts as you: it sees the channels you are in and posts under your name.',
+              },
+              {
+                text: 'Several workspaces? Connect each one and name them so the AI can tell them apart.',
+              },
+            ],
+            tips: [
+              'Some workspaces only allow apps an admin approved. If Slack asks for approval, request it right on that page.',
+            ],
+          },
+        },
+        prompts: [
+          'What did people ask me in Slack today?',
+          'Summarise #product since Monday.',
+          'Post “Deploy is done” in #releases.',
+          'Find the message where Alex shared the Q4 plan.',
+        ],
         fields: {
           token: {
             label: 'User token (xoxp-…)',

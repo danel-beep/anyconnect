@@ -1,4 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
+import { ASSET_URLS } from './asset-urls.js';
 
 /**
  * The HTML document every page shares: fonts and styles from `/assets/app.css`, the theme script
@@ -41,10 +42,10 @@ export const Doc: FC<{
         type="font/woff2"
         crossorigin="anonymous"
       />
-      <link rel="stylesheet" href="/assets/app.css" />
-      <script src="/assets/theme.js" />
-      <script src="/assets/site.js" defer />
-      {passkeys ? <script src="/assets/webauthn.js" defer /> : null}
+      <link rel="stylesheet" href={ASSET_URLS.css} />
+      <script src={ASSET_URLS.theme} />
+      <script src={ASSET_URLS.site} defer />
+      {passkeys ? <script src={ASSET_URLS.webauthn} defer /> : null}
     </head>
     <body class={bodyClass}>{children}</body>
   </html>

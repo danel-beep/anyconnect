@@ -46,6 +46,8 @@ export type AppSection =
 export interface ShellInfo {
   planId: string;
   pendingConfirmations: number;
+  /** Turned-on accounts that stopped working (shown on Services, so they get fixed). */
+  brokenAccounts: number;
 }
 
 const NAV: {
@@ -117,6 +119,12 @@ export const AppShell: FC<{
                     <span class="count">
                       <span aria-hidden="true">{shell.pendingConfirmations}</span>
                       <span class="sr-only">{t('app.nav.pending', { n: shell.pendingConfirmations })}</span>
+                    </span>
+                  ) : null}
+                  {n.id === 'services' && shell.brokenAccounts > 0 ? (
+                    <span class="count bad" title={t('app.nav.broken', { n: shell.brokenAccounts })}>
+                      <span aria-hidden="true">{shell.brokenAccounts}</span>
+                      <span class="sr-only">{t('app.nav.broken', { n: shell.brokenAccounts })}</span>
                     </span>
                   ) : null}
                 </a>
@@ -215,6 +223,10 @@ export interface CallView {
   createdAt: Date;
   durationMs: number;
   client: string | null;
+  /** The action as people read it ("Search mail"); the tool name when the action is unknown. */
+  title: string;
+  /** Label of the account the call used, when it used one. */
+  account: string | null;
 }
 
 export interface UsageView {
@@ -225,7 +237,7 @@ export interface UsageView {
   introUntil?: Date | undefined;
 }
 
-const AccountStatus: FC<{ t: Translate; a: AccountView }> = ({ t, a }) =>
+export const AccountStatus: FC<{ t: Translate; a: AccountView }> = ({ t, a }) =>
   !a.enabled ? (
     <span class="badge">{t('app.acc.off')}</span>
   ) : a.status === 'active' ? (
@@ -247,12 +259,14 @@ const CallStatus: FC<{ t: Translate; call: CallView }> = ({ t, call }) => {
   return <span class="badge bad">{t('app.call.error')}</span>;
 };
 
-const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClient?: boolean }> = ({
-  ctx,
-  calls,
-  empty,
-  withClient: wantClient,
-}) => {
+export const CallsTable: FC<{
+  ctx: PageCtx;
+  calls: CallView[];
+  empty: string;
+  withClient?: boolean;
+  /** All rows are of one account (its own page): its name under each row would only repeat. */
+  oneAccount?: boolean;
+}> = ({ ctx, calls, empty, withClient: wantClient, oneAccount }) => {
   // The app column only when some row has an app (calls from the dashboard or old tokens have none).
   const withClient = wantClient && calls.some((call) => call.client);
   return calls.length === 0 ? (
@@ -276,7 +290,10 @@ const CallsTable: FC<{ ctx: PageCtx; calls: CallView[]; empty: string; withClien
                 <td>
                   <span class="user-cell">
                     <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={call.connectorId} size="sm" />
-                    <code>{call.toolName}</code>
+                    <span class="call-what">
+                      <span title={call.toolName}>{call.title}</span>
+                      {call.account && !oneAccount ? <span class="small muted">{call.account}</span> : null}
+                    </span>
                   </span>
                 </td>
                 {withClient ? (
@@ -347,6 +364,51 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
 // Overview
 // ---------------------------------------------------------------------------
 
+/** How many accounts the overview lists before "View all". */
+const OVERVIEW_ACCOUNTS = 6;
+
+const needsFix = (a: AccountView) => a.enabled && a.status !== 'active';
+
+/** Accounts that need a fix come first, so they are never hidden below the fold. */
+export const brokenFirst = (accounts: AccountView[]) =>
+  [...accounts].sort((a, b) => Number(needsFix(b)) - Number(needsFix(a)));
+
+/** Accounts by service: services with a broken account first, then by name; broken accounts first inside. */
+const groupByService = (accounts: AccountView[]): [string, AccountView[]][] => {
+  const groups = new Map<string, AccountView[]>();
+  for (const a of brokenFirst(accounts)) groups.set(a.service, [...(groups.get(a.service) ?? []), a]);
+  return [...groups.entries()].sort(
+    ([an, a], [bn, b]) => Number(b.some(needsFix)) - Number(a.some(needsFix)) || an.localeCompare(bn),
+  );
+};
+
+/** A banner over the page when connected accounts stopped working, with a fix for each. */
+export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ ctx, accounts }) => {
+  const { t } = ctx;
+  const broken = accounts.filter(needsFix);
+  if (!broken.length) return null;
+  return (
+    <div class="notice bad attention" role="status">
+      <strong>{t('app.attention.title', { n: broken.length })}</strong>
+      <ul>
+        {broken.slice(0, 5).map((a) => (
+          <li>
+            <a href={`/app/accounts/${encodeURIComponent(a.id)}`}>{a.label}</a>
+            <span class="muted"> · {a.service}</span>
+            {a.statusMessage ? <span class="muted"> · {a.statusMessage}</span> : null}{' '}
+            <a
+              class="btn sm"
+              href={`/connect/${encodeURIComponent(a.connectorId)}?account=${encodeURIComponent(a.id)}&returnTo=${encodeURIComponent('/app')}`}
+            >
+              <Icon name="refresh" /> {t('app.acc.reconnect')}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 export interface OverviewView {
   firstName: string | null;
   welcome: boolean;
@@ -383,6 +445,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
         sub={allDone ? t('app.overview.sub') : t('app.overview.subNew')}
       />
       {view.welcome ? <div class="notice ok">{t('app.welcome')}</div> : null}
+      <BrokenAccounts ctx={ctx} accounts={view.accounts} />
       {allDone ? null : (
         <div class="onboard">
           {steps.map((s, i) => (
@@ -433,23 +496,34 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
             <p class="muted pad-x">{t('app.services.none')}</p>
           ) : (
             <div class="acc-list">
-              {view.accounts.map((a) => {
-                const meta = serviceMeta(a.connectorId);
-                return (
-                  <div class="acc">
-                    <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={a.service} size="sm" />
-                    <div class="grow">
-                      <div class="title">{a.label}</div>
-                      <div class="sub">
-                        {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
+              {brokenFirst(view.accounts)
+                .slice(0, OVERVIEW_ACCOUNTS)
+                .map((a) => {
+                  const meta = serviceMeta(a.connectorId);
+                  return (
+                    <div class="acc">
+                      <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={a.service} size="sm" />
+                      <div class="grow">
+                        <div class="title">
+                          <a class="acc-link" href={`/app/accounts/${encodeURIComponent(a.id)}`}>
+                            {a.label}
+                          </a>
+                        </div>
+                        <div class="sub">
+                          {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
+                        </div>
+                      </div>
+                      <div class="ops inline">
+                        <AccountStatus t={t} a={a} />
                       </div>
                     </div>
-                    <div class="ops inline">
-                      <AccountStatus t={t} a={a} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              {view.accounts.length > OVERVIEW_ACCOUNTS ? (
+                <a class="acc acc-more" href="/app/services">
+                  {t('app.services.viewAll', { n: view.accounts.length })}
+                </a>
+              ) : null}
             </div>
           )}
         </div>
@@ -527,9 +601,10 @@ export interface CatalogEntryView {
   description: string;
   connect: 'oauth' | 'form' | 'none';
   ready: boolean;
-  setupVar?: string | undefined;
   custom: boolean;
   accounts: number;
+  /** Another way to connect the same data while this service is not set up (e.g. Gmail over IMAP). */
+  alternative?: { service: string; url: string } | undefined;
 }
 
 export interface CustomServiceView {
@@ -540,9 +615,6 @@ export interface CustomServiceView {
   tools: number;
   lastError: string | null;
 }
-
-/** Mail services that can be connected over IMAP while their OAuth app is not set up. */
-const MAIL_SERVICES = new Set(['gmail', 'outlook']);
 
 export interface ServicesView {
   accounts: AccountView[];
@@ -563,7 +635,10 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
       <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={a.service} />
       <div class="grow">
         <div class="title">
-          {a.label} <AccountStatus t={t} a={a} />
+          <a class="acc-link" href={base}>
+            {a.label}
+          </a>{' '}
+          <AccountStatus t={t} a={a} />
         </div>
         <div class="sub">
           {a.service} · <code>{`${a.connectorId}:${a.name}`}</code>
@@ -656,8 +731,15 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
           <p class="muted pad-x">{t('app.services.none')}</p>
         ) : (
           <div class="acc-list">
-            {view.accounts.map((a) => (
-              <AccountRow ctx={ctx} a={a} />
+            {groupByService(view.accounts).map(([service, accounts]) => (
+              <>
+                <div class="acc-group">
+                  {service} <span class="muted">· {accounts.length}</span>
+                </div>
+                {accounts.map((a) => (
+                  <AccountRow ctx={ctx} a={a} />
+                ))}
+              </>
             ))}
           </div>
         )}
@@ -707,20 +789,17 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                         {s.accounts > 0 ? t('app.services.addAnother') : t('app.services.connect')}
                       </a>
                     )
-                  ) : ctx.user?.isAdmin && s.setupVar ? (
-                    // The owner can fix it; everyone else just sees that it is coming.
-                    <span class="small muted">
-                      {t('app.services.setupVar')} <code>{s.setupVar}</code>
-                    </span>
                   ) : (
-                    <span class="small muted">
+                    <span class="cat-unavailable small muted">
                       <span class="badge">{t('app.services.notReady')}</span>
-                      {MAIL_SERVICES.has(s.service) ? (
-                        <>
-                          {' '}
-                          <a href="/connect/imap?returnTo=%2Fapp%2Fservices">{t('app.services.viaImap')}</a>
-                        </>
+                      {s.alternative ? (
+                        <a
+                          href={`${s.alternative.url}${s.alternative.url.includes('?') ? '&' : '?'}returnTo=%2Fapp%2Fservices`}
+                        >
+                          {t('app.services.useAlt', { alternative: s.alternative.service })}
+                        </a>
                       ) : null}
+                      {ctx.user?.isAdmin ? <a href="/admin/system">{t('app.services.setUp')}</a> : null}
                     </span>
                   )}
                 </div>
@@ -958,8 +1037,18 @@ export interface ActivityView {
   historyDays: number | null;
   /** Link to the next page of the log, when there is one. */
   more?: string | undefined;
+  /** Link back to the newest rows with the same filters. */
+  newest?: string | undefined;
   /** This page continues the log (not its newest rows). */
   paged?: boolean;
+  /** What the log can be narrowed to, and what it is narrowed to now. */
+  filters: {
+    accounts: { id: string; label: string; service: string }[];
+    services: { id: string; name: string }[];
+    account?: string | undefined;
+    service?: string | undefined;
+    errors: boolean;
+  };
 }
 
 export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityView }> = ({
@@ -984,8 +1073,13 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
           </div>
           <div class="chart" role="img" aria-label={t('app.activity.chart')}>
             {view.daily.map((d) => (
-              <div class={`col${d.calls === 0 ? ' zero' : ''}`} title={`${d.day}: ${d.calls}`}>
-                <span class={pctClass('h', d.calls, max)} />
+              <div
+                class={`col${d.calls === 0 ? ' zero' : ''}`}
+                title={`${d.day}: ${t('app.activity.dayTitle', { n: d.calls, errors: d.errors })}`}
+              >
+                {/* Failed calls sit on top of the bar in red, so a bad day stands out. */}
+                {d.errors ? <span class={`err ${pctClass('h', d.errors, max)}`} /> : null}
+                <span class={pctClass('h', d.calls - d.errors, max)} />
               </div>
             ))}
           </div>
@@ -1020,11 +1114,56 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
             {view.historyDays ? t('app.activity.kept', { n: view.historyDays }) : null}
           </span>
         </div>
-        <CallsTable ctx={ctx} calls={view.calls} empty={t('app.activity.none')} withClient />
+        <form method="get" action="/app/activity#log" class="log-filters pad-x" data-autosubmit>
+          <label class="sr-only" for="f-account">
+            {t('app.activity.filterAccount')}
+          </label>
+          <select id="f-account" name="account">
+            <option value="">{t('app.activity.allAccounts')}</option>
+            {view.filters.accounts.map((a) => (
+              <option value={a.id} selected={view.filters.account === a.id}>
+                {a.label} · {a.service}
+              </option>
+            ))}
+          </select>
+          <label class="sr-only" for="f-service">
+            {t('app.activity.filterService')}
+          </label>
+          <select id="f-service" name="service">
+            <option value="">{t('app.activity.allServices')}</option>
+            {view.filters.services.map((x) => (
+              <option value={x.id} selected={view.filters.service === x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+          <label class="check log-errors">
+            <input type="checkbox" name="status" value="error" checked={view.filters.errors} />{' '}
+            {t('app.activity.errorsOnly')}
+          </label>
+          <button type="submit" class="sm">
+            {t('app.activity.apply')}
+          </button>
+          {view.filters.account || view.filters.service || view.filters.errors ? (
+            <a class="small" href="/app/activity#log">
+              {t('app.activity.reset')}
+            </a>
+          ) : null}
+        </form>
+        <CallsTable
+          ctx={ctx}
+          calls={view.calls}
+          empty={t(
+            view.filters.account || view.filters.service || view.filters.errors
+              ? 'app.activity.noneFiltered'
+              : 'app.activity.none',
+          )}
+          withClient
+        />
         {view.more || view.paged ? (
           <div class="actions start pad-x">
             {view.paged ? (
-              <a class="btn sm" href="/app/activity#log">
+              <a class="btn sm" href={view.newest ?? '/app/activity#log'}>
                 {t('app.activity.newest')}
               </a>
             ) : null}

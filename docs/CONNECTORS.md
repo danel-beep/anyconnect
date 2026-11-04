@@ -362,6 +362,54 @@ defineConnector({
   хорошем русском сервисе («Пароль приложения», «Адрес сервера IMAP»), «вы» со строчной, буква «ё»,
   без англицизмов там, где есть обычное слово.
 
+### Инструкция по подключению и примеры запросов
+
+Чтобы человеку не приходилось искать в справке сервиса, где взять ключ, коннектор описывает это сам.
+Инструкция показывается рядом с формой подключения и на странице `/services/<сервис>`, примеры
+запросов — там же и после подключения (`connectorGuide(connector, язык, 'oauth' | 'form')`).
+
+```ts
+ui: {
+  // Шаги, которые зависят от значения поля (например, почтового сервиса): сайт раскрывает нужный
+  // вариант по выбору в форме или по домену адреса (неизвестный домен → вариант `custom`).
+  setupVariants: { field: 'provider', emailField: 'email', domains: { gmail: ['gmail.com'] } },
+  locales: {
+    en: {
+      setup: {
+        oauth: { steps: [{ text: 'Click Connect and sign in with Google.' }] }, // вход через сервис
+        form: {                                                                   // ключ или пароль
+          summary: 'A Todoist API token. Takes about a minute.',
+          steps: [
+            {
+              text: 'Open Settings → Integrations → Developer.',
+              link: { label: 'Open Todoist settings', url: 'https://app.todoist.com/app/settings/integrations/developer' },
+            },
+            { text: 'Copy the API token and paste it into the form.' },
+          ],
+          variantsTitle: 'App password: steps for your provider', // если есть variants
+          variants: { gmail: { title: 'Gmail', steps: [/* ... */] } },
+          tips: ['You can revoke the token in the same place at any time.'],
+        },
+      },
+      prompts: ['What tasks are due today?', 'Add “Call Anna” for tomorrow at 10'],
+    },
+    ru: { /* те же ключи */ },
+  },
+}
+```
+
+- Шаги пишутся словами меню самого сервиса; ссылки — только `https` на сайт сервиса. Форму
+  называйте «форма» («вставьте в форму»), а не «AnyConnect».
+- `oauth` нужен только коннекторам с `oauth`; если хаб не настроен на вход через сервис, форма
+  показывает инструкцию `form`.
+- Ключи `variants` — значения поля из `setupVariants.field` (это список); для ключей доменов то же.
+- Примеры запросов — три–пять, конкретные, теми словами, которыми люди просят ИИ.
+- Тест `test/connectors/ui-texts.test.ts` проверяет, что инструкции и примеры есть на обоих языках
+  или ни на одном, у вариантов одинаковые ключи, а ссылки ведут на `https`.
+
+Новый аккаунт, проверка которого (`test`) не прошла, не сохраняется: форма возвращается с причиной
+и галочкой «Всё равно сохранить». Переподключение существующего аккаунта сохраняется всегда.
+
 ## Общие интерфейсы (capabilities)
 
 Описаны в `src/connectors/capabilities.ts`: вход и выход каждой операции заданы zod-схемами.

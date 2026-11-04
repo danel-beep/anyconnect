@@ -118,6 +118,31 @@ export default defineConnector({
   ui: {
     locales: {
       ru: {
+        setup: {
+          oauth: {
+            summary: 'Ваш аккаунт Google. Меньше минуты.',
+            steps: [
+              {
+                text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными файлами.',
+              },
+              {
+                text: 'Google попросит разрешить AnyConnect смотреть и менять файлы на Диске. Нажмите «Продолжить».',
+              },
+              {
+                text: 'Готово: ИИ находит файлы и читает Документы, Таблицы и PDF на этом Диске.',
+              },
+            ],
+            tips: [
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите AnyConnect в аккаунте Google, раздел «Сторонние приложения и сервисы».',
+            ],
+          },
+        },
+        prompts: [
+          'Найди таблицу с бюджетом на третий квартал и назови итог.',
+          'Перескажи последнюю версию документа «Бриф проекта».',
+          'Какие документы я правил на этой неделе?',
+          'Создай документ «Заметки со встречи 12 ноября» с тем, что мы обсудили.',
+        ],
         name: 'Google Диск',
         description:
           'Google Диск: поиск файлов, чтение документов, таблиц, презентаций и текстовых файлов, создание, переименование, перемещение и удаление.',
@@ -144,6 +169,31 @@ export default defineConnector({
         },
       },
       en: {
+        setup: {
+          oauth: {
+            summary: 'Your Google account. Takes under a minute.',
+            steps: [
+              {
+                text: 'Click Connect and choose the Google account with the files you need.',
+              },
+              {
+                text: 'Google asks to let AnyConnect see and edit your Drive files. Click Continue.',
+              },
+              {
+                text: 'Done: the AI can find files and read Docs, Sheets and PDFs on that Drive.',
+              },
+            ],
+            tips: [
+              'To cut access, delete the account here or remove AnyConnect in your Google Account under Third-party connections.',
+            ],
+          },
+        },
+        prompts: [
+          'Find the Q3 budget spreadsheet and tell me the total.',
+          'Summarise the latest version of “Project brief”.',
+          'Which documents did I edit this week?',
+          'Create a doc “Meeting notes 12 Nov” with the points we just discussed.',
+        ],
         actions: {
           search: {
             title: 'Search files',
