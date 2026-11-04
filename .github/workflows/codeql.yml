@@ -26,9 +26,3 @@ jobs:
       - uses: github/codeql-action/analyze@v3
         with:
           category: /language:javascript-typescript
-      - name: Show clear-text logging paths (temporary debug)
-        if: always()
-        run: |
-          for f in ../results/*.sarif; do
-            jq -r '.runs[].results[] | select(.ruleId=="js/clear-text-logging") | "ALERT " + .locations[0].physicalLocation.artifactLocation.uri + ":" + (.locations[0].physicalLocation.region.startLine|tostring), (.codeFlows[0].threadFlows[0].locations[] | "  " + .location.physicalLocation.artifactLocation.uri + ":" + (.location.physicalLocation.region.startLine|tostring) + " " + (.location.message.text // ""))' "$f"
-          done
