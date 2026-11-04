@@ -16,7 +16,7 @@ export const authEn = {
     'Google has not confirmed this email address. Try another Google account.',
   'login.externalFailed': 'Google sign-in did not complete. Try again.',
   'login.expired': 'The sign-in took too long or was opened in another browser. Try again.',
-  'signup.title': 'Create an Manyplug account',
+  'signup.title': 'Create your Manyplug account',
   'signup.subtitle': 'Free plan, no card. It takes a minute.',
   'signup.termsA': 'By continuing you accept the',
   'signup.termsLink': 'terms of service',

@@ -61,7 +61,7 @@ export type IconName = keyof typeof ICONS;
 
 export const Icon: FC<{ name: IconName; class?: string; label?: string }> = ({ name, class: cls, label }) => (
   <svg
-    class={cls}
+    class={cls ? `i ${cls}` : 'i'}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
