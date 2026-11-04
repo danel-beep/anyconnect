@@ -3,13 +3,25 @@ import { resolveProvider } from '../connectors/oauth/providers.js';
 import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registry.js';
 import type { ConnectorDefinition, ConnectorLogger, TestResult } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
-import { type SecuritySettings, type WorkspaceSettings, workspaces } from '../db/schema.js';
+import {
+  type AccessLevel,
+  type ConfirmLevel,
+  type SecuritySettings,
+  type WorkspaceSettings,
+  workspaces,
+} from '../db/schema.js';
 import { badRequest, notFound } from '../lib/errors.js';
-import { DEFAULT_SECURITY } from '../security/policy.js';
+import type { AiClientRow, AiClientService } from '../security/clients.js';
+import { DEFAULT_SECURITY, type Loosening, type PolicyTarget, type RuleChange } from '../security/policy.js';
+import type { PolicyService } from '../security/policy-service.js';
 import type { AccountRow, AccountService, UpdateAccountInput } from './accounts.js';
 import type { AddServiceInput, CustomServiceManager, ServiceView } from './custom-services.js';
 import { getWorkspace } from './identity.js';
 import type { OAuthAppService } from './oauth-apps.js';
+import type { Principal } from './principal.js';
+
+/** Rule levels and changes, for the setup tools (the hub does not depend on the security layer). */
+export { ACCESS_LEVELS, CONFIRM_LEVELS, type RuleChange } from '../security/policy.js';
 
 /**
  * Workspace administration as plain operations: what the hub's setup tools (`manyplug_*`) and,
@@ -53,6 +65,22 @@ export interface ConnectLink {
 /** `service:account`, `account` (when unambiguous) or an account id. */
 export type AccountRef = string;
 
+/** The access rules as the chat shows them (see `WorkspaceAdmin.rulesOverview`). */
+export interface RulesOverview {
+  defaults: Required<SecuritySettings>;
+  /** Rules for an app and/or an account; persona and service rules are counted in `otherRules`. */
+  rules: {
+    app?: string;
+    account?: string;
+    access: AccessLevel | null;
+    confirm: ConfirmLevel | null;
+  }[];
+  otherRules: number;
+  apps: { id: string; name: string; current: boolean; lastUsedAt: Date | null }[];
+  /** What applies to the calling app on each account. */
+  accounts: { account: string; label: string; access: AccessLevel; confirm: ConfirmLevel }[];
+}
+
 export class WorkspaceAdmin {
   constructor(
     private readonly deps: {
@@ -63,6 +91,8 @@ export class WorkspaceAdmin {
       accounts: AccountService;
       customServices: CustomServiceManager;
       apps: OAuthAppService;
+      policies: PolicyService;
+      aiClients: AiClientService;
       publicUrl: string;
       logger: ConnectorLogger;
     },
@@ -283,5 +313,84 @@ export class WorkspaceAdmin {
     };
     await this.deps.db.update(workspaces).set({ settings: next }).where(eq(workspaces.id, workspaceId));
     return next;
+  }
+
+  // --- Access rules ------------------------------------------------------------
+
+  /** Defaults, the rules for apps and accounts, and what applies to the caller on each account. */
+  async rulesOverview(principal: Principal): Promise<RulesOverview> {
+    const workspaceId = principal.workspaceId;
+    const [defaults, rules, clients, accounts, policy] = await Promise.all([
+      this.security(workspaceId),
+      this.deps.policies.listRules(workspaceId),
+      this.deps.aiClients.list(workspaceId),
+      this.deps.accounts.list(workspaceId),
+      this.deps.policies.forPrincipal(principal),
+    ]);
+    const appName = new Map(clients.map((c) => [c.id, c.name]));
+    const ref = new Map(accounts.map((a) => [a.id, `${a.connectorId}:${a.name}`]));
+    const simple = rules.filter((r) => r.personaId === null && r.connectorId === null);
+    return {
+      defaults,
+      rules: simple.map((r) => ({
+        ...(r.aiClientId ? { app: appName.get(r.aiClientId) ?? r.aiClientId } : {}),
+        ...(r.accountId ? { account: ref.get(r.accountId) ?? r.accountId } : {}),
+        access: r.access,
+        confirm: r.confirm,
+      })),
+      otherRules: rules.length - simple.length,
+      apps: clients.map((c) => ({
+        id: c.id,
+        name: c.name,
+        current: c.id === principal.aiClientId,
+        lastUsedAt: c.lastUsedAt,
+      })),
+      accounts: accounts.map((a) => {
+        const effective = policy.effective({ connectorId: a.connectorId, accountId: a.id });
+        return {
+          account: `${a.connectorId}:${a.name}`,
+          label: a.label,
+          access: effective.access,
+          confirm: effective.confirm,
+        };
+      }),
+    };
+  }
+
+  /** An AI app by id or name (any case); a name two apps share must be given as an id. */
+  async findAiClient(workspaceId: string, ref: string): Promise<AiClientRow> {
+    const all = await this.deps.aiClients.list(workspaceId);
+    const wanted = ref.trim().toLowerCase();
+    const matches = all.filter((c) => c.id === ref || c.name.toLowerCase() === wanted);
+    if (matches.length === 1) return matches[0]!;
+    if (matches.length === 0) throw notFound(`AI app "${ref}"`);
+    throw badRequest(
+      `Several AI apps are called "${ref}": use one of the ids ${matches.map((c) => c.id).join(', ')}.`,
+    );
+  }
+
+  /**
+   * What a rule change would let any app do that it could not before (empty: it only tightens).
+   * `extraTargets` adds what has no account, such as the hub's own settings.
+   */
+  ruleLoosenings(
+    workspaceId: string,
+    change: RuleChange,
+    extraTargets: readonly PolicyTarget[] = [],
+  ): Promise<Loosening[]> {
+    return this.deps.policies.loosenedBy(workspaceId, change, extraTargets);
+  }
+
+  /** Applies a change to the defaults or to the rule for an app and/or an account. */
+  async changeRule(workspaceId: string, change: RuleChange): Promise<void> {
+    if (change.kind === 'defaults') {
+      await this.updateSecurity(workspaceId, {
+        ...(change.access ? { defaultAccess: change.access } : {}),
+        ...(change.confirm ? { defaultConfirm: change.confirm } : {}),
+        ...(change.undoWindowSeconds !== undefined ? { undoWindowSeconds: change.undoWindowSeconds } : {}),
+      });
+      return;
+    }
+    await this.deps.policies.setRuleAt(workspaceId, change);
   }
 }

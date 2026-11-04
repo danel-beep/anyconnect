@@ -194,3 +194,135 @@ export function evaluatePolicy(
     ruleIds: base.ruleIds,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Changes and what they loosen
+// ---------------------------------------------------------------------------
+
+/** Everything a decision depends on besides the caller: the rules and the workspace defaults. */
+export interface PolicyState {
+  rules: readonly PolicyRule[];
+  settings: SecuritySettings;
+}
+
+/**
+ * One change to the policy as the panel and the chat make it: the workspace defaults, or the rule
+ * for an AI app and/or one account (no persona, no service). `undefined` keeps a value; `null`
+ * clears it, so the default or a broader rule applies again.
+ */
+export type RuleChange =
+  | {
+      kind: 'defaults';
+      access?: AccessLevel | undefined;
+      confirm?: ConfirmLevel | undefined;
+      undoWindowSeconds?: number | undefined;
+    }
+  | {
+      kind: 'rule';
+      aiClientId: string | null;
+      accountId: string | null;
+      access?: AccessLevel | null | undefined;
+      confirm?: ConfirmLevel | null | undefined;
+    };
+
+/** Whether a rule is the one a {@link RuleChange} of kind `rule` edits. */
+export function isRuleAt(
+  rule: PolicyRule,
+  at: { aiClientId: string | null; accountId: string | null },
+): boolean {
+  return (
+    rule.aiClientId === at.aiClientId &&
+    rule.accountId === at.accountId &&
+    rule.personaId === null &&
+    rule.connectorId === null
+  );
+}
+
+/** The values the rule at a change's place ends up with (all null: the rule goes away). */
+export function changedRuleValues(
+  existing: Pick<PolicyRule, 'access' | 'confirm' | 'undoWindowSeconds'> | undefined,
+  change: Extract<RuleChange, { kind: 'rule' }>,
+): Pick<PolicyRule, 'access' | 'confirm' | 'undoWindowSeconds'> {
+  return {
+    access: change.access === undefined ? (existing?.access ?? null) : change.access,
+    confirm: change.confirm === undefined ? (existing?.confirm ?? null) : change.confirm,
+    undoWindowSeconds: existing?.undoWindowSeconds ?? null,
+  };
+}
+
+/** The state after a change (pure; a new rule gets the id `new`). */
+export function applyRuleChange(state: PolicyState, change: RuleChange): PolicyState {
+  if (change.kind === 'defaults') {
+    const settings: SecuritySettings = { ...state.settings };
+    if (change.access !== undefined) settings.defaultAccess = change.access;
+    if (change.confirm !== undefined) settings.defaultConfirm = change.confirm;
+    if (change.undoWindowSeconds !== undefined) settings.undoWindowSeconds = change.undoWindowSeconds;
+    return { rules: state.rules, settings };
+  }
+  const existing = state.rules.find((r) => isRuleAt(r, change));
+  const values = changedRuleValues(existing, change);
+  const others = state.rules.filter((r) => r !== existing);
+  const empty = values.access === null && values.confirm === null && values.undoWindowSeconds === null;
+  if (empty) return { rules: others, settings: state.settings };
+  const rule: PolicyRule = {
+    id: existing?.id ?? 'new',
+    aiClientId: change.aiClientId,
+    personaId: null,
+    connectorId: null,
+    accountId: change.accountId,
+    ...values,
+  };
+  return { rules: [...others, rule], settings: state.settings };
+}
+
+/** One way a change lets an app do more than before. */
+export interface Loosening {
+  /** Undefined: an app the rules do not name (any new app falls here). */
+  aiClientId: string | undefined;
+  personaId: string | undefined;
+  target: PolicyTarget;
+  risk: RiskLevel;
+  /** `access`: now allowed; `confirm`: no longer asks first; `undo`: shorter undo window. */
+  change: 'access' | 'confirm' | 'undo';
+}
+
+const RISKS: readonly RiskLevel[] = ['read', 'write', 'dangerous'];
+
+/**
+ * Every place where `after` is more permissive than `before`: an action that becomes allowed,
+ * stops asking first, or gets a shorter undo window, for each app (and an app the rules do not
+ * name), with and without each persona, on each target. Empty means the change only tightens or
+ * changes nothing, so it is safe to apply without asking the user.
+ */
+export function loosenings(
+  before: PolicyState,
+  after: PolicyState,
+  universe: {
+    aiClientIds: readonly string[];
+    personas: readonly PolicyPersona[];
+    targets: readonly PolicyTarget[];
+  },
+): Loosening[] {
+  const found: Loosening[] = [];
+  for (const aiClientId of [undefined, ...universe.aiClientIds]) {
+    for (const persona of [undefined, ...universe.personas]) {
+      const subject: PolicySubject = { aiClientId, persona };
+      for (const target of universe.targets) {
+        for (const risk of RISKS) {
+          const was = evaluatePolicy(before.rules, subject, target, risk, before.settings);
+          const now = evaluatePolicy(after.rules, subject, target, risk, after.settings);
+          const change =
+            !was.allowed && now.allowed
+              ? 'access'
+              : was.allowed && now.allowed && was.confirm && !now.confirm
+                ? 'confirm'
+                : was.allowed && now.allowed && now.undoWindowSeconds < was.undoWindowSeconds
+                  ? 'undo'
+                  : undefined;
+          if (change) found.push({ aiClientId, personaId: persona?.id, target, risk, change });
+        }
+      }
+    }
+  }
+  return found;
+}

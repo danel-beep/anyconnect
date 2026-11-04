@@ -294,7 +294,7 @@ oauth: { provider: 'google', scopes: ['https://www.googleapis.com/auth/gmail.mod
 | --- | --- | --- |
 | `hints` | Подсказки MCP-клиентам (`readOnly`, `destructive`, `idempotent`, `openWorld`) | — |
 | `risk` | `read` / `write` / `dangerous`: для политики доступа, подтверждений и журнала | `read`, если `hints.readOnly`; `dangerous`, если `hints.destructive`; иначе `write` |
-| `assessRisk(input, ctx)` | Повысить риск конкретного вызова, например первое сообщение новому собеседнику → `dangerous` с причиной. Понизить нельзя; если проверка упала, вызов считается `dangerous` | — |
+| `assessRisk(input, ctx)` | Повысить риск конкретного вызова, например первое сообщение новому собеседнику → `dangerous` с причиной. С `confirm: true` вызов спросит пользователя при любых правилах (как `requiresConfirmation`, но для одного вызова). Понизить нельзя; если проверка упала, вызов считается `dangerous` | — |
 | `undo` | Как отменить: `{ kind: 'action', action: 'delete_message' }`, `{ kind: 'delay', seconds: 10 }` (окно отмены) или `{ kind: 'none' }` | не указано |
 | `capability` | Какую общую операцию реализует действие (`'mail.search'`, можно массив и `{ id, mapInput, mapOutput }`) | — |
 | `response.fields` | Поля результата, которые ИИ может выбрать аргументом `fields` (хаб добавит его сам) | аргумента нет |

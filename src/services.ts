@@ -261,6 +261,8 @@ export function createServices(
     accounts,
     customServices,
     apps: oauthApps,
+    policies,
+    aiClients,
     publicUrl: config.publicUrl,
     logger,
   });

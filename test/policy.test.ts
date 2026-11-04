@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { evaluatePolicy, type PolicyRule } from '../src/security/policy.js';
+import {
+  applyRuleChange,
+  evaluatePolicy,
+  loosenings,
+  type PolicyRule,
+  type PolicyState,
+} from '../src/security/policy.js';
 
 let seq = 0;
 function rule(partial: Partial<PolicyRule>): PolicyRule {
@@ -108,5 +114,104 @@ describe('access policy', () => {
       allowed: false,
       confirm: false,
     });
+  });
+});
+
+describe('rule changes and what they loosen', () => {
+  const universe = {
+    aiClientIds: ['app_chatgpt', 'app_claude'],
+    personas: [],
+    targets: [gmailWork, gmailHome, { connectorId: 'manyplug', accountId: null }],
+  };
+  const empty: PolicyState = { rules: [], settings: {} };
+
+  it('edits only the rule at the place of the change and drops it once nothing is set', () => {
+    const set = applyRuleChange(empty, {
+      kind: 'rule',
+      aiClientId: null,
+      accountId: 'acc_work',
+      confirm: 'write',
+    });
+    expect(set.rules).toEqual([
+      expect.objectContaining({ accountId: 'acc_work', confirm: 'write', access: null }),
+    ]);
+    // undefined keeps a value, null clears it
+    const both = applyRuleChange(set, {
+      kind: 'rule',
+      aiClientId: null,
+      accountId: 'acc_work',
+      access: 'read',
+    });
+    expect(both.rules).toEqual([expect.objectContaining({ access: 'read', confirm: 'write' })]);
+    const cleared = applyRuleChange(both, {
+      kind: 'rule',
+      aiClientId: null,
+      accountId: 'acc_work',
+      access: null,
+      confirm: null,
+    });
+    expect(cleared.rules).toEqual([]);
+    const defaults = applyRuleChange(empty, { kind: 'defaults', confirm: 'never', undoWindowSeconds: 30 });
+    expect(defaults.settings).toEqual({ defaultConfirm: 'never', undoWindowSeconds: 30 });
+  });
+
+  it('finds nothing to confirm when a change only tightens', () => {
+    const asks = applyRuleChange(empty, {
+      kind: 'rule',
+      aiClientId: null,
+      accountId: 'acc_work',
+      confirm: 'write',
+    });
+    expect(loosenings(empty, asks, universe)).toEqual([]);
+    const readOnly = applyRuleChange(empty, { kind: 'defaults', access: 'read', undoWindowSeconds: 10 });
+    expect(loosenings(empty, readOnly, universe)).toEqual([]);
+  });
+
+  it('reports fewer confirmations, more access and a shorter undo window', () => {
+    const never = applyRuleChange(empty, {
+      kind: 'rule',
+      aiClientId: 'app_claude',
+      accountId: 'acc_work',
+      confirm: 'never',
+    });
+    const found = loosenings(empty, never, universe);
+    expect(found).toEqual([
+      expect.objectContaining({
+        aiClientId: 'app_claude',
+        target: gmailWork,
+        risk: 'dangerous',
+        change: 'confirm',
+      }),
+    ]);
+
+    const readOnly: PolicyState = { rules: [], settings: { defaultAccess: 'read', undoWindowSeconds: 30 } };
+    const full = applyRuleChange(readOnly, { kind: 'defaults', access: 'full', undoWindowSeconds: 0 });
+    const kinds = new Set(loosenings(readOnly, full, universe).map((l) => l.change));
+    expect(kinds).toEqual(new Set(['access']));
+    const delayed: PolicyState = { rules: [], settings: { undoWindowSeconds: 30 } };
+    const shorter = applyRuleChange(delayed, { kind: 'defaults', undoWindowSeconds: 5 });
+    expect(new Set(loosenings(delayed, shorter, universe).map((l) => l.change))).toEqual(new Set(['undo']));
+  });
+
+  it('sees a loosening that only shows for a persona once a stricter rule goes away', () => {
+    // Default asks before everything; a persona rule says never; an account rule says always.
+    const persona = { id: 'per_work', accountIds: ['acc_work'], maxAccess: 'full' as const };
+    const before: PolicyState = {
+      rules: [
+        rule({ personaId: 'per_work', confirm: 'never' }),
+        rule({ accountId: 'acc_work', confirm: 'always' }),
+      ],
+      settings: { defaultConfirm: 'always' },
+    };
+    const after = applyRuleChange(before, {
+      kind: 'rule',
+      aiClientId: null,
+      accountId: 'acc_work',
+      confirm: null,
+    });
+    expect(loosenings(before, after, { ...universe, personas: [] })).toEqual([]);
+    expect(loosenings(before, after, { ...universe, personas: [persona] })).toContainEqual(
+      expect.objectContaining({ personaId: 'per_work', target: gmailWork, change: 'confirm' }),
+    );
   });
 });

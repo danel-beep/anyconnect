@@ -188,7 +188,8 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     const declaredDelay = call.meta.undo?.kind === 'delay' ? call.meta.undo.seconds : 0;
     const undoWindowSeconds = call.risk === 'read' ? 0 : Math.max(decision.undoWindowSeconds, declaredDelay);
     // Actions that delete data or widen access always need the user, whatever the rules say.
-    const confirm = decision.confirm || call.action.requiresConfirmation === true;
+    const confirm =
+      decision.confirm || call.action.requiresConfirmation === true || call.mustConfirm === true;
     if (!confirm && undoWindowSeconds === 0) return next();
 
     const riskReason = typeof call.locals.riskReason === 'string' ? call.locals.riskReason : undefined;
