@@ -28,7 +28,9 @@ develop further. In practice:
 
 ## Layout and rules
 
-- `src/connectors/sdk.ts` is the connector API and must not import app code.
+- `src/connectors/sdk.ts` is the connector API and must not import app code (nor may anything else
+  under `src/connectors/`). Connectors do all I/O through `ctx.fetch` / `ctx.network` (hub network
+  policy, test fixtures); REST services are best written as HTTP manifests. See `docs/CONNECTORS.md`.
   New service = `defineConnector({...})` in `src/connectors/builtin/`, registered in
   `src/connectors/index.ts`. Never add an input named `account` (reserved for routing).
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.

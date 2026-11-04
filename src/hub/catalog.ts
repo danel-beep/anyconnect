@@ -208,7 +208,7 @@ export function buildCatalog(input: {
         .filter((a) => !a.settings.disabledActions?.includes(action.name))
         .map(toCatalogAccount);
       if (eligible.length === 0) continue;
-      const baseSchema = toJsonSchema(action.input);
+      const baseSchema = action.inputSchema ?? toJsonSchema(action.input);
       const title = action.title ?? action.name;
       if (mode === 'grouped') {
         add({

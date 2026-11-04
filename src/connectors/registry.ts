@@ -1,3 +1,4 @@
+import { resolveProvider, validateProvider } from './oauth/providers.js';
 import type { ConnectorDefinition } from './sdk.js';
 
 const CONNECTOR_ID = /^[a-z][a-z0-9_]{1,23}$/;
@@ -50,6 +51,7 @@ export function validateConnector(connector: ConnectorDefinition): void {
     );
   }
   if (RESERVED_CONNECTOR_IDS.has(connector.id)) throw new Error(`Connector id "${connector.id}" is reserved`);
+  if (connector.oauth) validateProvider(resolveProvider(connector.oauth));
   const seen = new Set<string>();
   for (const action of connector.actions) {
     if (!ACTION_NAME.test(action.name)) {
@@ -59,7 +61,8 @@ export function validateConnector(connector: ConnectorDefinition): void {
     seen.add(action.name);
     if (!action.description.trim())
       throw new Error(`Action "${connector.id}.${action.name}" needs a description`);
-    if (ACCOUNT_ARGUMENT in action.input.shape) {
+    const jsonProperties = (action.inputSchema?.properties ?? {}) as Record<string, unknown>;
+    if (ACCOUNT_ARGUMENT in action.input.shape || ACCOUNT_ARGUMENT in jsonProperties) {
       throw new Error(
         `Action "${connector.id}.${action.name}" must not define an "${ACCOUNT_ARGUMENT}" input`,
       );
