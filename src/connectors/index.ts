@@ -1,5 +1,8 @@
 import demo from './builtin/demo.js';
 import github from './builtin/github.js';
+import gmail from './builtin/gmail.js';
+import gcal from './builtin/google-calendar.js';
+import gdrive from './builtin/google-drive.js';
 import http from './builtin/http.js';
 import imap from './builtin/imap/index.js';
 import notion from './builtin/notion/index.js';
@@ -18,7 +21,10 @@ export function createBuiltinRegistry(): ConnectorRegistry {
     .register(todoist)
     .register(stripe)
     .register(slack)
-    .register(notion);
+    .register(notion)
+    .register(gmail)
+    .register(gcal)
+    .register(gdrive);
 }
 
 export type { ConnectorResolver } from './registry.js';
