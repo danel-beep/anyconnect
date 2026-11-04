@@ -101,9 +101,28 @@ Claude Code откроет браузер для входа и согласия,
    credentials → OAuth client ID → Web application**.
 2. **Authorized redirect URIs**: `https://<ваш адрес>/auth/google/callback` (вход на сайт) и
    `https://<ваш адрес>/connect/callback` (подключение Gmail, Календаря, Диска).
-3. В Render задайте `LOGIN_GOOGLE_CLIENT_ID` и `LOGIN_GOOGLE_CLIENT_SECRET` (или
-   `OAUTH_APP_GOOGLE_CLIENT_ID` / `_SECRET`, если одно приложение и для входа, и для сервисов).
+3. В Render задайте `LOGIN_GOOGLE_CLIENT_ID` и `LOGIN_GOOGLE_CLIENT_SECRET`. Этот же клиент
+   используется и для подключения Gmail, Календаря и Диска, если не заданы отдельные
+   `OAUTH_APP_GOOGLE_CLIENT_ID` / `_SECRET`.
 4. `SUPPORT_EMAIL` — адрес для вопросов и запросов тарифа, его видно на сайте.
+
+### Gmail, Календарь и Диск
+
+1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API** и **Google Drive
+   API** (APIs & Services → Library).
+2. Google Auth Platform → **Data Access** → добавьте доступы коннекторов:
+   `https://www.googleapis.com/auth/gmail.modify`, `https://www.googleapis.com/auth/calendar`,
+   `https://www.googleapis.com/auth/drive`.
+3. Пока приложение не прошло проверку Google, при подключении пользователи видят предупреждение
+   «Google hasn't verified this app» (Advanced → Go to AnyConnect), и подключиться могут не больше
+   100 человек. Для себя и первых пользователей этого достаточно.
+4. Для открытого запуска нужна проверка в Google Auth Platform → **Verification Center**:
+   - Календарь — «чувствительный» доступ: подтверждение домена, политика конфиденциальности,
+     объяснение, зачем нужен доступ, и видео, как приложение им пользуется.
+   - Gmail и Диск — «ограниченный» доступ: всё то же плюс ежегодная платная проверка безопасности
+     (CASA) у одной из лабораторий, которые назначает Google.
+   - Домен `*.onrender.com` подтвердить сложнее, чем свой: для проверки лучше подключить свой
+     домен (`PUBLIC_URL`) и добавить новые адреса возврата в клиент.
 
 Остальные настройки сайта (`SIGNUPS`, `ADMIN_EMAILS`, `ADMIN_ALLOWED_IPS`, `ADMIN_SESSION_HOURS`,
 `TRUST_PROXY`) описаны в `.env.example`.
