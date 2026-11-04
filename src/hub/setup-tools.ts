@@ -7,25 +7,36 @@ import type {
   ActionResult,
   AnyObjectSchema,
   ConnectorDefinition,
+  RiskAssessment,
   RiskLevel,
 } from '../connectors/sdk.js';
 import { ACCOUNT_NAME } from '../core/accounts.js';
 import { AddMcpServerInput } from '../core/custom-services.js';
 import type { Principal } from '../core/principal.js';
-import type { WorkspaceAdmin } from '../core/workspace-admin.js';
+import {
+  ACCESS_LEVELS,
+  CONFIRM_LEVELS,
+  type RuleChange,
+  type RulesOverview,
+  type WorkspaceAdmin,
+} from '../core/workspace-admin.js';
+import { AppError, badRequest } from '../lib/errors.js';
 
 /**
  * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
  * everything else from their AI assistant — connect accounts, add services, rename, disable tools,
- * change settings. They form the connector `manyplug`, whose actions run on the workspace instead
- * of an account, so they go through the same executor stages as every other call: audit, access
- * rules, confirmation, duplicate protection.
+ * set access rules, change settings. They form the connector `manyplug`, whose actions run on the
+ * workspace instead of an account, so they go through the same executor stages as every other
+ * call: audit, access rules, confirmation, duplicate protection.
  *
  * Rules: secrets never pass through the chat (connecting returns a link to the hub's page);
  * anything that removes data or adds a new destination for data is `dangerous` and always needs the
- * user's confirmation (`requiresConfirmation`, which access rules cannot turn off). Access rules,
- * personas, AI clients and sign-in security are deliberately not editable from the chat: an AI must
- * not be able to lift its own restrictions.
+ * user's confirmation (`requiresConfirmation`, which access rules cannot turn off). An AI must not
+ * lift its own restrictions: a change that tightens access rules applies at once, but one that
+ * loosens them anywhere (more access, fewer confirmations, a shorter undo window, a tool or account
+ * turned back on) is held for the user's confirmation (`assessRisk` with `confirm`), which only the
+ * user can give, in the chat's own prompt, in Telegram or on the hub's page. Personas, AI clients
+ * and sign-in security stay on the website.
  */
 
 export const SETUP_CONNECTOR_ID = BRAND.slug;
@@ -49,6 +60,8 @@ interface SetupActionSpec<TInput extends AnyObjectSchema> {
   risk: RiskLevel;
   requiresConfirmation?: boolean;
   hints?: ActionHints;
+  /** Raises the risk of one call or holds it for the user (see `ActionDefinition.assessRisk`). */
+  assessRisk?(input: z.output<TInput>, ctx: SetupContext): Promise<RiskAssessment | undefined>;
   run(input: z.output<TInput>, ctx: SetupContext): Promise<ActionResult>;
 }
 
@@ -57,9 +70,15 @@ interface SetupActionSpec<TInput extends AnyObjectSchema> {
  * units with a {@link SetupContext} (see `Hub.invoke`), never with an account context.
  */
 function setupAction<TInput extends AnyObjectSchema>(spec: SetupActionSpec<TInput>): ActionDefinition {
-  const { run, ...rest } = spec;
+  const { run, assessRisk, ...rest } = spec;
   return {
     ...rest,
+    ...(assessRisk
+      ? {
+          assessRisk: (input: unknown, ctx: ActionContext<unknown, unknown>) =>
+            assessRisk(input as z.output<TInput>, ctx as unknown as SetupContext),
+        }
+      : {}),
     run: (input: unknown, ctx: ActionContext<unknown, unknown>) =>
       run(input as z.output<TInput>, ctx as unknown as SetupContext),
   };
@@ -83,6 +102,93 @@ const accountView = (a: {
   ...(a.statusMessage ? { statusMessage: a.statusMessage } : {}),
   ...(a.settings.disabledActions?.length ? { disabledTools: a.settings.disabledActions } : {}),
 });
+
+/** The hub's own settings as a policy target (setup tools act on no account). */
+const HUB_TARGET = { connectorId: SETUP_CONNECTOR_ID, accountId: null };
+
+const LEVELS = {
+  access:
+    'none: no access · read: only reading · write: reading and changes · full: everything, including sending and deleting',
+  confirm:
+    'when the app asks the user first: never · dangerous: before sending, deleting and other risky actions · write: before any change · always: before everything, reading too',
+};
+
+/** The rules for the AI: defaults, rules for apps and accounts, and what applies to the caller. */
+function rulesView(o: RulesOverview) {
+  return {
+    defaults: {
+      access: o.defaults.defaultAccess,
+      confirm: o.defaults.defaultConfirm,
+      undo_window_seconds: o.defaults.undoWindowSeconds,
+    },
+    rules: o.rules,
+    ...(o.otherRules
+      ? { other_rules: `${o.otherRules} more (for personas or whole services), managed on the website` }
+      : {}),
+    apps: o.apps.map((a) => ({ app: a.name, id: a.id, ...(a.current ? { this_app: true } : {}) })),
+    for_this_app: o.accounts,
+    levels: LEVELS,
+  };
+}
+
+const RuleInput = z.object({
+  app: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe('AI app name or id, or "this" for the app making this call. Leave out for every app.'),
+  account: accountRef.optional().describe('Leave out for every account.'),
+  access: z.enum(ACCESS_LEVELS).nullable().optional().describe('null: back to the default'),
+  confirm: z.enum(CONFIRM_LEVELS).nullable().optional().describe('null: back to the default'),
+  undo_window_seconds: z
+    .number()
+    .int()
+    .min(0)
+    .max(3600)
+    .optional()
+    .describe('Defaults only: seconds a change waits before it runs, so the user can cancel it'),
+});
+
+/** The change a `set_rule` call asks for; throws a user-safe error for a call that makes no sense. */
+async function ruleChangeOf(input: z.output<typeof RuleInput>, ctx: SetupContext): Promise<RuleChange> {
+  const { app, account, access, confirm, undo_window_seconds } = input;
+  if (access === undefined && confirm === undefined && undo_window_seconds === undefined) {
+    throw badRequest('Set access, confirm or undo_window_seconds.');
+  }
+  if (!app && !account) {
+    if (access === null || confirm === null) throw badRequest('The defaults can be changed, not removed.');
+    return { kind: 'defaults', access, confirm, undoWindowSeconds: undo_window_seconds };
+  }
+  if (undo_window_seconds !== undefined) {
+    throw badRequest('The undo window is set for everything at once: leave out app and account.');
+  }
+  const workspaceId = ctx.principal.workspaceId;
+  let aiClientId: string | null = null;
+  if (app?.toLowerCase() === 'this') {
+    if (!ctx.principal.aiClientId)
+      throw badRequest('This connection is not linked to an AI app; name the app.');
+    aiClientId = ctx.principal.aiClientId;
+  } else if (app) {
+    aiClientId = (await ctx.admin.findAiClient(workspaceId, app)).id;
+  }
+  const accountId = account ? (await ctx.admin.findAccount(workspaceId, account)).id : null;
+  return { kind: 'rule', aiClientId, accountId, access, confirm };
+}
+
+/** Short description of what a loosening change does, shown when the user is asked to confirm. */
+function looseningReason(input: z.output<typeof RuleInput>, kinds: Set<string>): string {
+  const who = [
+    input.app ? `app ${input.app}` : 'every app',
+    input.account ? `on ${input.account}` : 'on every account',
+  ];
+  const what = [
+    ...(kinds.has('access') ? ['may do more'] : []),
+    ...(kinds.has('confirm') ? ['asks before fewer actions'] : []),
+    ...(kinds.has('undo') ? ['gets a shorter undo window'] : []),
+  ];
+  return `Lowers your protection: ${who.join(' ')} ${what.join(', ')}`;
+}
 
 const NEW_TOOLS_HINT =
   'New tools work right away through manyplug_search_tools and manyplug_call_tool; some apps show them in their tool list only after reconnecting.';
@@ -141,6 +247,22 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     }),
     risk: 'write',
     hints: { idempotent: true, openWorld: false },
+    // Turning back on what the user turned off lifts a restriction: the user confirms it.
+    async assessRisk({ account, enabled, enable_tools }, ctx) {
+      if (enabled !== true && !enable_tools?.length) return undefined;
+      const row = await ctx.admin.findAccount(ctx.principal.workspaceId, account).catch(() => undefined);
+      if (!row) return undefined; // run() reports the unknown account
+      const disabled = new Set(row.settings.disabledActions ?? []);
+      const back = (enable_tools ?? []).filter((name) => disabled.has(name));
+      const ref = `${row.connectorId}:${row.name}`;
+      if (enabled === true && !row.enabled) {
+        return { risk: 'write', confirm: true, reason: `Turns account ${ref} back on` };
+      }
+      if (back.length) {
+        return { risk: 'write', confirm: true, reason: `Turns tools of ${ref} back on: ${back.join(', ')}` };
+      }
+      return undefined;
+    },
     async run({ account, disable_tools, enable_tools, ...change }, ctx) {
       const row = await ctx.admin.updateAccount(ctx.principal.workspaceId, account, {
         ...change,
@@ -221,6 +343,52 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     async run({ service }, ctx) {
       await ctx.admin.removeService(ctx.principal.workspaceId, service);
       return { removed: service };
+    },
+  }),
+  setupAction({
+    name: 'rules',
+    title: 'Show access rules',
+    description:
+      'Shows what each AI app may do on each account and when it asks the user first: defaults, rules and what applies to this app.',
+    input: z.object({}),
+    risk: 'read',
+    hints: { readOnly: true, openWorld: false },
+    async run(_input, ctx) {
+      return rulesView(await ctx.admin.rulesOverview(ctx.principal));
+    },
+  }),
+  setupAction({
+    name: 'set_rule',
+    title: 'Change an access rule',
+    description:
+      'Sets what an AI app may do (access: none / read / write / full) and when it asks the user first (confirm: never / dangerous / write / always) for one app and/or one account, or the defaults when neither is given. null returns a value to the default. Tightening applies at once; anything that loosens protection waits for the user’s confirmation.',
+    input: RuleInput,
+    risk: 'write',
+    hints: { idempotent: true, openWorld: false },
+    async assessRisk(input, ctx) {
+      let change: RuleChange;
+      try {
+        change = await ruleChangeOf(input, ctx);
+      } catch (error) {
+        if (error instanceof AppError) return undefined; // run() reports the same problem
+        throw error;
+      }
+      try {
+        const loosened = await ctx.admin.ruleLoosenings(ctx.principal.workspaceId, change, [HUB_TARGET]);
+        if (!loosened.length) return undefined;
+        return {
+          risk: 'dangerous',
+          confirm: true,
+          reason: looseningReason(input, new Set(loosened.map((l) => l.change))),
+        };
+      } catch {
+        // Fail closed: if the check cannot run, the user decides.
+        return { risk: 'dangerous', confirm: true, reason: 'Changes your access rules' };
+      }
+    },
+    async run(input, ctx) {
+      await ctx.admin.changeRule(ctx.principal.workspaceId, await ruleChangeOf(input, ctx));
+      return { saved: true, ...rulesView(await ctx.admin.rulesOverview(ctx.principal)) };
     },
   }),
   setupAction({

@@ -181,4 +181,97 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
     expect(actions).not.toContain('add_service');
     expect(usage.every((r) => r.caller === `user:${principal.userId}`)).toBe(true);
   });
+
+  describe('access rules from the chat', () => {
+    const approveOpen = async (action: string) => {
+      const row = (await hub.services.pendingCalls.listOpen(workspaceId)).find((r) => r.action === action);
+      expect(row).toBeDefined();
+      await hub.services.pendingCalls.decide(row!.id, true, 'web');
+      await hub.services.pendingRunner.tick();
+    };
+    const accountRule = async () => {
+      const account = (await hub.services.accounts.findByName(workspaceId, 'demo', 'rules'))!;
+      return (await hub.services.policies.listRules(workspaceId)).find((r) => r.accountId === account.id);
+    };
+
+    beforeAll(async () => {
+      await hub.services.accounts.create(workspaceId, {
+        connectorId: 'demo',
+        name: 'rules',
+        label: 'Rules',
+        credentials: { secret: 's' },
+      });
+    });
+
+    it('shows the defaults and what applies to this app on each account', async () => {
+      const data = json(await call('manyplug_rules'));
+      expect(data.defaults).toEqual({ access: 'full', confirm: 'dangerous', undo_window_seconds: 0 });
+      expect(data.for_this_app).toContainEqual({
+        account: 'demo:rules',
+        label: 'Rules',
+        access: 'full',
+        confirm: 'dangerous',
+      });
+      expect(data.levels.confirm).toContain('dangerous');
+    });
+
+    it('applies a change that only tightens at once', async () => {
+      const data = json(await call('manyplug_set_rule', { account: 'demo:rules', confirm: 'always' }));
+      expect(data.saved).toBe(true);
+      // Unset values are left out of results.
+      expect(data.rules).toContainEqual({ account: 'demo:rules', confirm: 'always' });
+      expect(await accountRule()).toMatchObject({ confirm: 'always' });
+    });
+
+    it('holds a change that loosens protection until the user confirms it, whatever the rules say', async () => {
+      // The setup tools already run with "never ask" (rule from an earlier test): it does not help.
+      const held = await call('manyplug_set_rule', { account: 'demo:rules', confirm: 'never' });
+      expect(text(held)).toContain('/confirm/');
+      expect(await accountRule()).toMatchObject({ confirm: 'always' });
+      const [row] = (await hub.services.pendingCalls.listOpen(workspaceId)).filter(
+        (r) => r.action === 'set_rule',
+      );
+      expect(row).toMatchObject({
+        risk: 'dangerous',
+        reason: expect.stringContaining('Lowers your protection'),
+      });
+
+      await approveOpen('set_rule');
+      expect(await accountRule()).toMatchObject({ confirm: 'never' });
+      const repeat = json(await call('manyplug_set_rule', { account: 'demo:rules', confirm: 'never' }));
+      expect(repeat.saved).toBe(true);
+    });
+
+    it('treats the defaults the same way', async () => {
+      const stricter = json(await call('manyplug_set_rule', { confirm: 'write', undo_window_seconds: 20 }));
+      expect(stricter.defaults).toEqual({ access: 'full', confirm: 'write', undo_window_seconds: 20 });
+      const looser = await call('manyplug_set_rule', { undo_window_seconds: 0 });
+      expect(text(looser)).toContain('/confirm/');
+      expect((await hub.services.admin.security(workspaceId)).undoWindowSeconds).toBe(20);
+      await approveOpen('set_rule');
+      expect((await hub.services.admin.security(workspaceId)).undoWindowSeconds).toBe(0);
+    });
+
+    it('asks before turning back on a tool the user turned off', async () => {
+      const hidden = json(
+        await call('manyplug_update_account', { account: 'demo:rules', disable_tools: ['fail'] }),
+      );
+      expect(hidden.updated.disabledTools).toEqual(['fail']);
+      const back = await call('manyplug_update_account', { account: 'demo:rules', enable_tools: ['fail'] });
+      expect(text(back)).toContain('/confirm/');
+      await approveOpen('update_account');
+      const account = await hub.services.accounts.findByName(workspaceId, 'demo', 'rules');
+      expect(account!.settings.disabledActions).toEqual([]);
+    });
+
+    it('explains a mistake without asking the user anything', async () => {
+      const unknown = await call('manyplug_set_rule', { app: 'Nope', confirm: 'never' });
+      expect(unknown.isError).toBe(true);
+      expect(text(unknown)).toContain('AI app "Nope" not found');
+      const removal = await call('manyplug_set_rule', { confirm: null });
+      expect(text(removal)).toContain('can be changed, not removed');
+      const open = await hub.services.pendingCalls.listOpen(workspaceId);
+      expect(open.filter((r) => r.action === 'set_rule')).toEqual([]);
+    });
+  });
 });

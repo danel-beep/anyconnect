@@ -17,13 +17,20 @@ import { newId } from '../lib/ids.js';
 import {
   ACCESS_LEVELS,
   accountPolicy,
+  applyRuleChange,
   CONFIRM_LEVELS,
+  changedRuleValues,
   evaluatePolicy,
+  isRuleAt,
+  type Loosening,
+  loosenings,
   type PolicyDecision,
   type PolicyPersona,
   type PolicyRule,
+  type PolicyState,
   type PolicySubject,
   type PolicyTarget,
+  type RuleChange,
 } from './policy.js';
 
 export type AccessRuleRow = typeof accessRules.$inferSelect;
@@ -71,6 +78,17 @@ export class CallerPolicy {
   /** Can the caller see this account at all (any risk)? */
   seesAccount(target: PolicyTarget): boolean {
     return accountPolicy(this.rules, this.subject, target, this.settings).access !== 'none';
+  }
+
+  /** What applies to the caller on a target: access level, from which risk it asks, undo window. */
+  effective(target: PolicyTarget) {
+    const { access, confirmLevel, undoWindowSeconds } = accountPolicy(
+      this.rules,
+      this.subject,
+      target,
+      this.settings,
+    );
+    return { access, confirm: confirmLevel, undoWindowSeconds };
   }
 
   decide(target: PolicyTarget, risk: RiskLevel): PolicyDecision {
@@ -167,27 +185,74 @@ export class PolicyService {
     scope: { aiClientId: string } | { accountId: string },
     value: { access: AccessLevel | null; confirm: ConfirmLevel | null },
   ): Promise<void> {
-    const aiClientId = 'aiClientId' in scope ? scope.aiClientId : null;
-    const accountId = 'accountId' in scope ? scope.accountId : null;
-    const existing = (await this.listRules(workspaceId)).find(
-      (r) =>
-        r.aiClientId === aiClientId &&
-        r.accountId === accountId &&
-        r.personaId === null &&
-        r.connectorId === null,
-    );
-    if (value.access === null && value.confirm === null) {
+    await this.setRuleAt(workspaceId, {
+      kind: 'rule',
+      aiClientId: 'aiClientId' in scope ? scope.aiClientId : null,
+      accountId: 'accountId' in scope ? scope.accountId : null,
+      ...value,
+    });
+  }
+
+  /**
+   * Sets the rule for an AI app and/or one account (no persona, no service), as `applyRuleChange`
+   * describes: `undefined` keeps a value, `null` clears it, and a rule left with nothing set is
+   * removed so the defaults apply again.
+   */
+  async setRuleAt(workspaceId: string, change: Extract<RuleChange, { kind: 'rule' }>): Promise<void> {
+    const existing = (await this.listRules(workspaceId)).find((r) => isRuleAt(r, change));
+    const values = changedRuleValues(existing, change);
+    if (values.access === null && values.confirm === null && values.undoWindowSeconds === null) {
       if (existing) await this.deleteRule(workspaceId, existing.id);
       return;
     }
-    const input = { aiClientId, accountId, access: value.access, confirm: value.confirm };
-    if (existing)
-      await this.updateRule(workspaceId, existing.id, {
-        ...input,
-        undoWindowSeconds: existing.undoWindowSeconds,
-        note: existing.note,
-      });
+    const input = { aiClientId: change.aiClientId, accountId: change.accountId, ...values };
+    if (existing) await this.updateRule(workspaceId, existing.id, { ...input, note: existing.note });
     else await this.createRule(workspaceId, input);
+  }
+
+  /** The workspace's rules and defaults, as the policy sees them. */
+  async state(workspaceId: string): Promise<PolicyState> {
+    const [rules, [workspace]] = await Promise.all([
+      this.listRules(workspaceId),
+      this.db
+        .select({ settings: workspaces.settings })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1),
+    ]);
+    return { rules, settings: workspace?.settings.security ?? {} };
+  }
+
+  /**
+   * What a change would loosen for any app, persona and account of the workspace (see
+   * `loosenings`); empty when it only tightens. `extraTargets` adds targets without an account,
+   * such as the hub's own settings.
+   */
+  async loosenedBy(
+    workspaceId: string,
+    change: RuleChange,
+    extraTargets: readonly PolicyTarget[] = [],
+  ): Promise<Loosening[]> {
+    const [state, clients, personaRows, accountRows] = await Promise.all([
+      this.state(workspaceId),
+      this.db.select({ id: aiClients.id }).from(aiClients).where(eq(aiClients.workspaceId, workspaceId)),
+      this.db
+        .select({ id: personas.id, accountIds: personas.accountIds, maxAccess: personas.maxAccess })
+        .from(personas)
+        .where(eq(personas.workspaceId, workspaceId)),
+      this.db
+        .select({ id: accounts.id, connectorId: accounts.connectorId })
+        .from(accounts)
+        .where(eq(accounts.workspaceId, workspaceId)),
+    ]);
+    return loosenings(state, applyRuleChange(state, change), {
+      aiClientIds: clients.map((c) => c.id),
+      personas: personaRows,
+      targets: [
+        ...accountRows.map((a) => ({ connectorId: a.connectorId, accountId: a.id })),
+        ...extraTargets,
+      ],
+    });
   }
 
   async createRule(workspaceId: string, raw: AccessRuleInput): Promise<AccessRuleRow> {
