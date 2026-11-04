@@ -74,8 +74,13 @@ export interface CallContext {
   tool: CatalogTool;
   connector: ConnectorDefinition;
   action: ActionDefinition;
-  account: CatalogAccount;
-  accountRow: AccountRow;
+  /**
+   * What the unit acts on: one account of a service, or the workspace itself (the hub's own setup
+   * tools, connector `anyconnect`). Workspace units have no `account` / `accountRow`.
+   */
+  scope: 'account' | 'workspace';
+  account?: CatalogAccount;
+  accountRow?: AccountRow;
   /** The action input, already validated by the action's schema. */
   input: Record<string, unknown>;
   /** Hub-level options taken from reserved arguments. */
@@ -83,7 +88,10 @@ export interface CallContext {
   /** Declared risk, possibly raised by the `risk` stage; `confirm` and `audit` use the final value. */
   risk: RiskLevel;
   meta: CallMeta;
-  /** The connector context for this account (credentials decrypted on first use, then cached). */
+  /**
+   * The context the action runs with: for an account, the connector context (credentials decrypted
+   * on first use, then cached); for the workspace, the hub's setup context.
+   */
   context(): Promise<AccountContext<unknown, unknown>>;
   /** Aborted on client cancellation or when the deadline passes. */
   signal: AbortSignal;
@@ -98,6 +106,16 @@ export interface CallContext {
   preApproved?: boolean;
   /** Set when the unit is part of a bigger call (fan-out over accounts, capability tool, batch). */
   group?: { kind: 'fanout' | 'capability' | 'batch'; id: string };
+}
+
+/** Key for per-target state (rate limits, duplicate protection): the account, or the workspace. */
+export function unitKey(call: CallContext): string {
+  return call.account ? call.account.id : `workspace:${call.principal.workspaceId}`;
+}
+
+/** How the target is named in messages to the AI. */
+export function unitLabel(call: CallContext): string {
+  return call.account ? `account "${call.account.name}"` : 'this workspace';
 }
 
 export type Next = () => Promise<ExecResult>;

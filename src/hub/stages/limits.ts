@@ -1,6 +1,6 @@
 import type { RateLimitSpec } from '../../connectors/sdk.js';
 import type { RateLimiter } from '../../lib/rate-limit.js';
-import type { CallContext, Middleware } from '../executor.js';
+import { type CallContext, type Middleware, unitKey, unitLabel } from '../executor.js';
 import { type ExecResult, errorResult } from '../result.js';
 
 const TRANSIENT = new Set(['rate_limited', 'upstream']);
@@ -50,7 +50,7 @@ export function limitsStage(options: LimitsOptions): Middleware {
     }
     call.audit.outcome = 'rate_limited';
     return errorResult(
-      `Too many calls to ${call.connector.name} for account "${call.account.name}" (limit ${spec.requests} per ${spec.perSeconds} s). Retry after ${slot.retryAfterSeconds} s.`,
+      `Too many calls to ${call.connector.name} for ${unitLabel(call)} (limit ${spec.requests} per ${spec.perSeconds} s). Retry after ${slot.retryAfterSeconds} s.`,
       'rate_limited',
       slot.retryAfterSeconds,
     );
@@ -58,11 +58,11 @@ export function limitsStage(options: LimitsOptions): Middleware {
 
   return async (call, next) => {
     if (call.connector.rateLimit) {
-      const denied = await acquire(call, `svc:${call.account.id}`, call.connector.rateLimit);
+      const denied = await acquire(call, `svc:${unitKey(call)}`, call.connector.rateLimit);
       if (denied) return denied;
     }
     if (call.action.rateLimit) {
-      const denied = await acquire(call, `act:${call.account.id}:${call.action.name}`, call.action.rateLimit);
+      const denied = await acquire(call, `act:${unitKey(call)}:${call.action.name}`, call.action.rateLimit);
       if (denied) return denied;
     }
 

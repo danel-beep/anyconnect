@@ -116,9 +116,18 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
 
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
+    // With one service everything fits the budget, setup tools included.
     expect(names).toEqual([
+      'anyconnect_add_service',
       'anyconnect_call_tools',
+      'anyconnect_connect_account',
       'anyconnect_list_accounts',
+      'anyconnect_remove_account',
+      'anyconnect_remove_service',
+      'anyconnect_services',
+      'anyconnect_test_account',
+      'anyconnect_update_account',
+      'anyconnect_update_settings',
       'demo_account_info',
       'demo_echo',
       'demo_fail',

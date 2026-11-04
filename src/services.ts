@@ -11,6 +11,7 @@ import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-
 import { CustomServiceManager } from './core/custom-services.js';
 import { AccountHealthService } from './core/health.js';
 import { OAuthAppService } from './core/oauth-apps.js';
+import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { TokenManager } from './core/oauth-tokens.js';
 import { PasskeyService } from './core/passkeys.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
@@ -20,6 +21,7 @@ import { createDatabase, type Database, type Db } from './db/client.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
 import { type IdempotencyStore, MemoryIdempotencyStore } from './hub/idempotency.js';
+import { SETUP_CONNECTOR } from './hub/setup-tools.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
 import { SecretBox } from './lib/crypto.js';
@@ -64,6 +66,8 @@ export interface Services {
   connectors: WorkspaceConnectorResolver;
   /** Remote MCP servers and HTTP manifests added without code. */
   customServices: CustomServiceManager;
+  /** Workspace administration (what the setup tools and the panel do for the user). */
+  admin: WorkspaceAdmin;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -220,11 +224,21 @@ export function createServices(
     untrusted: untrustedStage,
   };
 
+  const admin = new WorkspaceAdmin({
+    db,
+    connectors,
+    accounts,
+    customServices,
+    apps: oauthApps,
+    publicUrl: config.publicUrl,
+    logger,
+  });
   const hub = new Hub({
     db,
     connectors,
     accounts,
     logger,
+    setup: { connector: SETUP_CONNECTOR, admin },
     rateLimiter,
     idempotency,
     toolTimeoutMs: config.toolTimeoutMs,
@@ -281,6 +295,7 @@ export function createServices(
     network,
     connectors,
     customServices,
+    admin,
     accounts,
     oauthApps,
     tokens,

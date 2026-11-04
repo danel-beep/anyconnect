@@ -236,6 +236,11 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
   hints?: ActionHints;
   /** Default: `read` if `hints.readOnly`, `dangerous` if `hints.destructive`, otherwise `write`. */
   risk?: RiskLevel;
+  /**
+   * Always ask the user before running, whatever the access rules say (they cannot turn this off).
+   * For actions that could weaken protection or are hard to take back, e.g. removing an account.
+   */
+  requiresConfirmation?: boolean;
   undo?: UndoSpec;
   /** Shared interface operation(s) this action implements, e.g. `'mail.search'`. */
   capability?: CapabilityId | CapabilityBinding | Array<CapabilityId | CapabilityBinding>;

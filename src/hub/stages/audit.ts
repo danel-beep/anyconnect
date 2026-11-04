@@ -51,7 +51,7 @@ export function auditStage(deps: { db: Db; logger: Logger }): Middleware {
       toolName: call.tool.name,
       connectorId: call.connector.id,
       action: call.action.name,
-      accountId: call.account.id,
+      accountId: call.account?.id ?? null,
       risk: call.risk,
       outcome: call.audit.outcome,
       result,
