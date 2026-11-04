@@ -5,7 +5,6 @@ import { ConnectorError } from '../connectors/sdk.js';
 import type { AccountService } from '../core/accounts.js';
 import type { Db } from '../db/client.js';
 import { accounts, messengerAccounts } from '../db/schema.js';
-import type { SecretBox } from '../lib/crypto.js';
 import { newId } from '../lib/ids.js';
 import type { NetworkPolicy } from '../lib/network.js';
 import type { Logger } from '../logger.js';
@@ -70,7 +69,6 @@ export class SessionHost implements DeliveryExecutor {
   constructor(
     private readonly deps: {
       db: Db;
-      secrets: SecretBox;
       accounts: AccountService;
       connectors: ConnectorRegistry;
       messaging: Messaging;
@@ -223,7 +221,7 @@ export class SessionHost implements DeliveryExecutor {
       driver,
       session: {
         account: { id: accountId, name: resolved.row.name, config: ctx.config, credentials: ctx.credentials },
-        state: new FencedSessionState(this.deps.db, this.deps.secrets, accountId, {
+        state: new FencedSessionState(this.deps.db, this.deps.messaging.ciphers, accountId, {
           owner: this.deps.leases.owner,
           token: running.token,
         }),
@@ -447,7 +445,7 @@ export class SessionHost implements DeliveryExecutor {
       await running?.live?.logout?.();
     } finally {
       if (running) {
-        await new FencedSessionState(this.deps.db, this.deps.secrets, accountId, {
+        await new FencedSessionState(this.deps.db, this.deps.messaging.ciphers, accountId, {
           owner: this.deps.leases.owner,
           token: running.token,
         })

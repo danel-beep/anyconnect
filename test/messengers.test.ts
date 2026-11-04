@@ -208,6 +208,44 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     for (const secret of ['счёт', 'Анна', 'Петрова', 'доставку', '"42"']) expect(raw).not.toContain(secret);
   });
 
+  it("encrypts stored messages with the account's own data key", async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(3, 'Секретный номер заказа 7781'));
+    const [row] = await hub.services.db
+      .select()
+      .from(messengerMessages)
+      .where(eq(messengerMessages.accountId, account.id));
+    const [chat] = await hub.services.db
+      .select()
+      .from(messengerChats)
+      .where(eq(messengerChats.accountId, account.id));
+    const context = `messenger:message:${row!.id}`;
+    // A data-key envelope, which the master key alone cannot open.
+    expect(row!.bodyEncrypted).toMatch(/^d1\./);
+    expect(chat!.infoEncrypted).toMatch(/^d1\./);
+    expect(() => hub.services.secrets.decryptJson(row!.bodyEncrypted, context)).toThrow();
+
+    // Another account's key cannot open it either, even with the right context.
+    const other = await hub.services.accounts.create(principal.workspaceId, {
+      connectorId: 'telegram',
+      name: 'other',
+      label: 'Другой',
+      config: { mode: 'bot', botApiUrl: apis.url },
+      credentials: { botToken: BOT_TOKEN },
+    });
+    const foreign = await hub.services.messaging.ciphers.forAccount(other.id);
+    expect(() => foreign.decryptJson(row!.bodyEncrypted, context)).toThrow();
+
+    // Rows written with the master key before per-account keys stay readable.
+    const body = { externalId: '3', text: 'Старая запись', attachments: [] };
+    await hub.services.db
+      .update(messengerMessages)
+      .set({ bodyEncrypted: hub.services.secrets.encryptJson(body, context) })
+      .where(eq(messengerMessages.id, row!.id));
+    const read = json(await call('telegram_read_chat', { account: 'shop', chat: chat!.id }));
+    expect(read.messages.map((m: { text: string }) => m.text)).toEqual(['Старая запись']);
+  });
+
   it('asks the user before sending, by default', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(9, 'Пришлите счёт'));
