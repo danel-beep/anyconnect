@@ -19,9 +19,10 @@ export const accountPagesEn = {
   'security.step.codes': 'Recovery codes',
   'security.step.codesWhy': 'Get back in if you lose your phone or key.',
   'security.step.vaultKey': 'Vault recovery key',
-  'security.step.vaultKeyWhy': 'Opens your private vault if you lose every browser.',
+  'security.step.vaultKeyWhy': 'Optional: opens your private vault if you lose every browser.',
   'security.step.todo': 'Set up',
   'security.step.done': 'Done',
+  'security.step.next': 'Start here',
   'security.ask.title': 'Ask your AI',
   'security.ask.hint':
     'Tap a request to copy it, then paste it into Claude, ChatGPT or any AI app connected to Manyplug. The AI can check these settings; only you can change them, here.',
@@ -43,6 +44,7 @@ export const accountPagesEn = {
     'Tap a request to copy it, then paste it into your AI app. It takes effect the next time the app loads its tools.',
   'app.settings.ask.1': 'In Manyplug, give each of my accounts its own set of tools.',
   'app.settings.ask.2': 'In Manyplug, go back to automatic tool listing with one set of tools per service.',
+  'app.settings.recommended': 'Recommended',
   'app.settings.sessionsHint': 'Sign out of any browser you do not recognise.',
 } as const;
 
@@ -67,9 +69,10 @@ export const accountPagesRu: Record<AccountPagesKey, string> = {
   'security.step.codes': 'Коды восстановления',
   'security.step.codesWhy': 'Вернут доступ, если потеряете телефон или ключ.',
   'security.step.vaultKey': 'Ключ восстановления сейфа',
-  'security.step.vaultKeyWhy': 'Откроет личный сейф, если потеряете все браузеры.',
+  'security.step.vaultKeyWhy': 'По желанию: откроет личный сейф, если потеряете все браузеры.',
   'security.step.todo': 'Настроить',
   'security.step.done': 'Готово',
+  'security.step.next': 'Начните здесь',
   'security.ask.title': 'Спросите свой ИИ',
   'security.ask.hint':
     'Нажмите на запрос, чтобы скопировать его, и вставьте в Claude, ChatGPT или другое ИИ-приложение, подключённое к Manyplug. ИИ может проверить эти настройки, а менять их можете только вы, здесь.',
@@ -92,5 +95,6 @@ export const accountPagesRu: Record<AccountPagesKey, string> = {
   'app.settings.ask.1': 'В Manyplug дай каждому моему аккаунту свой набор инструментов.',
   'app.settings.ask.2':
     'В Manyplug верни автоматический список инструментов и один набор инструментов на сервис.',
+  'app.settings.recommended': 'Рекомендуем',
   'app.settings.sessionsHint': 'Выйдите из браузеров, которые вы не узнаёте.',
 };

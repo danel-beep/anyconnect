@@ -341,6 +341,8 @@ const ProtectionCard: FC<{ t: Translate; view: SecurityView }> = ({ t, view }) =
   const steps = protectionSteps(t, view);
   const done = steps.filter((s) => s.done).length;
   const level = done === steps.length ? 'strong' : view.hasFactor ? 'good' : 'basic';
+  /** The one step to do next gets the call to action; the rest stay quiet. */
+  const next = steps.find((s) => !s.done)?.id;
   return (
     <div class="card" id="protection">
       <div class="protect-head">
@@ -368,9 +370,15 @@ const ProtectionCard: FC<{ t: Translate; view: SecurityView }> = ({ t, view }) =
                 <strong>{s.title}</strong>
                 <span class="small muted">{s.why}</span>
               </span>
-              <span class={s.done ? 'badge ok' : 'badge accent'}>
-                {s.done ? t('security.step.done') : t('security.step.todo')}
-              </span>
+              {s.done ? (
+                <span class="badge ok">{t('security.step.done')}</span>
+              ) : s.id === next ? (
+                <span class="step-next">
+                  {t('security.step.next')} <Icon name="arrow" />
+                </span>
+              ) : (
+                <span class="badge">{t('security.step.todo')}</span>
+              )}
             </a>
           </li>
         ))}

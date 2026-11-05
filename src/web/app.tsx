@@ -2064,7 +2064,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
     <AppShell ctx={ctx} shell={shell} section="settings" title={t('app.nav.settings')}>
       <PageHead title={t('app.nav.settings')} sub={t('app.settings.sub')} />
       <Flash flash={view.flash} />
-      <div class="grid-2">
+      <div class="grid-2 top">
         <div class="card">
           <SectionHead icon="users" title={t('app.settings.profile')} hint={t('app.settings.profileHint')} />
           <form method="post" action="/app/settings/profile">
@@ -2139,14 +2139,17 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
         <SectionHead icon="layers" title={t('app.settings.ai')} hint={t('app.settings.aiText')} />
         <form method="post" action="/app/settings/tools">
           <input type="hidden" name="csrf" value={ctx.csrf} />
-          <div class="grid-2 choice-cols">
+          <div class="choice-cols">
             <fieldset class="choice-list">
               <legend>{t('app.settings.listing')}</legend>
               {(['auto', 'direct', 'discovery'] as const).map((v) => (
                 <label class="choice">
                   <input type="radio" name="toolListing" value={v} checked={view.toolListing === v} />
                   <span>
-                    <strong>{t(`app.settings.listing.${v}`)}</strong>
+                    <strong>
+                      {t(`app.settings.listing.${v}`)}
+                      {v === 'auto' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
+                    </strong>
                     <span class="small muted">{t(`app.settings.listingHint.${v}`)}</span>
                   </span>
                 </label>
@@ -2158,7 +2161,10 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
                 <label class="choice">
                   <input type="radio" name="toolExposure" value={v} checked={view.toolExposure === v} />
                   <span>
-                    <strong>{t(`app.settings.exposure.${v}`)}</strong>
+                    <strong>
+                      {t(`app.settings.exposure.${v}`)}
+                      {v === 'grouped' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
+                    </strong>
                     <span class="small muted">{t(`app.settings.exposureHint.${v}`)}</span>
                   </span>
                 </label>

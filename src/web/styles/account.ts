@@ -23,9 +23,8 @@ ul.plain>li:has(>.row-icon){justify-content:flex-start}
 .protect-head{display:flex;gap:8px 16px;align-items:flex-start;flex-wrap:wrap;margin:0 0 14px}
 .protect-head h2{font-size:21px;margin:0 0 6px}
 .protect-head p{margin:0}
-.level-strong{color:var(--ok)}
-.level-good{color:var(--accent-ink)}
-.level-basic{color:var(--danger)}
+.level-strong,.level-good{color:var(--ok)}
+.level-basic{color:var(--accent-ink)}
 .seg-bar{display:flex;gap:6px;margin:0 0 18px}
 .seg{flex:1;height:8px;border-radius:99px;background:var(--border)}
 .seg.on{background:var(--ok)}
@@ -36,11 +35,15 @@ ul.plain>li:has(>.row-icon){justify-content:flex-start}
 .step-item.done{background:var(--bg-subtle)}
 .step-mark{width:34px;height:34px}
 .step-mark svg{width:17px;height:17px}
+.step-next{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 12px;border-radius:99px;background:var(--accent);color:var(--accent-text);font-weight:600;font-size:13px;line-height:1;white-space:nowrap}
+.step-next svg{width:14px;height:14px}
+.step-item:has(.step-next){border-color:var(--accent)}
 .step-item.done .step-mark{background:var(--ok-soft);color:var(--ok)}
 @media (max-width:700px){.step-list{grid-template-columns:1fr}}
 
 /* Requests to copy into the AI app */
-.ask-ai{margin-top:20px;padding:16px;border-radius:12px;background:var(--bg-subtle);border:1px dashed var(--border-strong)}
+.ask-ai{margin-top:20px;padding:16px;border-radius:12px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+.ask-ai .sec-icon{background:var(--accent);color:var(--accent-text)}
 .ask-ai-head{display:flex;gap:12px;align-items:flex-start;margin:0 0 12px}
 .ask-ai-head .grow{display:flex;flex-direction:column;gap:2px}
 .prompts{display:grid;gap:8px}
@@ -52,8 +55,10 @@ button.prompt:hover{border-color:var(--accent)}
 .prompt-act svg{width:15px;height:15px}
 
 /* Option cards in Settings */
-.grid-2.choice-cols{margin-bottom:4px}
-.choice-cols .choice-list{margin:0;min-width:0;align-content:start}
+.grid-2.top{align-items:start}
+.choice-cols{display:grid;gap:20px;margin-bottom:4px}
+.choice-cols .choice-list{margin:0;min-width:0}
+.choice-cols .choice strong .badge{display:inline-flex;flex-direction:row;margin-left:8px;vertical-align:1px}
 .choice-cols legend{font-weight:600;font-size:14px;padding:0;margin:0 0 8px}
 
 /* The danger zone, folded until asked for */
@@ -70,7 +75,7 @@ details.danger-zone>summary{display:flex;align-items:center;gap:12px;padding:0 3
   .sec-head>.badge,.sec-head>form{margin:0 0 0 50px}
   .step-item{flex-wrap:wrap;column-gap:12px;row-gap:8px}
   .step-item .grow{flex-basis:calc(100% - 46px)}
-  .step-item>.badge{margin-left:46px}
+  .step-item>.badge,.step-item>.step-next{margin-left:46px}
   .prompt-act .copy-label{display:none}
   .protect-head>.grow{flex-basis:100%}
 }
