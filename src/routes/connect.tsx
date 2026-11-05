@@ -114,7 +114,8 @@ export function connectRoutes() {
           ...(q('app') ? { appId: q('app') } : {}),
           ...(q('label') ? { label: q('label') } : {}),
           ...(q('name') ? { name: q('name') } : {}),
-          ...(q('description') ? { description: q('description') } : {}),
+          // No description from a link: it goes into the AI's instructions and the user never sees
+          // it here, so a link someone sent could plant instructions for the AI.
           ...(returnTo ? { returnTo: safeNextPath(returnTo) } : {}),
         },
       ));
@@ -248,7 +249,7 @@ export function connectRoutes() {
 /** Query or form values carried through the connect form. */
 function hiddenFrom(get: (key: string) => string | undefined): Record<string, string> {
   const hidden: Record<string, string> = {};
-  for (const key of ['name', 'account', 'returnTo', 'description'] as const) {
+  for (const key of ['name', 'account', 'returnTo'] as const) {
     const value = get(key);
     if (value) hidden[key] = key === 'returnTo' ? safeNextPath(value) : value;
   }
