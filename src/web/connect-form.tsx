@@ -7,6 +7,7 @@ import { Layout } from './pages.js';
 import { ProblemText } from './problems.js';
 import {
   GuideSummary,
+  GuideText,
   type GuideVariantPicker,
   PromptList,
   RiskBadge,
@@ -255,6 +256,11 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
               <a class="to-guide" href="#connect-guide">
                 {t('connect.seeSteps')}
               </a>
+            </p>
+          ) : null}
+          {view.guide?.notice ? (
+            <p class="notice info guide-notice">
+              <GuideText text={view.guide.notice} />
             </p>
           ) : null}
           {view.error ? (

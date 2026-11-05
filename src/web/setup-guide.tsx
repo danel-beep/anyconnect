@@ -74,7 +74,7 @@ export const SetupGuideView: FC<{
   guide: ResolvedSetupGuide;
   /** In the connect form: the variant follows what the user picks or types (`/assets/site.js`). */
   picker?: GuideVariantPicker | undefined;
-  /** Hide the summary line (when the page shows it elsewhere). */
+  /** Hide the summary line and the notice (when the page shows them above the form). */
   bare?: boolean;
 }> = ({ t, guide, picker, bare }) => {
   const variants = Object.entries(guide.variants ?? {});
@@ -104,7 +104,7 @@ export const SetupGuideView: FC<{
           </ul>
         </div>
       ) : null}
-      {guide.notice ? (
+      {guide.notice && !bare ? (
         <p class="notice info guide-notice">
           <GuideText text={guide.notice} />
         </p>

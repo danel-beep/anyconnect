@@ -266,6 +266,17 @@ describe('connect form for services without OAuth', () => {
     expect(en).toContain('<summary>Advanced settings</summary>');
   });
 
+  it('shows the setup guide next to the form: time, needs, where each value goes, fixes', async () => {
+    const { html } = await openForm('/connect/imap');
+    const guide = imap.ui!.locales!.ru!.setup!.form!;
+    expect(html).toContain(`<b class="guide-minutes">Около ${guide.minutes} мин</b>`);
+    expect(html).toContain('<p class="guide-label">Понадобится</p>');
+    // A step that yields a form value names the field by its label in the page language.
+    expect(html).toMatch(/<span class="guide-fills">Вставьте в поле:\s*<b>Адрес почты<\/b>/);
+    expect(html).toContain('<summary>Если что-то не получилось</summary>');
+    expect(html).toContain(`<dt>${guide.problems[0]!.problem.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</dt>`);
+  });
+
   it('names the field at fault by its label and opens "Advanced" for it', async () => {
     const { hidden } = await openForm('/connect/imap');
     const res = await browser.request('/connect/imap', {
