@@ -73,7 +73,8 @@
 - Строки списка с разделителями: `ul.plain` / `ol.plain`.
 - Маркированный или нумерованный текст: `ul.bullets` / `ol.bullets`.
 - Карточки, заголовки страниц, метрики, вкладки, поля копирования — компоненты из `src/web/ui.tsx`
-  и `src/web/app.tsx` (`PageHead`, `Meter`, `Tabs`, `CopyField`…).
+  и `src/web/app.tsx` (`PageHead`, `Meter`, `Tabs`, `CopyField`…). `Tabs variant="tiles"` — выбор
+  плитками с логотипом (так выбирается ИИ-приложение в карточке «Подключите ИИ»).
 
 ## Порядок работы
 
