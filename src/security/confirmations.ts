@@ -3,7 +3,13 @@ import type { Logger } from '../logger.js';
 import { DEFAULT_LOCALE, type Locale, type Translate } from '../web/i18n.js';
 import type { NotificationChannels } from './notifications.js';
 import type { PendingCallRow, PendingCallService } from './pending-calls.js';
-import { escapeHtml, type InlineButton, type TelegramBot, TelegramUpdate } from './telegram.js';
+import {
+  type BotStartHandler,
+  escapeHtml,
+  type InlineButton,
+  type TelegramBot,
+  TelegramUpdate,
+} from './telegram.js';
 
 /** Human description of a pending call (resolved from connectors, accounts and AI clients). */
 export interface CallDescription {
@@ -93,6 +99,11 @@ export class ConfirmationCenter {
       /** Texts in a language: bot messages go out in the owner's language. */
       t: (locale: Locale) => Translate;
       logger: Logger;
+      /**
+       * Answers a `/start` that is not a valid link code (people from ads or a plain bot link).
+       * Without it, or when it declines, the bot says the link is invalid.
+       */
+      onOtherStart?: BotStartHandler;
     },
   ) {}
 
@@ -218,6 +229,10 @@ export class ConfirmationCenter {
       const code = text.slice('/start'.length).trim();
       const label = update.message.from?.username ? `@${update.message.from.username}` : null;
       const userId = code ? await channels.completeTelegramLink(code, chatId, label) : undefined;
+      if (!userId && this.deps.onOtherStart) {
+        const languageCode = update.message.from?.language_code;
+        if (await this.deps.onOtherStart({ chatId, payload: code, languageCode })) return;
+      }
       // The user's language when linked; otherwise the one their Telegram app is set to.
       const target = userId ? await channels.telegram(userId) : undefined;
       const t = this.deps.t(pickLocale(target?.locale, update.message.from?.language_code));
