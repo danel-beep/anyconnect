@@ -335,9 +335,10 @@ export default defineConnector({
             ],
             steps: [
               {
-                text: 'Откройте Slack API → **Your Apps**, нажмите **Create New App** → **From scratch**, назовите приложение Manyplug, выберите пространство и нажмите **Create App**.',
+                text: 'Откройте Slack API → **Your Apps** и нажмите **Create New App** → **From scratch**.',
                 link: { label: 'Открыть приложения Slack', url: 'https://api.slack.com/apps' },
               },
+              { text: 'Назовите приложение Manyplug, выберите пространство и нажмите **Create App**.' },
               {
                 text: 'Откройте **OAuth & Permissions** и в **User Token Scopes** добавьте: search:read, channels:read, channels:history, groups:read, groups:history, im:read, im:history, im:write, mpim:read, mpim:history, users:read, chat:write.',
               },
@@ -361,7 +362,7 @@ export default defineConnector({
               },
               {
                 problem: 'Вместо установки Slack предлагает отправить запрос',
-                fix: 'Приложения в пространстве одобряет администратор. Отправьте запрос и вернитесь к шагу 3 после одобрения.',
+                fix: 'Приложения в пространстве одобряет администратор. Отправьте запрос и вернитесь к шагу 4 после одобрения.',
               },
             ],
           },
@@ -440,9 +441,10 @@ export default defineConnector({
             needs: ['A Slack workspace where you may install apps (or an admin who approves it)'],
             steps: [
               {
-                text: 'Open Slack API → **Your Apps**, click **Create New App** → **From scratch**, name it Manyplug, pick the workspace and click **Create App**.',
+                text: 'Open Slack API → **Your Apps** and click **Create New App** → **From scratch**.',
                 link: { label: 'Open Slack apps', url: 'https://api.slack.com/apps' },
               },
+              { text: 'Name it Manyplug, pick your workspace and click **Create App**.' },
               {
                 text: 'Open **OAuth & Permissions** and under **User Token Scopes** add: search:read, channels:read, channels:history, groups:read, groups:history, im:read, im:history, im:write, mpim:read, mpim:history, users:read, chat:write.',
               },
@@ -464,7 +466,7 @@ export default defineConnector({
               },
               {
                 problem: 'Slack offers to send a request instead of installing',
-                fix: 'An admin approves apps in this workspace. Send the request and continue from step 3 once it is approved.',
+                fix: 'An admin approves apps in this workspace. Send the request and continue from step 4 once it is approved.',
               },
             ],
           },

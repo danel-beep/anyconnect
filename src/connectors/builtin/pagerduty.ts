@@ -255,7 +255,7 @@ const ui: ConnectorUi = {
           needs: ['Аккаунт PagerDuty с ролью Admin или Account Owner: только они создают общие ключи API'],
           steps: [
             {
-              text: 'В PagerDuty откройте **Integrations** → **API Access Keys** и нажмите **Create New API Key**.',
+              text: 'В PagerDuty откройте **Integrations** → **Developer Tools** → **API Access Keys** и нажмите **Create New API Key**.',
               link: {
                 label: 'Как создать ключ',
                 url: 'https://support.pagerduty.com/main/docs/api-access-keys',
@@ -280,8 +280,8 @@ const ui: ConnectorUi = {
               fix: 'Скопируйте ключ целиком. Если окно с ключом закрыто, создайте новый ключ — старый показать снова нельзя.',
             },
             {
-              problem: 'Чтение работает, а изменения падают с ошибкой про заголовок **From**',
-              fix: 'Впишите в поле «Email пользователя» точный email существующего пользователя PagerDuty.',
+              problem: 'Чтение работает, а изменения не проходят',
+              fix: 'В поле «Email пользователя» впишите точный email, с которым входит существующий пользователь PagerDuty: PagerDuty записывает изменения от его имени.',
             },
             {
               problem: 'Ваш PagerDuty открывается на адресе **eu.pagerduty.com**, а проверка не проходит',
@@ -317,7 +317,7 @@ const ui: ConnectorUi = {
           ],
           steps: [
             {
-              text: 'In PagerDuty, open **Integrations** → **API Access Keys** and click **Create New API Key**.',
+              text: 'In PagerDuty, open **Integrations** → **Developer Tools** → **API Access Keys** and click **Create New API Key**.',
               link: {
                 label: 'How to create a key',
                 url: 'https://support.pagerduty.com/main/docs/api-access-keys',
@@ -340,8 +340,8 @@ const ui: ConnectorUi = {
               fix: 'Copy the whole key. If the key window is closed, create a new key: PagerDuty cannot show the old one again.',
             },
             {
-              problem: 'Reading works, but changes fail with an error about the **From** header',
-              fix: 'In User email, type the exact email of an existing PagerDuty user.',
+              problem: 'Reading works, but changes fail',
+              fix: 'In User email, type the exact sign-in email of an existing PagerDuty user: PagerDuty records changes in that user’s name.',
             },
             {
               problem: 'Your PagerDuty opens at **eu.pagerduty.com** and the check fails',

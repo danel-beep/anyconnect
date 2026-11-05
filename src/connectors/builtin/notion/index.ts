@@ -23,7 +23,7 @@ const Credentials = z.object({
     .string()
     .min(1)
     .optional()
-    .describe('Internal integration secret (ntn_…): https://www.notion.so/profile/integrations'),
+    .describe('Internal connection API token (ntn_…): https://app.notion.com/developers/connections'),
 });
 
 type Ctx = AccountContext<Record<string, never>, z.output<typeof Credentials>>;
@@ -212,43 +212,43 @@ export default defineConnector({
           },
           form: {
             summary:
-              'Вы создаёте внутреннюю интеграцию в Notion, открываете ей нужные страницы и вставляете сюда её секрет.',
+              'Вы создаёте внутреннее подключение в Notion, открываете ему нужные страницы и вставляете сюда его токен.',
             minutes: 3,
-            needs: ['Пространство Notion, где вы владелец: только владельцы создают интеграции'],
+            needs: ['Пространство Notion, где вы владелец: только владельцы создают подключения'],
             steps: [
               {
-                text: 'Откройте интеграции Notion и нажмите **New integration**.',
+                text: 'Откройте портал разработчика Notion и нажмите **Create a new connection** (в старых пространствах — **New integration**).',
                 link: {
-                  label: 'Открыть интеграции Notion',
-                  url: 'https://www.notion.so/profile/integrations',
+                  label: 'Открыть портал разработчика Notion',
+                  url: 'https://app.notion.com/developers/connections',
                 },
               },
               {
-                text: 'Назовите её Manyplug, выберите пространство, оставьте тип **Internal** и нажмите **Save**.',
+                text: 'Назовите подключение Manyplug, выберите своё пространство и создайте его.',
               },
               {
-                text: 'Скопируйте **Internal Integration Secret** (начинается с ntn_) и вставьте его в форму.',
+                text: 'На вкладке **Configuration** скопируйте **API token** (начинается с ntn_) и вставьте его в форму.',
                 fills: ['token'],
               },
               {
-                text: 'В Notion откройте каждую нужную страницу или базу, нажмите **•••** → **Connections** и добавьте интеграцию.',
+                text: 'В Notion откройте каждую нужную страницу или базу, нажмите **•••** → **Connections** и добавьте Manyplug.',
               },
             ],
             tips: [
-              'ИИ видит только страницы, открытые интеграции: начните с нужных и добавляйте остальные когда угодно.',
+              'ИИ видит только страницы, открытые подключению: начните с нужных и добавляйте остальные когда угодно.',
             ],
             problems: [
               {
                 problem: '«API token is invalid»',
-                fix: 'Скопируйте секрет ещё раз на странице интеграции кнопкой **Show** → **Copy**. Он начинается с ntn_ или secret_.',
+                fix: 'Скопируйте токен ещё раз на вкладке **Configuration** вашего подключения. Он начинается с ntn_ (старые — с secret_).',
               },
               {
                 problem: 'ИИ пишет, что страница не найдена',
-                fix: 'Страница не открыта интеграции. Откройте её в Notion, нажмите **•••** → **Connections** и добавьте Manyplug.',
+                fix: 'Страница не открыта подключению. Откройте её в Notion, нажмите **•••** → **Connections** и добавьте Manyplug.',
               },
               {
-                problem: 'Нет кнопки **New integration**',
-                fix: 'Интеграции создают только владельцы пространства. Попросите владельца создать её или подключитесь кнопкой входа через Notion.',
+                problem: 'Нет кнопки **Create a new connection**',
+                fix: 'Подключения создают только владельцы пространства. Попросите владельца создать его или подключитесь кнопкой входа через Notion.',
               },
             ],
           },
@@ -263,8 +263,8 @@ export default defineConnector({
           'Страницы и базы данных Notion: поиск, чтение страниц в Markdown, выборки из баз, создание и изменение.',
         fields: {
           token: {
-            label: 'Секрет интеграции (ntn_…)',
-            hint: 'Создайте внутреннюю интеграцию на notion.so/profile/integrations и откройте ей доступ к нужным страницам.',
+            label: 'Токен подключения (ntn_…)',
+            hint: 'Создайте внутреннее подключение в портале разработчика Notion и откройте ему доступ к нужным страницам.',
           },
         },
         actions: {
@@ -326,43 +326,43 @@ export default defineConnector({
           },
           form: {
             summary:
-              'You create an internal integration in Notion, share the pages you need with it and paste its secret here.',
+              'You create an internal connection in Notion, share the pages you need with it and paste its token here.',
             minutes: 3,
-            needs: ['A Notion workspace where you are an owner: only owners create integrations'],
+            needs: ['A Notion workspace where you are an owner: only owners create connections'],
             steps: [
               {
-                text: 'Open Notion integrations and click **New integration**.',
+                text: 'Open the Notion developer portal and click **Create a new connection** (older workspaces: **New integration**).',
                 link: {
-                  label: 'Open Notion integrations',
-                  url: 'https://www.notion.so/profile/integrations',
+                  label: 'Open the Notion developer portal',
+                  url: 'https://app.notion.com/developers/connections',
                 },
               },
               {
-                text: 'Name it Manyplug, pick your workspace, keep the type **Internal** and click **Save**.',
+                text: 'Name the connection Manyplug, pick your workspace and create it.',
               },
               {
-                text: 'Copy the **Internal Integration Secret** (it starts with ntn_) and paste it into the form.',
+                text: 'On the **Configuration** tab, copy the **API token** (it starts with ntn_) and paste it into the form.',
                 fills: ['token'],
               },
               {
-                text: 'In Notion, open each page or database the AI should see, click **•••** → **Connections** and add the integration.',
+                text: 'In Notion, open each page or database the AI should see, click **•••** → **Connections** and add Manyplug.',
               },
             ],
             tips: [
-              'The AI only sees pages shared with the integration, so start with the ones you need and add more any time.',
+              'The AI only sees pages shared with the connection, so start with the ones you need and add more any time.',
             ],
             problems: [
               {
                 problem: '“API token is invalid”',
-                fix: 'Copy the secret again on the integration page with **Show** → **Copy**. It starts with ntn_ or secret_.',
+                fix: 'Copy the token again on the **Configuration** tab of your connection. It starts with ntn_ (older ones with secret_).',
               },
               {
                 problem: 'The AI says a page cannot be found',
-                fix: 'The page is not shared with the integration. Open it in Notion, click **•••** → **Connections** and add Manyplug.',
+                fix: 'The page is not shared with the connection. Open it in Notion, click **•••** → **Connections** and add Manyplug.',
               },
               {
-                problem: 'There is no **New integration** button',
-                fix: 'Only workspace owners create integrations. Ask an owner to create it, or connect with the Notion sign-in button instead.',
+                problem: 'There is no **Create a new connection** button',
+                fix: 'Only workspace owners create connections. Ask an owner to create it, or connect with the Notion sign-in button instead.',
               },
             ],
           },
@@ -375,8 +375,8 @@ export default defineConnector({
         ],
         fields: {
           token: {
-            label: 'Integration secret (ntn_…)',
-            hint: 'Create an internal integration at notion.so/profile/integrations and give it access to the pages you need.',
+            label: 'Connection token (ntn_…)',
+            hint: 'Create an internal connection in the Notion developer portal and give it access to the pages you need.',
           },
         },
         actions: {

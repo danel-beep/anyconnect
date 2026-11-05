@@ -516,7 +516,7 @@ export function createTelegramConnector(port: MessagingPort) {
                 },
                 {
                   problem: 'Не приходят сообщения из группы',
-                  fix: 'Добавьте бота в группу и выключите у него режим приватности: отправьте @BotFather **/setprivacy**, выберите бота и нажмите **Disable**.',
+                  fix: 'Отправьте @BotFather **/setprivacy**, выберите бота и нажмите **Disable**. Затем удалите бота из группы и добавьте снова.',
                 },
                 {
                   problem: 'Бот не видит сообщения человека',
@@ -574,7 +574,7 @@ export function createTelegramConnector(port: MessagingPort) {
                 },
                 {
                   problem: 'Messages from a group do not show up',
-                  fix: 'Add the bot to the group and turn off its privacy mode: send **/setprivacy** to @BotFather, pick the bot and choose **Disable**.',
+                  fix: 'Send **/setprivacy** to @BotFather, pick the bot and choose **Disable**. Then remove the bot from the group and add it again.',
                 },
                 {
                   problem: 'The bot does not see a person’s messages',

@@ -164,18 +164,18 @@ const ui: ConnectorUi = {
         form: {
           summary: 'Вы создаёте ограниченный ключ API в панели Stripe и вставляете его сюда.',
           minutes: 3,
-          needs: ['Аккаунт Stripe, где у вас роль **Administrator** или **Developer**'],
+          needs: ['Аккаунт Stripe, где вы владелец или у вас роль **Administrator** или **Developer**'],
           steps: [
             {
               text: 'В панели Stripe откройте **Developers → API keys**.',
               link: { label: 'Открыть ключи API в Stripe', url: 'https://dashboard.stripe.com/apikeys' },
             },
-            { text: 'Нажмите **Create restricted key** и назовите ключ Manyplug.' },
+            { text: 'Нажмите **Create restricted key**, начните с нулевых прав и назовите ключ Manyplug.' },
             {
               text: 'Поставьте **Read** для Balance, Customers, PaymentIntents, Invoices и Subscriptions. Для **Refunds** ставьте **Write**, только если ИИ можно делать возвраты.',
             },
             {
-              text: 'Нажмите **Create key** и скопируйте ключ (он начинается с rk_live_).',
+              text: 'Нажмите **Create key**, введите код подтверждения от Stripe и скопируйте ключ (rk_live_…): Stripe показывает его только один раз.',
               fills: ['apiKey'],
             },
           ],
@@ -233,17 +233,20 @@ const ui: ConnectorUi = {
         form: {
           summary: 'You create a restricted API key in the Stripe dashboard and paste it here.',
           minutes: 3,
-          needs: ['A Stripe account where you have the **Administrator** or **Developer** role'],
+          needs: ['A Stripe account where you are the owner, an **Administrator** or a **Developer**'],
           steps: [
             {
               text: 'In the Stripe dashboard, open **Developers → API keys**.',
               link: { label: 'Open Stripe API keys', url: 'https://dashboard.stripe.com/apikeys' },
             },
-            { text: 'Click **Create restricted key** and name it Manyplug.' },
+            { text: 'Click **Create restricted key**, start from no permissions and name it Manyplug.' },
             {
               text: 'Set **Read** for Balance, Customers, PaymentIntents, Invoices and Subscriptions. Set **Refunds** to **Write** only if the AI may refund payments.',
             },
-            { text: 'Click **Create key** and copy the key (it starts with rk_live_).', fills: ['apiKey'] },
+            {
+              text: 'Click **Create key**, enter the verification code Stripe sends and copy the key (rk_live_…): Stripe shows it only once.',
+              fills: ['apiKey'],
+            },
           ],
           tips: [
             'Want to try it safely first? Use a test-mode key (rk_test_…).',

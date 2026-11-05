@@ -256,7 +256,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'Письма уходят только на адреса вашего домена',
-              fix: 'Аккаунт Postmark ещё ждёт одобрения. Запросите его в Postmark (**Request approval**), до этого Postmark ограничивает получателей.',
+              fix: 'Аккаунт Postmark ещё ждёт одобрения и пишет только на ваши подтверждённые домены. Владелец аккаунта может запросить одобрение в Postmark.',
             },
           ],
         },
@@ -313,7 +313,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'Email only goes to addresses at your own domain',
-              fix: 'Your Postmark account still waits for approval. Request it in Postmark (**Request approval**); until then Postmark limits recipients.',
+              fix: 'Your Postmark account is still pending approval and sends only to your verified domains. The account owner can request approval in Postmark.',
             },
           ],
         },

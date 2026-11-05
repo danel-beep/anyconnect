@@ -207,7 +207,7 @@ const ui: ConnectorUi = {
               link: { label: 'Открыть токены Vercel', url: 'https://vercel.com/account/tokens' },
             },
             {
-              text: 'Назовите токен Manyplug, выберите **Scope** (ваш аккаунт или команда) и срок действия, затем скопируйте токен.',
+              text: 'Назовите токен Manyplug, выберите **Scope** (ваш аккаунт или команда) и срок действия, нажмите **Create** и скопируйте токен: Vercel показывает его только один раз.',
               fills: ['token'],
             },
             {
@@ -264,7 +264,7 @@ const ui: ConnectorUi = {
               link: { label: 'Open Vercel tokens', url: 'https://vercel.com/account/tokens' },
             },
             {
-              text: 'Name it Manyplug, pick the **Scope** (your account or a team) and an expiry, then copy the token.',
+              text: 'Name it Manyplug, pick the **Scope** (your account or a team) and an expiry, click **Create** and copy the token: Vercel shows it only once.',
               fills: ['token'],
             },
             {

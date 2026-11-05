@@ -143,7 +143,9 @@ export default defineConnector({
                 text: 'Назовите приложение Manyplug и нажмите **Create**. На вкладке **App Credentials** скопируйте **Account ID**, **Client ID** и **Client Secret**.',
                 fills: ['accountId', 'clientId', 'clientSecret'],
               },
-              { text: 'На вкладке **Information** укажите название компании, имя и почту разработчика.' },
+              {
+                text: 'На вкладке **Information** заполните краткое описание, название компании, имя и почту разработчика: без них Zoom не активирует приложение.',
+              },
               {
                 text: 'На вкладке **Scopes** нажмите **Add Scopes** и добавьте meeting:read:list_meetings:admin, meeting:read:meeting:admin, meeting:write:meeting:admin, meeting:update:meeting:admin и meeting:delete:meeting:admin.',
               },
@@ -166,7 +168,7 @@ export default defineConnector({
               },
               {
                 problem: 'Нет варианта **Server-to-Server OAuth App**',
-                fix: 'Попросите администратора Zoom дать вашей роли право **Server-to-Server OAuth app** (раздел **Roles**, расширенные возможности).',
+                fix: 'Попросите администратора Zoom отметить **View** и **Edit** для **Server-to-Server OAuth app** в вашей роли (**User Management → Roles → Advanced features**) и дать доступ к нужным правам.',
               },
             ],
           },
@@ -212,7 +214,9 @@ export default defineConnector({
                 text: 'Name it Manyplug and click **Create**. On **App Credentials**, copy the **Account ID**, **Client ID** and **Client Secret**.',
                 fills: ['accountId', 'clientId', 'clientSecret'],
               },
-              { text: 'On **Information**, fill in the company name and the developer’s name and email.' },
+              {
+                text: 'On **Information**, fill in the short description, company name and the developer’s name and email: Zoom will not activate the app without them.',
+              },
               {
                 text: 'On **Scopes**, click **Add Scopes** and add meeting:read:list_meetings:admin, meeting:read:meeting:admin, meeting:write:meeting:admin, meeting:update:meeting:admin and meeting:delete:meeting:admin.',
               },
@@ -235,7 +239,7 @@ export default defineConnector({
               },
               {
                 problem: 'There is no **Server-to-Server OAuth App** option',
-                fix: 'Ask your Zoom admin to give your role the **Server-to-Server OAuth app** permission (under **Roles**, in the advanced features).',
+                fix: 'Ask your Zoom admin to tick **View** and **Edit** for **Server-to-Server OAuth app** in your role (**User Management → Roles → Advanced features**), plus access to the scopes you add.',
               },
             ],
           },

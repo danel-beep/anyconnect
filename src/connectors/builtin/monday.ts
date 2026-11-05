@@ -152,7 +152,7 @@ export default defineConnector({
             needs: ['Аккаунт monday.com'],
             steps: [
               {
-                text: 'В monday.com нажмите на аватар → **Developers** и откройте **My access tokens**.',
+                text: 'В monday.com нажмите на аватар → **Developers** и откройте раздел **API token** (в старом интерфейсе — **My access tokens**).',
                 link: {
                   label: 'Где найти токен',
                   url: 'https://developer.monday.com/api-reference/docs/authentication',
@@ -183,7 +183,7 @@ export default defineConnector({
           'Поставь элементу «Лендинг» статус Done и напиши апдейт, что всё готово.',
           'Перескажи последние апдейты по элементу «Редизайн».',
         ],
-        fields: { token: { label: 'Токен API', hint: 'Аватар → Developers → My access tokens.' } },
+        fields: { token: { label: 'Токен API', hint: 'Аватар → Developers → API token.' } },
         actions: {
           list_boards: { title: 'Доски', description: 'Доски с id и рабочими пространствами.' },
           get_board: { title: 'Доска', description: 'Группы и колонки доски с вариантами статусов.' },
@@ -203,7 +203,7 @@ export default defineConnector({
             needs: ['A monday.com account'],
             steps: [
               {
-                text: 'In monday.com, click your avatar → **Developers** and open **My access tokens**.',
+                text: 'In monday.com, click your avatar → **Developers** and open **API token** (older screens: **My access tokens**).',
                 link: {
                   label: 'Where to find the token',
                   url: 'https://developer.monday.com/api-reference/docs/authentication',
@@ -234,7 +234,7 @@ export default defineConnector({
           'Set “Landing page” to Done and post an update that it is finished.',
           'Summarize the latest updates on the “Redesign” item.',
         ],
-        fields: { token: { label: 'API token', hint: 'Avatar → Developers → My access tokens.' } },
+        fields: { token: { label: 'API token', hint: 'Avatar → Developers → API token.' } },
         actions: {
           list_boards: { title: 'Boards', description: 'Boards with ids and workspaces.' },
           get_board: { title: 'Get a board', description: 'Groups and columns with status labels.' },

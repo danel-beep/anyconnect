@@ -221,7 +221,7 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Дайте права **event:read**, **project:read**, **org:read** и **event:write** (чтобы решать задачи и комментировать) и нажмите **Create Token**.',
+              text: 'Дайте чтение для **Organization** и **Project** и **Read & Write** для **Issue & Event** (права org:read, project:read, event:read и event:write), затем нажмите **Create Token**.',
             },
             { text: 'Скопируйте токен: Sentry показывает его только один раз.', fills: ['token'] },
             {
@@ -287,7 +287,7 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Grant **event:read**, **project:read**, **org:read** and **event:write** (to resolve and comment) and click **Create Token**.',
+              text: 'Give **Organization** and **Project** read access and **Issue & Event** **Read & Write** (scopes org:read, project:read, event:read, event:write), then click **Create Token**.',
             },
             { text: 'Copy the token: Sentry shows it only once.', fills: ['token'] },
             {

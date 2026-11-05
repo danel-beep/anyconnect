@@ -40,7 +40,7 @@ const manifest = defineManifestConnector({
   credentials: {
     type: 'object',
     properties: {
-      token: { type: 'string', minLength: 20, description: 'Account → Apps & Integrations → API Access' },
+      token: { type: 'string', minLength: 20, description: 'Account → Personal Settings → API Access' },
     },
     required: ['token'],
   },
@@ -179,12 +179,12 @@ const ui: ConnectorUi = {
           summary: 'Вы создаёте токен доступа к API в Smartsheet и вставляете его сюда.',
           minutes: 2,
           needs: [
-            'Аккаунт Smartsheet',
+            'Тариф Smartsheet Business или Enterprise: на других тарифах токены API не создаются',
             'Знать, где ваш аккаунт: smartsheet.com, smartsheet.eu или smartsheet.au',
           ],
           steps: [
             {
-              text: 'В Smartsheet откройте **Account** (аватар) → **Apps & Integrations** → **API Access**.',
+              text: 'В Smartsheet нажмите на **Account** (аватар внизу слева) → **Personal Settings** и откройте вкладку **API Access**.',
               link: {
                 label: 'Как получить токен',
                 url: 'https://help.smartsheet.com/articles/2482389-generate-API-key',
@@ -209,8 +209,8 @@ const ui: ConnectorUi = {
               fix: 'Скопируйте токен целиком ещё раз или создайте новый, если старый потерян. Проверьте и **Регион**: токен со smartsheet.eu не работает с сервером США.',
             },
             {
-              problem: 'Нет пункта **API Access**',
-              fix: 'Ваш тариф или администратор Smartsheet не разрешает токены API. Попросите администратора включить вам доступ к API.',
+              problem: 'Нет вкладки **API Access**',
+              fix: 'Токены API есть только на тарифах Business и Enterprise. На них спросите администратора, разрешён ли вам доступ к API.',
             },
           ],
         },
@@ -221,7 +221,7 @@ const ui: ConnectorUi = {
         'Отметь строку «Лендинг» выполненной и оставь комментарий.',
       ],
       fields: {
-        token: { label: 'Токен', hint: 'Apps & Integrations → API Access.' },
+        token: { label: 'Токен', hint: 'Personal Settings → API Access.' },
         host: {
           label: 'Регион',
           hint: 'Где находится ваш аккаунт Smartsheet.',
@@ -247,12 +247,12 @@ const ui: ConnectorUi = {
           summary: 'You create an API access token in Smartsheet and paste it here.',
           minutes: 2,
           needs: [
-            'A Smartsheet account',
+            'A Smartsheet Business or Enterprise plan: other plans cannot create API tokens',
             'To know where your account lives: smartsheet.com, smartsheet.eu or smartsheet.au',
           ],
           steps: [
             {
-              text: 'In Smartsheet, open **Account** (your avatar) → **Apps & Integrations** → **API Access**.',
+              text: 'In Smartsheet, click your **Account** picture (bottom left) → **Personal Settings** and open the **API Access** tab.',
               link: {
                 label: 'How to get a token',
                 url: 'https://help.smartsheet.com/articles/2482389-generate-API-key',
@@ -277,8 +277,8 @@ const ui: ConnectorUi = {
               fix: 'Copy the whole token again, or make a new one if you lost it. Also check the **Region**: a token from smartsheet.eu does not work on the US server.',
             },
             {
-              problem: 'There is no **API Access** item',
-              fix: 'Your plan or your Smartsheet admin does not allow API tokens. Ask the admin to turn on API access for you.',
+              problem: 'There is no **API Access** tab',
+              fix: 'API tokens need a Business or Enterprise plan. On those plans, ask your admin whether API access is allowed for you.',
             },
           ],
         },
@@ -289,7 +289,7 @@ const ui: ConnectorUi = {
         'Mark the “Landing page” row done and leave a comment.',
       ],
       fields: {
-        token: { label: 'Token', hint: 'Apps & Integrations → API Access.' },
+        token: { label: 'Token', hint: 'Personal Settings → API Access.' },
         host: {
           label: 'Region',
           hint: 'Where your Smartsheet account lives.',

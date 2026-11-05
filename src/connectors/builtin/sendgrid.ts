@@ -208,7 +208,7 @@ const ui: ConnectorUi = {
               link: { label: 'Открыть ключи SendGrid', url: 'https://app.sendgrid.com/settings/api_keys' },
             },
             {
-              text: 'Назовите ключ Manyplug, выберите **Restricted Access** и дайте доступ к Mail Send, Marketing, Stats и Template Engine (чтение). Или выберите **Full Access**.',
+              text: 'Назовите ключ Manyplug, выберите **Custom Access** (в старом интерфейсе — **Restricted Access**) и дайте доступ к Mail Send, Marketing, Stats и Template Engine. Или выберите **Full Access**.',
             },
             {
               text: 'Нажмите **Create & View** и скопируйте ключ (SG.…): SendGrid показывает его только один раз.',
@@ -273,7 +273,7 @@ const ui: ConnectorUi = {
               link: { label: 'Open SendGrid API keys', url: 'https://app.sendgrid.com/settings/api_keys' },
             },
             {
-              text: 'Name it Manyplug, pick **Restricted Access** and allow Mail Send, Marketing, Stats and Template Engine (read). Or pick **Full Access**.',
+              text: 'Name it Manyplug, pick **Custom Access** (older screens: **Restricted Access**) and allow Mail Send, Marketing, Stats and Template Engine. Or pick **Full Access**.',
             },
             {
               text: 'Click **Create & View** and copy the key (SG.…): SendGrid shows it only once.',

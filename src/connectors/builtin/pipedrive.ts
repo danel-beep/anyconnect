@@ -262,7 +262,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'Нет вкладки **API**',
-              fix: 'Администратор вашей компании в Pipedrive мог закрыть доступ к API. Попросите его разрешить API в настройках прав пользователей.',
+              fix: 'Администратор Pipedrive мог закрыть доступ к API. Попросите его отметить **Access their own API token** в вашем наборе прав (**Manage users → Permission sets**).',
             },
           ],
         },
@@ -317,7 +317,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'There is no **API** tab',
-              fix: 'Your company’s Pipedrive admin may have turned off API access. Ask them to allow it in the user permission settings.',
+              fix: 'Your Pipedrive admin may have turned off API access. Ask them to tick **Access their own API token** in your permission set (**Manage users → Permission sets**).',
             },
           ],
         },
