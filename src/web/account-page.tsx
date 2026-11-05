@@ -105,7 +105,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
       />
       <Flash flash={view.flash} />
       {broken ? (
-        <div class="notice bad acc-problem">
+        <div class="notice bad">
           <strong>
             {t(a.status === 'needs_reauth' ? 'app.account.reauthTitle' : 'app.account.errorTitle')}
           </strong>{' '}
@@ -117,7 +117,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
         <div class="card flush">
           <div class="card-head pad">
             <div>
-              <h2 class="h3">{t('app.account.tools')}</h2>
+              <h2>{t('app.account.tools')}</h2>
               <p class="small muted">{t('app.account.toolsSub', { on, n: view.tools.length })}</p>
             </div>
           </div>
@@ -164,7 +164,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
         </div>
         <div class="account-side">
           <div class="card">
-            <h2 class="h3">{t('app.account.rules')}</h2>
+            <h2>{t('app.account.rules')}</h2>
             <p class="small muted">{t('app.account.rulesSub')}</p>
             <form method="post" action="/app/rules/scoped">
               <Hidden values={{ ...back, kind: 'account', id: a.id }} />
@@ -202,13 +202,13 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
           </div>
           {view.prompts.length ? (
             <div class="card">
-              <h2 class="h3">{t('connect.tryAsking')}</h2>
+              <h2>{t('connect.tryAsking')}</h2>
               <PromptList t={t} prompts={view.prompts.slice(0, 3)} idPrefix="ask" />
               <p class="small muted">{t('app.account.askHint', { label: a.label })}</p>
             </div>
           ) : null}
           <div class="card">
-            <h2 class="h3">{t('app.account.details')}</h2>
+            <h2>{t('app.account.details')}</h2>
             <form method="post" action={`${base}/rename`} class="copy">
               <Hidden values={back} />
               <label class="sr-only" for="acc-label">
@@ -256,7 +256,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
       </div>
       <div class="card flush" id="log">
         <div class="card-head pad">
-          <h2 class="h3">{t('app.account.calls')}</h2>
+          <h2>{t('app.account.calls')}</h2>
           <a class="small" href={`/app/activity?account=${encodeURIComponent(a.id)}`}>
             {t('app.account.allCalls')}
           </a>

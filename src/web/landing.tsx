@@ -135,7 +135,7 @@ const Hero: FC<{ ctx: PageCtx; more: number }> = ({ ctx, more }) => {
   return (
     <section class="hero">
       <div class="wrap">
-        <div class="hero-copy">
+        <div>
           <p class="eyebrow">{t('landing.eyebrow')}</p>
           <h1>
             {t('landing.h1a')} <span class="mark">{t('landing.h1b')}</span>
@@ -376,7 +376,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </ul>
         </div>
         <div class="versus" data-reveal="kids">
-          <div class="vs-card before">
+          <div class="vs-card">
             <h3>
               <Icon name="x" /> {t('landing.map.before')}
             </h3>

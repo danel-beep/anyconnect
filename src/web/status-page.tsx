@@ -113,7 +113,7 @@ export const StatusPage: FC<{ ctx: PageCtx; data: StatusPageData }> = ({ ctx, da
         )}
 
         {data.components.length ? (
-          <div class="card flush status-components">
+          <div class="card flush">
             {data.components.map((c) => (
               <section class="status-component">
                 <div class="status-head">

@@ -310,7 +310,7 @@ export const LANDING_CSS = `
   .hero .demo{animation:lp-rise .8s cubic-bezier(.2,.7,.2,1) .1s backwards}
   /* The chat plays its request once: the question is there from the first paint, the AI works,
      asks, the Allow button is pressed and the card settles into "Approved by you". */
-  .demo .step:not(.s1){animation:lp-step .45s cubic-bezier(.2,.7,.2,1) backwards}
+  .demo .step{animation:lp-step .45s cubic-bezier(.2,.7,.2,1) backwards}.demo .step.s1{animation:none}
   .demo .step.s2{animation-delay:.4s}.demo .step.s3{animation-delay:.75s}.demo .step.s4{animation-delay:1.1s}.demo .step.s5{animation-delay:3.6s}.demo .step.s6{animation-delay:3.9s}
   .demo .approve .btns{animation:lp-hold 3.4s linear}
   .demo .approve .yes{animation:lp-press .9s ease 2.4s backwards}

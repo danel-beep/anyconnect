@@ -58,7 +58,7 @@ export const AdminOverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Admin
     <AppShell ctx={ctx} shell={shell} section="admin" title={t('admin.nav.overview')}>
       <PageHead title={t('admin.overview.title')} sub={t('admin.overview.sub')} />
       {view.warnings || view.failingAccounts ? (
-        <div class="notice warn attention" role="status">
+        <div class="notice attention" role="status">
           <strong>{t('admin.attention.title')}</strong>
           <ul>
             {view.warnings ? (
@@ -768,7 +768,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
               </li>
             ) : null}
           </ul>
-          <h3 class="mt">{t('admin.user.history')}</h3>
+          <h3>{t('admin.user.history')}</h3>
           {view.audit.length === 0 ? (
             <p class="muted small">—</p>
           ) : (
@@ -1294,9 +1294,9 @@ export const AdminErrorsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminEr
         </div>
       ) : (
         <div class="card flush">
-          <ul class="plain error-list">
+          <ul class="error-list">
             {view.rows.map((r) => (
-              <li class="pad" id={r.id}>
+              <li id={r.id}>
                 <div class="error-head">
                   <div>
                     <strong>{r.type}</strong> <span class="badge">{r.source}</span>{' '}

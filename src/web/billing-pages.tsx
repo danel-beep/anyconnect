@@ -36,7 +36,7 @@ export const PaddleCheckoutPage: FC<{
       >
         {t('billing.checkout.opening')}
       </p>
-      <p class="muted small checkout-failed">{t('billing.checkout.failed')}</p>
+      <p class="muted small">{t('billing.checkout.failed')}</p>
       {view.sandbox ? <p class="notice info">{t('app.billing.testMode')}</p> : null}
       <div class="actions start">
         <a class="btn" href={view.back}>

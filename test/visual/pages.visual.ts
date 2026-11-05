@@ -70,6 +70,12 @@ async function seed(): Promise<void> {
       json: { csrf, response: authenticator.create(options as never, aaguid ? { aaguid } : {}) },
     });
   }
+  // The admin panel's error list with an error group and its stack trace, not only the empty state.
+  hub.services.ops.errors.capture(new Error('Upstream service timed out after 30 seconds'), {
+    source: 'job',
+    context: { job: 'status.sample' },
+  });
+  await hub.services.ops.errorStore.flush();
   const teams = TestBrowser.hiddenInputs(await (await owner.request('/app/teams')).text());
   await owner.request('/app/teams', { form: { ...teams, name: 'Acme sales' } });
   personas.push({

@@ -180,7 +180,7 @@ export const AiCanDo: FC<{
   const changes = count('write') + count('dangerous');
   return (
     <div class="card ai-can-do">
-      <h2 class="h3">{t('connect.canDo')}</h2>
+      <h2>{t('connect.canDo')}</h2>
       <p class="small muted">
         {changes
           ? t('connect.canDoSummary', { n: actions.length, read: count('read'), write: changes })
@@ -322,7 +322,7 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
         <aside class="connect-aside">
           {view.guide ? (
             <div class="card guide-card" id="connect-guide">
-              <h2 class="h3">{t('connect.howTo')}</h2>
+              <h2>{t('connect.howTo')}</h2>
               <SetupGuideView t={t} guide={view.guide} picker={view.picker} bare />
             </div>
           ) : null}
@@ -378,7 +378,7 @@ export const ConnectedPage: FC<{ t: Translate; lang: string; view: ConnectedView
           ) : null}
           {view.prompts.length && !view.problem ? (
             <div class="try-it">
-              <h2 class="h3">{t('connect.tryAsking')}</h2>
+              <h2>{t('connect.tryAsking')}</h2>
               <PromptList t={t} prompts={view.prompts.slice(0, 3)} idPrefix="try" />
               <p class="small muted">{view.needsAi ? t('connect.aiFirst') : t('connect.aiHint')}</p>
             </div>
