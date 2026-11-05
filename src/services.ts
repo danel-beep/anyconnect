@@ -10,6 +10,7 @@ import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
 import type { MessagingPort } from './connectors/messaging.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
 import { actionText, connectorText } from './connectors/sdk.js';
+import { AccountAlerts } from './core/account-alerts.js';
 import { AccountKeyring } from './core/account-keys.js';
 import { AccountService } from './core/accounts.js';
 import { ActivityService } from './core/activity.js';
@@ -36,6 +37,7 @@ import { SETUP_CONNECTOR } from './hub/setup-tools.js';
 import { PgUsageMeter, type UsageMeter } from './hub/usage.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
+import { CircuitBreaker } from './lib/circuit-breaker.js';
 import { SecretBox } from './lib/crypto.js';
 import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
@@ -51,6 +53,7 @@ import { UserSecurityTools, WorkspaceAppTools, WorkspaceProfileTools } from './s
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
+import { TelegramOwnerNotifier } from './security/owner-notifier.js';
 import { PendingCallService, principalOf } from './security/pending-calls.js';
 import { PERSONA_SLUG, PersonaService } from './security/personas.js';
 import { PolicyService } from './security/policy-service.js';
@@ -100,6 +103,8 @@ export interface Services {
   /** "Connect an account" OAuth flows. */
   connect: ConnectService;
   health: AccountHealthService;
+  /** Tells owners about accounts that need a new sign-in. */
+  alerts: AccountAlerts;
   /** Background jobs; started by `startJobs()` in processes that run them. */
   jobs: JobQueue;
   apiTokens: ApiTokenService;
@@ -136,6 +141,7 @@ export interface Services {
   /** TOTP, recovery codes and passkeys. */
   secondFactors: SecondFactorService;
   rateLimiter: RateLimiter;
+  circuitBreaker: CircuitBreaker;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
   messaging: Messaging;
@@ -252,7 +258,6 @@ export function createServices(
     monitor: ops.jobRuns,
     onError: (error, job) => ops.errors.capture(error, { source: 'job', context: { job } }),
   });
-  for (const job of builtinJobs({ health, customServices, status: ops.status })) jobs.register(job);
   messaging = createMessaging({
     publicUrl: config.publicUrl,
     gatewayConfig: config.gateway,
@@ -272,6 +277,7 @@ export function createServices(
   );
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
+  const circuitBreaker = new CircuitBreaker();
   const idempotency = new MemoryIdempotencyStore();
 
   // Security layer: who may do what, confirmations, undo windows.
@@ -347,6 +353,23 @@ export function createServices(
     publicUrl: config.publicUrl,
     logger,
   });
+  const alerts = new AccountAlerts({
+    db,
+    connectors,
+    notifier: new TelegramOwnerNotifier({
+      channels: notificationChannels,
+      bot: telegramBot,
+      t: translator,
+      logger,
+    }),
+    reconnectUrl: (workspaceId, service, accountId) =>
+      admin
+        .connectLink(workspaceId, { service, reconnect: accountId })
+        .then((link) => link.url)
+        .catch(() => `${config.publicUrl}/app/accounts/${encodeURIComponent(accountId)}`),
+    logger,
+  });
+  for (const job of builtinJobs({ health, alerts, customServices, status: ops.status })) jobs.register(job);
   const hub = new Hub({
     db,
     meter: usage,
@@ -374,6 +397,7 @@ export function createServices(
       }),
     },
     rateLimiter,
+    circuitBreaker,
     idempotency,
     errors: ops.errors,
     toolTimeoutMs: config.toolTimeoutMs,
@@ -464,6 +488,7 @@ export function createServices(
     tokens,
     connect,
     health,
+    alerts,
     jobs,
     apiTokens,
     hub,
@@ -488,6 +513,7 @@ export function createServices(
     pendingLogins,
     secondFactors,
     rateLimiter,
+    circuitBreaker,
     idempotency,
     mcp,
     messaging,

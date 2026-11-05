@@ -191,6 +191,7 @@ describe('HTTP manifest connectors', () => {
           updatedAt: new Date(),
           lastUsedAt: null,
           checkedAt: null,
+          reauthNotifiedAt: null,
         },
       ],
     });

@@ -176,7 +176,13 @@ describe('REST API, personal tokens and account management', () => {
     });
     const expired = await api('/tools/flaky_expired/call', { method: 'POST', body: { arguments: {} } });
     expect(expired.body.isError).toBe(true);
-    expect(expired.body.content[0].text).toContain('reconnect');
+    expect(expired.body.content[0].text).toContain(
+      'Sign-in to Flaky for account "ci" stopped working: token expired.',
+    );
+    // The AI gets the link that fixes it, not just "reconnect".
+    expect(expired.body.content[0].text).toContain(
+      `sign in again, here: ${hub.baseUrl}/connect/flaky?account=${created.body.account.id}`,
+    );
     expect((await api(`/accounts/${created.body.account.id}`)).body.status).toBe('needs_reauth');
 
     const slow = await api('/tools/flaky_slow/call', { method: 'POST', body: { arguments: {} } });

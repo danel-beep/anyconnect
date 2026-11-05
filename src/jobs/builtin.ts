@@ -1,3 +1,4 @@
+import type { AccountAlerts } from '../core/account-alerts.js';
 import type { CustomServiceManager } from '../core/custom-services.js';
 import type { AccountHealthService } from '../core/health.js';
 import type { StatusService } from '../ops/status.js';
@@ -6,6 +7,7 @@ import type { JobDefinition } from './queue.js';
 /** Jobs every hub runs. New recurring work is added here (or registered by a feature module). */
 export function builtinJobs(deps: {
   health: AccountHealthService;
+  alerts: AccountAlerts;
   customServices: CustomServiceManager;
   status: StatusService;
 }): JobDefinition[] {
@@ -26,6 +28,15 @@ export function builtinJobs(deps: {
       expectEveryMs: 20 * 60_000,
       run: async () => {
         await deps.health.refreshExpiringTokens();
+      },
+    },
+    {
+      name: 'accounts.notify_reauth',
+      description: 'Tell owners about accounts that need a new sign-in',
+      cron: '*/5 * * * *',
+      expectEveryMs: 20 * 60_000,
+      run: async () => {
+        await deps.alerts.notifyReauth();
       },
     },
     {

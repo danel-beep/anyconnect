@@ -16,7 +16,8 @@ import type { ExecResult } from './result.js';
  * fan-out, a unified capability tool or a `call_tools` batch — runs as one *unit* (one action on one
  * account) through the same ordered chain of stages:
  *
- *   audit → meter → quota → policy → risk → confirm → limits → idempotency → untrusted → shape → invoke
+ *   audit → meter → quota → policy → risk → confirm → limits → circuit → idempotency → untrusted → shape
+ *   → invoke
  *
  * Each stage is a middleware `(call, next) => result`: it may inspect the call, short-circuit with
  * its own result (a policy denial), call `next()` more than once (a retry) or post-process the
@@ -37,6 +38,8 @@ export const STAGE_ORDER = [
   'confirm',
   /** Per-account rate limits and safe retries of transient failures. */
   'limits',
+  /** Fails fast while a service keeps failing for an account (circuit breaker). */
+  'circuit',
   /** Suppresses accidental duplicates of non-idempotent writes. */
   'idempotency',
   /** Marks third-party content (emails, messages) as data, not instructions (security layer). */
