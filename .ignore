@@ -1,0 +1,6 @@
+# Generated or bulky files that searches (ripgrep, editors, agents) should skip.
+# Edit them only through their generators; see CLAUDE.md.
+drizzle/meta/
+package-lock.json
+src/web/seo/og-image-data.ts
+src/web/brand-icons.ts
