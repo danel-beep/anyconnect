@@ -2,7 +2,7 @@ import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan, yearlyFreeMonths } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, SAMPLE_SERVICES, searchText, serviceMeta } from './catalog.js';
-import { CLIENT_GUIDES, clientName } from './clients.js';
+import { CLIENT_GUIDES, clientName, guideForApp } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
@@ -1299,173 +1299,245 @@ const AppName: FC<{ id: string | null; name: string }> = ({ id, name }) =>
     <strong>{name}</strong>
   );
 
+/** Signed in within this many days counts as active (green dot). */
+const ACTIVE_DAYS = 7;
+
+/** One signed-in AI app: its logo, how recently it worked, and its actions. */
+const AppTile: FC<{ ctx: PageCtx; g: AppsView['grants'][number] }> = ({ ctx, g }) => {
+  const { t, lang } = ctx;
+  const guide = guideForApp(g.client, g.name);
+  const linked = g.appId !== null;
+  const active = g.lastUsedAt !== null && Date.now() - g.lastUsedAt.getTime() < ACTIVE_DAYS * 86_400_000;
+  return (
+    <li class={linked ? 'app-tile linked' : 'app-tile'} id={`app-${g.id}`}>
+      <ServiceLogo icon={guide?.icon} glyph={guide?.glyph ?? 'zap'} name={g.name} />
+      <div class="grow">
+        <div class="app-tile-name">
+          {g.appId ? (
+            <a class="app-tile-link stretch" href={`/app/apps/${encodeURIComponent(g.appId)}`}>
+              {g.name}
+            </a>
+          ) : (
+            <strong>{g.name}</strong>
+          )}
+          {g.profile ? <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span> : null}
+        </div>
+        <p class="app-tile-meta">
+          <span class={active ? 'dot ok' : 'dot off'} />
+          <span>
+            {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('aiapp.neverUsed')} ·{' '}
+            {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })}
+          </span>
+        </p>
+      </div>
+      <div class="app-tile-actions">
+        <form
+          method="post"
+          action={`/grants/${g.id}/revoke`}
+          data-confirm={t('app.apps.revokeConfirm', { name: g.name })}
+        >
+          <input type="hidden" name="csrf" value={ctx.csrf} />
+          <button class="sm ghost app-tile-revoke" type="submit">
+            {t('home.revoke')}
+          </button>
+        </form>
+      </div>
+    </li>
+  );
+};
+
+/** Logos of the AI apps the hub has guides for, shown while none is connected. */
+const APP_LOGOS = CLIENT_GUIDES.filter((g) => g.id !== 'other').slice(0, 6);
+
 export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = ({ ctx, shell, view }) => {
   const { t, lang } = ctx;
+  const apps = view.grants.length > 0;
   return (
     <AppShell ctx={ctx} shell={shell} section="apps" title={t('app.nav.apps')}>
       <PageHead title={t('app.nav.apps')} sub={t('app.apps.sub')} />
       <Flash flash={view.flash} />
-      <ConnectAiCard ctx={ctx} />
-      <div class="card flush">
-        <div class="card-head pad">
-          <h2>{t('app.apps.connected')}</h2>
-        </div>
-        {view.grants.length === 0 ? (
-          <p class="muted pad-x">{t(view.tokens.length ? 'aiapp.noSignIns' : 'home.noApps')}</p>
-        ) : (
-          <ul class="plain pad-x">
+      {apps ? (
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-h">
+          <div class="card-head">
+            <h2 id="connected-apps-h" class="apps-head">
+              {t('app.apps.yours')} <span class="badge tiny-badge">{view.grants.length}</span>
+            </h2>
+            <a class="btn sm" href="#connect-ai">
+              <Icon name="plus" /> {t('app.apps.addAnother')}
+            </a>
+          </div>
+          <ul class="app-grid">
             {view.grants.map((g) => (
-              <li>
-                <span class="grow">
-                  <AppName id={g.appId} name={g.name} />
-                  {g.client && g.client !== g.name ? <span class="badge">{g.client}</span> : null}
-                  {g.profile ? (
-                    <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span>
-                  ) : null}
-                  <div class="small muted">
-                    {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })} ·{' '}
-                    {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('home.never')}
-                  </div>
-                </span>
-                <form
-                  method="post"
-                  action={`/grants/${g.id}/revoke`}
-                  data-confirm={t('app.apps.revokeConfirm', { name: g.name })}
-                >
-                  <input type="hidden" name="csrf" value={ctx.csrf} />
-                  <button class="sm danger" type="submit">
-                    {t('home.revoke')}
-                  </button>
-                </form>
-              </li>
+              <AppTile ctx={ctx} g={g} />
             ))}
           </ul>
-        )}
-      </div>
-      <div class="card" id="profiles">
-        <div class="card-head">
-          <h2>{t('profiles.title')}</h2>
-          <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
-            {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
-          </a>
-        </div>
-        <p class="muted">{t('profiles.appsText')}</p>
-        {view.profiles.length ? (
-          <ul class="plain">
-            {view.profiles.map((p) => (
-              <li>
-                <span class="grow">
-                  <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
-                    <strong>{p.name}</strong>
-                  </a>{' '}
-                  <code class="small">/mcp/{p.slug}</code>
-                </span>
-                <span class="small muted">
-                  {t('profiles.accountsN', { n: p.accounts })} ·{' '}
-                  {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
-                </span>
-              </li>
+        </section>
+      ) : null}
+      <ConnectAiCard ctx={ctx} />
+      {apps ? null : (
+        <section class="card apps-empty" id="connected-apps">
+          <div class="apps-empty-logos">
+            {APP_LOGOS.map((g) => (
+              <span class="apps-empty-logo">
+                <ServiceLogo icon={g.icon} glyph={g.glyph} name={clientName(g, lang)} />
+                <span class="apps-empty-name">{clientName(g, lang)}</span>
+              </span>
             ))}
-          </ul>
-        ) : null}
-      </div>
-      <div class="card" id="tokens">
-        <h2>{t('app.tokens.title')}</h2>
-        <p class="muted">{t('app.tokens.text')}</p>
-        {view.newToken ? (
-          <div class="notice ok" data-replace-url="/app/apps">
-            <p>
-              <strong>{t('app.tokens.created')}</strong> {t('app.tokens.once')}
-            </p>
-            <CopyField t={t} id="new-token" value={view.newToken} label={t('app.tokens.title')} />
           </div>
-        ) : null}
-        {view.tokens.length ? (
-          <ul class="plain">
-            {view.tokens.map((tok) => (
-              <li>
-                <span class="grow">
-                  <AppName id={tok.appId} name={tok.name} />
-                  {tok.profile ? (
-                    <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
-                  ) : null}
-                  <span class={tok.api ? 'badge warn' : 'badge'}>
-                    {t(tok.api ? 'app.tokens.scopeApi' : 'app.tokens.scopeMcp')}
-                  </span>
-                  <div class="small muted">
-                    {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
-                    {tok.lastUsedAt
-                      ? t('app.apps.used', { ago: fmtAgo(lang, tok.lastUsedAt) })
-                      : t('home.never')}
-                    {tok.expiresAt
-                      ? ` · ${t('app.tokens.expires', { date: fmtDate(lang, tok.expiresAt) })}`
-                      : ''}
-                  </div>
-                </span>
-                <form
-                  method="post"
-                  action={`/app/tokens/${tok.id}/revoke`}
-                  data-confirm={t('app.tokens.revokeConfirm', { name: tok.name })}
-                >
-                  <input type="hidden" name="csrf" value={ctx.csrf} />
-                  <button class="sm danger" type="submit">
-                    {t('home.revoke')}
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <form method="post" action="/app/tokens" class="inline-form">
-          <input type="hidden" name="csrf" value={ctx.csrf} />
-          <div class="wide-2">
-            <label for="tok-name">{t('app.tokens.name')}</label>
-            <input
-              id="tok-name"
-              type="text"
-              name="name"
-              required
-              maxlength={80}
-              placeholder={t('app.tokens.placeholder')}
-            />
-          </div>
+          <h2>{t('app.apps.emptyTitle')}</h2>
+          <p class="muted">{t(view.tokens.length ? 'aiapp.noSignIns' : 'app.apps.emptyText')}</p>
+        </section>
+      )}
+      <h2 class="section-label">{t('app.apps.more')}</h2>
+      <details class="card fold" id="profiles" open={view.profiles.length > 0}>
+        <summary>
+          <span class="fold-icon" aria-hidden="true">
+            <Icon name="layers" />
+          </span>
+          <span class="grow">
+            <span class="fold-title">
+              {t('profiles.title')}
+              {view.profiles.length ? <span class="badge tiny-badge">{view.profiles.length}</span> : null}
+            </span>
+            <span class="muted small fold-sub">{t('profiles.appsText')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
           {view.profiles.length ? (
-            <div>
-              <label for="tok-profile">{t('profiles.tokenFor')}</label>
-              <select id="tok-profile" name="profile">
-                <option value="">{t('profiles.tokenMain')}</option>
-                {view.profiles.map((p) => (
-                  <option value={p.id}>{p.name}</option>
-                ))}
-              </select>
+            <ul class="plain">
+              {view.profiles.map((p) => (
+                <li>
+                  <span class="grow">
+                    <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
+                      <strong>{p.name}</strong>
+                    </a>{' '}
+                    <code class="small">/mcp/{p.slug}</code>
+                  </span>
+                  <span class="small muted">
+                    {t('profiles.accountsN', { n: p.accounts })} ·{' '}
+                    {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p>
+            <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
+              {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
+            </a>
+          </p>
+        </div>
+      </details>
+      <details class="card fold" id="tokens" open={Boolean(view.newToken) || view.tokens.length > 0}>
+        <summary>
+          <span class="fold-icon" aria-hidden="true">
+            <Icon name="key" />
+          </span>
+          <span class="grow">
+            <span class="fold-title">
+              {t('app.tokens.title')}
+              {view.tokens.length ? <span class="badge tiny-badge">{view.tokens.length}</span> : null}
+            </span>
+            <span class="muted small fold-sub">{t('app.tokens.text')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
+          {view.newToken ? (
+            <div class="notice ok" data-replace-url="/app/apps">
+              <p>
+                <strong>{t('app.tokens.created')}</strong> {t('app.tokens.once')}
+              </p>
+              <CopyField t={t} id="new-token" value={view.newToken} label={t('app.tokens.title')} />
             </div>
           ) : null}
-          <div>
-            <label for="tok-exp">{t('app.tokens.expiry')}</label>
-            <select id="tok-exp" name="days">
-              <option value="30">{t('app.tokens.days', { n: 30 })}</option>
-              <option value="90" selected>
-                {t('app.tokens.days', { n: 90 })}
-              </option>
-              <option value="365">{t('app.tokens.days', { n: 365 })}</option>
-              <option value="0">{t('app.tokens.never')}</option>
-            </select>
-          </div>
-          {/* The API switch and its explanation get their own line under the fields. */}
-          <div class="wide">
-            <label class="check">
-              <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
-            </label>
-            <p class="hint">{t('app.tokens.apiHint')}</p>
-          </div>
-          <div class="wide">
-            <button type="submit" class="primary">
-              {t('app.tokens.create')}
-            </button>
-          </div>
-        </form>
-        {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
-      </div>
+          {view.tokens.length ? (
+            <ul class="plain">
+              {view.tokens.map((tok) => (
+                <li>
+                  <span class="grow">
+                    <AppName id={tok.appId} name={tok.name} />
+                    {tok.profile ? (
+                      <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
+                    ) : null}
+                    <span class={tok.api ? 'badge warn' : 'badge'}>
+                      {t(tok.api ? 'app.tokens.scopeApi' : 'app.tokens.scopeMcp')}
+                    </span>
+                    <div class="small muted">
+                      {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
+                      {tok.lastUsedAt
+                        ? t('app.apps.used', { ago: fmtAgo(lang, tok.lastUsedAt) })
+                        : t('aiapp.neverUsed')}
+                      {tok.expiresAt
+                        ? ` · ${t('app.tokens.expires', { date: fmtDate(lang, tok.expiresAt) })}`
+                        : ''}
+                    </div>
+                  </span>
+                  <form
+                    method="post"
+                    action={`/app/tokens/${tok.id}/revoke`}
+                    data-confirm={t('app.tokens.revokeConfirm', { name: tok.name })}
+                  >
+                    <input type="hidden" name="csrf" value={ctx.csrf} />
+                    <button class="sm danger" type="submit">
+                      {t('home.revoke')}
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <h3 class="fold-sub-h">{t('app.tokens.new')}</h3>
+          <form method="post" action="/app/tokens" class="inline-form">
+            <input type="hidden" name="csrf" value={ctx.csrf} />
+            <div class="wide-2">
+              <label for="tok-name">{t('app.tokens.name')}</label>
+              <input
+                id="tok-name"
+                type="text"
+                name="name"
+                required
+                maxlength={80}
+                placeholder={t('app.tokens.placeholder')}
+              />
+            </div>
+            {view.profiles.length ? (
+              <div>
+                <label for="tok-profile">{t('profiles.tokenFor')}</label>
+                <select id="tok-profile" name="profile">
+                  <option value="">{t('profiles.tokenMain')}</option>
+                  {view.profiles.map((p) => (
+                    <option value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div>
+              <label for="tok-exp">{t('app.tokens.expiry')}</label>
+              <select id="tok-exp" name="days">
+                <option value="30">{t('app.tokens.days', { n: 30 })}</option>
+                <option value="90" selected>
+                  {t('app.tokens.days', { n: 90 })}
+                </option>
+                <option value="365">{t('app.tokens.days', { n: 365 })}</option>
+                <option value="0">{t('app.tokens.never')}</option>
+              </select>
+            </div>
+            {/* The API switch and its explanation get their own line under the fields. */}
+            <div class="wide">
+              <label class="check">
+                <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
+              </label>
+              <p class="hint">{t('app.tokens.apiHint')}</p>
+            </div>
+            <div class="wide">
+              <button type="submit" class="primary">
+                {t('app.tokens.create')}
+              </button>
+            </div>
+          </form>
+          {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
+        </div>
+      </details>
     </AppShell>
   );
 };
