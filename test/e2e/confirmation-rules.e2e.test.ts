@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { hashToken } from '../../src/lib/crypto.js';
 import { resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { AI_CLIENTS, type AiClientProfile, SimulatedAiClient, serveClientDocuments } from './ai-clients.js';
 import { FakeInternet } from './fake-internet.js';
@@ -149,17 +148,14 @@ describe.each(
       const { response } = await browser.walk(url);
       return allow(browser, response, profile);
     });
-    const { rows } = await hub.services.database.pool.query<{ ai_client_id: string }>(
-      'SELECT g.ai_client_id FROM oauth_tokens t JOIN oauth_grants g ON g.id = t.grant_id WHERE t.token_hash = $1',
-      [hashToken(client.oauth.savedTokens!.access_token)],
-    );
+    const verified = await hub.services.oauth.verifyAccessToken(client.oauth.savedTokens!.access_token);
     const other = await hub.services.aiClients.ensure(workspaceId, {
       matchKey: 'app:chatgpt',
       name: 'ChatGPT',
       kind: 'oauth',
     });
     const account = (await hub.services.accounts.list(workspaceId)).find((a) => a.connectorId === 'gmail')!;
-    ids = { self: rows[0]!.ai_client_id, other: other.id, account: account.id };
+    ids = { self: verified!.aiClientId!, other: other.id, account: account.id };
   });
 
   beforeEach(async () => {

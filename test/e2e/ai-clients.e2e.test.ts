@@ -1,6 +1,5 @@
 import { UnauthorizedError } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { hashToken } from '../../src/lib/crypto.js';
 import { translator } from '../../src/web/i18n.js';
 import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { AI_CLIENTS, type AiClientProfile, SimulatedAiClient, serveClientDocuments } from './ai-clients.js';
@@ -73,13 +72,10 @@ describe('AI clients connect end to end', () => {
   // The test browser picked Russian with the language switch.
   const t = translator('ru');
 
+  /** The grant behind the client's current access token, as the hub's token check sees it. */
   const grantOf = async (client: SimulatedAiClient) => {
-    const token = client.oauth.savedTokens!.access_token;
-    const { rows } = await hub.services.database.pool.query<{ grant_id: string }>(
-      'SELECT grant_id FROM oauth_tokens WHERE token_hash = $1',
-      [hashToken(token)],
-    );
-    return hub.services.db.query.oauthGrants.findFirst({ where: (g, { eq }) => eq(g.id, rows[0]!.grant_id) });
+    const verified = await hub.services.oauth.verifyAccessToken(client.oauth.savedTokens!.access_token);
+    return hub.services.db.query.oauthGrants.findFirst({ where: (g, { eq }) => eq(g.id, verified!.grantId) });
   };
 
   describe.each(AI_CLIENTS.map((profile) => [profile.id, profile] as const))('%s', (_id, profile) => {
@@ -210,9 +206,10 @@ describe('AI clients connect end to end', () => {
 
     it('refreshes its access token when it expires and keeps working', async () => {
       const old = client.oauth.savedTokens!;
+      const grant = (await grantOf(client))!;
       await hub.services.database.pool.query(
-        "UPDATE oauth_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = $1",
-        [hashToken(old.access_token)],
+        "UPDATE oauth_tokens SET expires_at = now() - interval '1 second' WHERE grant_id = $1 AND type = 'access'",
+        [grant.id],
       );
       await client.open();
       const result = await callAnyway(client, 'demo_echo', { account: 'main', message: 'after refresh' });
