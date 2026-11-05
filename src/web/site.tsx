@@ -306,7 +306,7 @@ const Roadmap: FC<{ ctx: PageCtx; services: PublicService[]; limit?: number }> =
   ].slice(0, limit ?? Number.POSITIVE_INFINITY);
   if (!items.length) return null;
   return (
-    <div class="roadmap" data-filter-group>
+    <div data-filter-group>
       <h3 class="cat-title">{ctx.t('services.roadmap')}</h3>
       <ul class="roadmap-list">
         {items.map((x) => (
@@ -1247,7 +1247,7 @@ export const ServiceDetailPage: FC<{
           )}
           <div class="svc-detail-grid">
             <div class="card">
-              <h2 class="h3">{t('service.how')}</h2>
+              <h2>{t('service.how')}</h2>
               {service.guide ? (
                 <SetupGuideView t={t} guide={service.guide} />
               ) : (
@@ -1255,7 +1255,7 @@ export const ServiceDetailPage: FC<{
               )}
             </div>
             <div class="card">
-              <h2 class="h3">{t('service.prompts')}</h2>
+              <h2>{t('service.prompts')}</h2>
               {service.prompts.length ? (
                 <PromptList t={t} prompts={service.prompts} idPrefix="ask" />
               ) : (
@@ -1266,7 +1266,7 @@ export const ServiceDetailPage: FC<{
           </div>
           <div class="card flush">
             <div class="card-head pad">
-              <h2 class="h3">{t('service.tools', { n: service.actions.length })}</h2>
+              <h2>{t('service.tools', { n: service.actions.length })}</h2>
               <p class="small muted">{t('service.toolsNote')}</p>
             </div>
             <div class="table-wrap">

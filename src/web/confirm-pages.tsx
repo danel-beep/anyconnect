@@ -79,7 +79,7 @@ const PendingCall: FC<{
       <div class="pending-head">
         <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={call.service} />
         <div class="grow">
-          {heading === 1 ? <h1 class="h2">{call.action}</h1> : <h2 class="h3">{call.action}</h2>}
+          {heading === 1 ? <h1>{call.action}</h1> : <h2>{call.action}</h2>}
           <p class="small muted">
             {call.service} · {call.account}
           </p>
@@ -177,7 +177,7 @@ export const ConfirmListPage: FC<{
         <span class="empty-icon" aria-hidden="true">
           <Icon name="check" />
         </span>
-        <h2 class="h3">{t('confirm.page.noneTitle')}</h2>
+        <h2>{t('confirm.page.noneTitle')}</h2>
         <p class="muted">{t('confirm.page.noneText')}</p>
         <p class="small">
           {t('confirm.page.now', { rule })} <a href="/app/rules">{t('confirm.page.change')}</a>
@@ -192,7 +192,7 @@ export const ConfirmListPage: FC<{
     )}
     {telegram.enabled ? (
       <div class="card" id="telegram">
-        <h2 class="h3">{t('home.telegram')}</h2>
+        <h2>{t('home.telegram')}</h2>
         {telegram.linked ? (
           <form method="post" action="/telegram/unlink">
             <input type="hidden" name="csrf" value={csrf} />

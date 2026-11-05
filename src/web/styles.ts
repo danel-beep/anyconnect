@@ -139,8 +139,8 @@ ul.plain>li:first-child,ol.plain>li:first-child{border-top:0}
 /* On a phone a row of label and quiet text value (not a button) puts the value on its own line,
    the same in every row of the list, so long labels are not squeezed into one word per line. */
 @media (max-width:640px){:is(ul,ol).plain>li:has(>.muted:last-child:not(:first-child)){flex-wrap:wrap;gap:2px 12px}:is(ul,ol).plain>li:has(>.muted:last-child:not(:first-child))>:first-child{flex:1 1 100%}}
-ul.bullets{margin:4px 0 12px;padding-left:20px}
-ul.bullets li+li{margin-top:4px}
+ul.bullets,ol.bullets{margin:4px 0 12px;padding-left:20px}
+ul.bullets li+li,ol.bullets li+li{margin-top:4px}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:10px 12px;border-top:1px solid var(--border);vertical-align:middle}

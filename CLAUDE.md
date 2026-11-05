@@ -54,6 +54,10 @@ develop further. In practice:
   storage, search, outbox and pacing live in `src/messaging/`; long-lived sessions run in the
   gateway process (`src/gateway/`, `node dist/gateway/index.js`) behind `SessionDriver`. Message
   content is always encrypted; external ids are stored only as keyed hashes.
+- Web UI (`src/web/*.tsx` + `src/web/styles*`): every class on an element must be styled for that
+  element and no `style` attributes (CSP drops them); `test/ui-contract.test.ts` enforces it. Fix a
+  failure in the markup or CSS, never with an exception; scripts and tests use `data-*`/ids, not classes.
+  Prefer the components in `src/web/ui.tsx` (`Tabs`, `CopyField`, `Meter`…) to hand-made class combos. See `docs/UI.md`.
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.
 - `src/hub/hub.ts` resolves calls; every connector call runs through the stage chain in
   `src/hub/executor.ts` (audit → meter → quota → policy → risk → confirm → limits → circuit →

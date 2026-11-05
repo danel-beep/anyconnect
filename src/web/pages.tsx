@@ -172,7 +172,7 @@ export const LoginPage: FC<{
               <GoogleG /> {t('login.google')}
             </a>
             {mode === 'signup' ? (
-              <p class="small muted center">
+              <p class="small muted">
                 {t('signup.termsA')} <a href="/terms">{t('signup.termsLink')}</a> {t('signup.and')}{' '}
                 <a href="/privacy">{t('signup.privacyLink')}</a>.
               </p>
@@ -210,13 +210,13 @@ export const LoginPage: FC<{
         ) : null}
       </div>
       {mode === 'login' && google && signupsOpen ? (
-        <p class="center small muted switch-auth">
+        <p class="small muted">
           {t('login.noAccount')}{' '}
           <a href={`/signup?next=${encodeURIComponent(next)}`}>{t('login.signupLink')}</a>
         </p>
       ) : null}
       {mode === 'signup' ? (
-        <p class="center small muted switch-auth">
+        <p class="small muted">
           {t('signup.haveAccount')}{' '}
           <a href={`/login?next=${encodeURIComponent(next)}`}>{t('signup.signInLink')}</a>
         </p>

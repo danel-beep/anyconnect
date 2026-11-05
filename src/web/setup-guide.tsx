@@ -81,7 +81,6 @@ export const SetupGuideView: FC<{
   const labels = guide.fieldLabels;
   return (
     <div
-      class="setup-guide"
       data-guide={picker ? '' : undefined}
       data-guide-field={picker?.field}
       data-guide-email={picker?.emailField}
@@ -165,7 +164,7 @@ export const RISK_KEYS: Record<RiskLevel, 'risk.read' | 'risk.write' | 'risk.dan
 };
 
 export const RiskBadge: FC<{ t: Translate; risk: RiskLevel }> = ({ t, risk }) => (
-  <span class={`badge risk-${risk}`}>
+  <span class="badge">
     <span class={`dot ${risk === 'dangerous' ? 'bad' : risk === 'write' ? 'accent' : 'ok'}`} />
     {t(RISK_KEYS[risk])}
   </span>

@@ -1089,12 +1089,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
           </summary>
           <div id="svc-all-list">
             {layout.groups.map(([category, entries]) => (
-              <section
-                data-filter-group
-                data-group={category}
-                class="svc-cat"
-                aria-labelledby={`cat-${category}`}
-              >
+              <section data-filter-group data-group={category} aria-labelledby={`cat-${category}`}>
                 <h3 class="svc-section" id={`cat-${category}`}>
                   {t(`category.${category}`)}{' '}
                   <span class="muted">· {entries.length + (category === 'custom' ? 1 : 0)}</span>
@@ -1130,12 +1125,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
               </section>
             ))}
             {layout.unavailable.length ? (
-              <section
-                data-filter-group
-                data-group="unavailable"
-                class="svc-cat"
-                aria-labelledby="cat-unavailable"
-              >
+              <section data-filter-group data-group="unavailable" aria-labelledby="cat-unavailable">
                 <h3 class="svc-section" id="cat-unavailable">
                   {t('app.services.notReady')} <span class="muted">· {layout.unavailable.length}</span>
                 </h3>
@@ -1563,7 +1553,7 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
               </option>
             ))}
           </select>
-          <label class="check log-errors">
+          <label class="check">
             <input type="checkbox" name="status" value="error" checked={view.filters.errors} />{' '}
             {t('app.activity.errorsOnly')}
           </label>

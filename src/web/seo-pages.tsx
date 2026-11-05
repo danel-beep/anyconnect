@@ -276,14 +276,14 @@ export const ServiceClientPage: FC<{
           )}
           <div class="svc-detail-grid">
             <div class="card step-card-plain" id="step-1">
-              <h2 class="h3">1. {t('combo.step1', vars)}</h2>
+              <h2>1. {t('combo.step1', vars)}</h2>
               <p>{step1}</p>
               {service.connect === 'form' && service.guide ? (
                 <SetupGuideView t={t} guide={service.guide} />
               ) : null}
             </div>
             <div class="card guide" id="step-2">
-              <h2 class="h3">2. {t('combo.step2', vars)}</h2>
+              <h2>2. {t('combo.step2', vars)}</h2>
               <p class="small muted">{guide.note[lang]}</p>
               <CopyField t={t} id="combo-mcp-url" value={ctx.mcpUrl} label={t('home.mcpUrl')} />
               <ClientSteps ctx={ctx} guide={guide} idPrefix="client-" />
@@ -295,7 +295,7 @@ export const ServiceClientPage: FC<{
             </div>
           </div>
           <div class="card" id="step-3">
-            <h2 class="h3">3. {t('combo.step3', vars)}</h2>
+            <h2>3. {t('combo.step3', vars)}</h2>
             {service.prompts.length ? (
               <PromptList t={t} prompts={service.prompts} idPrefix="ask" />
             ) : (
@@ -304,7 +304,7 @@ export const ServiceClientPage: FC<{
           </div>
           <div class="card flush">
             <div class="card-head pad">
-              <h2 class="h3">{t('combo.tools', vars)}</h2>
+              <h2>{t('combo.tools', vars)}</h2>
               <p class="small muted">{t('service.toolsNote')}</p>
             </div>
             <div class="table-wrap">
@@ -338,11 +338,11 @@ export const ServiceClientPage: FC<{
             title={t('combo.useCases', vars)}
           />
           <div class="card">
-            <h2 class="h3">{t('guide.faq')}</h2>
+            <h2>{t('guide.faq')}</h2>
             <FaqList items={faq} />
           </div>
           <div class="card">
-            <h2 class="h3">{t('combo.otherClients', vars)}</h2>
+            <h2>{t('combo.otherClients', vars)}</h2>
             <ClientGrid
               ctx={ctx}
               clients={COMBO_CLIENTS.filter((g) => g !== guide)}
@@ -351,7 +351,7 @@ export const ServiceClientPage: FC<{
           </div>
           {others.length ? (
             <div class="card">
-              <h2 class="h3">{t('combo.otherServices', vars)}</h2>
+              <h2>{t('combo.otherServices', vars)}</h2>
               <ServiceGrid ctx={ctx} services={others} href={(s) => comboPath(s.id, guide)} />
             </div>
           ) : null}
@@ -369,7 +369,7 @@ export const UseWith: FC<{ ctx: PageCtx; service: PublicService; services: Publi
 }) => (
   <>
     <div class="card">
-      <h2 class="h3">{ctx.t('combo.useWith', { service: service.name })}</h2>
+      <h2>{ctx.t('combo.useWith', { service: service.name })}</h2>
       <ClientGrid ctx={ctx} clients={COMBO_CLIENTS} href={(g) => comboPath(service.id, g)} />
     </div>
     <RelatedUseCases
@@ -444,7 +444,7 @@ export const FaqPageView: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
           </div>
           {groups.map((g) => (
             <div class="faq-group" id={g.id}>
-              <h2 class="h3">{t(`faqPage.group.${g.id}`)}</h2>
+              <h2>{t(`faqPage.group.${g.id}`)}</h2>
               <FaqList items={g.items} />
             </div>
           ))}
@@ -531,7 +531,7 @@ export const CompareView: FC<{ ctx: PageCtx; page: ComparePage; services: Public
       ]}
     >
       <div class="wrap">
-        <article class="prose wide-prose">
+        <article class="prose">
           <Crumbs ctx={ctx} items={crumbs} />
           <h1>{body.h1}</h1>
           <p class="muted">{t('article.updated', { date: formatDate(lang, page.checked) })}</p>
@@ -753,7 +753,7 @@ export const BlogIndexPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             {BLOG_POSTS.map((p) => (
               <a class="card post-card" href={localizedPath(blogPath(p.slug), lang)}>
                 <span class="small muted">{formatDate(lang, p.published)}</span>
-                <h2 class="h3">{p.body[lang].h1}</h2>
+                <h2>{p.body[lang].h1}</h2>
                 <p class="muted">{p.body[lang].description}</p>
               </a>
             ))}

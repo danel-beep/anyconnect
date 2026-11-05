@@ -421,6 +421,9 @@ select.narrow{max-width:320px}
 @media (max-width:640px){.pk.acc{grid-template-columns:auto minmax(0,1fr) auto}.pk.acc .ops{grid-column:auto}}
 .chart{position:relative}
 .chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13.5px}
+/* One error group per row: the head (message, button) and its stack trace below it. */
+.error-list{list-style:none;margin:0;padding:0}
+.error-list>li{padding:16px 24px}
 .error-list>li+li{border-top:1px solid var(--border)}
 .error-head{display:flex;gap:12px 16px;justify-content:space-between;align-items:flex-start}
 .error-head>div{min-width:0}

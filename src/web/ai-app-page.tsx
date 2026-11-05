@@ -68,7 +68,7 @@ export const AiAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiAppPageView
           <div class="card flush">
             <div class="card-head pad">
               <div>
-                <h2 class="h3">{t('aiapp.connections')}</h2>
+                <h2>{t('aiapp.connections')}</h2>
                 <p class="small muted">{t('aiapp.connectionsSub')}</p>
               </div>
             </div>
@@ -119,14 +119,14 @@ export const AiAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiAppPageView
           </div>
           <div class="card flush">
             <div class="card-head pad">
-              <h2 class="h3">{t('aiapp.calls')}</h2>
+              <h2>{t('aiapp.calls')}</h2>
             </div>
             <CallsTable ctx={ctx} calls={view.calls} empty={t('aiapp.noCalls')} />
           </div>
         </div>
         <div class="account-side">
           <div class="card">
-            <h2 class="h3">{t('aiapp.rules')}</h2>
+            <h2>{t('aiapp.rules')}</h2>
             <p class="small muted">{t('aiapp.rulesSub')}</p>
             <form method="post" action="/app/rules/scoped">
               <Hidden values={{ csrf: ctx.csrf, back: base, kind: 'app', id: a.id }} />
@@ -163,7 +163,7 @@ export const AiAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiAppPageView
             </form>
           </div>
           <div class="card">
-            <h2 class="h3">{t('aiapp.name')}</h2>
+            <h2>{t('aiapp.name')}</h2>
             <form method="post" action={`${base}/rename`} class="copy">
               <Hidden values={{ csrf: ctx.csrf }} />
               <label class="sr-only" for="app-name">
@@ -180,7 +180,7 @@ export const AiAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiAppPageView
       <div class="card danger-zone">
         {connected ? (
           <>
-            <h2 class="h3">{t('aiapp.disconnect')}</h2>
+            <h2>{t('aiapp.disconnect')}</h2>
             <p class="muted">{t('aiapp.disconnectText')}</p>
             <form
               method="post"
@@ -195,7 +195,7 @@ export const AiAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiAppPageView
           </>
         ) : (
           <>
-            <h2 class="h3">{t('aiapp.forget')}</h2>
+            <h2>{t('aiapp.forget')}</h2>
             <p class="muted">{t('aiapp.forgetText')}</p>
             <form
               method="post"
