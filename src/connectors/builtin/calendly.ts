@@ -108,21 +108,36 @@ export default defineConnector({
           'Calendly: типы встреч и ссылки для записи, назначенные встречи и их участники, отмена встреч.',
         setup: {
           form: {
-            summary: 'Личный токен доступа Calendly. Около минуты.',
+            summary: 'Вы создаёте личный токен доступа в Calendly и вставляете его сюда.',
+            minutes: 2,
+            needs: ['Аккаунт Calendly'],
             steps: [
               {
-                text: 'Откройте Calendly → Integrations → API & Webhooks.',
+                text: 'В Calendly откройте **Integrations & apps** и нажмите на карточку **API and webhooks**.',
                 link: {
                   label: 'Открыть API & Webhooks',
                   url: 'https://calendly.com/integrations/api_webhooks',
                 },
               },
               {
-                text: 'В Personal Access Tokens нажмите Generate New Token, назовите его Manyplug и нажмите Create Token.',
+                text: 'В разделе **Personal Access Tokens** нажмите **Generate New Token**, назовите токен Manyplug и нажмите **Create Token**.',
               },
-              { text: 'Скопируйте токен (Calendly покажет его один раз) и вставьте в форму.' },
+              {
+                text: 'Сразу скопируйте токен: Calendly показывает его только один раз.',
+                fills: ['token'],
+              },
             ],
             tips: ['Отозвать токен можно на той же странице.'],
+            problems: [
+              {
+                problem: 'Форма пишет, что токен не подходит',
+                fix: 'Создайте новый токен и скопируйте его целиком: токен длинный, его легко обрезать.',
+              },
+              {
+                problem: 'ИИ не видит встречи коллег',
+                fix: 'Токен видит то же, что ваш пользователь Calendly. Чтобы видеть встречи команды, создайте токен под аккаунтом владельца или администратора.',
+              },
+            ],
           },
         },
         prompts: [
@@ -151,18 +166,30 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'A Calendly personal access token. Takes about a minute.',
+            summary: 'You create a personal access token in Calendly and paste it here.',
+            minutes: 2,
+            needs: ['A Calendly account'],
             steps: [
               {
-                text: 'Open Calendly → Integrations → API & Webhooks.',
+                text: 'In Calendly, open **Integrations & apps** and click the **API and webhooks** card.',
                 link: { label: 'Open API & Webhooks', url: 'https://calendly.com/integrations/api_webhooks' },
               },
               {
-                text: 'Under Personal Access Tokens, click Generate New Token, name it Manyplug and click Create Token.',
+                text: 'Under **Personal Access Tokens**, click **Generate New Token**, name it Manyplug and click **Create Token**.',
               },
-              { text: 'Copy the token (Calendly shows it only once) and paste it into the form.' },
+              { text: 'Copy the token right away: Calendly shows it only once.', fills: ['token'] },
             ],
             tips: ['You can revoke the token on the same page.'],
+            problems: [
+              {
+                problem: 'The form says the token is not valid',
+                fix: 'Generate a new token and copy it in full: a long token often gets cut short.',
+              },
+              {
+                problem: 'The AI does not see events of your teammates',
+                fix: 'The token sees what your own Calendly user sees. Connect it from an owner or admin account to see team events.',
+              },
+            ],
           },
         },
         prompts: [

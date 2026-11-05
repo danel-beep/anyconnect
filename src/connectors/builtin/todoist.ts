@@ -222,38 +222,55 @@ const ui: ConnectorUi = {
     ru: {
       setup: {
         oauth: {
-          summary: 'Ваш аккаунт Todoist. Меньше минуты.',
+          summary: 'Вы входите в Todoist и разрешаете Manyplug работать с вашими задачами.',
+          minutes: 1,
+          needs: ['Аккаунт Todoist (подойдёт бесплатный тариф)'],
           steps: [
+            { text: 'Нажмите **Подключить** и войдите в Todoist.' },
             {
-              text: 'Нажмите «Подключить» и войдите в Todoist.',
+              text: 'Нажмите **Agree**: Manyplug сможет читать, добавлять, менять и удалять ваши задачи и проекты.',
             },
             {
-              text: 'Нажмите Agree: Manyplug сможет читать, добавлять, менять и удалять задачи и проекты.',
+              text: 'Вы вернётесь сюда, и аккаунт появится в списке. Другой аккаунт Todoist подключается так же.',
             },
+          ],
+          tips: [
+            'Чтобы отозвать доступ, удалите аккаунт здесь или уберите Manyplug в Todoist в **Settings → Integrations**.',
+          ],
+          problems: [
             {
-              text: 'Готово. Ещё один аккаунт Todoist? Подключите его так же.',
+              problem: 'Подключился не тот аккаунт Todoist',
+              fix: 'Todoist взял аккаунт, в который вы уже вошли в этом браузере. Выйдите на todoist.com, удалите аккаунт здесь и снова нажмите **Подключить**.',
             },
           ],
         },
         form: {
-          summary: 'Токен API Todoist. Около минуты.',
+          summary: 'Вы копируете токен API из настроек Todoist и вставляете его сюда.',
+          minutes: 1,
+          needs: ['Аккаунт Todoist (подойдёт бесплатный тариф)'],
           steps: [
             {
-              text: 'Откройте Todoist → «Настройки» → «Интеграции» → «Для разработчиков».',
+              text: 'В Todoist откройте **Settings → Integrations → Developer**.',
               link: {
-                label: 'Открыть Todoist → «Для разработчиков»',
+                label: 'Открыть Todoist → Developer',
                 url: 'https://app.todoist.com/app/settings/integrations/developer',
               },
             },
-            {
-              text: 'Нажмите «Скопировать токен API».',
-            },
-            {
-              text: 'Вставьте его в форму и нажмите «Подключить».',
-            },
+            { text: 'Нажмите **Copy API token** и вставьте токен в форму.', fills: ['token'] },
+            { text: 'Нажмите **Подключить**: Manyplug сразу проверит токен.' },
           ],
           tips: [
-            'Токен открывает весь ваш Todoist. Чтобы закрыть доступ, выпустите новый токен на той же странице.',
+            'Токен открывает весь ваш Todoist. Чтобы отозвать доступ, выпустите новый токен на той же странице.',
+          ],
+          problems: [
+            {
+              problem: 'Проверка пишет, что токен неверный',
+              fix: 'Скопируйте токен ещё раз кнопкой **Copy API token**: лишний пробел или пропущенный символ ломают его.',
+            },
+            {
+              problem: 'Нет вкладки **Developer**',
+              fix: 'Откройте Todoist в браузере или в приложении для компьютера: в мобильном приложении этой вкладки нет.',
+            },
           ],
         },
       },
@@ -292,37 +309,52 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         oauth: {
-          summary: 'Your Todoist account. Takes under a minute.',
+          summary: 'You sign in to Todoist and allow Manyplug to work with your tasks.',
+          minutes: 1,
+          needs: ['A Todoist account (the free plan works)'],
           steps: [
+            { text: 'Click **Connect** and sign in to Todoist.' },
+            { text: 'Click **Agree**: Manyplug may read, add, change and delete your tasks and projects.' },
             {
-              text: 'Click Connect and sign in to Todoist.',
+              text: 'You are back here and the account is in the list. Connect another Todoist account the same way.',
             },
+          ],
+          tips: [
+            'To cut access, delete the account here or remove Manyplug in Todoist under **Settings → Integrations**.',
+          ],
+          problems: [
             {
-              text: 'Click Agree: Manyplug may read, add, change and delete your tasks and projects.',
-            },
-            {
-              text: 'Done. Another Todoist account? Connect it the same way.',
+              problem: 'The wrong Todoist account got connected',
+              fix: 'Todoist used the account already signed in in this browser. Sign out at todoist.com, delete the account here and click **Connect** again.',
             },
           ],
         },
         form: {
-          summary: 'Your Todoist API token. Takes about a minute.',
+          summary: 'You copy your API token from Todoist settings and paste it here.',
+          minutes: 1,
+          needs: ['A Todoist account (the free plan works)'],
           steps: [
             {
-              text: 'Open Todoist → Settings → Integrations → Developer.',
+              text: 'In Todoist, open **Settings → Integrations → Developer**.',
               link: {
                 label: 'Open Todoist → Developer',
                 url: 'https://app.todoist.com/app/settings/integrations/developer',
               },
             },
-            {
-              text: 'Click Copy API token.',
-            },
-            {
-              text: 'Paste it into the form and click Connect.',
-            },
+            { text: 'Click **Copy API token** and paste it into the form.', fills: ['token'] },
+            { text: 'Click **Connect**: Manyplug checks the token right away.' },
           ],
           tips: ['The token opens your whole Todoist. To cut access, issue a new token on the same page.'],
+          problems: [
+            {
+              problem: 'The check says the token is invalid',
+              fix: 'Copy the token again with **Copy API token**: a space or a missing letter breaks it.',
+            },
+            {
+              problem: 'There is no **Developer** tab',
+              fix: 'Open Todoist in a browser or the desktop app: the tab is not in the mobile app.',
+            },
+          ],
         },
       },
       prompts: [

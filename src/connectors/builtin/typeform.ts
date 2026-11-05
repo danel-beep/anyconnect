@@ -142,20 +142,36 @@ const ui: ConnectorUi = {
       description: 'Формы Typeform и ответы на них: список форм, вопросы, выгрузка и поиск ответов.',
       setup: {
         form: {
-          summary: 'Личный токен Typeform. Меньше минуты.',
+          summary: 'Вы создаёте личный токен в Typeform и вставляете его сюда.',
+          minutes: 2,
+          needs: ['Аккаунт Typeform'],
           steps: [
             {
-              text: 'Откройте Typeform → аватар → Your settings → Personal tokens и нажмите Generate a new token.',
+              text: 'Откройте Typeform → аватар → **Your settings** → **Personal tokens** и нажмите **Generate a new token**.',
               link: { label: 'Открыть токены Typeform', url: 'https://admin.typeform.com/user/tokens' },
             },
             {
-              text: 'Назовите токен Manyplug, выберите права Forms: Read, Responses: Read (и Responses: Write, если ИИ можно удалять ответы).',
+              text: 'Назовите токен Manyplug и разрешите **Forms: Read** и **Responses: Read**. **Responses: Write** добавляйте, только если ИИ можно удалять ответы.',
             },
-            { text: 'Скопируйте токен и вставьте его в форму.' },
+            {
+              text: 'Нажмите **Generate token** и скопируйте его: Typeform показывает токен только один раз.',
+              fills: ['token'],
+            },
+            {
+              text: 'Если данные аккаунта хранятся в ЕС, выберите **api.eu.typeform.com** в поле **Сервер** формы.',
+              fills: ['host'],
+            },
           ],
-          tips: [
-            'Аккаунт с хранением данных в ЕС? Выберите в поле «Сервер» api.eu.typeform.com.',
-            'Токен показывается один раз; потерянный можно удалить и создать новый.',
+          tips: ['Если токен потерян, удалите его и создайте новый.'],
+          problems: [
+            {
+              problem: 'Проверка пишет, что токен неверный',
+              fix: 'Скопируйте токен ещё раз или создайте новый. Аккаунту в ЕС нужен ещё сервер api.eu.typeform.com в форме.',
+            },
+            {
+              problem: 'ИИ не может прочитать ответы',
+              fix: 'У токена нет **Responses: Read**. Создайте новый токен с этим правом и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -188,20 +204,33 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Typeform personal token. Takes under a minute.',
+          summary: 'You create a personal token in Typeform and paste it here.',
+          minutes: 2,
+          needs: ['A Typeform account'],
           steps: [
             {
-              text: 'Open Typeform → your avatar → Your settings → Personal tokens and click Generate a new token.',
+              text: 'Open Typeform → your avatar → **Your settings** → **Personal tokens** and click **Generate a new token**.',
               link: { label: 'Open Typeform tokens', url: 'https://admin.typeform.com/user/tokens' },
             },
             {
-              text: 'Name it Manyplug and pick Forms: Read and Responses: Read (plus Responses: Write if the AI may delete responses).',
+              text: 'Name it Manyplug and allow **Forms: Read** and **Responses: Read**. Add **Responses: Write** only if the AI may delete responses.',
             },
-            { text: 'Copy the token and paste it into the form.' },
+            { text: 'Click **Generate token** and copy it: Typeform shows it only once.', fills: ['token'] },
+            {
+              text: 'If your account keeps data in the EU, pick **api.eu.typeform.com** as **Server** in the form.',
+              fills: ['host'],
+            },
           ],
-          tips: [
-            'EU data residency account? Pick api.eu.typeform.com as the server.',
-            'The token is shown once; if you lose it, delete it and make a new one.',
+          tips: ['If you lose the token, delete it and make a new one.'],
+          problems: [
+            {
+              problem: 'The check says the token is invalid',
+              fix: 'Copy the token again or make a new one. An EU account also needs the server api.eu.typeform.com in the form.',
+            },
+            {
+              problem: 'The AI cannot read responses',
+              fix: 'The token lacks **Responses: Read**. Make a new token with it and paste it with **Reconnect**.',
+            },
           ],
         },
       },

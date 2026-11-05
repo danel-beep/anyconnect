@@ -272,26 +272,48 @@ const ui: ConnectorUi = {
         'Репозитории, pull request’ы и пайплайны Bitbucket Cloud: ревью, комментарии, одобрение, мерж.',
       setup: {
         form: {
-          summary: 'Рабочее пространство, почта Atlassian и API-токен с правами Bitbucket. Около двух минут.',
+          summary:
+            'Вы создаёте API-токен Atlassian для Bitbucket и вставляете его сюда вместе с именем рабочего пространства и почтой.',
+          minutes: 3,
+          needs: [
+            'Аккаунт Bitbucket Cloud с доступом к рабочему пространству',
+            'Почта, с которой вы входите в Atlassian',
+          ],
           steps: [
             {
-              text: 'Откройте настройки аккаунта Atlassian → Security → API tokens и нажмите Create API token with scopes.',
+              text: 'Откройте страницу API-токенов Atlassian и нажмите **Create API token with scopes**.',
               link: {
                 label: 'Открыть токены Atlassian',
                 url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
               },
             },
+            { text: 'Назовите токен Manyplug, выберите срок действия и приложение **Bitbucket**.' },
             {
-              text: 'Выберите приложение Bitbucket и права read:repository, read:pullrequest, write:pullrequest и read:pipeline.',
+              text: 'Отметьте права **read:repository:bitbucket**, **read:pullrequest:bitbucket**, **write:pullrequest:bitbucket** и **read:pipeline:bitbucket**, нажмите **Create token** и скопируйте токен.',
+              fills: ['apiToken'],
             },
-            { text: 'Создайте токен и скопируйте его.' },
             {
-              text: 'В форме укажите рабочее пространство (из адреса bitbucket.org/acme/ — это acme), почту Atlassian и токен.',
+              text: 'В форме укажите рабочее пространство (acme для bitbucket.org/acme/) и почту, с которой входите в Atlassian.',
+              fills: ['workspace', 'email'],
             },
           ],
           tips: [
-            'Пароли приложений Bitbucket больше не выдаются: нужен именно API-токен Atlassian.',
-            'Мерж ИИ делает только после вашего подтверждения.',
+            'Пароли приложений Bitbucket больше не выдаются: используйте API-токен Atlassian.',
+            'Сливает ветки ИИ только после вашего подтверждения.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что почта или токен не подходят',
+              fix: 'Укажите почту аккаунта Atlassian, а не имя пользователя Bitbucket. Проверьте, что токен создан через **Create API token with scopes** для приложения **Bitbucket**.',
+            },
+            {
+              problem: 'ИИ пишет, что репозиторий не найден',
+              fix: 'Проверьте имя рабочего пространства: это часть адреса репозитория после bitbucket.org/.',
+            },
+            {
+              problem: 'ИИ не может комментировать или одобрять пул-реквесты',
+              fix: 'Создайте новый токен с правом **write:pullrequest:bitbucket** и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -325,26 +347,47 @@ const ui: ConnectorUi = {
       setup: {
         form: {
           summary:
-            'Your workspace, Atlassian email and an API token with Bitbucket scopes. Takes about two minutes.',
+            'You create an Atlassian API token for Bitbucket and paste it here with your workspace name and email.',
+          minutes: 3,
+          needs: [
+            'A Bitbucket Cloud account with access to the workspace',
+            'The email you sign in to Atlassian with',
+          ],
           steps: [
             {
-              text: 'Open your Atlassian account settings → Security → API tokens and click Create API token with scopes.',
+              text: 'Open your Atlassian API tokens page and click **Create API token with scopes**.',
               link: {
                 label: 'Open Atlassian API tokens',
                 url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
               },
             },
+            { text: 'Name it Manyplug, pick an expiry date and choose the app **Bitbucket**.' },
             {
-              text: 'Pick the Bitbucket app and the scopes read:repository, read:pullrequest, write:pullrequest and read:pipeline.',
+              text: 'Tick the scopes **read:repository:bitbucket**, **read:pullrequest:bitbucket**, **write:pullrequest:bitbucket** and **read:pipeline:bitbucket**, then click **Create token** and copy it.',
+              fills: ['apiToken'],
             },
-            { text: 'Create the token and copy it.' },
             {
-              text: 'In the form, enter the workspace (acme for bitbucket.org/acme/), your Atlassian email and the token.',
+              text: 'In the form, enter the workspace (acme for bitbucket.org/acme/) and the email you sign in to Atlassian with.',
+              fills: ['workspace', 'email'],
             },
           ],
           tips: [
             'Bitbucket app passwords are no longer issued: use an Atlassian API token.',
             'The AI merges only after you confirm.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the email or token is wrong',
+              fix: 'Use the email of your Atlassian account, not your Bitbucket username. Check that the token was made with **Create API token with scopes** and the app **Bitbucket**.',
+            },
+            {
+              problem: 'The AI says a repository is not found',
+              fix: 'Check the workspace name: it is the part after bitbucket.org/ in the repository address.',
+            },
+            {
+              problem: 'The AI cannot comment on or approve a pull request',
+              fix: 'Create a new token with the **write:pullrequest:bitbucket** scope and paste it with **Reconnect**.',
+            },
           ],
         },
       },

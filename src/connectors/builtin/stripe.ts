@@ -162,28 +162,40 @@ const ui: ConnectorUi = {
     ru: {
       setup: {
         form: {
-          summary: 'Ограниченный ключ API из панели Stripe. Около двух минут.',
+          summary: 'Вы создаёте ограниченный ключ API в панели Stripe и вставляете его сюда.',
+          minutes: 3,
+          needs: ['Аккаунт Stripe, где вы владелец или у вас роль **Administrator** или **Developer**'],
           steps: [
             {
-              text: 'Откройте Developers → API keys в панели Stripe.',
-              link: {
-                label: 'Открыть ключи API Stripe',
-                url: 'https://dashboard.stripe.com/apikeys',
-              },
+              text: 'В панели Stripe откройте **Developers → API keys**.',
+              link: { label: 'Открыть ключи API в Stripe', url: 'https://dashboard.stripe.com/apikeys' },
+            },
+            { text: 'Нажмите **Create restricted key**, начните с нулевых прав и назовите ключ Manyplug.' },
+            {
+              text: 'Поставьте **Read** для Balance, Customers, PaymentIntents, Invoices и Subscriptions. Для **Refunds** ставьте **Write**, только если ИИ можно делать возвраты.',
             },
             {
-              text: 'Нажмите Create restricted key и назовите ключ Manyplug.',
-            },
-            {
-              text: 'Поставьте Read для Balance, Customers, PaymentIntents, Invoices и Subscriptions. Refunds — Write, только если ИИ можно делать возвраты.',
-            },
-            {
-              text: 'Нажмите Create key, скопируйте ключ (rk_live_…) и вставьте в форму.',
+              text: 'Нажмите **Create key**, введите код подтверждения от Stripe и скопируйте ключ (rk_live_…): Stripe показывает его только один раз.',
+              fills: ['apiKey'],
             },
           ],
           tips: [
             'Хотите сначала попробовать без риска? Возьмите ключ тестового режима (rk_test_…).',
-            'Возвраты по умолчанию ждут вашего подтверждения (см. «Правила»).',
+            'Возвраты по умолчанию ждут вашего подтверждения (см. **Правила**).',
+          ],
+          problems: [
+            {
+              problem: 'Проверка пишет, что ключ неверный',
+              fix: 'Скопируйте ключ целиком кнопкой копирования. Ключ, который начинается с pk_, публичный и здесь не подходит: нужен ограниченный ключ (rk_…).',
+            },
+            {
+              problem: 'ИИ пишет, что ему не хватает прав',
+              fix: 'В **Developers → API keys** откройте меню ключа, нажмите **Edit key**, поставьте **Read** для нужного раздела и сохраните.',
+            },
+            {
+              problem: 'ИИ видит тестовые данные вместо настоящих платежей',
+              fix: 'Ключ из тестового режима (rk_test_). Выключите **Test mode** в панели, создайте ключ заново и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -219,28 +231,40 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A restricted API key from your Stripe dashboard. Takes about two minutes.',
+          summary: 'You create a restricted API key in the Stripe dashboard and paste it here.',
+          minutes: 3,
+          needs: ['A Stripe account where you are the owner, an **Administrator** or a **Developer**'],
           steps: [
             {
-              text: 'Open Developers → API keys in the Stripe dashboard.',
-              link: {
-                label: 'Open Stripe API keys',
-                url: 'https://dashboard.stripe.com/apikeys',
-              },
+              text: 'In the Stripe dashboard, open **Developers → API keys**.',
+              link: { label: 'Open Stripe API keys', url: 'https://dashboard.stripe.com/apikeys' },
+            },
+            { text: 'Click **Create restricted key**, start from no permissions and name it Manyplug.' },
+            {
+              text: 'Set **Read** for Balance, Customers, PaymentIntents, Invoices and Subscriptions. Set **Refunds** to **Write** only if the AI may refund payments.',
             },
             {
-              text: 'Click Create restricted key and name it Manyplug.',
-            },
-            {
-              text: 'Set Read for Balance, Customers, PaymentIntents, Invoices and Subscriptions. Set Refunds to Write only if the AI may refund payments.',
-            },
-            {
-              text: 'Click Create key, copy it (rk_live_…) and paste it into the form.',
+              text: 'Click **Create key**, enter the verification code Stripe sends and copy the key (rk_live_…): Stripe shows it only once.',
+              fills: ['apiKey'],
             },
           ],
           tips: [
             'Want to try it safely first? Use a test-mode key (rk_test_…).',
-            'Refunds wait for your confirmation by default (see Rules).',
+            'Refunds wait for your confirmation by default (see **Rules**).',
+          ],
+          problems: [
+            {
+              problem: 'The check says the key is invalid',
+              fix: 'Copy the whole key again with the copy button. A key that starts with pk_ is the publishable key and does not work here: use the restricted key (rk_…).',
+            },
+            {
+              problem: 'The AI says it has no permission to read something',
+              fix: 'In **Developers → API keys**, open the key’s menu, click **Edit key**, set **Read** for that resource and save.',
+            },
+            {
+              problem: 'The AI sees test data instead of real payments',
+              fix: 'The key is from test mode (rk_test_). Turn off **Test mode** in the dashboard, create the key again and paste it with **Reconnect**.',
+            },
           ],
         },
       },

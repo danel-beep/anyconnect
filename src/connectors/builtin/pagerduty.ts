@@ -249,23 +249,44 @@ const ui: ConnectorUi = {
         'Инциденты PagerDuty: список и детали, подтверждение, закрытие, заметки, новые инциденты, кто дежурит.',
       setup: {
         form: {
-          summary: 'Ключ API PagerDuty и email пользователя. Около двух минут.',
+          summary:
+            'Вы создаёте ключ API в PagerDuty и вставляете его сюда вместе со своим email в PagerDuty.',
+          minutes: 3,
+          needs: ['Аккаунт PagerDuty с ролью Admin или Account Owner: только они создают общие ключи API'],
           steps: [
             {
-              text: 'Откройте PagerDuty → Integrations → API Access Keys и нажмите Create New API Key.',
+              text: 'В PagerDuty откройте **Integrations** → **Developer Tools** → **API Access Keys** и нажмите **Create New API Key**.',
               link: {
                 label: 'Как создать ключ',
                 url: 'https://support.pagerduty.com/main/docs/api-access-keys',
               },
             },
             {
-              text: 'Назовите ключ Manyplug. Если инциденты нужно только читать, отметьте Read-only API Key.',
+              text: 'Назовите ключ Manyplug. Если инциденты нужно только читать, отметьте **Read-only API Key**.',
             },
-            { text: 'Скопируйте ключ, вставьте в форму и укажите email своего пользователя PagerDuty.' },
+            {
+              text: 'Нажмите **Create Key** и скопируйте ключ: PagerDuty показывает его только один раз.',
+              fills: ['apiKey'],
+            },
+            {
+              text: 'Впишите email, с которым вы входите в PagerDuty: изменения будут сделаны от этого пользователя.',
+              fills: ['fromEmail'],
+            },
           ],
-          tips: [
-            'Аккаунт в регионе ЕС — выберите регион api.eu.pagerduty.com.',
-            'Новый инцидент будит дежурных, поэтому он создаётся только после вашего подтверждения.',
+          tips: ['Новый инцидент будит дежурных, поэтому он создаётся только после вашего подтверждения.'],
+          problems: [
+            {
+              problem: 'Проверка не проходит: «Unauthorized» или неверный ключ',
+              fix: 'Скопируйте ключ целиком. Если окно с ключом закрыто, создайте новый ключ — старый показать снова нельзя.',
+            },
+            {
+              problem: 'Чтение работает, а изменения не проходят',
+              fix: 'В поле «Email пользователя» впишите точный email, с которым входит существующий пользователь PagerDuty: PagerDuty записывает изменения от его имени.',
+            },
+            {
+              problem: 'Ваш PagerDuty открывается на адресе **eu.pagerduty.com**, а проверка не проходит',
+              fix: 'Аккаунт в регионе ЕС. В поле «Регион» выберите **ЕС (api.eu.pagerduty.com)**.',
+            },
           ],
         },
       },
@@ -289,21 +310,43 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A PagerDuty API key and your user email. Takes about two minutes.',
+          summary: 'You create an API key in PagerDuty and paste it here with your PagerDuty email.',
+          minutes: 3,
+          needs: [
+            'A PagerDuty account with the Admin or Account Owner role: only they can create general API keys',
+          ],
           steps: [
             {
-              text: 'Open PagerDuty → Integrations → API Access Keys and click Create New API Key.',
+              text: 'In PagerDuty, open **Integrations** → **Developer Tools** → **API Access Keys** and click **Create New API Key**.',
               link: {
                 label: 'How to create a key',
                 url: 'https://support.pagerduty.com/main/docs/api-access-keys',
               },
             },
-            { text: 'Name it Manyplug. Tick Read-only API Key if you only want to read incidents.' },
-            { text: 'Copy the key into the form and enter the email of your PagerDuty user.' },
+            { text: 'Name it Manyplug. Tick **Read-only API Key** if you only want to read incidents.' },
+            {
+              text: 'Click **Create Key** and copy the key: PagerDuty shows it only once.',
+              fills: ['apiKey'],
+            },
+            {
+              text: 'Type the email you sign in to PagerDuty with: changes are made as that user.',
+              fills: ['fromEmail'],
+            },
           ],
-          tips: [
-            'EU account? Pick the api.eu.pagerduty.com region.',
-            'Opening an incident wakes the on-call people, so it only happens after you confirm.',
+          tips: ['Opening an incident wakes the on-call people, so it only happens after you confirm.'],
+          problems: [
+            {
+              problem: 'The check fails with “Unauthorized” or an invalid key',
+              fix: 'Copy the whole key. If the key window is closed, create a new key: PagerDuty cannot show the old one again.',
+            },
+            {
+              problem: 'Reading works, but changes fail',
+              fix: 'In User email, type the exact sign-in email of an existing PagerDuty user: PagerDuty records changes in that user’s name.',
+            },
+            {
+              problem: 'Your PagerDuty opens at **eu.pagerduty.com** and the check fails',
+              fix: 'The account is in the EU region. Under Region, pick **EU (api.eu.pagerduty.com)**.',
+            },
           ],
         },
       },

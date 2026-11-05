@@ -220,18 +220,30 @@ const ui: ConnectorUi = {
       description: 'Учёт времени Toggl Track: запуск и остановка таймеров, текущий таймер, записи, проекты.',
       setup: {
         form: {
-          summary: 'Токен API Toggl Track. Около минуты.',
+          summary: 'Вы копируете токен API из профиля Toggl Track и вставляете его сюда.',
+          minutes: 1,
+          needs: ['Аккаунт Toggl Track (подойдёт бесплатный тариф)'],
           steps: [
             {
-              text: 'Откройте Toggl Track → Profile settings и прокрутите до блока API Token.',
+              text: 'Откройте Toggl Track → **Profile settings** и прокрутите вниз до **API Token**.',
               link: { label: 'Открыть профиль Toggl', url: 'https://track.toggl.com/profile' },
             },
-            { text: 'Нажмите Click to reveal и скопируйте токен.' },
-            { text: 'Вставьте токен в форму.' },
+            { text: 'Нажмите **Click to reveal** и скопируйте токен.', fills: ['token'] },
+            { text: 'Вставьте его в форму и нажмите **Подключить**.' },
           ],
           tips: [
-            'Токен действует от вашего имени во всех ваших пространствах.',
-            'Удаление записи времени выполняется только после вашего подтверждения.',
+            'Токен действует от вашего имени во всех ваших рабочих пространствах.',
+            'Удаление записи времени происходит только после вашего подтверждения.',
+          ],
+          problems: [
+            {
+              problem: 'Проверка пишет, что токен неверный',
+              fix: 'Скопируйте его заново из **Profile settings**. Если кто-то нажал **Reset**, старый токен перестал работать: возьмите новый и вставьте его через **Переподключить**.',
+            },
+            {
+              problem: 'ИИ не видит рабочее пространство',
+              fix: 'Токен видит только пространства, где состоит этот аккаунт Toggl. Попросите администратора пространства пригласить вас.',
+            },
           ],
         },
       },
@@ -256,18 +268,30 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Toggl Track API token. Takes about a minute.',
+          summary: 'You copy your API token from your Toggl Track profile and paste it here.',
+          minutes: 1,
+          needs: ['A Toggl Track account (the free plan works)'],
           steps: [
             {
-              text: 'Open Toggl Track → Profile settings and scroll to API Token.',
+              text: 'Open Toggl Track → **Profile settings** and scroll down to **API Token**.',
               link: { label: 'Open your Toggl profile', url: 'https://track.toggl.com/profile' },
             },
-            { text: 'Click to reveal the token and copy it.' },
-            { text: 'Paste the token into the form.' },
+            { text: 'Click **Click to reveal** and copy the token.', fills: ['token'] },
+            { text: 'Paste it into the form and click **Connect**.' },
           ],
           tips: [
             'The token acts as you in all of your workspaces.',
             'Deleting a time entry only happens after you confirm.',
+          ],
+          problems: [
+            {
+              problem: 'The check says the token is invalid',
+              fix: 'Copy it again from **Profile settings**. If someone clicked **Reset**, the old token stopped working: copy the new one and paste it with **Reconnect**.',
+            },
+            {
+              problem: 'The AI does not see a workspace',
+              fix: 'The token sees only workspaces this Toggl account is a member of. Ask the workspace admin to invite you.',
+            },
           ],
         },
       },

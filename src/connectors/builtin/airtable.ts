@@ -184,22 +184,42 @@ const ui: ConnectorUi = {
       description: 'Базы Airtable: таблицы и поля, поиск, добавление, изменение и удаление записей.',
       setup: {
         form: {
-          summary: 'Личный токен доступа Airtable. Около двух минут.',
+          summary: 'Вы создаёте личный токен доступа в Airtable и вставляете его сюда.',
+          minutes: 2,
+          needs: ['Аккаунт Airtable с доступом к базам, с которыми будет работать ИИ'],
           steps: [
             {
-              text: 'Откройте страницу токенов Airtable и нажмите Create token.',
+              text: 'Откройте страницу токенов Airtable и нажмите **Create new token**.',
               link: { label: 'Открыть токены Airtable', url: 'https://airtable.com/create/tokens' },
             },
             {
-              text: 'Назовите его Manyplug и добавьте права (Scopes): data.records:read, data.records:write, schema.bases:read.',
+              text: 'Назовите токен Manyplug. В разделе **Scopes** добавьте **data.records:read**, **data.records:write** и **schema.bases:read**.',
             },
             {
-              text: 'В Access выберите базы, с которыми будет работать ИИ, или All current and future bases.',
+              text: 'В разделе **Access** добавьте базы, с которыми будет работать ИИ, или выберите **All current and future bases in all current and future workspaces**.',
             },
-            { text: 'Нажмите Create token, скопируйте токен (pat…) и вставьте в форму.' },
+            {
+              text: 'Нажмите **Create token** и скопируйте его (начинается с pat). Airtable показывает его только один раз.',
+              fills: ['token'],
+            },
           ],
           tips: [
-            'Чтобы ИИ только читал, не добавляйте data.records:write. Отозвать токен можно на той же странице.',
+            'Чтобы ИИ только читал, не добавляйте data.records:write.',
+            'Отозвать токен можно на той же странице в любой момент.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что токен не подходит',
+              fix: 'Скопируйте токен целиком ещё раз: он длинный и начинается с pat. Если окно уже закрыто, создайте новый токен на той же странице.',
+            },
+            {
+              problem: 'ИИ пишет, что база или таблица не найдена',
+              fix: 'У токена нет доступа к этой базе. Откройте токен на странице токенов, добавьте базу в **Access** и сохраните.',
+            },
+            {
+              problem: 'ИИ читает записи, но не может добавлять и менять их',
+              fix: 'Добавьте токену право **data.records:write** и сохраните.',
+            },
           ],
         },
       },
@@ -228,20 +248,42 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'An Airtable personal access token. Takes about two minutes.',
+          summary: 'You create a personal access token in Airtable and paste it here.',
+          minutes: 2,
+          needs: ['An Airtable account with access to the bases the AI should work with'],
           steps: [
             {
-              text: 'Open the Airtable tokens page and click Create token.',
+              text: 'Open the Airtable tokens page and click **Create new token**.',
               link: { label: 'Open Airtable tokens', url: 'https://airtable.com/create/tokens' },
             },
             {
-              text: 'Name it Manyplug and add the scopes data.records:read, data.records:write and schema.bases:read.',
+              text: 'Name it Manyplug. Under **Scopes**, add **data.records:read**, **data.records:write** and **schema.bases:read**.',
             },
-            { text: 'Under Access, pick the bases the AI may use, or All current and future bases.' },
-            { text: 'Click Create token, copy the token (pat…) and paste it into the form.' },
+            {
+              text: 'Under **Access**, add the bases the AI may use, or pick **All current and future bases in all current and future workspaces**.',
+            },
+            {
+              text: 'Click **Create token** and copy it (it starts with pat). Airtable shows it only once.',
+              fills: ['token'],
+            },
           ],
           tips: [
-            'For read-only access, leave out data.records:write. You can revoke the token on the same page.',
+            'For read-only access, leave out data.records:write.',
+            'You can revoke the token on the same page at any time.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the token is not valid',
+              fix: 'Copy the whole token again: it is long and starts with pat. If you closed the window, create a new token on the same page.',
+            },
+            {
+              problem: 'The AI says a base or table is not found',
+              fix: 'The token has no access to that base. Open the token on the tokens page, add the base under **Access** and save.',
+            },
+            {
+              problem: 'The AI can read records but cannot add or change them',
+              fix: 'Add the **data.records:write** scope to the token and save.',
+            },
           ],
         },
       },

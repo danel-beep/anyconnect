@@ -156,21 +156,33 @@ const ui: ConnectorUi = {
       description: 'Хостинг Netlify: сайты, деплои и их статус, новые сборки, откат, заявки из форм.',
       setup: {
         form: {
-          summary: 'Личный токен Netlify. Около минуты.',
+          summary: 'Вы создаёте личный токен в настройках Netlify и вставляете его сюда.',
+          minutes: 2,
+          needs: ['Аккаунт Netlify с доступом к нужным сайтам'],
           steps: [
             {
-              text: 'Откройте Netlify → User settings → Applications → Personal access tokens и нажмите New access token.',
+              text: 'Откройте Netlify → **User settings** → **Applications** → **Personal access tokens** и нажмите **New access token**.',
               link: {
                 label: 'Открыть токены Netlify',
                 url: 'https://app.netlify.com/user/applications#personal-access-tokens',
               },
             },
-            { text: 'Назовите токен Manyplug, выберите срок действия и создайте его.' },
-            { text: 'Скопируйте токен и вставьте в форму.' },
+            { text: 'Назовите токен Manyplug, выберите срок действия и нажмите **Generate token**.' },
+            { text: 'Скопируйте токен: Netlify показывает его только один раз.', fills: ['token'] },
           ],
           tips: [
             'Токен видит все команды и сайты вашего пользователя.',
             'Откат на старый деплой выполняется только после вашего подтверждения.',
+          ],
+          problems: [
+            {
+              problem: 'Токен перестал работать',
+              fix: 'Скорее всего, истёк его срок. Создайте новый токен с более долгим сроком и вставьте его через **Переподключить**.',
+            },
+            {
+              problem: 'Сайта команды нет в списке',
+              fix: 'Токен видит только команды, где вы состоите. Попросите владельца команды добавить вас.',
+            },
           ],
         },
       },
@@ -193,21 +205,33 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Netlify personal access token. Takes about a minute.',
+          summary: 'You create a personal access token in Netlify settings and paste it here.',
+          minutes: 2,
+          needs: ['A Netlify account with access to the sites you need'],
           steps: [
             {
-              text: 'Open Netlify → User settings → Applications → Personal access tokens and click New access token.',
+              text: 'Open Netlify → **User settings** → **Applications** → **Personal access tokens** and click **New access token**.',
               link: {
                 label: 'Open Netlify tokens',
                 url: 'https://app.netlify.com/user/applications#personal-access-tokens',
               },
             },
-            { text: 'Name it Manyplug, pick an expiry and create it.' },
-            { text: 'Copy the token and paste it into the form.' },
+            { text: 'Name it Manyplug, pick an expiry and click **Generate token**.' },
+            { text: 'Copy the token: Netlify shows it only once.', fills: ['token'] },
           ],
           tips: [
             'The token sees every team and site of your user.',
             'Rolling back to an older deploy only happens after you confirm.',
+          ],
+          problems: [
+            {
+              problem: 'The token stopped working',
+              fix: 'It has most likely expired. Create a new token with a longer expiry and paste it with **Reconnect**.',
+            },
+            {
+              problem: 'A team’s site is missing',
+              fix: 'The token only sees teams you are a member of. Ask the team owner to add you.',
+            },
           ],
         },
       },

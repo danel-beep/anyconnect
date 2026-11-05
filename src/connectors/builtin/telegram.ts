@@ -484,19 +484,44 @@ export function createTelegramConnector(port: MessagingPort) {
             'Ваш бот Telegram: чаты, поиск по переписке, ответы. Официальный Bot API, без риска для личного аккаунта.',
           setup: {
             form: {
-              summary: 'Токен бота от @BotFather. Около двух минут.',
+              summary: 'Вы создаёте бота Telegram через @BotFather и вставляете его токен сюда.',
+              minutes: 3,
+              needs: ['Telegram на телефоне или компьютере'],
+              notice:
+                'Так подключается **бот**, которого вы создаёте, а не ваш личный аккаунт Telegram: ИИ видит только чаты, где люди пишут боту, и отвечает от имени бота.',
               steps: [
                 {
-                  text: 'Откройте @BotFather в Telegram и отправьте /newbot (или /mybots, если бот уже есть).',
+                  text: 'Откройте @BotFather в Telegram и отправьте **/newbot** (или **/mybots**, чтобы выбрать уже созданного бота).',
                   link: { label: 'Открыть @BotFather', url: 'https://t.me/BotFather' },
                 },
-                { text: 'Придумайте имя и адрес бота. BotFather пришлёт токен вида 123456:ABC-…' },
-                { text: 'Вставьте токен в форму. Хаб сам проверит его и подключит приём сообщений.' },
+                {
+                  text: 'Отправьте имя бота, затем адрес, который заканчивается на bot, например acme_support_bot.',
+                },
+                {
+                  text: 'Скопируйте токен из ответа BotFather: он выглядит как 123456789:AA…',
+                  fills: ['botToken'],
+                },
+                {
+                  text: 'Вставьте его в форму и нажмите **Подключить**. Manyplug проверит токен и начнёт принимать сообщения.',
+                },
               ],
               tips: [
-                'Бот видит только чаты, где ему написали, и не может первым написать человеку.',
-                'Чтобы бот читал сообщения в группе, выключите у него Group Privacy в @BotFather.',
-                'С Telegram Premium бот может вести и ваши личные чаты: Настройки → Telegram для бизнеса → Чат-боты, укажите бота и дайте право отвечать. Ответы уйдут от вашего имени.',
+                'Бот не может начать разговор первым: человек должен сначала написать ему.',
+                'С Telegram Premium бот может вести и ваши личные чаты: **Настройки → Telegram для бизнеса → Чат-боты**. Ответы уходят от вашего имени.',
+              ],
+              problems: [
+                {
+                  problem: 'Проверка пишет, что токен неверный (Unauthorized)',
+                  fix: 'Скопируйте токен заново: отправьте @BotFather **/mybots**, выберите бота и нажмите **API Token**. Если вы нажимали **Revoke current token**, возьмите новый токен.',
+                },
+                {
+                  problem: 'Не приходят сообщения из группы',
+                  fix: 'Отправьте @BotFather **/setprivacy**, выберите бота и нажмите **Disable**. Затем удалите бота из группы и добавьте снова.',
+                },
+                {
+                  problem: 'Бот не видит сообщения человека',
+                  fix: 'Человек должен сначала открыть бота и нажать **Start**: бот не может написать тому, кто ему ни разу не писал.',
+                },
               ],
             },
           },
@@ -517,19 +542,44 @@ export function createTelegramConnector(port: MessagingPort) {
           description: 'Your Telegram bot: chats, message search, replies. The official Bot API.',
           setup: {
             form: {
-              summary: 'A bot token from @BotFather. Takes about two minutes.',
+              summary: 'You create a Telegram bot with @BotFather and paste its token here.',
+              minutes: 3,
+              needs: ['Telegram on your phone or computer'],
+              notice:
+                'This connects a **bot** that you create, not your personal Telegram account: the AI sees only the chats where people write to the bot, and it answers as the bot.',
               steps: [
                 {
-                  text: 'Open @BotFather in Telegram and send /newbot (or /mybots if you already have a bot).',
+                  text: 'Open @BotFather in Telegram and send **/newbot** (or **/mybots** to pick a bot you already have).',
                   link: { label: 'Open @BotFather', url: 'https://t.me/BotFather' },
                 },
-                { text: 'Pick a name and a username. BotFather replies with a token like 123456:ABC-…' },
-                { text: 'Paste the token into the form. The hub checks it and starts receiving messages.' },
+                {
+                  text: 'Send a name for the bot, then a username that ends in bot, for example acme_support_bot.',
+                },
+                {
+                  text: 'Copy the token from BotFather’s reply: it looks like 123456789:AA…',
+                  fills: ['botToken'],
+                },
+                {
+                  text: 'Paste it into the form and click **Connect**. Manyplug checks the token and starts receiving messages.',
+                },
               ],
               tips: [
-                'A bot only sees chats where people wrote to it and cannot start a conversation.',
-                'To let the bot read group messages, turn off Group Privacy for it in @BotFather.',
-                'With Telegram Premium the bot can also handle your personal chats: Settings → Telegram Business → Chatbots, pick the bot and allow it to reply. Replies are sent as you.',
+                'A bot cannot start a conversation: a person has to write to it first.',
+                'With Telegram Premium the bot can also handle your personal chats: **Settings → Telegram Business → Chatbots**. Replies are sent as you.',
+              ],
+              problems: [
+                {
+                  problem: 'The check says the token is wrong (Unauthorized)',
+                  fix: 'Copy the token again: send **/mybots** to @BotFather, pick the bot and tap **API Token**. If you tapped **Revoke current token**, use the new token.',
+                },
+                {
+                  problem: 'Messages from a group do not show up',
+                  fix: 'Send **/setprivacy** to @BotFather, pick the bot and choose **Disable**. Then remove the bot from the group and add it again.',
+                },
+                {
+                  problem: 'The bot does not see a person’s messages',
+                  fix: 'The person has to open the bot and tap **Start** first: a bot cannot write to someone who never wrote to it.',
+                },
               ],
             },
           },

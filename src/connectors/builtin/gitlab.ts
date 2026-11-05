@@ -269,23 +269,49 @@ const ui: ConnectorUi = {
         'Проекты, задачи и merge request’ы GitLab: поиск, чтение, создание, изменение и комментарии.',
       setup: {
         form: {
-          summary: 'Персональный токен доступа GitLab. Около двух минут.',
+          summary: 'Вы создаёте персональный токен доступа в GitLab и вставляете его сюда.',
+          minutes: 2,
+          needs: [
+            'Аккаунт на gitlab.com или на сервере GitLab вашей компании',
+            'Если GitLab на сервере компании: его адрес, например gitlab.acme.com. Все шаги делайте на нём, а не на gitlab.com',
+          ],
           steps: [
             {
-              text: 'Откройте GitLab → аватар → Edit profile → Access tokens и нажмите Add new token.',
+              text: 'Откройте в GitLab **аватар → Edit profile → Access tokens** и нажмите **Add new token**.',
               link: {
                 label: 'Открыть токены GitLab',
                 url: 'https://gitlab.com/-/user_settings/personal_access_tokens',
               },
             },
-            { text: 'Назовите токен Manyplug, задайте срок действия и отметьте право api.' },
-            { text: 'Нажмите Create token, скопируйте его (glpat-…) и вставьте в форму.' },
             {
-              text: 'Свой сервер GitLab? Укажите в форме его адрес, например gitlab.acme.com; токен создаётся там же.',
+              text: 'Назовите токен Manyplug, задайте срок действия и в разделе **Select scopes** отметьте **api**.',
+            },
+            {
+              text: 'Нажмите **Create token** внизу (в старых версиях **Create personal access token**) и скопируйте токен, он начинается с glpat-.',
+              fills: ['token'],
+            },
+            {
+              text: 'Если GitLab на сервере компании, впишите его адрес в форму без https://, например gitlab.acme.com. Для gitlab.com поле не меняйте.',
+              fills: ['host'],
             },
           ],
           tips: [
-            'Чтобы ИИ только читал, вместо api отметьте read_api. Отозвать токен можно на той же странице.',
+            'Чтобы ИИ только читал, вместо **api** отметьте **read_api**.',
+            'Отозвать токен можно на той же странице: **Revoke** рядом с ним.',
+          ],
+          problems: [
+            {
+              problem: 'Ошибка 401 или «Unauthorized»',
+              fix: 'Токен истёк, отозван или скопирован с пробелом. Создайте новый и нажмите **Переподключить**.',
+            },
+            {
+              problem: 'Ошибка 403 при создании задачи или комментария',
+              fix: 'У токена право **read_api** вместо **api**. Создайте токен с **api** и вставьте его через **Переподключить**.',
+            },
+            {
+              problem: 'Свой сервер GitLab не отвечает',
+              fix: 'Проверьте адрес в поле «Сервер GitLab» (без https:// и пути). Сервер должен быть доступен из интернета, а не только из сети компании.',
+            },
           ],
         },
       },
@@ -329,23 +355,49 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A GitLab personal access token. Takes about two minutes.',
+          summary: 'You create a personal access token in GitLab and paste it here.',
+          minutes: 2,
+          needs: [
+            'An account on gitlab.com or on your company’s GitLab server',
+            'For a company server: its address, for example gitlab.acme.com. Do every step there, not on gitlab.com',
+          ],
           steps: [
             {
-              text: 'Open GitLab → your avatar → Edit profile → Access tokens and click Add new token.',
+              text: 'In GitLab, open **your avatar → Edit profile → Access tokens** and click **Add new token**.',
               link: {
                 label: 'Open GitLab access tokens',
                 url: 'https://gitlab.com/-/user_settings/personal_access_tokens',
               },
             },
-            { text: 'Name it Manyplug, set an expiry date and tick the api scope.' },
-            { text: 'Click Create token, copy it (glpat-…) and paste it into the form.' },
             {
-              text: 'Your own GitLab server? Enter its address in the form, e.g. gitlab.acme.com, and create the token there.',
+              text: 'Name it Manyplug, set an expiry date and, under **Select scopes**, tick **api**.',
+            },
+            {
+              text: 'Click **Create token** at the bottom (**Create personal access token** in older versions) and copy the token, it starts with glpat-.',
+              fills: ['token'],
+            },
+            {
+              text: 'On a company GitLab server, enter its address in the form without https://, for example gitlab.acme.com. For gitlab.com, leave the field as it is.',
+              fills: ['host'],
             },
           ],
           tips: [
-            'For read-only access, tick read_api instead of api. You can revoke the token on the same page.',
+            'For read-only access, tick **read_api** instead of **api**.',
+            'To cut access, click **Revoke** next to the token on the same page.',
+          ],
+          problems: [
+            {
+              problem: 'Error 401 or “Unauthorized”',
+              fix: 'The token expired, was revoked or was copied with a space. Create a new one and click **Reconnect**.',
+            },
+            {
+              problem: 'Error 403 when creating an issue or a comment',
+              fix: 'The token has **read_api** instead of **api**. Create a token with **api** and paste it with **Reconnect**.',
+            },
+            {
+              problem: 'Your own GitLab server does not answer',
+              fix: 'Check the address in the GitLab server field (no https:// and no path). The server must be reachable from the internet, not only from the company network.',
+            },
           ],
         },
       },

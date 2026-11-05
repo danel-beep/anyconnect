@@ -261,23 +261,41 @@ const ui: ConnectorUi = {
       description: 'Аудитории и подписчики Mailchimp, теги и отчёты по рассылкам.',
       setup: {
         form: {
-          summary: 'Ключ API Mailchimp и его дата-центр. Около минуты.',
+          summary: 'Вы создаёте ключ API в Mailchimp и вставляете его сюда вместе с дата-центром.',
+          minutes: 2,
+          needs: ['Аккаунт Mailchimp с ролью Manager, Admin или Owner'],
           steps: [
             {
-              text: 'Откройте Mailchimp → аватар → Profile → Extras → API keys.',
+              text: 'В Mailchimp нажмите на аватар → **Profile** → **Extras** → **API keys**.',
               link: {
                 label: 'Открыть ключи API Mailchimp',
                 url: 'https://us1.admin.mailchimp.com/account/api/',
               },
             },
-            { text: 'Нажмите Create A Key, назовите его Manyplug и скопируйте ключ.' },
+            { text: 'Нажмите **Create A Key**, назовите ключ Manyplug и нажмите **Generate Key**.' },
+            { text: 'Скопируйте ключ: Mailchimp показывает его только один раз.', fills: ['apiKey'] },
             {
-              text: 'Вставьте ключ в форму, а в поле «Дата-центр» — его окончание после дефиса (например, us21).',
+              text: 'В поле «Дата-центр» впишите окончание ключа после дефиса. Для ключа …-us21 это us21.',
+              fills: ['dc'],
             },
           ],
           tips: [
             'Ключ даёт полный доступ к аккаунту. Отозвать его можно на той же странице.',
             'Новые подписчики сначала получают письмо с подтверждением, если вы не скажете ИИ иное.',
+          ],
+          problems: [
+            {
+              problem: '«API Key Invalid» или ключ не принимается',
+              fix: 'Скопируйте ключ целиком, вместе с окончанием после дефиса. Если ключ потерян, создайте новый на той же странице.',
+            },
+            {
+              problem: 'Ошибка «Resource Not Found» при проверке',
+              fix: 'Дата-центр не совпадает с ключом. Впишите ровно то, что стоит после дефиса в конце ключа, например us21.',
+            },
+            {
+              problem: 'В **Extras** нет пункта **API keys**',
+              fix: 'Ваша роль не даёт создавать ключи. Попросите владельца аккаунта выдать вам роль Manager или выше либо создать ключ самому.',
+            },
           ],
         },
       },
@@ -305,20 +323,38 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Mailchimp API key and its data center. Takes about a minute.',
+          summary: 'You create an API key in Mailchimp and paste it here together with its data center.',
+          minutes: 2,
+          needs: ['A Mailchimp account where you are a Manager, Admin or Owner'],
           steps: [
             {
-              text: 'Open Mailchimp → your avatar → Profile → Extras → API keys.',
+              text: 'In Mailchimp, click your avatar → **Profile** → **Extras** → **API keys**.',
               link: { label: 'Open Mailchimp API keys', url: 'https://us1.admin.mailchimp.com/account/api/' },
             },
-            { text: 'Click Create A Key, name it Manyplug and copy the key.' },
+            { text: 'Click **Create A Key**, name it Manyplug and click **Generate Key**.' },
+            { text: 'Copy the key: Mailchimp shows it only once.', fills: ['apiKey'] },
             {
-              text: 'Paste the key into the form, and its ending after the dash (for example us21) into Data center.',
+              text: 'In Data center, type the end of the key after the dash. For a key ending in -us21 that is us21.',
+              fills: ['dc'],
             },
           ],
           tips: [
             'The key gives full access to the account. You can revoke it on the same page.',
             'New subscribers get a confirmation email first unless you tell the AI otherwise.',
+          ],
+          problems: [
+            {
+              problem: '“API Key Invalid”, or the key is not accepted',
+              fix: 'Copy the whole key, including the part after the dash. If the key is lost, create a new one on the same page.',
+            },
+            {
+              problem: '“Resource Not Found” during the check',
+              fix: 'The data center does not match the key. Type exactly what follows the last dash of the key, for example us21.',
+            },
+            {
+              problem: 'There is no **API keys** item under **Extras**',
+              fix: 'Your role cannot create keys. Ask the account owner for the Manager role or higher, or to create the key.',
+            },
           ],
         },
       },

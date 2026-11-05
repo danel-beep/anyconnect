@@ -335,21 +335,26 @@ export default defineConnector({
       ru: {
         setup: {
           oauth: {
-            summary: 'Аккаунт Microsoft: Outlook.com, Hotmail или рабочий Microsoft 365. Меньше минуты.',
+            summary: 'Вы входите в свой аккаунт Microsoft и разрешаете Manyplug доступ к почте и календарю.',
+            minutes: 1,
+            needs: ['Аккаунт Outlook.com, Hotmail или рабочий Microsoft 365'],
             steps: [
-              {
-                text: 'Нажмите «Подключить» и войдите в нужный аккаунт Microsoft.',
-              },
-              {
-                text: 'Microsoft попросит разрешить доступ к почте и календарю. Нажмите «Принять».',
-              },
-              {
-                text: 'Готово: ИИ работает с этим ящиком и его календарями.',
-              },
+              { text: 'Нажмите **Подключить** и войдите в нужный аккаунт Microsoft.' },
+              { text: 'Microsoft попросит разрешить доступ к почте и календарю. Нажмите **Принять**.' },
+              { text: 'Готово: вы вернётесь сюда, и ИИ сможет работать с этим ящиком и его календарями.' },
             ],
             tips: [
-              'Рабочий аккаунт: если Microsoft пишет, что нужно одобрение администратора, попросите IT-отдел разрешить Manyplug.',
-              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug на account.microsoft.com → «Конфиденциальность» → «Приложения и службы».',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug на account.microsoft.com → **Конфиденциальность** → **Приложения и службы**.',
+            ],
+            problems: [
+              {
+                problem: 'Microsoft пишет, что нужно одобрение администратора',
+                fix: 'Это рабочий аккаунт с ограничениями. Попросите IT-отдел разрешить приложение Manyplug, а затем подключитесь снова.',
+              },
+              {
+                problem: 'Подключился не тот аккаунт',
+                fix: 'Удалите его здесь, снова нажмите **Подключить** и на странице входа Microsoft выберите **Использовать другую учётную запись**.',
+              },
             ],
           },
         },
@@ -436,22 +441,26 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary:
-              'Your Microsoft account: Outlook.com, Hotmail or work Microsoft 365. Takes under a minute.',
+            summary: 'You sign in to your Microsoft account and let Manyplug use your mail and calendar.',
+            minutes: 1,
+            needs: ['An Outlook.com, Hotmail or work Microsoft 365 account'],
             steps: [
-              {
-                text: 'Click Connect and sign in with the Microsoft account you want to add.',
-              },
-              {
-                text: 'Microsoft asks to allow access to your mail and calendar. Click Accept.',
-              },
-              {
-                text: 'Done: the AI can work with this mailbox and its calendars.',
-              },
+              { text: 'Click **Connect** and sign in with the Microsoft account you want to add.' },
+              { text: 'Microsoft asks to allow access to your mail and calendar. Click **Accept**.' },
+              { text: 'Done: you are back here, and the AI can work with this mailbox and its calendars.' },
             ],
             tips: [
-              'Work accounts: if Microsoft says an admin must approve the app, ask your IT admin to allow Manyplug.',
-              'To cut access, delete the account here or remove Manyplug at account.microsoft.com → Privacy → Apps and services.',
+              'To cut access, delete the account here or remove Manyplug at account.microsoft.com → **Privacy** → **Apps and services**.',
+            ],
+            problems: [
+              {
+                problem: 'Microsoft says an admin must approve the app',
+                fix: 'Your work account limits apps. Ask your IT admin to allow Manyplug, then connect again.',
+              },
+              {
+                problem: 'The wrong account got connected',
+                fix: 'Delete it here, click **Connect** again and pick **Use another account** on the Microsoft sign-in page.',
+              },
             ],
           },
         },

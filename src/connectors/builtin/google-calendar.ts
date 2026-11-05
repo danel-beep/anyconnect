@@ -305,21 +305,29 @@ const ui: ConnectorUi = {
     ru: {
       setup: {
         oauth: {
-          summary: 'Ваш аккаунт Google. Меньше минуты.',
+          summary: 'Вы входите в свой аккаунт Google и разрешаете Manyplug работать с календарями.',
+          minutes: 1,
+          needs: ['Аккаунт Google с Google Календарём'],
           steps: [
+            { text: 'Нажмите **Подключить** и выберите аккаунт Google с нужными календарями.' },
             {
-              text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными календарями.',
+              text: 'Google попросит разрешить Manyplug смотреть и менять события в календарях. Оставьте галочку и нажмите **Продолжить**.',
             },
-            {
-              text: 'Google попросит разрешить Manyplug смотреть и менять события в календарях. Нажмите «Продолжить».',
-            },
-            {
-              text: 'Готово: ИИ видит все календари этого аккаунта, в том числе общие.',
-            },
+            { text: 'Готово: ИИ видит все календари этого аккаунта, в том числе общие.' },
           ],
           tips: [
             'Удаление событий по умолчанию ждёт вашего подтверждения (см. «Правила»).',
             'Рабочий и личный календари в разных аккаунтах Google? Подключите оба.',
+          ],
+          problems: [
+            {
+              problem: 'Рабочий аккаунт Google Workspace пишет «Доступ заблокирован» или «Access blocked»',
+              fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → Access and data control → API controls**.',
+            },
+            {
+              problem: 'ИИ пишет, что у него нет доступа к календарю',
+              fix: 'На странице Google были сняты галочки с разрешений. Нажмите **Переподключить** и оставьте отмеченными все пункты.',
+            },
           ],
         },
       },
@@ -364,21 +372,29 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         oauth: {
-          summary: 'Your Google account. Takes under a minute.',
+          summary: 'You sign in to your Google account and allow Manyplug to work with your calendars.',
+          minutes: 1,
+          needs: ['A Google account with Google Calendar'],
           steps: [
+            { text: 'Click **Connect** and choose the Google account whose calendars you want to add.' },
             {
-              text: 'Click Connect and choose the Google account whose calendars you want to add.',
+              text: 'Google asks to let Manyplug see and edit events in your calendars. Leave the box ticked and click **Continue**.',
             },
-            {
-              text: 'Google asks to let Manyplug see and edit events in your calendars. Click Continue.',
-            },
-            {
-              text: 'Done: the AI sees every calendar of that account, including shared ones.',
-            },
+            { text: 'Done: the AI sees every calendar of that account, including shared ones.' },
           ],
           tips: [
             'Deleting events waits for your confirmation by default (see Rules).',
             'Work and personal calendars in different Google accounts? Connect each account.',
+          ],
+          problems: [
+            {
+              problem: 'A Google Workspace work account says “Access blocked”',
+              fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → Access and data control → API controls**.',
+            },
+            {
+              problem: 'The AI says it has no access to your calendar',
+              fix: 'Some permission boxes were unticked on the Google page. Click **Reconnect** and leave every box ticked.',
+            },
           ],
         },
       },

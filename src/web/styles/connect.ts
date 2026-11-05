@@ -22,8 +22,9 @@ export const CONNECT_CSS = `
 .field-check label{margin:0;order:2;font-weight:500}
 .field-check input{order:1}
 .field-check .hint{order:3;flex-basis:100%;margin-left:24px}
-.guide-summary{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13.5px;margin:0 0 14px}
-.guide-summary svg{width:16px;height:16px;flex:none}
+.guide-summary{display:flex;gap:8px;align-items:flex-start;color:var(--muted);font-size:13.5px;line-height:1.45;margin:0 0 14px}
+.guide-summary svg{width:16px;height:16px;flex:none;margin-top:1px}
+.guide-minutes{color:var(--text);font-weight:600}
 .secure-note{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px;margin:14px 0 0}
 .secure-note svg{width:15px;height:15px;flex:none}
 
@@ -34,6 +35,13 @@ export const CONNECT_CSS = `
 .guide-steps>li::before{content:counter(step);position:absolute;left:0;top:-1px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-ink);font:650 12.5px/1 ${MONO}}
 .guide-steps>li:not(:last-child)::after{content:"";position:absolute;left:12.5px;top:29px;bottom:3px;width:1px;background:var(--border)}
 .guide-steps>li>span{display:block}
+.guide-label{font-weight:600;font-size:14px;margin:0 0 8px}
+.guide-needs{margin:0 0 14px}
+.guide-needs ul{margin:0;padding-left:20px;font-size:14px;line-height:1.5}
+.guide-needs li+li{margin-top:3px}
+.guide-notice{margin:0 0 14px;font-size:14px;line-height:1.5}
+.guide-steps>li>.guide-fills{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:6px;background:var(--bg-subtle);border:1px solid var(--border);font-size:12.5px;color:var(--muted)}
+.guide-fills b{color:var(--text);font-weight:600}
 .step-link{margin-top:8px;gap:6px}
 .btn.step-link svg{width:14px;height:14px}
 .guide-variants{margin:6px 0 0}
@@ -49,6 +57,12 @@ details.guide-variant>.guide-steps{padding:4px 0 6px}
 .guide-tips li{padding-left:16px;position:relative}
 .guide-tips li+li{margin-top:6px}
 .guide-tips li::before{content:"";position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+details.guide-problems{margin:14px 0 0;border:1px solid var(--border);border-radius:10px;padding:0 14px;background:var(--card)}
+details.guide-problems>summary{padding:11px 28px 11px 0;font-size:14px;font-weight:600}
+details.guide-problems>summary::after{width:8px;height:8px;right:4px}
+.guide-problems dl{margin:0;padding:0 0 10px;font-size:13.5px;line-height:1.5}
+.guide-problems dt{font-weight:600;margin:8px 0 2px}
+.guide-problems dd{margin:0;color:var(--muted)}
 
 /* What the AI can do */
 .ai-can-do h2{margin-bottom:6px}

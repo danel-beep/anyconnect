@@ -209,25 +209,43 @@ const ui: ConnectorUi = {
       description: 'Ошибки в Sentry: поиск проблем, последний стек вызовов, решение, игнор и назначение.',
       setup: {
         form: {
-          summary: 'Slug организации и личный токен Sentry. Около минуты.',
+          summary: 'Вы создаёте личный токен в Sentry и вставляете его сюда вместе с названием организации.',
+          minutes: 3,
+          needs: ['Аккаунт Sentry в нужной организации'],
           steps: [
             {
-              text: 'Откройте Sentry → Settings → Account → Personal Tokens и нажмите Create New Token.',
+              text: 'Откройте Sentry → **Settings** → **Account** → **Personal Tokens** и нажмите **Create New Token**.',
               link: {
                 label: 'Открыть токены Sentry',
                 url: 'https://sentry.io/settings/account/api/auth-tokens/',
               },
             },
             {
-              text: 'Дайте права event:read, project:read, org:read и event:write (для решения и комментариев), создайте токен и скопируйте его.',
+              text: 'Дайте чтение для **Organization** и **Project** и **Read & Write** для **Issue & Event** (права org:read, project:read, event:read и event:write), затем нажмите **Create Token**.',
             },
+            { text: 'Скопируйте токен: Sentry показывает его только один раз.', fills: ['token'] },
             {
-              text: 'В форме укажите slug организации (из адреса sentry.io/organizations/acme/ — это acme) и токен.',
+              text: 'Впишите slug организации из адреса Sentry: acme для acme.sentry.io или sentry.io/organizations/acme/.',
+              fills: ['organization'],
             },
           ],
           tips: [
             'Данные в ЕС? Укажите в поле «Адрес Sentry» de.sentry.io. Для своего сервера — его адрес.',
             'Токен действует от вашего имени и только с выбранными правами.',
+          ],
+          problems: [
+            {
+              problem: 'Проверка падает с «Invalid token» или 401',
+              fix: 'Скопируйте токен целиком. Если окно закрыто, создайте новый токен: старый показать снова нельзя.',
+            },
+            {
+              problem: 'Ошибка «not found» при проверке',
+              fix: 'Проверьте slug организации. Если адрес вашего Sentry на de.sentry.io, впишите de.sentry.io в поле «Адрес Sentry».',
+            },
+            {
+              problem: 'Чтение работает, а решить задачу или оставить комментарий нельзя',
+              fix: 'У токена нет права **event:write**. Создайте новый токен с этим правом и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -257,25 +275,43 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Sentry organization slug and a personal token. Takes about a minute.',
+          summary: 'You create a personal token in Sentry and paste it here with your organization name.',
+          minutes: 3,
+          needs: ['A Sentry account in the organization you need'],
           steps: [
             {
-              text: 'Open Sentry → Settings → Account → Personal Tokens and click Create New Token.',
+              text: 'Open Sentry → **Settings** → **Account** → **Personal Tokens** and click **Create New Token**.',
               link: {
                 label: 'Open Sentry tokens',
                 url: 'https://sentry.io/settings/account/api/auth-tokens/',
               },
             },
             {
-              text: 'Grant event:read, project:read, org:read and event:write (to resolve and comment), create the token and copy it.',
+              text: 'Give **Organization** and **Project** read access and **Issue & Event** **Read & Write** (scopes org:read, project:read, event:read, event:write), then click **Create Token**.',
             },
+            { text: 'Copy the token: Sentry shows it only once.', fills: ['token'] },
             {
-              text: 'In the form, enter the organization slug (acme for sentry.io/organizations/acme/) and the token.',
+              text: 'Type the organization slug from your Sentry address: acme for acme.sentry.io or sentry.io/organizations/acme/.',
+              fills: ['organization'],
             },
           ],
           tips: [
             'Data in the EU? Set Sentry host to de.sentry.io. For self-hosted Sentry, use its host.',
             'The token acts as you, with only the scopes you picked.',
+          ],
+          problems: [
+            {
+              problem: 'The check fails with “Invalid token” or 401',
+              fix: 'Copy the whole token. If the window is closed, create a new token: Sentry cannot show the old one again.',
+            },
+            {
+              problem: '“Not found” during the check',
+              fix: 'Check the organization slug. If your Sentry opens at de.sentry.io, type de.sentry.io in Sentry host.',
+            },
+            {
+              problem: 'Reading works, but resolving or commenting fails',
+              fix: 'The token lacks **event:write**. Create a new token with it and paste it with **Reconnect**.',
+            },
           ],
         },
       },

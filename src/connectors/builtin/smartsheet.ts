@@ -40,7 +40,7 @@ const manifest = defineManifestConnector({
   credentials: {
     type: 'object',
     properties: {
-      token: { type: 'string', minLength: 20, description: 'Account → Apps & Integrations → API Access' },
+      token: { type: 'string', minLength: 20, description: 'Account → Personal Settings → API Access' },
     },
     required: ['token'],
   },
@@ -176,19 +176,43 @@ const ui: ConnectorUi = {
         'Таблицы Smartsheet: поиск, чтение столбцов и строк, добавление и изменение строк, комментарии.',
       setup: {
         form: {
-          summary: 'Личный токен Smartsheet. Около минуты.',
+          summary: 'Вы создаёте токен доступа к API в Smartsheet и вставляете его сюда.',
+          minutes: 2,
+          needs: [
+            'Тариф Smartsheet Business или Enterprise: на других тарифах токены API не создаются',
+            'Знать, где ваш аккаунт: smartsheet.com, smartsheet.eu или smartsheet.au',
+          ],
           steps: [
             {
-              text: 'Откройте Smartsheet → Account (аватар) → Apps & Integrations → API Access.',
+              text: 'В Smartsheet нажмите на **Account** (аватар внизу слева) → **Personal Settings** и откройте вкладку **API Access**.',
               link: {
                 label: 'Как получить токен',
                 url: 'https://help.smartsheet.com/articles/2482389-generate-API-key',
               },
             },
-            { text: 'Нажмите Generate new access token, назовите его Manyplug и скопируйте.' },
-            { text: 'Вставьте токен в форму. Аккаунт в ЕС или Австралии — выберите свой регион.' },
+            {
+              text: 'Нажмите **Generate new access token**, назовите токен Manyplug и скопируйте его: Smartsheet показывает его только один раз.',
+              fills: ['token'],
+            },
+            {
+              text: 'Если аккаунт на smartsheet.eu или smartsheet.au, выберите этот **Регион** в форме и нажмите **Подключить**.',
+              fills: ['host'],
+            },
           ],
-          tips: ['Токен действует от вашего имени и видит те же таблицы, что и вы.'],
+          tips: [
+            'Токен действует от вашего имени и видит те же таблицы, что и вы.',
+            'Чтобы отозвать доступ, удалите токен на той же странице **API Access**.',
+          ],
+          problems: [
+            {
+              problem: 'Проверка пишет, что токен неверный',
+              fix: 'Скопируйте токен целиком ещё раз или создайте новый, если старый потерян. Проверьте и **Регион**: токен со smartsheet.eu не работает с сервером США.',
+            },
+            {
+              problem: 'Нет вкладки **API Access**',
+              fix: 'Токены API есть только на тарифах Business и Enterprise. На них спросите администратора, разрешён ли вам доступ к API.',
+            },
+          ],
         },
       },
       prompts: [
@@ -197,7 +221,7 @@ const ui: ConnectorUi = {
         'Отметь строку «Лендинг» выполненной и оставь комментарий.',
       ],
       fields: {
-        token: { label: 'Токен', hint: 'Apps & Integrations → API Access.' },
+        token: { label: 'Токен', hint: 'Personal Settings → API Access.' },
         host: {
           label: 'Регион',
           hint: 'Где находится ваш аккаунт Smartsheet.',
@@ -220,19 +244,43 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Smartsheet access token. Takes about a minute.',
+          summary: 'You create an API access token in Smartsheet and paste it here.',
+          minutes: 2,
+          needs: [
+            'A Smartsheet Business or Enterprise plan: other plans cannot create API tokens',
+            'To know where your account lives: smartsheet.com, smartsheet.eu or smartsheet.au',
+          ],
           steps: [
             {
-              text: 'Open Smartsheet → Account (your avatar) → Apps & Integrations → API Access.',
+              text: 'In Smartsheet, click your **Account** picture (bottom left) → **Personal Settings** and open the **API Access** tab.',
               link: {
                 label: 'How to get a token',
                 url: 'https://help.smartsheet.com/articles/2482389-generate-API-key',
               },
             },
-            { text: 'Click Generate new access token, name it Manyplug and copy it.' },
-            { text: 'Paste the token into the form. EU or Australian account? Pick your region.' },
+            {
+              text: 'Click **Generate new access token**, name it Manyplug and copy the token: Smartsheet shows it only once.',
+              fills: ['token'],
+            },
+            {
+              text: 'If your account is on smartsheet.eu or smartsheet.au, pick that **Region** in the form, then click **Connect**.',
+              fills: ['host'],
+            },
           ],
-          tips: ['The token acts as you and sees the same sheets you do.'],
+          tips: [
+            'The token acts as you and sees the same sheets you do.',
+            'To cut access, revoke the token on the same **API Access** page.',
+          ],
+          problems: [
+            {
+              problem: 'The check says the token is invalid',
+              fix: 'Copy the whole token again, or make a new one if you lost it. Also check the **Region**: a token from smartsheet.eu does not work on the US server.',
+            },
+            {
+              problem: 'There is no **API Access** tab',
+              fix: 'API tokens need a Business or Enterprise plan. On those plans, ask your admin whether API access is allowed for you.',
+            },
+          ],
         },
       },
       prompts: [
@@ -241,7 +289,7 @@ const ui: ConnectorUi = {
         'Mark the “Landing page” row done and leave a comment.',
       ],
       fields: {
-        token: { label: 'Token', hint: 'Apps & Integrations → API Access.' },
+        token: { label: 'Token', hint: 'Personal Settings → API Access.' },
         host: {
           label: 'Region',
           hint: 'Where your Smartsheet account lives.',
