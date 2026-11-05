@@ -9,11 +9,10 @@ export const botEn = {
     '<b>Manyplug</b> connects your mail, calendars, files and other services to ChatGPT and Claude, with several accounts per service.\n\nSign up on the site (it takes a minute), then add one address to your AI app. It works best from a computer.',
   'bot.landing.open': 'Open {host}',
   'bot.tc.confirm':
-    '<b>Connect this Telegram account to {brand}?</b>\n\n{brand} account: {account}\n\nNext you add this bot under Settings → Chat Automation and pick the chats it may see. Your AI apps will read those chats and can reply as you. You can remove the bot there at any time.',
+    '<b>Connect this Telegram account to {brand}?</b>\n\n{brand} account: {account}\n\nYour code: <code>{code}</code>\nType it on the {brand} page where you scanned the QR code. Never send this code to anyone: whoever types it can read your chats.\n\nThen add this bot under Settings → Chat Automation and pick the chats it may see. Your AI apps will read those chats and can reply as you. You can remove the bot there at any time.',
   'bot.tc.team': '{email}, team {team}',
   'bot.tc.moves':
     'This Telegram account is connected to another {brand} account now. Connecting moves it here.',
-  'bot.tc.connect': 'Connect',
   'bot.tc.cancel': 'Cancel',
   'bot.tc.lastStep':
     '<b>Last step, in Telegram</b>\n\n1. Open Settings → Chat Automation (on some phones: Settings → Edit → Chat Automation).\n2. Add the bot {bot}.\n3. Pick the chats it may see, allow it to reply to messages and save.\n\nThe page on the site shows <b>Connected</b> by itself.',
@@ -40,6 +39,9 @@ export const botEn = {
     'This Telegram account is not connected to {brand}. Open the connect page on the site to connect it.',
   'bot.tc.connectedShort': 'This Telegram account is connected already.',
   'bot.tc.unknown': 'This button no longer works.',
+  'bot.tc.typeCode': 'The bot is added. Now type the code from the message above on the {brand} page.',
+  'bot.tc.otherAccount':
+    'This QR code connects again a {brand} account of another Telegram account. Open it from that Telegram account, or connect this one as a new account on the site.',
 } as const;
 
 export const botRu: Record<keyof typeof botEn, string> = {
@@ -47,11 +49,10 @@ export const botRu: Record<keyof typeof botEn, string> = {
     '<b>Manyplug</b> подключает вашу почту, календари, файлы и другие сервисы к ChatGPT и Claude, по нескольку аккаунтов каждого сервиса.\n\nЗарегистрируйтесь на сайте (это минута) и добавьте один адрес в своё AI-приложение. Удобнее всего с компьютера.',
   'bot.landing.open': 'Открыть {host}',
   'bot.tc.confirm':
-    '<b>Подключить этот аккаунт Telegram к {brand}?</b>\n\nАккаунт {brand}: {account}\n\nДальше вы добавите этого бота в «Настройки → Автоматизация чатов» и выберете чаты, которые он может видеть. Ваши AI-приложения смогут читать эти чаты и отвечать от вашего имени. Убрать бота можно там же в любой момент.',
+    '<b>Подключить этот аккаунт Telegram к {brand}?</b>\n\nАккаунт {brand}: {account}\n\nВаш код: <code>{code}</code>\nВведите его на странице {brand}, где вы сканировали QR-код. Никому не отправляйте этот код: тот, кто его введёт, сможет читать ваши чаты.\n\nЗатем добавьте этого бота в «Настройки → Автоматизация чатов» и выберите чаты, которые он может видеть. Ваши AI-приложения смогут читать эти чаты и отвечать от вашего имени. Убрать бота можно там же в любой момент.',
   'bot.tc.team': '{email}, команда {team}',
   'bot.tc.moves':
     'Сейчас этот аккаунт Telegram подключён к другому аккаунту {brand}. После подключения он перейдёт сюда.',
-  'bot.tc.connect': 'Подключить',
   'bot.tc.cancel': 'Отмена',
   'bot.tc.lastStep':
     '<b>Последний шаг, в Telegram</b>\n\n1. Откройте «Настройки → Автоматизация чатов» (на некоторых телефонах: «Настройки → Изменить → Автоматизация чатов»).\n2. Добавьте бота {bot}.\n3. Выберите чаты, которые он может видеть, разрешите ему отвечать на сообщения и сохраните.\n\nСтраница на сайте сама покажет <b>Подключено</b>.',
@@ -78,4 +79,7 @@ export const botRu: Record<keyof typeof botEn, string> = {
     'Этот аккаунт Telegram не подключён к {brand}. Откройте страницу подключения на сайте, чтобы подключить его.',
   'bot.tc.connectedShort': 'Этот аккаунт Telegram уже подключён.',
   'bot.tc.unknown': 'Эта кнопка больше не работает.',
+  'bot.tc.typeCode': 'Бот добавлен. Теперь введите код из сообщения выше на странице {brand}.',
+  'bot.tc.otherAccount':
+    'Этот QR-код повторно подключает аккаунт {brand} другого аккаунта Telegram. Откройте его из того аккаунта Telegram или подключите этот как новый аккаунт на сайте.',
 };

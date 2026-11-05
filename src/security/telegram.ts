@@ -42,6 +42,33 @@ export class RetryUpdateError extends Error {
   override name = 'RetryUpdateError';
 }
 
+/**
+ * How many times one update may ask Telegram to deliver it again. A failure that repeats (a bug,
+ * data that cannot be read) must not hold the bot's webhook, and with it every user's updates,
+ * for good: after the limit the update is answered 200 and only reported.
+ */
+export class RetryBudget {
+  private readonly attempts = new Map<number, number>();
+
+  constructor(
+    private readonly limit = 3,
+    private readonly remembered = 1_000,
+  ) {}
+
+  /** Counts a failed attempt of the update; true while Telegram may deliver it again. */
+  take(updateId: unknown): boolean {
+    if (typeof updateId !== 'number') return false;
+    const used = (this.attempts.get(updateId) ?? 0) + 1;
+    this.attempts.delete(updateId);
+    this.attempts.set(updateId, used);
+    if (this.attempts.size > this.remembered) {
+      const oldest = this.attempts.keys().next().value;
+      if (oldest !== undefined) this.attempts.delete(oldest);
+    }
+    return used <= this.limit;
+  }
+}
+
 /** An inline keyboard button: a callback the webhook receives, or a link Telegram opens. */
 export type InlineButton = { text: string; callback_data: string } | { text: string; url: string };
 

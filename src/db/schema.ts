@@ -1196,8 +1196,18 @@ export const telegramLinks = pgTable(
     state: text().$type<TelegramLinkState>().notNull().default('pending'),
     /** Keyed hash of the Telegram user who opened the link: only they can finish it. */
     telegramUserKey: text(),
-    /** Their @username or name, shown on the page while the link is in progress. */
-    telegramLabel: text(),
+    /**
+     * Encrypted `{ chat, label }` of that user (SecretBox, AAD = link id): the private chat the bot
+     * writes to and the @username or name the page shows while the link is in progress.
+     */
+    telegramEncrypted: text(),
+    /**
+     * SHA-256 of the 6-digit code the bot sent when the link was opened. The signed-in user types it
+     * on the link's page: proof that one person holds both the hub session and the Telegram account.
+     */
+    confirmCodeHash: text(),
+    /** Wrong codes typed on the page; the link fails after a few. */
+    confirmAttempts: integer().notNull().default(0),
     accountId: text().references(() => accounts.id, { onDelete: 'set null' }),
     error: text(),
     /** Language of the page, for the bot's messages. */
@@ -1222,7 +1232,10 @@ export const telegramConnections = pgTable('telegram_connections', {
   connectionKey: text().notNull().unique(),
   /** Encrypted `{ connectionId, userChatId, username, name }` (SecretBox, AAD = the user key). */
   infoEncrypted: text().notNull(),
-  /** What the person allowed the bot: the BusinessBotRights flags that are on (`can_reply`...). */
+  /**
+   * What the person allowed the bot: the BusinessBotRights flags that are on (`can_reply`...).
+   * Names of permissions only, nothing about the person, so it is not encrypted.
+   */
   rights: text().array().notNull().default(sql`'{}'::text[]`),
   /** False while the bot is removed or paused in Telegram. */
   enabled: boolean().notNull().default(true),

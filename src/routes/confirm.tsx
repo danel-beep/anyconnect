@@ -3,7 +3,7 @@ import { getDefaultWorkspace } from '../core/identity.js';
 import { safeEqual } from '../lib/crypto.js';
 import { argumentFields } from '../security/confirmations.js';
 import type { PendingCallRow } from '../security/pending-calls.js';
-import { RetryUpdateError } from '../security/telegram.js';
+import { RetryBudget, RetryUpdateError } from '../security/telegram.js';
 import { ConfirmListPage, ConfirmPage, type PendingCallView } from '../web/confirm-pages.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
@@ -161,6 +161,7 @@ export function confirmRoutes() {
     return c.redirect('/confirm', 303);
   });
 
+  const retries = new RetryBudget();
   app.post('/telegram/webhook', async (c) => {
     const s = c.get('services');
     const secret = c.req.header(TELEGRAM_SECRET_HEADER) ?? '';
@@ -169,12 +170,14 @@ export function confirmRoutes() {
     try {
       await s.telegramUpdates(update);
     } catch (error) {
-      const retry = error instanceof RetryUpdateError;
-      s.ops.errors.capture(retry ? (error.cause ?? error) : error, {
+      const asked = error instanceof RetryUpdateError;
+      const retry = asked && retries.take((update as { update_id?: unknown } | undefined)?.update_id);
+      s.ops.errors.capture(asked ? (error.cause ?? error) : error, {
         source: 'telegram',
         context: { path: '/telegram/webhook', retry },
       });
-      // Telegram delivers it again later; handlers ask for that only when doing it twice is safe.
+      // Telegram delivers it again later; handlers ask for that only when doing it twice is safe,
+      // and an update that keeps failing stops asking (RetryBudget).
       if (retry) return c.body(null, 500);
     }
     // Otherwise 200: a retry would not succeed either.

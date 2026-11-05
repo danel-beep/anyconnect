@@ -44,7 +44,8 @@ export const connectEn = {
   'guide.fills': 'Paste into:',
   'guide.problems': 'If something goes wrong',
   'connect.quickTitle': 'Faster: under a minute',
-  'connect.quickText': 'Scan a QR code with your phone and confirm in {service}. There is nothing to type.',
+  'connect.quickText':
+    'Scan a QR code with your phone and confirm with the code {service} sends you. No password or key.',
   'connect.quickButton': 'Connect with a QR code',
   'connect.quickRateLimited': 'Too many QR codes in the last hour. Wait a little and try again.',
 } as const;
@@ -92,7 +93,8 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
   'guide.fills': 'Вставьте в поле:',
   'guide.problems': 'Если что-то не получилось',
   'connect.quickTitle': 'Быстрее: меньше минуты',
-  'connect.quickText': 'Отсканируйте QR-код телефоном и подтвердите в {service}. Ничего вводить не нужно.',
+  'connect.quickText':
+    'Отсканируйте QR-код телефоном и подтвердите кодом, который пришлёт {service}. Без пароля и ключей.',
   'connect.quickButton': 'Подключить по QR-коду',
   'connect.quickRateLimited':
     'Слишком много QR-кодов за последний час. Подождите немного и попробуйте снова.',

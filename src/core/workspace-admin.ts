@@ -77,7 +77,8 @@ export interface ConnectLink {
   url: string;
   /**
    * How the page connects it; `app`: the person confirms in the service's own app (Telegram: scan
-   * a QR code and tap Connect in the hub's bot), with nothing to type (see `quick-connect.ts`).
+   * a QR code, then the code from the hub's bot typed on the page), with no password or key (see
+   * `quick-connect.ts`).
    */
   method: ConnectMethod | 'app';
   service: string;

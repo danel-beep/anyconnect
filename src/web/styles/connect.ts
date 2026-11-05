@@ -111,6 +111,12 @@ details.guide-problems>summary::after{width:8px;height:8px;right:4px}
 .tg-progress li[data-step=current]{color:var(--text);font-weight:600}
 .tg-progress li[data-step=current]::before{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
 .tg-open{margin:4px 0 0}
+.tg-code{margin:4px 0 0}
+.tg-code label{display:block;font-weight:600;font-size:14px;margin:0 0 6px}
+.tg-code-row{display:flex;gap:8px;align-items:stretch}
+.tg-code-row input{flex:0 1 10em;min-width:0;font:600 20px/1.2 ${MONO};letter-spacing:.18em;text-align:center}
+.tg-code .notice{margin:10px 0 0}
+.tg-code .hint{margin:8px 0 0}
 .tg-last{margin:0 0 4px;padding:14px 16px;border:1px solid var(--accent);border-radius:12px;background:var(--accent-soft)}
 .tg-last ol{margin:0;padding-left:20px;font-size:14.5px;line-height:1.5}
 .tg-last li+li{margin-top:6px}

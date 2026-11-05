@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { BRAND } from '../brand.js';
@@ -18,7 +18,7 @@ import {
   users,
   workspaces,
 } from '../db/schema.js';
-import { hashToken, type SecretBox } from '../lib/crypto.js';
+import { hashToken, type SecretBox, safeEqual } from '../lib/crypto.js';
 import { AppError, badRequest, conflict } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 import type { Logger } from '../logger.js';
@@ -39,8 +39,10 @@ import type { MessagingService } from './service.js';
  * hub's bot under Settings → Chat Automation, with no api_id, password or code typed anywhere.
  *
  * 1. The connect page shows a one-time link to the bot as a QR code (`start`, 15 minutes).
- * 2. The person opens it in Telegram: the bot names the hub account the link connects to and asks
- *    to confirm. Only the Telegram user who opened the link first can finish it.
+ * 2. The person opens it in Telegram: the bot names the hub account the link connects to and sends
+ *    a 6-digit code, which the signed-in user types on the link's page. Only the Telegram user who
+ *    opened the link first gets the code, and only the link's creator can type it, so a QR code sent
+ *    by someone else cannot connect a person's chats to the sender's account.
  * 3. They add the bot under Chat Automation (before or after step 2). Telegram reports the
  *    business connection; the hub creates (or reconnects) the account and the page says Connected.
  *
@@ -55,12 +57,15 @@ export const LINK_TTL_MS = 15 * 60_000;
 /** How long the person has to add the bot under Chat Automation after confirming. */
 const CONFIRMED_TTL_MS = 30 * 60_000;
 const IN_PROGRESS: TelegramLinkState[] = ['pending', 'opened', 'confirmed'];
+/** Wrong codes on the page before the link stops working. */
+export const CODE_ATTEMPTS = 5;
 
 /** `/start c_<code>`: the deep link of a QR code (Telegram allows 64 characters of [A-Za-z0-9_-]). */
 const START = /^c_([A-Za-z0-9_-]{32})$/;
 /** Telegram's "Manage bot" button in a business chat opens the bot with `/start bizChat<chat id>`. */
 const MANAGE_START = /^bizChat\d+$/;
-const LINK_CALLBACK = /^tgl:(tgl_[0-9a-z]{26}):([yn])$/;
+/** Cancel under the bot's question (connecting is confirmed with the code on the page). */
+const LINK_CALLBACK = /^tgl:(tgl_[0-9a-z]{26}):n$/;
 const CONNECTION_CALLBACK = /^tgc:(tgc_[0-9a-z]{26}):x$/;
 
 /**
@@ -91,6 +96,15 @@ const STATUS = {
 
 export type TelegramLinkRow = typeof telegramLinks.$inferSelect;
 type ConnectionRow = typeof telegramConnections.$inferSelect;
+
+/** What a link's `telegramEncrypted` holds: the opener's private chat and how the page names them. */
+interface LinkTelegram {
+  chat: string;
+  label: string;
+}
+
+/** What typing the bot's code on the page came to. */
+export type ConfirmResult = 'confirmed' | 'wrong' | 'failed' | 'expired';
 
 /** What `infoEncrypted` holds. */
 interface ConnectionInfo {
@@ -200,6 +214,8 @@ export interface TelegramLinkView {
   accountId?: string;
   /** Why connecting failed, when it was the user's to fix (a plan limit); otherwise undefined. */
   error?: string;
+  /** Failed because the code was typed wrong too many times. */
+  tooManyCodes?: boolean;
   workspaceId: string;
   draft: ConnectDraft;
   reconnectAccountId?: string;
@@ -259,13 +275,20 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
         throw badRequest('Account names use 1-32 lowercase letters, digits, "-" or "_".');
       }
       await permissions.assertCanConnect(input.workspaceId, input.userId, input.owner);
-      await this.deps.accounts.assertCanCreate(input.workspaceId);
+      // The plan of whoever the account will count for: a team account (owner null) the team's payer.
+      await this.deps.accounts.assertCanCreate(
+        input.workspaceId,
+        input.owner ? input.owner.userId : input.userId,
+      );
     }
-    // One QR code at a time per person: a new one stops the older ones.
+    // One QR code at a time per person: a new one stops older ones that are not confirmed yet. A
+    // confirmed one only waits for Telegram, so opening the page again does not lose it.
     await db
       .update(telegramLinks)
       .set({ state: 'cancelled' })
-      .where(and(eq(telegramLinks.userId, input.userId), inArray(telegramLinks.state, IN_PROGRESS)));
+      .where(
+        and(eq(telegramLinks.userId, input.userId), inArray(telegramLinks.state, ['pending', 'opened'])),
+      );
     const id = newId('tgl');
     const code = randomBytes(24).toString('base64url');
     const label = input.label?.trim().slice(0, 100);
@@ -303,9 +326,10 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
             deepLink: `https://t.me/${bot}?start=c_${this.deps.secrets.decrypt(link.codeEncrypted, linkContext(link.id))}`,
           }
         : {}),
-      ...(link.telegramLabel ? { telegram: link.telegramLabel } : {}),
+      ...(link.telegramEncrypted ? { telegram: this.linkTelegram(link).label } : {}),
       ...(link.accountId ? { accountId: link.accountId } : {}),
       ...(link.error ? { error: link.error } : {}),
+      ...(link.confirmAttempts >= CODE_ATTEMPTS ? { tooManyCodes: true } : {}),
       workspaceId: link.workspaceId,
       draft: link.draft,
       ...(link.reconnectAccountId ? { reconnectAccountId: link.reconnectAccountId } : {}),
@@ -334,6 +358,53 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
       );
   }
 
+  /**
+   * The signed-in user typed the bot's code on the link's page. Right: the link is confirmed, and
+   * the account connects now if the bot is already added (else when Telegram reports it). Wrong
+   * {@link CODE_ATTEMPTS} times: the link fails. Undefined unless `userId` made the link.
+   */
+  async confirm(userId: string, linkId: string, code: string): Promise<ConfirmResult | undefined> {
+    const { db } = this.deps;
+    const link = await this.link(linkId);
+    if (!link || link.userId !== userId) return undefined;
+    if (this.stateOf(link) !== 'opened' || !link.confirmCodeHash || !link.telegramUserKey) return 'expired';
+    if (!safeEqual(codeHash(link.id, code), link.confirmCodeHash)) {
+      const [counted] = await db
+        .update(telegramLinks)
+        .set({
+          confirmAttempts: sql`${telegramLinks.confirmAttempts} + 1`,
+          state: sql<TelegramLinkState>`case when ${telegramLinks.confirmAttempts} + 1 >= ${CODE_ATTEMPTS} then 'failed' else ${telegramLinks.state} end`,
+        })
+        .where(and(eq(telegramLinks.id, link.id), eq(telegramLinks.state, 'opened')))
+        .returning({ state: telegramLinks.state });
+      return counted?.state === 'failed' ? 'failed' : counted ? 'wrong' : 'expired';
+    }
+    const [confirmed] = await db
+      .update(telegramLinks)
+      .set({ state: 'confirmed', confirmCodeHash: null, expiresAt: new Date(Date.now() + CONFIRMED_TTL_MS) })
+      .where(
+        and(
+          eq(telegramLinks.id, link.id),
+          eq(telegramLinks.state, 'opened'),
+          eq(telegramLinks.confirmCodeHash, link.confirmCodeHash),
+          gt(telegramLinks.expiresAt, new Date()),
+        ),
+      )
+      .returning();
+    if (!confirmed) return 'expired';
+    const { chat } = this.linkTelegram(confirmed);
+    const t = this.t(confirmed.locale);
+    const connection = await this.connectionOfUser(link.telegramUserKey);
+    if (connection?.enabled) {
+      // Undefined: Telegram's report is attaching it at this moment and tells the person itself.
+      const outcome = await this.attach(confirmed, connection);
+      if (outcome) await this.send(chat, ...this.outcomeMessage(outcome, t));
+      return 'confirmed';
+    }
+    await this.send(chat, await this.lastStep(t));
+    return 'confirmed';
+  }
+
   private stateOf(link: TelegramLinkRow): TelegramLinkView['state'] {
     if (IN_PROGRESS.includes(link.state) && link.expiresAt.getTime() <= Date.now()) return 'expired';
     if (link.state === 'connected' && !link.accountId) {
@@ -351,7 +422,12 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
     if (!parsed.success) return false;
     const update = parsed.data;
     if (update.business_connection) {
-      await this.onConnection(update.business_connection);
+      try {
+        await this.onConnection(update.business_connection);
+      } catch (error) {
+        // Saving it is idempotent: without it, the connection's messages would be dropped for good.
+        throw new RetryUpdateError('Telegram business connection not saved', { cause: error });
+      }
       return true;
     }
     const routed =
@@ -401,22 +477,32 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
   }
 
   /** The person opened a QR code's link in Telegram. */
-  private async onStart(code: string, message: StartMessage): Promise<void> {
+  private async onStart(linkCode: string, message: StartMessage): Promise<void> {
     const chat = String(message.chat.id);
     const from = message.from;
-    const link = await this.linkByCode(code);
+    const link = await this.linkByCode(linkCode);
     const t = this.t(link?.locale, from?.language_code);
     if (!from || !link || this.stateOf(link) === 'expired' || !IN_PROGRESS.includes(link.state)) {
       return this.send(chat, escapeHtml(t('bot.tc.expired')));
     }
     const userKey = this.userKey(from.id);
+    if (link.reconnectAccountId && !(await this.mayReconnect(link.reconnectAccountId, userKey))) {
+      return this.send(chat, escapeHtml(t('bot.tc.otherAccount', { brand: BRAND.name })));
+    }
+    // A new code each time the link is opened (until it is confirmed); only its hash is kept.
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const telegram: LinkTelegram = {
+      chat,
+      label: identityOf({ username: from.username, name: fullName(from) }),
+    };
     // The first Telegram account to open a link owns it: a leaked QR code is no use to anyone else.
     const [claimed] = await this.deps.db
       .update(telegramLinks)
       .set({
         state: sql<TelegramLinkState>`case when ${telegramLinks.state} = 'pending' then 'opened' else ${telegramLinks.state} end`,
         telegramUserKey: userKey,
-        telegramLabel: identityOf({ username: from.username, name: fullName(from) }),
+        telegramEncrypted: this.deps.secrets.encryptJson(telegram, linkContext(link.id)),
+        confirmCodeHash: sql`case when ${telegramLinks.state} = 'confirmed' then ${telegramLinks.confirmCodeHash} else ${codeHash(link.id, code)} end`,
       })
       .where(
         and(
@@ -429,13 +515,30 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
       .returning();
     if (!claimed) return this.send(chat, escapeHtml(t('bot.tc.otherUser')));
     if (claimed.state === 'confirmed') return this.send(chat, await this.lastStep(t));
-    await this.send(chat, await this.prompt(claimed, userKey, t), this.promptButtons(claimed, t));
+    await this.send(chat, await this.prompt(claimed, userKey, code, t), this.promptButtons(claimed, t));
   }
 
-  /** "Connect this Telegram account to <hub account>?", with a warning when it moves from another. */
-  private async prompt(link: TelegramLinkRow, userKey: string, t: Translate): Promise<string> {
+  /**
+   * An account to connect again goes back to the Telegram account it had (bound when it was first
+   * connected), never to another one whose chats would mix with its history.
+   */
+  private async mayReconnect(accountId: string, userKey: string): Promise<boolean> {
+    const [account] = await this.deps.db
+      .select({ metadata: accounts.metadata })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    const bound = account?.metadata.telegramUserKey;
+    return typeof bound !== 'string' || bound === userKey;
+  }
+
+  /**
+   * "Connect this Telegram account to <hub account>?" with the code to type on the page, and a
+   * warning when the Telegram account moves from another hub account.
+   */
+  private async prompt(link: TelegramLinkRow, userKey: string, code: string, t: Translate): Promise<string> {
     const account = await this.ownerText(link.workspaceId, link.userId, t);
-    const lines = [t('bot.tc.confirm', { brand: BRAND.name, account: escapeHtml(account) })];
+    const lines = [t('bot.tc.confirm', { brand: BRAND.name, account: escapeHtml(account), code })];
     const connection = await this.connectionOfUser(userKey);
     if (connection?.accountId && connection.accountId !== link.reconnectAccountId) {
       const [current] = await this.deps.db
@@ -451,12 +554,7 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
   }
 
   private promptButtons(link: TelegramLinkRow, t: Translate): InlineButton[][] {
-    return [
-      [
-        { text: t('bot.tc.connect'), callback_data: `tgl:${link.id}:y` },
-        { text: t('bot.tc.cancel'), callback_data: `tgl:${link.id}:n` },
-      ],
-    ];
+    return [[{ text: t('bot.tc.cancel'), callback_data: `tgl:${link.id}:n` }]];
   }
 
   private async lastStep(t: Translate): Promise<string> {
@@ -483,58 +581,35 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
 
   private async onCallback(callback: Callback, data: string): Promise<void> {
     const link = LINK_CALLBACK.exec(data);
-    if (link) return this.onLinkCallback(callback, link[1]!, link[2] === 'y');
+    if (link) return this.onCancel(callback, link[1]!);
     const connection = CONNECTION_CALLBACK.exec(data);
     if (connection) return this.onDisconnect(callback, connection[1]!);
   }
 
-  /** Connect or Cancel under the bot's question. */
-  private async onLinkCallback(callback: Callback, linkId: string, connect: boolean): Promise<void> {
-    const { db } = this.deps;
+  /** Cancel under the bot's question. */
+  private async onCancel(callback: Callback, linkId: string): Promise<void> {
     const userKey = this.userKey(callback.from.id);
     const link = await this.link(linkId);
     const t = this.t(link?.locale, callback.from.language_code);
-    const show = this.replier(callback);
     if (!link || link.telegramUserKey !== userKey) return this.answer(callback, t('bot.tc.unknown'));
-    if (!connect) {
-      const cancelled = await db
-        .update(telegramLinks)
-        .set({ state: 'cancelled' })
-        .where(
-          and(
-            eq(telegramLinks.id, link.id),
-            eq(telegramLinks.telegramUserKey, userKey),
-            inArray(telegramLinks.state, IN_PROGRESS),
-          ),
-        )
-        .returning({ id: telegramLinks.id });
-      await this.answer(callback);
-      return show(escapeHtml(t(cancelled.length ? 'bot.tc.cancelled' : 'bot.tc.expired')));
-    }
-    const [confirmed] = await db
+    const cancelled = await this.deps.db
       .update(telegramLinks)
-      .set({ state: 'confirmed', expiresAt: new Date(Date.now() + CONFIRMED_TTL_MS) })
+      .set({ state: 'cancelled' })
       .where(
         and(
           eq(telegramLinks.id, link.id),
           eq(telegramLinks.telegramUserKey, userKey),
-          eq(telegramLinks.state, 'opened'),
-          gt(telegramLinks.expiresAt, new Date()),
+          inArray(telegramLinks.state, IN_PROGRESS),
         ),
       )
-      .returning();
+      .returning({ id: telegramLinks.id });
     await this.answer(callback);
-    // Tapped again after confirming: the same last step (or the outcome, if it is there already).
-    const current = confirmed ?? (this.stateOf(link) === 'confirmed' ? link : undefined);
-    if (!current) {
-      return show(escapeHtml(t(link.state === 'connected' ? 'bot.tc.connectedShort' : 'bot.tc.expired')));
-    }
-    const connection = await this.connectionOfUser(userKey);
-    if (connection?.enabled) {
-      const outcome = await this.attach(current, connection);
-      if (outcome) return show(...this.outcomeMessage(outcome, t));
-    }
-    await show(await this.lastStep(t));
+    const done = cancelled.length
+      ? 'bot.tc.cancelled'
+      : link.state === 'connected'
+        ? 'bot.tc.connectedShort'
+        : 'bot.tc.expired';
+    await this.replier(callback)(escapeHtml(t(done)));
   }
 
   /** Disconnect under the bot's "Connected" message: the account stops getting messages. */
@@ -620,23 +695,24 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
       else await db.delete(telegramConnections).where(eq(telegramConnections.id, row.id));
       return;
     }
+    const chat = String(connection.user_chat_id);
+    const link = await this.openLinkOf(userKey);
+    const t = this.t(link?.locale, row.locale);
+    if (link?.state === 'confirmed') {
+      // A confirmed link wins over the account the connection had: the person asked for it now.
+      const outcome = await this.attach(link, row);
+      if (outcome) await this.send(chat, ...this.outcomeMessage(outcome, t));
+      return;
+    }
     if (row.accountId) {
       // Rights changed, or the bot is back: the account's check says what it can do now.
       const [account] = await db.select().from(accounts).where(eq(accounts.id, row.accountId)).limit(1);
       if (account) await this.deps.accounts.test(account.workspaceId, account.id, logger);
       return;
     }
-    const chat = String(connection.user_chat_id);
-    const link = await this.openLinkOf(userKey);
-    const t = this.t(link?.locale, row.locale);
-    if (link?.state === 'confirmed') {
-      const outcome = await this.attach(link, row);
-      if (outcome) await this.send(chat, ...this.outcomeMessage(outcome, t));
-      return;
-    }
     if (link?.state === 'opened') {
-      // Added the bot before tapping Connect: the question again, at the bottom of the chat.
-      return this.send(chat, await this.prompt(link, userKey, t), this.promptButtons(link, t));
+      // Added the bot before typing the code: what is left, at the bottom of the chat.
+      return this.send(chat, escapeHtml(t('bot.tc.typeCode', { brand: BRAND.name })));
     }
     // Added without a QR code (or it ran out): how to finish, once per new connection.
     if (!before?.enabled || before.connectionKey !== row.connectionKey) {
@@ -675,11 +751,29 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
           .set({ accountId: account.id })
           .where(eq(telegramConnections.id, connection.id));
       });
+      // The account belongs to this Telegram account from now on (see `mayReconnect`).
+      await db
+        .update(accounts)
+        .set({
+          metadata: sql`${accounts.metadata} || ${JSON.stringify({ telegramUserKey: connection.telegramUserKey })}::jsonb`,
+        })
+        .where(eq(accounts.id, account.id));
       if (previous) await this.deps.accounts.markStatus(previous, 'needs_reauth', STATUS.moved);
       await this.deps.accounts.test(account.workspaceId, account.id, logger);
+      const telegram = claimed.telegramEncrypted ? this.linkTelegram(claimed) : undefined;
       await db
         .update(telegramLinks)
-        .set({ accountId: account.id, telegramLabel: identityOf(info) })
+        .set({
+          accountId: account.id,
+          ...(telegram
+            ? {
+                telegramEncrypted: this.deps.secrets.encryptJson(
+                  { ...telegram, label: identityOf(info) },
+                  linkContext(claimed.id),
+                ),
+              }
+            : {}),
+        })
         .where(eq(telegramLinks.id, claimed.id));
       this.deps.onConnected?.(account, created);
       return { ok: true, account, created, connection: { ...connection, accountId: account.id } };
@@ -707,13 +801,21 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
       if (!this.reconnects(account)) {
         throw conflict('This account is no longer connected through Telegram Chat Automation.');
       }
+      if (!(await this.mayReconnect(account.id, connection.telegramUserKey))) {
+        throw conflict(
+          'This account belongs to another Telegram account: connect this one as a new account.',
+        );
+      }
       await permissions.assertCanManage(link.workspaceId, link.userId, account);
       return { account, created: false };
     }
     await permissions.assertCanConnect(link.workspaceId, link.userId, link.draft.owner);
-    // Connected here before: that account comes back instead of a second one for the same person.
-    if (connection.accountId) {
-      const previous = await service.get(link.workspaceId, connection.accountId).catch(() => undefined);
+    // Connected here before (still, or until Disconnect): that account comes back instead of a
+    // second one for the same person.
+    const previousId =
+      connection.accountId ?? (await this.accountOfUser(link.workspaceId, connection.telegramUserKey));
+    if (previousId) {
+      const previous = await service.get(link.workspaceId, previousId).catch(() => undefined);
       const sameOwner = link.draft.owner === undefined || previous?.ownerUserId === link.draft.owner.userId;
       if (previous && this.reconnects(previous) && sameOwner) {
         const manages = await permissions.assertCanManage(link.workspaceId, link.userId, previous).then(
@@ -806,6 +908,27 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
     );
   }
 
+  private linkTelegram(link: TelegramLinkRow): LinkTelegram {
+    return this.deps.secrets.decryptJson<LinkTelegram>(link.telegramEncrypted ?? '', linkContext(link.id));
+  }
+
+  /** The workspace's newest Chat Automation account bound to this Telegram user, if any. */
+  private async accountOfUser(workspaceId: string, userKey: string): Promise<string | undefined> {
+    const [row] = await this.deps.db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.workspaceId, workspaceId),
+          eq(accounts.connectorId, this.connectorId),
+          sql`${accounts.metadata}->>'telegramUserKey' = ${userKey}`,
+        ),
+      )
+      .orderBy(desc(accounts.updatedAt))
+      .limit(1);
+    return row?.id;
+  }
+
   private async link(id: string): Promise<TelegramLinkRow | undefined> {
     const [row] = await this.deps.db.select().from(telegramLinks).where(eq(telegramLinks.id, id)).limit(1);
     return row;
@@ -888,6 +1011,11 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
       .answerCallback(callback.id, text)
       .catch((error) => this.deps.logger.debug({ err: error }, 'telegram callback answer failed'));
   }
+}
+
+/** The code is hashed with its link, so the same 6 digits on two links never match each other. */
+function codeHash(linkId: string, code: string): string {
+  return hashToken(`${linkId}:${code.replace(/\s+/g, '')}`);
 }
 
 function linkContext(linkId: string): string {

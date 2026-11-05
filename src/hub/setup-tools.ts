@@ -219,7 +219,7 @@ const CONNECT_STEPS: Record<ConnectLink['method'], string> = {
   oauth: ' (sign in with the provider)',
   form: '',
   none: '',
-  app: ' (scan the QR code with their phone and confirm in the app; there is nothing to type)',
+  app: ' (scan the QR code with their phone and confirm on the page; no password or key is needed)',
 };
 
 export const SETUP_ACTIONS: ActionDefinition[] = [

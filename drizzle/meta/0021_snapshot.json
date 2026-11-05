@@ -1,5 +1,5 @@
 {
-  "id": "a4c44328-f3c1-4cfe-bb6b-1bebb1d90f67",
+  "id": "8471bcc8-62df-42b9-8909-24ee7086aea5",
   "prevId": "529df512-922d-4907-b02f-990490bce2a3",
   "version": "7",
   "dialect": "postgresql",
@@ -4922,11 +4922,24 @@
           "primaryKey": false,
           "notNull": false
         },
-        "telegram_label": {
-          "name": "telegram_label",
+        "telegram_encrypted": {
+          "name": "telegram_encrypted",
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "confirm_code_hash": {
+          "name": "confirm_code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirm_attempts": {
+          "name": "confirm_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "account_id": {
           "name": "account_id",

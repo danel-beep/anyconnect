@@ -10,6 +10,7 @@ import type { AccountRow } from '../src/core/accounts.js';
 import { connectFormFields, readConnectForm } from '../src/core/connect-form.js';
 import { type QuickConnectFlow, QuickConnects } from '../src/core/quick-connect.js';
 import { maskEmail } from '../src/messaging/telegram-automation.js';
+import { RetryBudget } from '../src/security/telegram.js';
 
 const port: MessagingPort = {
   forAccount: () => {
@@ -163,5 +164,18 @@ describe('quick connect flows', () => {
     expect(maskEmail('owner@example.com')).toBe('o•••@example.com');
     expect(maskEmail('x@y.io')).toBe('x•••@y.io');
     expect(maskEmail('not-an-email')).toBe('•••');
+  });
+});
+
+describe('retries of bot updates', () => {
+  it('lets an update ask for redelivery a few times, then lets it go', () => {
+    const budget = new RetryBudget(3, 2);
+    expect([1, 2, 3, 4].map(() => budget.take(10))).toEqual([true, true, true, false]);
+    // Each update has its own budget; without an update_id there is nothing to count.
+    expect(budget.take(11)).toBe(true);
+    expect(budget.take(undefined)).toBe(false);
+    // Only the newest updates are remembered: an old one starts again rather than growing a map.
+    budget.take(12);
+    expect(budget.take(10)).toBe(true);
   });
 });

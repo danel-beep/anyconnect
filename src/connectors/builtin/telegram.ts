@@ -657,7 +657,7 @@ export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot
           setup: {
             app: {
               summary:
-                'Вы сканируете QR-код телефоном, подтверждаете подключение в боте Manyplug и добавляете бота в Telegram в разделе «Автоматизация чатов».',
+                'Вы сканируете QR-код телефоном, вводите на этой странице код из бота Manyplug и добавляете бота в Telegram в разделе «Автоматизация чатов».',
               minutes: 1,
               needs: ['Telegram на телефоне, обновлённый после мая 2026 года'],
               notice:
@@ -667,7 +667,7 @@ export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot
                   text: 'Наведите камеру телефона на QR-код на этой странице. Если страница открыта на телефоне, нажмите **Открыть Telegram**.',
                 },
                 {
-                  text: 'В боте Manyplug нажмите **Запустить** (Start), проверьте, что показан ваш аккаунт Manyplug, и нажмите **Подключить**.',
+                  text: 'В боте Manyplug нажмите **Запустить** (Start) и проверьте, что показан ваш аккаунт Manyplug. Введите код из бота на этой странице и нажмите **Подключить**.',
                 },
                 { text: 'В Telegram откройте **Настройки → Автоматизация чатов** и добавьте бота Manyplug.' },
                 {
@@ -691,7 +691,7 @@ export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot
                 },
                 {
                   problem: 'Страница всё ждёт, хотя бот добавлен',
-                  fix: 'Откройте бота и проверьте, что вы нажали **Подключить**. Затем проверьте в **Настройки → Автоматизация чатов**, что бот Manyplug в списке и включён.',
+                  fix: 'Проверьте, что вы ввели код из бота на этой странице. Затем проверьте в **Настройки → Автоматизация чатов**, что бот Manyplug в списке и включён.',
                 },
                 {
                   problem: 'ИИ не может ответить в чате',
@@ -805,7 +805,7 @@ export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot
           setup: {
             app: {
               summary:
-                'You scan a QR code with your phone, confirm in the Manyplug bot and add the bot to your Telegram under Settings → Chat Automation.',
+                'You scan a QR code with your phone, type the code from the Manyplug bot on this page and add the bot to your Telegram under Settings → Chat Automation.',
               minutes: 1,
               needs: ['Telegram on your phone, updated since May 2026'],
               notice:
@@ -815,7 +815,7 @@ export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot
                   text: 'Point your phone camera at the QR code on this page. If this page is open on your phone, tap **Open Telegram**.',
                 },
                 {
-                  text: 'In the Manyplug bot tap **Start**, check that it shows your Manyplug account and tap **Connect**.',
+                  text: 'In the Manyplug bot tap **Start** and check that it shows your Manyplug account. Type the code from the bot on this page and click **Connect**.',
                 },
                 { text: 'In Telegram open **Settings → Chat Automation** and add the Manyplug bot.' },
                 { text: 'Choose the chats the bot may see, allow it to reply to messages and save.' },
@@ -837,7 +837,7 @@ export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot
                 },
                 {
                   problem: 'The page keeps waiting after you added the bot',
-                  fix: 'Open the bot and check that you tapped **Connect**. Then check under **Settings → Chat Automation** that the Manyplug bot is listed and turned on.',
+                  fix: 'Check that you typed the code from the bot on this page. Then check under **Settings → Chat Automation** that the Manyplug bot is listed and turned on.',
                 },
                 {
                   problem: 'The AI cannot reply in a chat',

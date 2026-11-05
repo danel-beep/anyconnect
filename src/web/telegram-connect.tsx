@@ -21,6 +21,10 @@ export interface TelegramConnectView {
   telegram?: string | undefined;
   /** Why connecting failed, when it is the user's to fix (a plan limit). */
   error?: string | undefined;
+  /** Failed because the bot's code was typed wrong too many times. */
+  tooManyCodes?: boolean | undefined;
+  /** The code just typed was wrong. */
+  codeWrong?: boolean | undefined;
   /** Label of the account being connected again. */
   reconnecting?: string | undefined;
   csrf: string;
@@ -28,6 +32,8 @@ export interface TelegramConnectView {
   pageUrl: string;
   stateUrl: string;
   cancelUrl: string;
+  /** Where the bot's code is typed (POST). */
+  confirmUrl: string;
   /** A new QR code with the same settings. */
   restartUrl: string;
   /** The connect form: a personal account with full access, or an own bot. */
@@ -37,7 +43,7 @@ export interface TelegramConnectView {
 
 const STEPS = ['open', 'confirm', 'add'] as const;
 
-/** The step the person is on: 0 open the link, 1 tap Connect, 2 add the bot. */
+/** The step the person is on: 0 open the link, 1 type the bot's code, 2 add the bot. */
 function stepOf(state: TelegramConnectState): number {
   return state === 'pending' ? 0 : state === 'opened' ? 1 : 2;
 }
@@ -133,6 +139,8 @@ const Waiting: FC<{ t: Translate; view: TelegramConnectView }> = ({ t, view }) =
               <li>{t('tgc.last3')}</li>
             </ol>
           </div>
+        ) : view.state === 'opened' ? (
+          <CodeForm t={t} view={view} />
         ) : view.deepLink ? (
           <a class="btn primary tg-open" href={view.deepLink} target="_blank" rel="noopener noreferrer">
             {t('tgc.open')} <Icon name="external" />
@@ -164,11 +172,47 @@ const Waiting: FC<{ t: Translate; view: TelegramConnectView }> = ({ t, view }) =
   );
 };
 
+/**
+ * The 6-digit code from the bot: typed here by the signed-in user, it proves that the Telegram
+ * account that opened the link is theirs (a QR code someone else sent cannot connect it).
+ */
+const CodeForm: FC<{ t: Translate; view: TelegramConnectView }> = ({ t, view }) => (
+  <form method="post" action={view.confirmUrl} class="tg-code">
+    <input type="hidden" name="csrf" value={view.csrf} />
+    <label for="tg-code">{t('tgc.codeLabel')}</label>
+    <div class="tg-code-row">
+      <input
+        id="tg-code"
+        name="code"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        pattern="[0-9 ]{6,7}"
+        maxlength={7}
+        required
+        autofocus
+        aria-invalid={view.codeWrong ? 'true' : undefined}
+        aria-describedby="tg-code-hint"
+      />
+      <button type="submit" class="btn primary">
+        {t('tgc.codeSubmit')}
+      </button>
+    </div>
+    {view.codeWrong ? (
+      <p class="notice bad" role="alert">
+        {t('tgc.codeWrong')}
+      </p>
+    ) : null}
+    <p class="hint" id="tg-code-hint">
+      {t('tgc.codeHint')}
+    </p>
+  </form>
+);
+
 /** Expired, failed or cancelled: what happened and a new QR code. */
 const Outcome: FC<{ t: Translate; view: TelegramConnectView }> = ({ t, view }) => {
   const [heading, text] =
     view.state === 'failed'
-      ? [t('tgc.failedTitle'), view.error ?? t('tgc.failed')]
+      ? [t('tgc.failedTitle'), view.tooManyCodes ? t('tgc.codeFailed') : (view.error ?? t('tgc.failed'))]
       : view.state === 'cancelled'
         ? [t('tgc.cancelledTitle'), t('tgc.cancelled')]
         : [t('tgc.expiredTitle'), t('tgc.expired')];

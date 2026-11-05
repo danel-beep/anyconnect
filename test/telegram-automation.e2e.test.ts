@@ -182,31 +182,58 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
   const telegramAccounts = () =>
     hub.services.db.select().from(accounts).where(eq(accounts.connectorId, 'telegram'));
 
-  it('connects with a QR code and a tap in the bot, then routes messages both ways', async () => {
+  /** The 6-digit code in the bot's last message to `user`. */
+  const codeOf = (user: { id: number }) => /<code>(\d{6})<\/code>/.exec(String(lastTo(user).body.text))?.[1];
+
+  /** Types a code on the link's page, as the signed-in user who made the link. */
+  async function typeCode(path: string, code: string) {
+    const { csrf } = TestBrowser.hiddenInputs(await (await browser.request(path)).text());
+    const response = await browser.request(`${path}/confirm`, { form: { csrf: csrf!, code } });
+    expect(response.status).toBe(303);
+    return response.headers.get('location')!;
+  }
+
+  /** Dana connects through a new QR code: opens it, types the bot's code, adds the bot. */
+  async function connectDana(query = '') {
+    const link = await openLink(query);
+    await webhook(start(DANA, `/start ${link.payload}`));
+    await typeCode(link.path, codeOf(DANA)!);
+    await webhook(businessConnection(DANA));
+    return link;
+  }
+
+  it('connects with a QR code and the bot’s code typed on the page, then routes messages both ways', async () => {
     const link = await openLink();
     expect(await state(link.path)).toBe('pending');
 
-    // Dana opens the link: the bot names the hub account the link connects to (masked) and asks.
+    // Dana opens the link: the bot names the hub account (masked) and sends a code for the page.
     expect((await webhook(start(DANA, `/start ${link.payload}`))).status).toBe(200);
     const ask = lastTo(DANA);
     expect(String(ask.body.text)).toContain(maskEmail(ADMIN.email));
     expect(String(ask.body.text)).not.toContain(ADMIN.email);
-    expect(buttons(ask)).toContain(`tgl:${link.id}:y`);
+    const code = codeOf(DANA)!;
+    expect(code).toMatch(/^\d{6}$/);
+    // Nothing in Telegram connects by itself: the bot only offers Cancel.
+    expect(buttons(ask)).toContain(`tgl:${link.id}:n`);
+    expect(buttons(ask)).not.toContain(`tgl:${link.id}:y`);
     expect(await state(link.path)).toBe('opened');
-    expect(await (await browser.request(link.path)).text()).toContain('@dana_lee');
+    const opened = await (await browser.request(link.path)).text();
+    expect(opened).toContain('@dana_lee');
+    expect(opened).toContain('name="code"');
 
-    // Someone else with the same QR code gets nothing: the link is Dana's now.
+    // Someone else with the same QR code gets no code: the link is Dana's now.
     await webhook(start(EVE, `/start ${link.payload}`));
-    expect(buttons(lastTo(EVE))).not.toContain('tgl:');
-    await webhook(press(EVE, `tgl:${link.id}:y`));
+    expect(codeOf(EVE)).toBeUndefined();
+    await webhook(press(EVE, `tgl:${link.id}:n`));
     expect(await state(link.path)).toBe('opened');
 
-    // Connect: the bot shows the last step in place of the question.
-    await webhook(press(DANA, `tgl:${link.id}:y`));
-    const lastStep = bot.calls.filter((c) => c.method === 'editMessageText').at(-1)!;
-    expect(lastStep.body).toMatchObject({ chat_id: String(DANA.id), message_id: 50 });
-    expect(String(lastStep.body.text)).toContain(`@${BOT}`);
+    // A wrong code changes nothing; the right one confirms, and the bot sends the last step.
+    expect(await typeCode(link.path, code === '000000' ? '111111' : '000000')).toContain('code=wrong');
+    expect(await (await browser.request(`${link.path}?code=wrong`)).text()).toContain('Неверный код');
+    expect(await state(link.path)).toBe('opened');
+    expect(await typeCode(link.path, `${code.slice(0, 3)} ${code.slice(3)}`)).toBe(link.path);
     expect(await state(link.path)).toBe('confirmed');
+    expect(String(lastTo(DANA).body.text)).toContain(`@${BOT}`);
     expect(await telegramAccounts()).toHaveLength(0);
 
     // Dana adds the bot under Chat Automation: Telegram reports it and the account appears.
@@ -225,12 +252,13 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(done).toContain('Аккаунт подключён');
     expect(done).toContain('@dana_lee');
 
-    // Telegram ids are stored as keyed hashes, the connection itself encrypted.
+    // Telegram ids are stored as keyed hashes, names and the connection encrypted, codes hashed.
     const [stored] = await hub.services.db.select().from(telegramConnections);
     expect(stored!.accountId).toBe(account!.id);
     expect(JSON.stringify(stored)).not.toMatch(/7001|BC-dana-1|dana_lee/);
     const [linkRow] = await hub.services.db.select().from(telegramLinks).where(eq(telegramLinks.id, link.id));
     expect(JSON.stringify(linkRow)).not.toContain(link.payload);
+    expect(JSON.stringify(linkRow)).not.toMatch(new RegExp(`7001|dana_lee|${code}`));
 
     // A message in a chat Dana shared reaches the account; the AI reads and answers it as Dana.
     expect((await webhook(businessMessage(5, 'Hi Dana, are we still on for Friday?'))).status).toBe(200);
@@ -265,6 +293,33 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     await expect(call('telegram_send', { chat: chat.id, text: 'still there?' })).rejects.toThrow();
   });
 
+  it('never moves a connected Telegram account from the bot alone, and fails after wrong codes', async () => {
+    await connectDana();
+    const [account] = await telegramAccounts();
+    const before = (await hub.services.db.select().from(telegramConnections))[0]!;
+
+    // Someone sends Dana a QR code of theirs and she opens it: the bot only shows a code, and
+    // without that code typed on the sender's page nothing moves, whatever she taps.
+    const foreign = await openLink();
+    await webhook(start(DANA, `/start ${foreign.payload}`));
+    expect(codeOf(DANA)).toMatch(/^\d{6}$/);
+    expect(String(lastTo(DANA).body.text)).toContain('Никому не отправляйте этот код');
+    await webhook(press(DANA, `tgl:${foreign.id}:y`));
+    expect(await state(foreign.path)).toBe('opened');
+    const after = (await hub.services.db.select().from(telegramConnections))[0]!;
+    expect(after.accountId).toBe(before.accountId);
+    expect(await telegramAccounts()).toEqual([account]);
+
+    // Guessing does not work: a few wrong codes and the link is dead, even for the right code.
+    const code = codeOf(DANA)!;
+    const wrong = code === '000000' ? '111111' : '000000';
+    for (let i = 0; i < 5; i++) await typeCode(foreign.path, wrong);
+    expect(await state(foreign.path)).toBe('failed');
+    expect(await (await browser.request(foreign.path)).text()).toContain('Слишком много неверных кодов');
+    await typeCode(foreign.path, code);
+    expect(await state(foreign.path)).toBe('failed');
+  });
+
   it('finishes when the bot was added before the QR code was scanned', async () => {
     await webhook(businessConnection(DANA));
     // Added without a link: the bot says where to finish, with a button to the site.
@@ -273,21 +328,16 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
 
     const link = await openLink();
     await webhook(start(DANA, `/start ${link.payload}`));
-    await webhook(press(DANA, `tgl:${link.id}:y`));
-    // The connection is there already: Connect connects at once.
+    await typeCode(link.path, codeOf(DANA)!);
+    // The connection is there already: the right code connects at once.
     const [account] = await telegramAccounts();
     expect(account).toMatchObject({ status: 'active', config: { mode: 'automation' } });
-    expect(String(bot.calls.filter((c) => c.method === 'editMessageText').at(-1)!.body.text)).toContain(
-      'Manyplug',
-    );
+    expect(buttons(lastTo(DANA))).toMatch(/tgc:tgc_[0-9a-z]{26}:x/);
     expect(await state(link.path)).toBe('connected');
   });
 
-  it('connects the same account again instead of making a second one', async () => {
-    const first = await openLink();
-    await webhook(start(DANA, `/start ${first.payload}`));
-    await webhook(press(DANA, `tgl:${first.id}:y`));
-    await webhook(businessConnection(DANA));
+  it('connects the same account again, and only with the same Telegram account', async () => {
+    await connectDana();
     const [account] = await telegramAccounts();
 
     // Paused in Telegram: the account waits, and comes back when the bot is on again.
@@ -298,12 +348,32 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(back.status).toBe('active');
     expect(back.statusMessage).toBeNull();
 
-    // A reconnect link for the account (as in the dashboard and the AI's connect link).
+    // Paused, then a new QR code confirmed while paused: the link finishes when the bot is back.
+    await webhook(businessConnection(DANA, { is_enabled: false }));
+    const whilePaused = await openLink();
+    await webhook(start(DANA, `/start ${whilePaused.payload}`));
+    await typeCode(whilePaused.path, codeOf(DANA)!);
+    expect(await state(whilePaused.path)).toBe('confirmed');
+    await webhook(businessConnection(DANA));
+    expect(await state(whilePaused.path)).toBe('connected');
+
+    // Disconnected in the bot, then a new QR code: the same account comes back, not a second one.
     await webhook(press(DANA, /tgc:(tgc_[0-9a-z]{26}):x/.exec(buttons(lastTo(DANA)))![0]));
+    expect((await telegramAccounts())[0]!.status).toBe('needs_reauth');
+    const plain = await openLink();
+    await webhook(start(DANA, `/start ${plain.payload}`));
+    await typeCode(plain.path, codeOf(DANA)!);
+    expect(await telegramAccounts()).toHaveLength(1);
+    expect((await telegramAccounts())[0]!).toMatchObject({ id: account!.id, status: 'active' });
+
+    // A reconnect link for Dana's account cannot be taken by another Telegram account.
     const again = await openLink(`?account=${account!.id}`);
     expect(again.html).toContain('@dana_lee');
+    await webhook(start(EVE, `/start ${again.payload}`));
+    expect(codeOf(EVE)).toBeUndefined();
+    expect(await state(again.path)).toBe('pending');
     await webhook(start(DANA, `/start ${again.payload}`));
-    await webhook(press(DANA, `tgl:${again.id}:y`));
+    await typeCode(again.path, codeOf(DANA)!);
     const accountsNow = await telegramAccounts();
     expect(accountsNow).toHaveLength(1);
     expect(accountsNow[0]!).toMatchObject({ id: account!.id, status: 'active' });
@@ -318,7 +388,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     await webhook(start(DANA, `/start ${link.payload}`));
     expect(buttons(lastTo(DANA))).not.toContain('tgl:');
 
-    // A new QR code stops the older one.
+    // A new QR code stops an older one that is not confirmed yet.
     const older = await openLink();
     const newer = await openLink();
     expect(await state(older.path)).toBe('cancelled');
@@ -332,6 +402,13 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(page).toContain('href="/connect/telegram"');
     await webhook(start(DANA, `/start ${newer.payload}`));
     expect(buttons(lastTo(DANA))).not.toContain('tgl:');
+
+    // A confirmed link only waits for Telegram: opening the connect page again keeps it.
+    const confirmed = await openLink();
+    await webhook(start(DANA, `/start ${confirmed.payload}`));
+    await typeCode(confirmed.path, codeOf(DANA)!);
+    await openLink();
+    expect(await state(confirmed.path)).toBe('confirmed');
 
     // Someone else's link page is not found.
     const stranger = new TestBrowser(hub.baseUrl);
@@ -357,17 +434,33 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(link.instructions).toContain('QR code');
   });
 
-  it('asks Telegram to deliver a business update again when it could not be stored', async () => {
+  it('asks Telegram to deliver an update again when it could not be saved, a few times at most', async () => {
+    // The connection itself: without it, every later message of the connection would be lost.
     const link = await openLink();
     await webhook(start(DANA, `/start ${link.payload}`));
-    await webhook(press(DANA, `tgl:${link.id}:y`));
-    await webhook(businessConnection(DANA));
+    await typeCode(link.path, codeOf(DANA)!);
+    const automation = hub.services.telegramAutomation as unknown as Record<string, unknown>;
+    const lookup = automation.connectionOfUser;
+    automation.connectionOfUser = async () => {
+      throw new Error('database is away');
+    };
+    expect((await webhook(businessConnection(DANA))).status).toBe(500);
+    automation.connectionOfUser = lookup;
+    expect((await webhook(businessConnection(DANA))).status).toBe(200);
+    expect(await state(link.path)).toBe('connected');
+
+    // A message: stored once when it comes again.
     const service = hub.services.messaging.service;
     const route = service.route.bind(service);
     service.route = async () => {
       throw new Error('database is away');
     };
     expect((await webhook(businessMessage(9, 'Hello?'))).status).toBe(500);
+    // An update that keeps failing stops holding the bot's webhook after a few deliveries.
+    const poison = businessMessage(10, 'never stored');
+    const statuses = [];
+    for (let i = 0; i < 4; i++) statuses.push((await webhook(poison)).status);
+    expect(statuses).toEqual([500, 500, 500, 200]);
     service.route = route;
     expect((await webhook(businessMessage(9, 'Hello?'))).status).toBe(200);
     const chats = await hub.services.db.select().from(messengerChats);

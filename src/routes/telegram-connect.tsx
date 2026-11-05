@@ -11,8 +11,8 @@ import { renderInApp } from './page-helpers.js';
 
 /**
  * The page of a Telegram Chat Automation link (`/connect/telegram/link/:linkId`, made by
- * `GET /connect/telegram`): the QR code, then the last step in Telegram, then the "Connected" page.
- * Only the user who made the link sees it. The site script asks `…/state` every few seconds and
+ * `GET /connect/telegram`): the QR code, the bot's code typed here (`POST …/confirm`), then the last
+ * step in Telegram, then the "Connected" page. Only the user who made the link sees it. The site script asks `…/state` every few seconds and
  * reloads the page when the state changes; without scripts, "Check now" does the same.
  */
 export function telegramConnectRoutes() {
@@ -72,11 +72,14 @@ export function telegramConnectRoutes() {
       deepLink: link.deepLink,
       telegram: link.telegram,
       error: link.error,
+      tooManyCodes: link.tooManyCodes,
+      codeWrong: c.req.query('code') === 'wrong',
       reconnecting: reconnecting?.label,
       csrf: csrfToken(c, { secure: s.config.secureCookies }),
       pageUrl: base(link.id),
       stateUrl: `${base(link.id)}/state`,
       cancelUrl: `${base(link.id)}/cancel`,
+      confirmUrl: `${base(link.id)}/confirm`,
       restartUrl: await startUrl(c, link),
       formUrl: await startUrl(c, link, 'form'),
       guide: connector ? connectorGuide(connector, locale, 'app').setup : undefined,
@@ -93,6 +96,23 @@ export function telegramConnectRoutes() {
     const state = await s.telegramAutomation?.state(user.id, c.req.param('linkId'));
     if (!state) return c.json({ error: 'not_found' }, 404);
     return c.json({ state });
+  });
+
+  /** The code the bot sent, typed by the signed-in user who made the link. */
+  app.post('/connect/telegram/link/:linkId/confirm', async (c) => {
+    const s = c.get('services');
+    const user = await currentUser(c);
+    if (!user) return signIn(c, 303);
+    const form = await bodyParams(c);
+    if (!verifyCsrf(c, form.csrf, { secure: s.config.secureCookies, publicUrl: s.config.publicUrl })) {
+      const t = c.get('t');
+      return c.html(<ErrorPage t={t} lang={c.get('locale')} message={t('error.csrf')} />, 403);
+    }
+    const linkId = c.req.param('linkId');
+    const code = typeof form.code === 'string' ? form.code.slice(0, 20) : '';
+    const result = await s.telegramAutomation?.confirm(user.id, linkId, code);
+    if (!result) throw notFound('Link');
+    return c.redirect(result === 'wrong' ? `${base(linkId)}?code=wrong` : base(linkId), 303);
   });
 
   app.post('/connect/telegram/link/:linkId/cancel', async (c) => {
