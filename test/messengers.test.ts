@@ -3,9 +3,10 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Principal } from '../src/core/principal.js';
 import { messengerChats, messengerMessages, messengerOutbox } from '../src/db/schema.js';
+import { OUTBOX_CHANNEL } from '../src/messaging/outbox.js';
 import { resetDatabase, startTestHub, type TestHub, unwrapUntrusted } from './helpers.js';
 
 const BOT_TOKEN = '123456789:AAEhBP0av18aaaaaaaaaaaaaaaaaaaaaaaa';
@@ -417,6 +418,18 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     const none = json(await call('telegram_whats_new', { cursor: second.cursor }));
     expect(none.messages).toBeUndefined();
     expect(none.cursor).toBe(second.cursor);
+  });
+
+  it('tells the dispatchers of other processes about a queued message (Postgres NOTIFY)', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(8, 'Hi'));
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const queued: string[] = [];
+    hub.services.listener.listen(OUTBOX_CHANNEL, (accountId) => queued.push(accountId));
+    hub.services.listener.start();
+    await vi.waitFor(() => expect(hub.services.listener.connected).toBe(true));
+    expect(json(await call('telegram_send', { chat: chat.id, text: 'Hello' })).status).toBe('sent');
+    await vi.waitFor(() => expect(queued).toEqual([account.id]));
   });
 
   it('sends through the outbox once, records the message and reports Telegram errors', async () => {

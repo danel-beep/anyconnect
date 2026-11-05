@@ -4,9 +4,11 @@ import {
   type PacingLimits,
   type SentReceipt,
 } from '../connectors/messaging.js';
+import type { DbListener } from '../db/listener.js';
+import { DueLoop } from '../lib/due-loop.js';
 import type { Logger } from '../logger.js';
 import type { MessengerAccounts } from './accounts.js';
-import type { Outbox, OutboxRow } from './outbox.js';
+import { OUTBOX_CHANNEL, type Outbox, type OutboxRow } from './outbox.js';
 import { nextSendTime, typingDurationMs } from './pacing.js';
 import type { MessageStore } from './store.js';
 
@@ -33,9 +35,14 @@ const SPAM_PAUSE_MS = 24 * 3_600_000;
  * Takes jobs from the outbox one at a time per account, applies pacing, shows typing, delivers
  * and records the result. Runs in-process; several dispatchers (hub instances, gateway instances)
  * can work at once because jobs are claimed in the database.
+ *
+ * It does not poll every second: a queued job wakes it (Postgres NOTIFY on {@link OUTBOX_CHANNEL},
+ * or `kick()` in the process that queued it), a job held back by pacing wakes it when due, and an
+ * idle dispatcher looks once per `backstopMs`. Without notifications it checks every `intervalMs`.
  */
 export class Dispatcher {
-  private timer: NodeJS.Timeout | undefined;
+  private readonly loop: DueLoop;
+  private unlisten: (() => void) | undefined;
   private readonly running = new Set<string>();
   private ticking = false;
   private stopped = true;
@@ -48,20 +55,37 @@ export class Dispatcher {
       executor: DeliveryExecutor;
       worker: string;
       logger: Logger;
+      /** Polling interval while database notifications are unavailable (default 1 s). */
       intervalMs?: number;
+      /** Longest sleep of an idle dispatcher while notifications work (default 60 s). */
+      backstopMs?: number;
+      /** Database notifications: a job queued by another process wakes this dispatcher. */
+      listener?: DbListener;
       random?: () => number;
     },
-  ) {}
+  ) {
+    this.loop = new DueLoop({
+      work: () => this.tickAndPlan(),
+      idleMs: () =>
+        this.deps.listener?.connected ? (this.deps.backstopMs ?? 60_000) : (this.deps.intervalMs ?? 1_000),
+      onError: (error) => this.deps.logger.warn({ err: error }, 'outbox tick failed'),
+    });
+  }
 
   start(): void {
     this.stopped = false;
-    this.timer = setInterval(() => void this.tick(), this.deps.intervalMs ?? 1_000);
-    this.timer.unref();
+    this.unlisten = this.deps.listener?.listen(
+      OUTBOX_CHANNEL,
+      () => this.loop.kick(),
+      () => this.loop.kick(),
+    );
+    this.loop.start();
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
-    if (this.timer) clearInterval(this.timer);
+    this.unlisten?.();
+    await this.loop.stop();
     // Let in-flight deliveries finish so they are recorded (claims of the rest expire on their own).
     const deadline = Date.now() + 10_000;
     while (this.running.size > 0 && Date.now() < deadline) await sleep(50);
@@ -69,7 +93,37 @@ export class Dispatcher {
 
   /** Looks for due jobs now instead of at the next interval. */
   kick(): void {
-    if (!this.stopped) void this.tick();
+    if (!this.stopped) this.loop.kick();
+  }
+
+  /** Starts what is due, then says when to look again: the next held-back job of an idle account. */
+  private async tickAndPlan(): Promise<Date | undefined> {
+    await this.tick();
+    const accounts = await this.deps.executor.accounts();
+    // Accounts being drained plan their own next look when the drain ends (afterDrain).
+    const due = await this.deps.outbox.nextDue(accounts.filter((id) => !this.running.has(id)));
+    return due && this.notBeforeRetry(due);
+  }
+
+  /** A drain stopped: wake when its account's next job is due (held back by pacing, a flood wait…). */
+  private async afterDrain(accountId: string): Promise<void> {
+    this.running.delete(accountId);
+    if (this.stopped) return;
+    try {
+      const due = await this.deps.outbox.nextDue([accountId]);
+      if (due) this.loop.wakeAt(this.notBeforeRetry(due));
+    } catch (error) {
+      this.deps.logger.warn({ err: error }, 'outbox tick failed');
+    }
+  }
+
+  /**
+   * A job that is already due but was not taken (another process is sending for that account, or a
+   * drain stopped after its batch) is looked at again after `intervalMs`, not in a tight loop.
+   */
+  private notBeforeRetry(due: Date): Date {
+    const retry = Date.now() + (this.deps.intervalMs ?? 1_000);
+    return due.getTime() < retry ? new Date(retry) : due;
   }
 
   async tick(): Promise<void> {
@@ -81,7 +135,9 @@ export class Dispatcher {
       for (const accountId of due) {
         if (this.running.has(accountId) || this.stopped) continue;
         this.running.add(accountId);
-        void this.drain(accountId).finally(() => this.running.delete(accountId));
+        void this.drain(accountId)
+          .catch((error) => this.deps.logger.warn({ err: error }, 'outbox drain failed'))
+          .then(() => this.afterDrain(accountId));
       }
     } catch (error) {
       this.deps.logger.warn({ err: error }, 'outbox tick failed');

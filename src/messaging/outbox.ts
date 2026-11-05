@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lte, min, sql } from 'drizzle-orm';
 import type { OutboundFile, OutboundJob, TemplateMessage } from '../connectors/messaging.js';
 import type { Db } from '../db/client.js';
 import { messengerChats, messengerOutbox, type OutboxStatus } from '../db/schema.js';
@@ -6,6 +6,9 @@ import { newId } from '../lib/ids.js';
 import type { CipherSource } from './ciphers.js';
 import type { MessengerKeys } from './keys.js';
 import type { ChatInfo } from './store.js';
+
+/** Postgres NOTIFY channel: a job was queued (payload: the account id). Dispatchers listen on it. */
+export const OUTBOX_CHANNEL = 'messenger_outbox';
 
 export type OutboxRow = typeof messengerOutbox.$inferSelect;
 
@@ -98,7 +101,7 @@ export class Outbox {
           newContact: input.newContact ?? false,
         })
         .returning();
-      await tx.execute(sql`select pg_notify('messenger_outbox', ${input.accountId})`);
+      await tx.execute(sql`select pg_notify(${OUTBOX_CHANNEL}, ${input.accountId})`);
       return { row: row!, deduplicated: false };
     });
   }
@@ -106,6 +109,16 @@ export class Outbox {
   async get(id: string): Promise<OutboxRow | undefined> {
     const [row] = await this.db.select().from(messengerOutbox).where(eq(messengerOutbox.id, id)).limit(1);
     return row;
+  }
+
+  /** When the next queued job of these accounts is due (undefined: none is queued). */
+  async nextDue(accountIds: string[]): Promise<Date | undefined> {
+    if (accountIds.length === 0) return undefined;
+    const [row] = await this.db
+      .select({ at: min(messengerOutbox.notBefore) })
+      .from(messengerOutbox)
+      .where(and(inArray(messengerOutbox.accountId, accountIds), eq(messengerOutbox.status, 'queued')));
+    return row?.at ?? undefined;
   }
 
   /** Accounts (among `accountIds`) that have jobs due now. */

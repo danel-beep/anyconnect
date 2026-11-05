@@ -60,6 +60,44 @@ describe('DueLoop', () => {
     await loop.stop();
   });
 
+  it('keeps a wake-up asked for during a run for later, instead of running again at once', async () => {
+    const runs: number[] = [];
+    const loop: DueLoop = new DueLoop({
+      work: async () => {
+        runs.push(Date.now());
+        if (runs.length === 1) loop.wakeAt(new Date(Date.now() + 300));
+        await sleep(20);
+        return undefined;
+      },
+      idleMs: () => 10_000,
+      onError: () => {},
+    });
+    loop.start();
+    await sleep(150);
+    expect(runs).toHaveLength(1);
+    await vi.waitFor(() => expect(runs).toHaveLength(2), { timeout: 2_000, interval: 10 });
+    expect(runs[1]! - runs[0]!).toBeGreaterThanOrEqual(290);
+    await loop.stop();
+  });
+
+  it('does not spin on a due time that is already past (work another process holds)', async () => {
+    let calls = 0;
+    const loop = new DueLoop({
+      work: async () => {
+        calls++;
+        return new Date(0);
+      },
+      idleMs: () => 10_000,
+      onError: () => {},
+      minGapMs: 50,
+    });
+    loop.start();
+    await sleep(275);
+    await loop.stop();
+    expect(calls).toBeGreaterThanOrEqual(3);
+    expect(calls).toBeLessThanOrEqual(7);
+  });
+
   it('never overlaps runs, and runs again after a kick that came during a run', async () => {
     let active = 0;
     let maxActive = 0;

@@ -15,6 +15,8 @@ export class DueLoop {
   private timerAt: number | undefined;
   private running: Promise<void> | undefined;
   private again = false;
+  /** Earliest `wakeAt` asked for during a run; the run's own plan takes it into account. */
+  private wakeDuringRun: number | undefined;
   private stopped = true;
 
   constructor(
@@ -25,6 +27,11 @@ export class DueLoop {
       idleMs: () => number;
       /** A failed run is reported and retried after `idleMs`; it never stops the loop. */
       onError: (error: unknown) => void;
+      /**
+       * Shortest pause before a run started by a due time (default 200 ms), so a due time that is
+       * already past (work another process holds) cannot make the loop spin. Kicks are not delayed.
+       */
+      minGapMs?: number;
       now?: () => number;
     },
   ) {}
@@ -54,11 +61,12 @@ export class DueLoop {
 
   /** Makes sure the loop runs no later than `at` (e.g. a call scheduled for the end of its undo window). */
   wakeAt(at: Date): void {
-    if (this.stopped || this.running) {
-      if (this.running) this.again = true;
+    if (this.stopped) return;
+    if (this.running) {
+      this.wakeDuringRun = Math.min(this.wakeDuringRun ?? Number.POSITIVE_INFINITY, at.getTime());
       return;
     }
-    this.schedule(at.getTime() - this.now());
+    this.schedule(Math.max(this.options.minGapMs ?? 200, at.getTime() - this.now()));
   }
 
   /** Waits for the current run; no run starts afterwards. */
@@ -74,15 +82,20 @@ export class DueLoop {
   }
 
   private async run(): Promise<void> {
-    let next: Date | undefined;
+    let next: number | undefined;
     try {
-      next = await this.options.work();
+      next = (await this.options.work())?.getTime();
     } catch (error) {
       this.options.onError(error);
     }
+    // A kick during the run starts another run at once; that run's plan includes what was asked.
     if (this.stopped || this.again) return;
-    const idle = this.options.idleMs();
-    this.schedule(next ? Math.min(next.getTime() - this.now(), idle) : idle);
+    const asked = this.wakeDuringRun;
+    this.wakeDuringRun = undefined;
+    if (asked !== undefined) next = Math.min(next ?? asked, asked);
+    const gap = this.options.minGapMs ?? 200;
+    const untilDue = next !== undefined ? Math.max(gap, next - this.now()) : Number.POSITIVE_INFINITY;
+    this.schedule(Math.min(untilDue, this.options.idleMs()));
   }
 
   private schedule(inMs: number): void {

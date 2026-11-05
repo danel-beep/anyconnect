@@ -40,6 +40,7 @@ import { VaultScopes } from './core/vault-scope.js';
 import { VaultService } from './core/vaults.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
+import { PgListener } from './db/listener.js';
 import { TelegramLanding } from './growth/telegram-landing.js';
 import type { CatalogTeam } from './hub/catalog-types.js';
 import type { StageMap } from './hub/executor.js';
@@ -148,6 +149,11 @@ export interface Services {
   backups: BackupService | undefined;
   /** Background jobs; started by `startJobs()` in processes that run them. */
   jobs: JobQueue;
+  /**
+   * Postgres notifications that wake the background loops (outbox) instead of polling; started with
+   * them in `src/index.ts`. Not started in tests, where the loops fall back to polling.
+   */
+  listener: PgListener;
   apiTokens: ApiTokenService;
   hub: Hub;
   clients: ClientRegistry;
@@ -357,9 +363,14 @@ export function createServices(
     monitor: ops.jobRuns,
     onError: (error, job) => ops.errors.capture(error, { source: 'job', context: { job } }),
   });
+  const listener = new PgListener({
+    connectionString: config.database.url,
+    logger: logger.child({ component: 'db-listener' }),
+  });
   messaging = createMessaging({
     publicUrl: config.publicUrl,
     gatewayConfig: config.gateway,
+    listener,
     db,
     secrets,
     keyring,
@@ -664,6 +675,7 @@ export function createServices(
     alerts,
     backups,
     jobs,
+    listener,
     apiTokens,
     hub,
     clients,
@@ -697,6 +709,7 @@ export function createServices(
     async close() {
       await analytics.close();
       await messaging?.stop();
+      await listener.stop();
       await pendingRunner.stop();
       rateLimiter.close();
       await jobs.stop();

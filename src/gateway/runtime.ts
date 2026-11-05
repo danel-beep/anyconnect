@@ -5,6 +5,7 @@ import type { ConnectorRegistry } from '../connectors/registry.js';
 import { AccountKeyring } from '../core/account-keys.js';
 import { AccountService } from '../core/accounts.js';
 import { createDatabase, type Database } from '../db/client.js';
+import { type DbListener, PgListener } from '../db/listener.js';
 import { SecretBox } from '../lib/crypto.js';
 import { createNetworkPolicy, type NetworkPolicy } from '../lib/network.js';
 import type { Logger } from '../logger.js';
@@ -38,6 +39,11 @@ export function createGatewayRuntime(
     leaseTtlMs?: number;
     instanceId?: string;
     dispatchIntervalMs?: number;
+    /**
+     * Database notifications shared with the hub when both run in one process; otherwise the
+     * runtime opens its own listening connection.
+     */
+    listener?: DbListener;
     /** Replaces the built-in connectors (tests). */
     connectors?: (deps: BuiltinDeps) => ConnectorRegistry;
   },
@@ -65,6 +71,13 @@ export function createGatewayRuntime(
     logger,
   });
   const instanceId = options.instanceId ?? `gw_${randomBytes(6).toString('hex')}`;
+  const ownListener = options.listener
+    ? undefined
+    : new PgListener({
+        connectionString: config.database.url,
+        logger: logger.child({ component: 'db-listener' }),
+      });
+  const listener = options.listener ?? ownListener;
   const leases = new LeaseManager(db, instanceId, {
     ownerUrl: config.advertiseUrl,
     ttlMs: options.leaseTtlMs ?? 30_000,
@@ -91,6 +104,7 @@ export function createGatewayRuntime(
     executor: host,
     worker: instanceId,
     logger: logger.child({ component: 'gateway-outbox' }),
+    ...(listener ? { listener } : {}),
     ...(options.dispatchIntervalMs ? { intervalMs: options.dispatchIntervalMs } : {}),
   });
   const ready = messaging;
@@ -105,11 +119,13 @@ export function createGatewayRuntime(
     connectors,
     async start() {
       await ready.init();
+      ownListener?.start();
       host.start();
       outbox.start();
     },
     async stop() {
       await outbox.stop();
+      await ownListener?.stop();
       await host.stop();
       await network.close();
       await database.close();
