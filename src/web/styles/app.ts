@@ -421,9 +421,6 @@ button.try-chip svg.copy-done{color:var(--ok)}
 .how-num{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-weight:650;font-size:13px}
 @media (max-width:860px){.how-steps{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:560px){.how-steps{gap:14px}.how-steps li{padding:0;border:0;background:none}}
-.tg-head{display:flex;gap:12px;align-items:flex-start;margin:0 0 12px}
-.tg-head h2{margin:0}
-.tg-head p{margin:2px 0 0}
 .pending-actions button svg{width:16px;height:16px}
 .empty-state{text-align:center;padding:40px 24px}
 .empty-state p{max-width:52ch;margin-left:auto;margin-right:auto}
@@ -437,17 +434,6 @@ button.try-chip svg.copy-done{color:var(--ok)}
 .start-state .ask-ai{max-width:640px;margin:22px auto 18px;text-align:left}
 @media (max-width:560px){.start-state{padding:28px 16px 20px}}
 
-/* "Ask your AI": requests the user copies into the AI chat with one tap */
-.ask-ai{border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));background:color-mix(in srgb,var(--accent-soft) 55%,var(--card));border-radius:var(--radius);padding:20px 24px;margin:0 0 16px}
-.card .ask-ai{padding:16px;border-radius:14px}
-.card .ask-ai:last-child{margin-bottom:0}
-@media (max-width:560px){.ask-ai{padding:16px}}
-.ask-ai-head{display:flex;gap:12px;align-items:flex-start;margin:0 0 12px}
-.ask-ai-head h3{margin:0;font-size:15.5px}
-.ask-ai-head p{margin:2px 0 0}
-.ask-ai-icon{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--accent);color:var(--accent-text)}
-.ask-ai-icon svg{width:18px;height:18px}
-.prompts{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .rule-who>span{display:flex;flex-direction:column;min-width:0}
 .rule-who .small{overflow-wrap:anywhere}
 .rule-list .acc-group{padding:18px 0 2px;background:none;border-top:0}

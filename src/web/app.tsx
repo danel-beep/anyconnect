@@ -18,6 +18,7 @@ import {
   fmtDate,
   fmtDay,
   fmtNumber,
+  GoogleG,
   Hidden,
   Icon,
   type IconName,
@@ -25,6 +26,7 @@ import {
   Meter,
   Prefs,
   pctClass,
+  SectionHead,
   ServiceLogo,
   Tabs,
   UsageStat,
@@ -1777,7 +1779,7 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
               t={t}
               id="activity-try"
               title={t('app.activity.tryTitle')}
-              text={t('app.activity.tryText')}
+              hint={t('app.activity.tryText')}
               prompts={FIRST_PROMPTS.map((k) => t(k))}
             />
             <p class="small muted">
@@ -2439,11 +2441,11 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
   const { t, lang } = ctx;
   return (
     <AppShell ctx={ctx} shell={shell} section="settings" title={t('app.nav.settings')}>
-      <PageHead title={t('app.nav.settings')} />
+      <PageHead title={t('app.nav.settings')} sub={t('app.settings.sub')} />
       <Flash flash={view.flash} />
-      <div class="grid-2">
+      <div class="grid-2 top">
         <div class="card">
-          <h2>{t('app.settings.profile')}</h2>
+          <SectionHead icon="users" title={t('app.settings.profile')} hint={t('app.settings.profileHint')} />
           <form method="post" action="/app/settings/profile">
             <input type="hidden" name="csrf" value={ctx.csrf} />
             <label for="name">{t('app.settings.name')}</label>
@@ -2478,109 +2480,160 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
               </button>
             </div>
           </form>
-          <hr />
-          <h3>{t('app.settings.signin')}</h3>
+        </div>
+        <div class="card">
+          <SectionHead icon="shield" title={t('app.settings.signin')} hint={t('app.settings.signinHint')} />
           <ul class="plain">
             {view.identities.map((i) => (
               <li>
-                <span>{i.provider === 'google' ? 'Google' : i.provider}</span>
-                <span class="small muted">{i.email}</span>
+                <span class="row-icon">{i.provider === 'google' ? <GoogleG /> : <Icon name="mail" />}</span>
+                <span class="grow">
+                  <strong>{i.provider === 'google' ? 'Google' : i.provider}</strong>
+                  <span class="small muted">{i.email}</span>
+                </span>
               </li>
             ))}
             {view.hasPassword ? (
               <li>
-                <span>{t('app.settings.password')}</span>
-                <span class="small muted">{t('app.settings.passwordHint')}</span>
+                <span class="row-icon">
+                  <Icon name="key" />
+                </span>
+                <span class="grow">
+                  <strong>{t('app.settings.password')}</strong>
+                  <span class="small muted">{t('app.settings.passwordHint')}</span>
+                </span>
               </li>
             ) : null}
           </ul>
-          <p class="hint">
-            <a href="/security">{t('app.settings.securityLink')}</a>
-          </p>
-        </div>
-        <div class="card">
-          <h2>{t('app.settings.ai')}</h2>
-          <p class="muted small">{t('app.settings.aiText')}</p>
-          <form method="post" action="/app/settings/tools">
-            <input type="hidden" name="csrf" value={ctx.csrf} />
-            <label for="listing">{t('app.settings.listing')}</label>
-            <select id="listing" name="toolListing">
-              {(['auto', 'direct', 'discovery'] as const).map((v) => (
-                <option value={v} selected={view.toolListing === v}>
-                  {t(`app.settings.listing.${v}`)}
-                </option>
-              ))}
-            </select>
-            <p class="hint">{t('app.settings.listingHint')}</p>
-            <label for="exposure">{t('app.settings.exposure')}</label>
-            <select id="exposure" name="toolExposure">
-              {(['grouped', 'per_account'] as const).map((v) => (
-                <option value={v} selected={view.toolExposure === v}>
-                  {t(`app.settings.exposure.${v}`)}
-                </option>
-              ))}
-            </select>
-            <p class="hint">{t('app.settings.exposureHint')}</p>
-            <div class="actions start">
-              <button type="submit" class="primary">
-                {t('app.settings.save')}
-              </button>
-            </div>
-          </form>
+          <a class="link-row" href="/security">
+            <span class="row-icon">
+              <Icon name="lock" />
+            </span>
+            <span class="grow">{t('app.settings.securityCta')}</span>
+            <Icon name="arrow" />
+          </a>
         </div>
       </div>
-      <div class="card flush" id="sessions">
-        <div class="card-head pad">
-          <h2>{t('app.settings.sessions')}</h2>
-          {view.sessions.length > 1 ? (
-            <form method="post" action="/app/settings/sessions/others">
-              <input type="hidden" name="csrf" value={ctx.csrf} />
-              <button type="submit" class="sm">
-                {t('app.settings.signOutOthers')}
-              </button>
-            </form>
-          ) : null}
-        </div>
-        <ul class="plain pad-x">
+      <div class="card" id="ai-tools">
+        <SectionHead icon="layers" title={t('app.settings.ai')} hint={t('app.settings.aiText')} />
+        <form method="post" action="/app/settings/tools">
+          <input type="hidden" name="csrf" value={ctx.csrf} />
+          <div class="choice-cols">
+            <fieldset class="choice-list">
+              <legend>{t('app.settings.listing')}</legend>
+              {(['auto', 'direct', 'discovery'] as const).map((v) => (
+                <label class="choice">
+                  <input type="radio" name="toolListing" value={v} checked={view.toolListing === v} />
+                  <span>
+                    <strong>
+                      {t(`app.settings.listing.${v}`)}
+                      {v === 'auto' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
+                    </strong>
+                    <span class="small muted">{t(`app.settings.listingHint.${v}`)}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <fieldset class="choice-list">
+              <legend>{t('app.settings.exposure')}</legend>
+              {(['grouped', 'per_account'] as const).map((v) => (
+                <label class="choice">
+                  <input type="radio" name="toolExposure" value={v} checked={view.toolExposure === v} />
+                  <span>
+                    <strong>
+                      {t(`app.settings.exposure.${v}`)}
+                      {v === 'grouped' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
+                    </strong>
+                    <span class="small muted">{t(`app.settings.exposureHint.${v}`)}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          </div>
+          <div class="actions start">
+            <button type="submit" class="primary">
+              {t('app.settings.save')}
+            </button>
+          </div>
+        </form>
+        <AskAi
+          t={t}
+          id="ask-settings"
+          title={t('app.settings.ask.title')}
+          hint={t('app.settings.ask.hint')}
+          prompts={[t('app.settings.ask.1'), t('app.settings.ask.2')]}
+        />
+      </div>
+      <div class="card" id="sessions">
+        <SectionHead
+          icon="globe"
+          title={t('app.settings.sessions')}
+          hint={t('app.settings.sessionsHint')}
+          aside={
+            view.sessions.length > 1 ? (
+              <form method="post" action="/app/settings/sessions/others">
+                <input type="hidden" name="csrf" value={ctx.csrf} />
+                <button type="submit" class="sm">
+                  {t('app.settings.signOutOthers')}
+                </button>
+              </form>
+            ) : undefined
+          }
+        />
+        <ul class="plain">
           {view.sessions.map((s) => (
             <li>
-              <span>
-                {agentName(s.userAgent) ?? t('app.settings.unknownDevice')}
-                {s.current ? ' ' : null}
-                {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
+              <span class="row-icon">
+                <Icon name={s.current ? 'check' : 'globe'} />
               </span>
-              <span class="small muted">
-                {s.ip ? `${s.ip} · ` : ''}
-                {fmtAgo(lang, s.lastSeenAt)}
+              <span class="grow">
+                <strong>
+                  {agentName(s.userAgent) ?? t('app.settings.unknownDevice')}
+                  {s.current ? ' ' : null}
+                  {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
+                </strong>
+                <span class="small muted">
+                  {s.ip ? `${s.ip} · ` : ''}
+                  {fmtAgo(lang, s.lastSeenAt)}
+                </span>
               </span>
             </li>
           ))}
         </ul>
       </div>
-      <div class="card danger-zone">
-        <h2>{t('app.settings.delete')}</h2>
-        <p class="muted">{t('app.settings.deleteText')}</p>
-        {ctx.user?.isAdmin ? <p class="small muted">{t('app.settings.adminNote')}</p> : null}
-        {view.recentAuth ? (
-          <form method="post" action="/app/settings/delete" data-confirm={t('app.settings.deleteConfirm')}>
-            <input type="hidden" name="csrf" value={ctx.csrf} />
-            <label for="confirm-email">{t('app.settings.deleteType', { email: view.email })}</label>
-            <input id="confirm-email" type="email" name="email" required autocomplete="off" />
-            <div class="actions start">
-              <button type="submit" class="danger">
-                {t('app.settings.deleteCta')}
-              </button>
+      <details class="card danger-zone">
+        <summary>
+          <span class="row-icon">
+            <Icon name="trash" />
+          </span>
+          <span class="grow">
+            <strong>{t('app.settings.delete')}</strong>
+            <span class="small muted">{t('app.settings.deleteText')}</span>
+          </span>
+        </summary>
+        <div class="danger-body">
+          {ctx.user?.isAdmin ? <p class="small muted">{t('app.settings.adminNote')}</p> : null}
+          {view.recentAuth ? (
+            <form method="post" action="/app/settings/delete" data-confirm={t('app.settings.deleteConfirm')}>
+              <input type="hidden" name="csrf" value={ctx.csrf} />
+              <label for="confirm-email">{t('app.settings.deleteType', { email: view.email })}</label>
+              <input id="confirm-email" type="email" name="email" required autocomplete="off" />
+              <div class="actions start">
+                <button type="submit" class="danger">
+                  {t('app.settings.deleteCta')}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div class="reauth-row">
+              <a class="btn" href={`/login?reauth=1&next=${encodeURIComponent('/app/settings')}`}>
+                {t('security.reauth')}
+              </a>
+              <span class="small muted">{t('app.settings.deleteReauth')}</span>
             </div>
-          </form>
-        ) : (
-          <div class="reauth-row">
-            <a class="btn" href={`/login?reauth=1&next=${encodeURIComponent('/app/settings')}`}>
-              {t('security.reauth')}
-            </a>
-            <span class="small muted">{t('app.settings.deleteReauth')}</span>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </details>
     </AppShell>
   );
 };

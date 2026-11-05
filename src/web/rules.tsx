@@ -192,14 +192,14 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
             </button>
           </div>
         </form>
+        <AskAi
+          t={t}
+          id="rules-try"
+          title={t('app.rules.chatTitle')}
+          hint={t('app.rules.chatText')}
+          prompts={[t('app.rules.chat.show'), t('app.rules.chat.ask'), t('app.rules.chat.readOnly')]}
+        />
       </div>
-      <AskAi
-        t={t}
-        id="rules-try"
-        title={t('app.rules.chatTitle')}
-        text={t('app.rules.chatText')}
-        prompts={[t('app.rules.chat.show'), t('app.rules.chat.ask'), t('app.rules.chat.readOnly')]}
-      />
       <details class="card fold" id="levels">
         <summary>
           <span class="grow">

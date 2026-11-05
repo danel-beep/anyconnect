@@ -5,7 +5,7 @@ import { serviceMeta } from './catalog.js';
 import type { Translate } from './i18n.js';
 import { Layout } from './pages.js';
 import { RiskBadge } from './setup-guide.js';
-import { AskAi, fmtAgo, fmtDate, Icon, ServiceLogo } from './ui.js';
+import { AskAi, fmtAgo, fmtDate, Icon, SectionHead, ServiceLogo } from './ui.js';
 
 /**
  * Actions the hub holds back for the owner's OK (`/confirm`, `/confirm/<id>`): what the AI wants
@@ -221,21 +221,13 @@ export const ConfirmListPage: FC<{
         t={t}
         id="confirm-try"
         title={t('confirm.try.title')}
-        text={t('confirm.try.text')}
+        hint={t('confirm.try.text')}
         prompts={[t('confirm.try.rules'), t('confirm.try.stricter')]}
       />
     </div>
     {telegram.enabled ? (
       <div class="card" id="telegram">
-        <div class="tg-head">
-          <span class="ask-ai-icon" aria-hidden="true">
-            <Icon name="bell" />
-          </span>
-          <div>
-            <h2>{t('home.telegram')}</h2>
-            <p class="small muted">{t('confirm.tg.why')}</p>
-          </div>
-        </div>
+        <SectionHead icon="bell" title={t('home.telegram')} hint={t('confirm.tg.why')} />
         {telegram.linked ? (
           <form method="post" action="/telegram/unlink">
             <input type="hidden" name="csrf" value={csrf} />
