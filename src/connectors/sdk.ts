@@ -441,9 +441,11 @@ export interface ConnectorLocale<TFieldKey extends string = string> {
   actions?: Record<string, ActionLocale>;
   /**
    * How to connect an account: `oauth` when the hub signs in on the service's page, `form` when
-   * the user pastes a key or an app password. A service with optional OAuth can describe both.
+   * the user pastes a key or an app password, `app` when the person confirms in the service's own
+   * app (a quick connect flow of the hub, e.g. Telegram Chat Automation). A service can describe
+   * several; the page shows the one it offers.
    */
-  setup?: { oauth?: SetupGuide<TFieldKey>; form?: SetupGuide<TFieldKey> };
+  setup?: { oauth?: SetupGuide<TFieldKey>; form?: SetupGuide<TFieldKey>; app?: SetupGuide<TFieldKey> };
   /**
    * Requests people can try with the AI once an account is connected, e.g. "What did Anna send me
    * this week?". Three to five, concrete, in the words people use.
@@ -473,6 +475,11 @@ export interface ConnectorUi<TFieldKey extends string = string> {
     /** Email domains per variant, e.g. `{ gmail: ['gmail.com', 'googlemail.com'] }`. */
     domains?: Record<string, string[]>;
   };
+  /**
+   * Values of select fields the connect form does not offer, because accounts with them are made
+   * another way (e.g. `{ mode: ['automation'] }`: Telegram accounts of the quick connect page).
+   */
+  formHiddenOptions?: Partial<Record<TFieldKey, string[]>>;
 }
 
 export interface ConnectorDefinition<TConfig = unknown, TCredentials = unknown> {
@@ -632,7 +639,7 @@ export function connectorText(
 export function connectorGuide(
   connector: Pick<ConnectorDefinition, 'ui'>,
   language: UiLanguage,
-  via: 'oauth' | 'form',
+  via: 'oauth' | 'form' | 'app',
 ): { setup?: ResolvedSetupGuide; prompts: string[] } {
   const locales = uiLocales(connector, language);
   const source = locales.find((l) => l.setup?.[via]);

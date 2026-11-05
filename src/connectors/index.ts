@@ -37,7 +37,7 @@ import sentry from './builtin/sentry.js';
 import slack from './builtin/slack.js';
 import smartsheet from './builtin/smartsheet.js';
 import stripe from './builtin/stripe.js';
-import { createTelegramConnector } from './builtin/telegram.js';
+import { createTelegramConnector, type TelegramHubBot } from './builtin/telegram.js';
 import todoist from './builtin/todoist.js';
 import toggl from './builtin/toggl.js';
 import trello from './builtin/trello.js';
@@ -56,6 +56,8 @@ import { ConnectorError } from './sdk.js';
 /** What built-in connectors get from the hub (ports to its subsystems; no app imports here). */
 export interface BuiltinDeps {
   messaging: MessagingPort;
+  /** The hub's own Telegram bot, for accounts connected through Chat Automation (when it has one). */
+  telegramBot?: TelegramHubBot;
 }
 
 /**
@@ -120,7 +122,7 @@ export function createBuiltinRegistry(deps: BuiltinDeps = { messaging: NO_MESSAG
     .register(netlify)
     .register(harvest)
     .register(toggl)
-    .register(createTelegramConnector(deps.messaging))
+    .register(createTelegramConnector(deps.messaging, deps.telegramBot))
     .register(createWhatsAppConnector(deps.messaging));
 }
 

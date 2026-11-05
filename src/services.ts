@@ -8,6 +8,7 @@ import { createBillingProvider, TestBillingProvider } from './billing/providers/
 import { ReferralService } from './billing/referrals.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
+import { NO_HUB_BOT, type TelegramHubBot } from './connectors/builtin/telegram.js';
 import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
 import type { MessagingPort } from './connectors/messaging.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
@@ -29,6 +30,7 @@ import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
 import { PasskeyService } from './core/passkeys.js';
 import type { Principal } from './core/principal.js';
+import { QuickConnects } from './core/quick-connect.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
 import { TeamService } from './core/teams.js';
@@ -55,6 +57,7 @@ import { createLogger, type Logger } from './logger.js';
 import { createMailer, type Mailer } from './mail/mailer.js';
 import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
+import { TelegramAutomation } from './messaging/telegram-automation.js';
 import { BillingNotices } from './notices/billing-notices.js';
 import { NoticeService } from './notices/notices.js';
 import { ClientRegistry } from './oauth/clients.js';
@@ -79,7 +82,7 @@ import {
   toStored,
   untrustedStage,
 } from './security/stages.js';
-import { TelegramBot } from './security/telegram.js';
+import { type BotUpdateHandler, chainUpdateHandlers, TelegramBot } from './security/telegram.js';
 import { VERSION } from './version.js';
 import { translator } from './web/i18n.js';
 import { PendingLoginService } from './web/pending-logins.js';
@@ -148,6 +151,12 @@ export interface Services {
   pendingRunner: PendingCallRunner;
   /** The hub's own Telegram bot, when TELEGRAM_BOT_TOKEN is set. */
   telegramBot: TelegramBot | undefined;
+  /** Telegram accounts connected by adding the hub's bot under Chat Automation (needs the bot). */
+  telegramAutomation: TelegramAutomation | undefined;
+  /** Every update of the hub's bot goes through here (`/telegram/webhook`). */
+  telegramUpdates: BotUpdateHandler;
+  /** Connecting accounts by confirming in the service's own app (`core/quick-connect.ts`). */
+  quickConnects: QuickConnects;
   /** Secret Telegram must send with webhook updates (derived from the master key). */
   telegramWebhookSecret: string;
   sessions: SessionService;
@@ -231,7 +240,15 @@ export function createServices(
       return messaging.service.forAccount(accountId);
     },
   };
-  const builtinDeps: BuiltinDeps = { messaging: messagingPort };
+  // Accounts connected through Telegram Chat Automation reach the Bot API through the hub's own
+  // bot, which is wired further down (it needs accounts, teams and messaging).
+  let telegramAutomation: TelegramAutomation | undefined;
+  const telegramHubBot: TelegramHubBot = {
+    call: (...args) => (telegramAutomation ?? NO_HUB_BOT).call(...args),
+    file: (...args) => (telegramAutomation ?? NO_HUB_BOT).file(...args),
+    connection: (accountId) => (telegramAutomation ?? NO_HUB_BOT).connection(accountId),
+  };
+  const builtinDeps: BuiltinDeps = { messaging: messagingPort, telegramBot: telegramHubBot };
   const builtin =
     typeof overrides.connectors === 'function'
       ? overrides.connectors(builtinDeps)
@@ -422,6 +439,34 @@ export function createServices(
     logger,
     ...(telegramLanding ? { onOtherStart: telegramLanding.handle } : {}),
   });
+  // People connect their own Telegram by adding the hub's bot under Chat Automation.
+  telegramAutomation = telegramBot
+    ? new TelegramAutomation({
+        db,
+        bot: telegramBot,
+        keys: messaging.keys,
+        secrets,
+        accounts,
+        permissions: teams,
+        messaging: messaging.service,
+        publicUrl: config.publicUrl,
+        t: translator,
+        logger,
+        capture: (error, context) => {
+          ops.errors.capture(error, { source: 'telegram', context });
+        },
+        onConnected: () => analytics.track('connect.quick', 'telegram'),
+      })
+    : undefined;
+  const quickConnects = new QuickConnects(telegramAutomation ? [telegramAutomation] : []);
+  // Chat Automation first (its business updates, links and buttons), then confirmations and the rest.
+  const telegramUpdates = chainUpdateHandlers([
+    ...(telegramAutomation ? [telegramAutomation.handleUpdate] : []),
+    async (update) => {
+      await confirmations.handleTelegramUpdate(update);
+      return true;
+    },
+  ]);
   const securityStages: StageMap = {
     policy: policyStage(policies),
     confirm: confirmStage({
@@ -444,6 +489,7 @@ export function createServices(
     policies,
     aiClients,
     teams,
+    quickConnects,
     publicUrl: config.publicUrl,
     logger,
   });
@@ -641,6 +687,9 @@ export function createServices(
     confirmations,
     pendingRunner,
     telegramBot,
+    telegramAutomation,
+    telegramUpdates,
+    quickConnects,
     telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
     users,

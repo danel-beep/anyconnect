@@ -61,4 +61,6 @@ export type IdPrefix =
   | 'shr' // account shared with a team member (or the whole team)
   | 'preq' // plan request (manual upgrades before payments)
   | 'err' // error group (the hub's own error tracker)
-  | 'inc'; // status page incident
+  | 'inc' // status page incident
+  | 'tgl' // Telegram link: connects a Telegram account through the hub's bot (Chat Automation)
+  | 'tgc'; // Telegram business connection of the hub's bot (a person added it in Chat Automation)

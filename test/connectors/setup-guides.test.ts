@@ -30,10 +30,10 @@ const LIMITS = {
   fix: 300,
   minutes: [1, 60],
   needs: [1, 5],
-  steps: { oauth: [2, 6], form: [2, 8] },
+  steps: { oauth: [2, 6], form: [2, 8], app: [2, 6] },
   variantSteps: [1, 6],
   tips: 4,
-  problems: { oauth: [1, 6], form: [2, 6] },
+  problems: { oauth: [1, 6], form: [2, 6], app: [1, 6] },
   prompts: [3, 5],
 } as const;
 
@@ -59,11 +59,20 @@ function formFields(connector: ConnectorDefinition): FormField[] {
   });
 }
 
-/** The ways an account of this connector is connected, each of which needs a guide. */
-function ways(connector: ConnectorDefinition): Array<'oauth' | 'form'> {
+/**
+ * The ways an account of this connector is connected, each of which needs a guide. Quick connect
+ * (`app`: confirming in the service's own app) is the hub's flow, so a connector that has one
+ * declares its guide and it is held to the same standard.
+ */
+function ways(connector: ConnectorDefinition): Array<'oauth' | 'form' | 'app'> {
   const secrets = toJsonSchema(connector.credentials as z.ZodType) as { properties?: object };
   const hasForm = !connector.oauth || Object.keys(secrets.properties ?? {}).length > 0;
-  return [...(connector.oauth ? (['oauth'] as const) : []), ...(hasForm ? (['form'] as const) : [])];
+  const hasApp = LANGUAGES.some((language) => connector.ui?.locales?.[language]?.setup?.app);
+  return [
+    ...(connector.oauth ? (['oauth'] as const) : []),
+    ...(hasForm ? (['form'] as const) : []),
+    ...(hasApp ? (['app'] as const) : []),
+  ];
 }
 
 function allSteps(guide: SetupGuide): SetupStep[] {

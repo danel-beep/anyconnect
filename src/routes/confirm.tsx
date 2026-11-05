@@ -3,6 +3,7 @@ import { getDefaultWorkspace } from '../core/identity.js';
 import { safeEqual } from '../lib/crypto.js';
 import { argumentFields } from '../security/confirmations.js';
 import type { PendingCallRow } from '../security/pending-calls.js';
+import { RetryUpdateError } from '../security/telegram.js';
 import { ConfirmListPage, ConfirmPage, type PendingCallView } from '../web/confirm-pages.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
@@ -166,11 +167,17 @@ export function confirmRoutes() {
     if (!s.telegramBot || !safeEqual(secret, s.telegramWebhookSecret)) return c.body(null, 401);
     const update = await c.req.json().catch(() => undefined);
     try {
-      await s.confirmations.handleTelegramUpdate(update);
+      await s.telegramUpdates(update);
     } catch (error) {
-      s.logger.warn({ err: error }, 'telegram update failed');
+      const retry = error instanceof RetryUpdateError;
+      s.ops.errors.capture(retry ? (error.cause ?? error) : error, {
+        source: 'telegram',
+        context: { path: '/telegram/webhook', retry },
+      });
+      // Telegram delivers it again later; handlers ask for that only when doing it twice is safe.
+      if (retry) return c.body(null, 500);
     }
-    // Always 200: Telegram retries failed deliveries, and a retry would not succeed either.
+    // Otherwise 200: a retry would not succeed either.
     return c.body(null, 200);
   });
 

@@ -7,9 +7,12 @@ import {
   type InboundMessage,
   type MessagingPort,
   type OutboundFile,
+  type OutboundJob,
+  type SentReceipt,
 } from '../messaging.js';
 import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
 import {
+  deliveryAttempt,
   deliveryFetch,
   downloadForUpload,
   fileNameFromUrl,
@@ -20,10 +23,10 @@ import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js'
 
 const config = z.object({
   mode: z
-    .enum(['bot', 'user'])
+    .enum(['bot', 'user', 'automation'])
     .default('bot')
     .describe(
-      'How the account is connected: user = your own Telegram account (log in with a QR code), bot = your bot through the official Bot API',
+      'How the account is connected: automation = the hub bot added in Telegram Chat Automation (made on the quick connect page), user = your own Telegram account (log in with a QR code), bot = your bot through the official Bot API',
     ),
   botApiUrl: z
     .url({ protocol: /^https?$/ })
@@ -46,8 +49,66 @@ type Credentials = z.output<typeof credentials>;
 type Ctx = AccountContext<Config, Credentials>;
 
 // ---------------------------------------------------------------------------
+// The hub's own bot (Telegram Chat Automation)
+// ---------------------------------------------------------------------------
+
+/**
+ * The hub's own bot, for accounts connected through Telegram Chat Automation (`mode: automation`):
+ * the person added it under Settings → Chat Automation and picked the chats it may see. The hub
+ * keeps the bot token and the account's business connection; this connector only names Bot API
+ * methods and reads Telegram's answers, exactly as for an account's own bot.
+ */
+export interface TelegramHubBot {
+  /**
+   * Calls a Bot API method on the account's business connection (the hub adds
+   * `business_connection_id`) and returns Telegram's raw response. Only methods that read files or
+   * send and read messages are allowed. Throws a {@link DeliveryError} (`auth`) when the account is
+   * not connected now.
+   */
+  call(
+    accountId: string,
+    method: string,
+    params: Record<string, unknown> | FormData,
+    signal?: AbortSignal,
+  ): Promise<Response>;
+  /** Downloads a file by the `file_path` getFile returned. */
+  file(accountId: string, path: string, signal?: AbortSignal): Promise<Response>;
+  /** The connection as Telegram last reported it; undefined when the account is not connected. */
+  connection(accountId: string): Promise<TelegramBotConnection | undefined>;
+}
+
+export interface TelegramBotConnection {
+  /** Who connected the bot: their @username, else their name. */
+  identity: string;
+  /** False while the bot is removed or paused in the person's Telegram settings. */
+  enabled: boolean;
+  /** What the person allowed: Telegram's BusinessBotRights flags that are on, e.g. `can_reply`. */
+  rights: string[];
+}
+
+/** For hubs without a bot of their own (TELEGRAM_BOT_TOKEN is not set). */
+export const NO_HUB_BOT: TelegramHubBot = {
+  call: () => Promise.reject(new DeliveryError('auth', 'This hub has no Telegram bot of its own.')),
+  file: () => Promise.reject(new ConnectorError('upstream', 'This hub has no Telegram bot of its own.')),
+  connection: () => Promise.resolve(undefined),
+};
+
+// ---------------------------------------------------------------------------
 // Bot API
 // ---------------------------------------------------------------------------
+
+/**
+ * How an account reaches the Bot API: its own bot (a token from @BotFather) or the hub's bot on the
+ * account's business connection.
+ */
+interface BotApi {
+  /** Chats are the person's own chats on one business connection that the hub adds to requests. */
+  hub: boolean;
+  /** Sends a request and returns Telegram's raw answer. */
+  send(method: string, params: Record<string, unknown> | FormData): Promise<Response>;
+  /** Downloads a file by the `file_path` getFile returned. */
+  file(path: string): Promise<Response>;
+}
 
 function botToken(ctx: Ctx): string {
   if (!ctx.credentials.botToken)
@@ -55,8 +116,28 @@ function botToken(ctx: Ctx): string {
   return ctx.credentials.botToken;
 }
 
-function botUrl(ctx: Ctx, method: string): string {
-  return `${ctx.config.botApiUrl.replace(/\/+$/, '')}/bot${botToken(ctx)}/${method}`;
+function ownBot(ctx: Ctx): BotApi {
+  const base = ctx.config.botApiUrl.replace(/\/+$/, '');
+  return {
+    hub: false,
+    send: (method, params) =>
+      deliveryFetch(ctx.fetch, `${base}/bot${botToken(ctx)}/${method}`, {
+        method: 'POST',
+        ...(params instanceof FormData
+          ? { body: params }
+          : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }),
+        signal: ctx.signal,
+      }),
+    file: (path) => ctx.fetch(`${base}/file/bot${botToken(ctx)}/${path}`, { signal: ctx.signal }),
+  };
+}
+
+function hubBot(port: TelegramHubBot, ctx: Ctx): BotApi {
+  return {
+    hub: true,
+    send: (method, params) => deliveryAttempt(() => port.call(ctx.account.id, method, params, ctx.signal)),
+    file: (path) => port.file(ctx.account.id, path, ctx.signal),
+  };
 }
 
 interface BotApiResult<T> {
@@ -68,14 +149,12 @@ interface BotApiResult<T> {
 }
 
 /** Calls a Bot API method; failures become {@link DeliveryError}s the dispatcher understands. */
-async function callBot<T>(ctx: Ctx, method: string, params: Record<string, unknown> | FormData): Promise<T> {
-  const response = await deliveryFetch(ctx.fetch, botUrl(ctx, method), {
-    method: 'POST',
-    ...(params instanceof FormData
-      ? { body: params }
-      : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }),
-    signal: ctx.signal,
-  });
+async function callBot<T>(
+  api: BotApi,
+  method: string,
+  params: Record<string, unknown> | FormData,
+): Promise<T> {
+  const response = await api.send(method, params);
   const body = (await readJson(response)) as BotApiResult<T>;
   if (response.ok && body.ok) return body.result as T;
   const description = body.description ?? `HTTP ${response.status}`;
@@ -85,17 +164,25 @@ async function callBot<T>(ctx: Ctx, method: string, params: Record<string, unkno
       retryAfterSeconds: body.parameters?.retry_after ?? 30,
     });
   }
-  if (code === 401 || code === 404)
+  if (code === 401 || code === 404) {
+    // The hub's bot token is the hub's problem, never the account's: retry, the owner was told.
+    if (api.hub) throw new DeliveryError('transient', `Telegram did not accept the hub bot: ${description}`);
     throw new DeliveryError('auth', `Telegram rejected the bot token: ${description}`);
+  }
   if (code >= 500) throw new DeliveryError('transient', description);
   // 400 (chat not found, message too long...), 403 (blocked by the user, kicked from the group).
-  throw new DeliveryError('rejected', description);
+  throw new DeliveryError(
+    'rejected',
+    api.hub
+      ? `${description}. With Chat Automation the bot replies only where the person wrote within the last 24 hours, and only while "Reply to messages" is allowed in Telegram (Settings → Chat Automation).`
+      : description,
+  );
 }
 
 /** The same call for actions (not the outbox): errors become ConnectorErrors for the AI. */
-async function callBotForAction<T>(ctx: Ctx, method: string, params: Record<string, unknown>): Promise<T> {
+async function callBotForAction<T>(api: BotApi, method: string, params: Record<string, unknown>): Promise<T> {
   try {
-    return await callBot<T>(ctx, method, params);
+    return await callBot<T>(api, method, params);
   } catch (error) {
     if (!(error instanceof DeliveryError)) throw error;
     const kind = error.kind === 'auth' ? 'auth' : error.kind === 'rejected' ? 'invalid_input' : 'upstream';
@@ -173,10 +260,11 @@ export const BOT_UPDATES = [
 ];
 
 /**
- * Chats of a Telegram Business account (a Premium user who connected the bot in Settings →
- * Telegram Business → Chatbots) are addressed through the connection, so their external id carries
- * it: `<chat id>@<connection id>`. Reconnecting the bot gives a new connection id, and with it new
- * chats in the hub's copy; the old ones stay readable.
+ * Chats of a person who connected an account's own bot to their Telegram (Settings → Chat
+ * Automation) are addressed through the connection, so their external id carries it:
+ * `<chat id>@<connection id>`. Reconnecting the bot gives a new connection id, and with it new chats
+ * in the hub's copy; the old ones stay readable. Accounts made with the hub's bot keep plain chat
+ * ids instead: they have one connection, which the hub tracks and adds to every request.
  */
 export function businessChatId(chatId: number | string, connectionId: string): string {
   return `${chatId}@${connectionId}`;
@@ -241,12 +329,20 @@ function chatOf(chat: TgChat, businessConnectionId: string | undefined): Inbound
   };
 }
 
-/** Turns a webhook update into the messages it carries (none for updates the hub ignores). */
-export function botUpdateToMessages(update: TgUpdate, botId: string): InboundMessage[] {
+/**
+ * Turns a webhook update into the messages it carries (none for updates the hub ignores). With
+ * `plainChats` (accounts of the hub's bot) business chats keep their plain Telegram ids.
+ */
+export function botUpdateToMessages(
+  update: TgUpdate,
+  botId: string,
+  options: { plainChats?: boolean } = {},
+): InboundMessage[] {
+  const connection = (id: string | undefined) => (options.plainChats ? undefined : id);
   const deleted = update.deleted_business_messages;
   if (deleted) {
     return deleted.message_ids.map((id) => ({
-      chat: chatOf(deleted.chat, deleted.business_connection_id),
+      chat: chatOf(deleted.chat, connection(deleted.business_connection_id)),
       externalId: String(id),
       direction: 'in',
       sentAt: new Date(),
@@ -271,7 +367,7 @@ export function botUpdateToMessages(update: TgUpdate, botId: string): InboundMes
     : author !== undefined && String(author.id) === botId;
   return [
     {
-      chat: chatOf(chat, business),
+      chat: chatOf(chat, connection(business)),
       externalId: String(message.message_id),
       direction: outgoing ? 'out' : 'in',
       sentAt: new Date(message.date * 1000),
@@ -332,9 +428,14 @@ function safePath(url: string): string {
 }
 
 /** Sends a file message, by link or as an upload (see {@link telegramFileRoute}). */
-async function sendFile(ctx: Ctx, file: OutboundFile, params: Record<string, unknown>): Promise<TgMessage> {
+async function sendFile(
+  api: BotApi,
+  ctx: Ctx,
+  file: OutboundFile,
+  params: Record<string, unknown>,
+): Promise<TgMessage> {
   const route = telegramFileRoute(file);
-  if (route.byLink) return callBot<TgMessage>(ctx, route.method, { ...params, [route.field]: file.url });
+  if (route.byLink) return callBot<TgMessage>(api, route.method, { ...params, [route.field]: file.url });
   const downloaded = await downloadForUpload(ctx.fetch, file.url, {
     maxBytes: MAX_UPLOAD_BYTES,
     ...(ctx.signal ? { signal: ctx.signal } : {}),
@@ -348,74 +449,78 @@ async function sendFile(ctx: Ctx, file: OutboundFile, params: Record<string, unk
     new Blob([downloaded.data as Uint8Array<ArrayBuffer>], { type: downloaded.mimeType }),
     file.name ?? downloaded.name,
   );
-  return callBot<TgMessage>(ctx, route.method, form);
+  return callBot<TgMessage>(api, route.method, form);
 }
 
-const botTransport: DirectTransport<Config, Credentials> = {
+/** Delivers an outbox job through the Bot API (both kinds of bot). */
+async function deliver(api: BotApi, job: OutboundJob, ctx: Ctx): Promise<SentReceipt | undefined> {
+  // The hub adds its own connection; an own bot's business chats carry theirs in the chat id.
+  const { chatId, businessConnectionId } = api.hub
+    ? { chatId: job.chat.externalId, businessConnectionId: undefined }
+    : parseChatId(job.chat.externalId);
+  if (job.kind === 'mark_read') {
+    // Only business chats have read receipts for bots, and only with the "read messages" right.
+    if ((!api.hub && !businessConnectionId) || !job.upToExternalId) return undefined;
+    await callBot(api, 'readBusinessMessage', {
+      ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
+      chat_id: Number(chatId),
+      message_id: Number(job.upToExternalId),
+    }).catch((error: unknown) => {
+      if (!(error instanceof DeliveryError) || error.kind !== 'rejected') throw error;
+    });
+    return undefined;
+  }
+  const params = {
+    chat_id: chatId,
+    ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
+    ...(job.replyToExternalId
+      ? {
+          reply_parameters: {
+            message_id: Number(job.replyToExternalId),
+            allow_sending_without_reply: true,
+          },
+        }
+      : {}),
+  };
+  const result = job.file
+    ? await sendFile(api, ctx, job.file, { ...params, ...(job.text ? { caption: job.text } : {}) })
+    : await callBot<TgMessage>(api, 'sendMessage', { ...params, text: job.text });
+  return {
+    externalId: String(result.message_id),
+    sentAt: new Date(result.date * 1000),
+    // Telegram returns the stored file: the hub's copy can then download it like a received one.
+    ...(job.file ? { attachments: attachments(result) } : {}),
+  };
+}
+
+/** Downloads a received (or sent) file through the Bot API (both kinds of bot). */
+async function download(api: BotApi, attachment: { locator?: unknown }) {
+  const fileId = (attachment.locator as { fileId?: string } | undefined)?.fileId;
+  if (!fileId) throw new ConnectorError('not_found', 'This file can no longer be downloaded.');
+  const file = await callBotForAction<{ file_path?: string; file_size?: number }>(api, 'getFile', {
+    file_id: fileId,
+  });
+  if (!file.file_path) {
+    throw new ConnectorError('invalid_input', 'Telegram does not let bots download files larger than 20 MB.');
+  }
+  const response = await api.file(file.file_path);
+  if (!response.ok)
+    throw new ConnectorError('upstream', `Telegram file download failed (${response.status})`);
+  return {
+    data: new Uint8Array(await response.arrayBuffer()),
+    mimeType: response.headers.get('content-type')?.split(';')[0] || 'application/octet-stream',
+    name: file.file_path.split('/').at(-1) ?? 'file',
+  };
+}
+
+/** An account's own bot: its token, its webhook (`/hooks/messenger/<account>`). */
+const ownBotTransport: DirectTransport<Config, Credentials> = {
   kind: 'direct',
   // The Bot API has no idempotency key: an interrupted send is reported as uncertain, never repeated.
   idempotentSend: false,
   files: true,
-
-  async send(job, ctx) {
-    const { chatId, businessConnectionId } = parseChatId(job.chat.externalId);
-    if (job.kind === 'mark_read') {
-      // Only business chats have read receipts for bots, and only with the "read messages" right.
-      if (!businessConnectionId || !job.upToExternalId) return undefined;
-      await callBot(ctx, 'readBusinessMessage', {
-        business_connection_id: businessConnectionId,
-        chat_id: Number(chatId),
-        message_id: Number(job.upToExternalId),
-      }).catch((error: unknown) => {
-        if (!(error instanceof DeliveryError) || error.kind !== 'rejected') throw error;
-      });
-      return undefined;
-    }
-    const params = {
-      chat_id: chatId,
-      ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
-      ...(job.replyToExternalId
-        ? {
-            reply_parameters: {
-              message_id: Number(job.replyToExternalId),
-              allow_sending_without_reply: true,
-            },
-          }
-        : {}),
-    };
-    const result = job.file
-      ? await sendFile(ctx, job.file, { ...params, ...(job.text ? { caption: job.text } : {}) })
-      : await callBot<TgMessage>(ctx, 'sendMessage', { ...params, text: job.text });
-    return {
-      externalId: String(result.message_id),
-      sentAt: new Date(result.date * 1000),
-      // Telegram returns the stored file: the hub's copy can then download it like a received one.
-      ...(job.file ? { attachments: attachments(result) } : {}),
-    };
-  },
-
-  async download(attachment, ctx) {
-    const fileId = (attachment.locator as { fileId?: string } | undefined)?.fileId;
-    if (!fileId) throw new ConnectorError('not_found', 'This file can no longer be downloaded.');
-    const file = await callBotForAction<{ file_path?: string; file_size?: number }>(ctx, 'getFile', {
-      file_id: fileId,
-    });
-    if (!file.file_path) {
-      throw new ConnectorError(
-        'invalid_input',
-        'Telegram does not let bots download files larger than 20 MB.',
-      );
-    }
-    const url = `${ctx.config.botApiUrl.replace(/\/+$/, '')}/file/bot${botToken(ctx)}/${file.file_path}`;
-    const response = await ctx.fetch(url, { signal: ctx.signal });
-    if (!response.ok)
-      throw new ConnectorError('upstream', `Telegram file download failed (${response.status})`);
-    return {
-      data: new Uint8Array(await response.arrayBuffer()),
-      mimeType: response.headers.get('content-type')?.split(';')[0] || 'application/octet-stream',
-      name: file.file_path.split('/').at(-1) ?? 'file',
-    };
-  },
+  send: (job, ctx) => deliver(ownBot(ctx), job, ctx),
+  download: (attachment, ctx) => download(ownBot(ctx), attachment),
 
   webhook: {
     async handle(request, ctx, hook) {
@@ -436,11 +541,33 @@ const botTransport: DirectTransport<Config, Credentials> = {
   },
 };
 
+/**
+ * The hub's bot added in the person's Chat Automation: the hub routes the updates of the account's
+ * business connection here (`routed`) and adds the connection to every request.
+ */
+function hubBotTransport(port: TelegramHubBot): DirectTransport<Config, Credentials> {
+  return {
+    kind: 'direct',
+    idempotentSend: false,
+    files: true,
+    send: (job, ctx) => deliver(hubBot(port, ctx), job, ctx),
+    download: (attachment, ctx) => download(hubBot(port, ctx), attachment),
+    routed: {
+      async handle(event, _ctx, sink) {
+        // Business updates only: the hub's bot gets nothing else for this account.
+        const messages = botUpdateToMessages(event as TgUpdate, '', { plainChats: true });
+        if (messages.length) await sink.ingest(messages);
+      },
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Connector
 // ---------------------------------------------------------------------------
 
-export function createTelegramConnector(port: MessagingPort) {
+export function createTelegramConnector(port: MessagingPort, hub: TelegramHubBot = NO_HUB_BOT) {
+  const hubTransport = hubBotTransport(hub);
   return defineConnector({
     id: 'telegram',
     name: 'Telegram',
@@ -449,36 +576,69 @@ export function createTelegramConnector(port: MessagingPort) {
     version: '1.0.0',
     homepage: 'https://telegram.org',
     instructions:
-      "Telegram tools read from the hub's synced copy of the chats, so reading and searching are fast and free. " +
-      'Find chats with telegram_list_chats, then read or send by chat id. Use telegram_whats_new with the returned cursor to follow new messages. ' +
-      'Before writing to someone who has not written to this account first, ask the user. Bots only see chats where people wrote to the bot. ' +
-      "With Telegram Business the user's own chats appear too; replies there are sent as the user.",
+      "Telegram tools read the hub's synced copy of the chats: fast and free. " +
+      'Find chats with telegram_list_chats, then read or send by chat id; follow new messages with telegram_whats_new and its cursor. ' +
+      'Ask the user before writing to someone who has not written to this account first. Bots see only chats where people wrote to the bot. ' +
+      "Via Telegram Business or Chat Automation the user's own picked private chats appear from connection on; " +
+      "replies go out as the user, within 24 hours of the person's last message.",
     config,
     credentials,
     messenger: {
       // A personal account is a long-lived MTProto session in the gateway (src/gateway/drivers/telegram).
-      transport: (cfg) => (cfg.mode === 'user' ? { kind: 'session' } : botTransport),
+      transport: (cfg) =>
+        cfg.mode === 'user'
+          ? { kind: 'session' }
+          : cfg.mode === 'automation'
+            ? hubTransport
+            : ownBotTransport,
       // Personal accounts send at a person's pace (the hub's defaults). Bots are official API
       // clients: Telegram limits them (about 1 message/s per chat, 20/min per group), but there is
-      // no reason to imitate a person.
+      // no reason to imitate a person. The hub's bot is shared by everyone who connected it
+      // (about 30 messages/s in total), so each such account gets a smaller share.
       pacing: (cfg) =>
         cfg.mode === 'user'
           ? {}
-          : {
-              perMinute: 20,
-              perHour: 1_000,
-              perDay: 20_000,
-              minGapMs: 100,
-              maxGapMs: 400,
-              typing: false,
-            },
+          : cfg.mode === 'automation'
+            ? { perMinute: 20, perHour: 300, perDay: 2_000, minGapMs: 300, maxGapMs: 900, typing: false }
+            : {
+                perMinute: 20,
+                perHour: 1_000,
+                perDay: 20_000,
+                minGapMs: 100,
+                maxGapMs: 400,
+                typing: false,
+              },
     },
     async test(ctx) {
       // A personal account is checked by logging in on the next page, through the gateway.
       if (ctx.config.mode === 'user') return { ok: true };
-      const me = await callBotForAction<TgUser>(ctx, 'getMe', {});
+      if (ctx.config.mode === 'automation') {
+        const connection = await hub.connection(ctx.account.id);
+        if (!connection)
+          throw new ConnectorError(
+            'auth',
+            'This Telegram account is no longer connected through Chat Automation: connect it again.',
+          );
+        if (!connection.enabled)
+          throw new ConnectorError(
+            'auth',
+            'The bot is removed or paused in Telegram (Settings → Chat Automation): add it again there or connect again.',
+          );
+        return {
+          ok: true,
+          identity: connection.identity,
+          ...(connection.rights.includes('can_reply')
+            ? {}
+            : {
+                message:
+                  'The bot can read but not reply: allow it to reply to messages in Telegram (Settings → Chat Automation).',
+              }),
+        };
+      }
+      const api = ownBot(ctx);
+      const me = await callBotForAction<TgUser>(api, 'getMe', {});
       const hook = port.forAccount(ctx.account.id).webhook();
-      await callBotForAction<boolean>(ctx, 'setWebhook', {
+      await callBotForAction<boolean>(api, 'setWebhook', {
         url: hook.url,
         secret_token: hook.secret,
         allowed_updates: BOT_UPDATES,
@@ -488,11 +648,61 @@ export function createTelegramConnector(port: MessagingPort) {
     ui: {
       primaryFields: ['mode', 'botToken'],
       setupVariants: { field: 'mode' },
+      // Chat Automation accounts are made on the quick connect page, never with the form.
+      formHiddenOptions: { mode: ['automation'] },
       locales: {
         ru: {
           description:
             'Ваш Telegram: личный аккаунт со всеми чатами и группами или бот. Чаты, поиск по переписке, ответы.',
           setup: {
+            app: {
+              summary:
+                'Вы сканируете QR-код телефоном, подтверждаете подключение в боте Manyplug и добавляете бота в Telegram в разделе «Автоматизация чатов».',
+              minutes: 1,
+              needs: ['Telegram на телефоне, обновлённый после мая 2026 года'],
+              notice:
+                'Бот видит только выбранные вами личные чаты и только с момента подключения. Для групп, каналов и старой переписки подключите личный аккаунт с полным доступом.',
+              steps: [
+                {
+                  text: 'Наведите камеру телефона на QR-код на этой странице. Если страница открыта на телефоне, нажмите **Открыть Telegram**.',
+                },
+                {
+                  text: 'В боте Manyplug нажмите **Запустить** (Start), проверьте, что показан ваш аккаунт Manyplug, и нажмите **Подключить**.',
+                },
+                { text: 'В Telegram откройте **Настройки → Автоматизация чатов** и добавьте бота Manyplug.' },
+                {
+                  text: 'Выберите чаты, которые бот может видеть, разрешите ему отвечать на сообщения и сохраните.',
+                },
+                { text: 'Подождите несколько секунд: эта страница сама покажет **Подключено**.' },
+              ],
+              tips: [
+                'Telegram сам показывает, что может бот. Изменить чаты или убрать бота можно в любой момент: **Настройки → Автоматизация чатов**.',
+                'ИИ видит новые сообщения с момента подключения, в том числе те, что вы пишете с телефона.',
+                'Ответы уходят от вашего имени и только в чаты, где собеседник писал за последние 24 часа.',
+              ],
+              problems: [
+                {
+                  problem: 'В настройках нет раздела **Автоматизация чатов**',
+                  fix: 'Обновите Telegram в App Store или Google Play: раздел появился в мае 2026 года. На некоторых телефонах он находится в **Настройки → Изменить**.',
+                },
+                {
+                  problem: 'Бот пишет, что ссылка устарела или уже использована',
+                  fix: 'Обновите эту страницу, чтобы получить новый QR-код, и отсканируйте его в течение 15 минут.',
+                },
+                {
+                  problem: 'Страница всё ждёт, хотя бот добавлен',
+                  fix: 'Откройте бота и проверьте, что вы нажали **Подключить**. Затем проверьте в **Настройки → Автоматизация чатов**, что бот Manyplug в списке и включён.',
+                },
+                {
+                  problem: 'ИИ не может ответить в чате',
+                  fix: 'Разрешите боту отвечать на сообщения в **Настройки → Автоматизация чатов**. Бот отвечает только там, где собеседник писал за последние 24 часа.',
+                },
+                {
+                  problem: 'Камера телефона не открывает Telegram',
+                  fix: 'Откройте эту страницу на телефоне, где установлен Telegram, и нажмите **Открыть Telegram**.',
+                },
+              ],
+            },
             form: {
               summary:
                 'Вы входите в свой аккаунт Telegram по QR-коду или создаёте бота через @BotFather и вставляете его токен.',
@@ -543,7 +753,7 @@ export function createTelegramConnector(port: MessagingPort) {
                 'Личный аккаунт видит все ваши чаты и группы, сообщения уходят от вашего имени. Сессию «Manyplug» можно завершить в Telegram: **Настройки → Устройства**.',
                 'Код входа и облачный пароль вводите только на странице сайта. Никогда не пишите их в чат с ИИ.',
                 'Бот видит только чаты, где ему написали, и не может начать разговор первым.',
-                'С Telegram Premium бот может вести и ваши личные чаты: **Настройки → Telegram для бизнеса → Чат-боты**. Ответы уходят от вашего имени.',
+                'Ваш бот может вести и ваши личные чаты: включите ему Secretary Mode в @BotFather и добавьте его в **Настройки → Автоматизация чатов**.',
               ],
               problems: [
                 {
@@ -577,7 +787,11 @@ export function createTelegramConnector(port: MessagingPort) {
           fields: {
             mode: {
               label: 'Как подключить',
-              options: { user: 'Личный аккаунт (вход по QR-коду)', bot: 'Бот (Bot API)' },
+              options: {
+                user: 'Личный аккаунт (вход по QR-коду)',
+                bot: 'Бот (Bot API)',
+                automation: 'Бот Manyplug («Автоматизация чатов»)',
+              },
             },
             botApiUrl: { label: 'Сервер Bot API', hint: 'Свой сервер нужен только для файлов больше 20 МБ.' },
             botToken: { label: 'Токен бота', placeholder: '123456789:AA…', hint: 'Только для бота.' },
@@ -589,6 +803,52 @@ export function createTelegramConnector(port: MessagingPort) {
           description:
             'Your Telegram: your personal account with all chats and groups, or a bot. Chats, message search, replies.',
           setup: {
+            app: {
+              summary:
+                'You scan a QR code with your phone, confirm in the Manyplug bot and add the bot to your Telegram under Settings → Chat Automation.',
+              minutes: 1,
+              needs: ['Telegram on your phone, updated since May 2026'],
+              notice:
+                'The bot sees only the private chats you pick, from the moment you connect. For groups, channels and older messages, connect a personal account with full access instead.',
+              steps: [
+                {
+                  text: 'Point your phone camera at the QR code on this page. If this page is open on your phone, tap **Open Telegram**.',
+                },
+                {
+                  text: 'In the Manyplug bot tap **Start**, check that it shows your Manyplug account and tap **Connect**.',
+                },
+                { text: 'In Telegram open **Settings → Chat Automation** and add the Manyplug bot.' },
+                { text: 'Choose the chats the bot may see, allow it to reply to messages and save.' },
+                { text: 'Wait a few seconds: this page shows **Connected** by itself.' },
+              ],
+              tips: [
+                'Telegram shows what the bot may do. Change the chats or remove the bot any time under **Settings → Chat Automation**.',
+                'The AI sees new messages from the moment you connect, including the ones you send from your phone.',
+                'Replies go out as you, and only in chats where the person wrote within the last 24 hours.',
+              ],
+              problems: [
+                {
+                  problem: 'There is no **Chat Automation** in Settings',
+                  fix: 'Update Telegram in the App Store or Google Play: the section appeared in May 2026. On some phones it is under **Settings → Edit**.',
+                },
+                {
+                  problem: 'The bot says the link has expired or was already used',
+                  fix: 'Reload this page to get a new QR code and scan it within 15 minutes.',
+                },
+                {
+                  problem: 'The page keeps waiting after you added the bot',
+                  fix: 'Open the bot and check that you tapped **Connect**. Then check under **Settings → Chat Automation** that the Manyplug bot is listed and turned on.',
+                },
+                {
+                  problem: 'The AI cannot reply in a chat',
+                  fix: 'Allow the bot to reply to messages under **Settings → Chat Automation**. The bot can only answer where the person wrote within the last 24 hours.',
+                },
+                {
+                  problem: 'The phone camera does not open Telegram',
+                  fix: 'Open this page on the phone that has Telegram and tap **Open Telegram**.',
+                },
+              ],
+            },
             form: {
               summary:
                 'You log in to your own Telegram account with a QR code, or create a bot with @BotFather and paste its token.',
@@ -639,7 +899,7 @@ export function createTelegramConnector(port: MessagingPort) {
                 'A personal account sees all your chats and groups, and messages are sent as you. You can end the "Manyplug" session in Telegram under **Settings → Devices**.',
                 'Type the login code and cloud password only on the website page. Never write them in the AI chat.',
                 'A bot only sees chats where people wrote to it and cannot start a conversation.',
-                'With Telegram Premium the bot can also handle your personal chats: **Settings → Telegram Business → Chatbots**. Replies are sent as you.',
+                'Your bot can also handle your personal chats: turn on Secretary Mode for it in @BotFather and add it under **Settings → Chat Automation**.',
               ],
               problems: [
                 {
@@ -673,7 +933,11 @@ export function createTelegramConnector(port: MessagingPort) {
           fields: {
             mode: {
               label: 'How to connect',
-              options: { user: 'Personal account (QR code login)', bot: 'Bot (Bot API)' },
+              options: {
+                user: 'Personal account (QR code login)',
+                bot: 'Bot (Bot API)',
+                automation: 'Manyplug bot (Chat Automation)',
+              },
             },
             botApiUrl: {
               label: 'Bot API server',

@@ -134,6 +134,13 @@
       "when": 1793879254973,
       "tag": "0018_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793886220512,
+      "tag": "0019_telegram_chat_automation",
+      "breakpoints": true
     }
   ]
 }

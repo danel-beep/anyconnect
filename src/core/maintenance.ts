@@ -8,6 +8,7 @@ import {
   oauthGrants,
   oauthTokens,
   pendingLogins,
+  telegramLinks,
   toolCalls,
   webauthnChallenges,
   webSessions,
@@ -30,6 +31,8 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
   await db.delete(oauthConnectStates).where(lt(oauthConnectStates.expiresAt, new Date(now)));
   // Abandoned "Sign in with Google" flows.
   await db.delete(loginStates).where(lt(loginStates.expiresAt, new Date(now)));
+  // Telegram QR links: their page shows the outcome for a day, then they go.
+  await db.delete(telegramLinks).where(lt(telegramLinks.expiresAt, new Date(now - DAY)));
   // Dynamically registered clients that never completed an authorization within 30 days.
   await db
     .delete(oauthClients)

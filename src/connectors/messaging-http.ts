@@ -28,14 +28,13 @@ function errorCode(error: unknown): string | undefined {
   return undefined;
 }
 
-/** `fetch` that turns "never left this machine" failures into a retryable {@link DeliveryError}. */
-export async function deliveryFetch(
-  fetch: FetchLike,
-  url: string | URL,
-  init: RequestInit,
-): Promise<Response> {
+/**
+ * Runs a request that may send a message: failures that never left this machine become a
+ * retryable {@link DeliveryError}, anything else is rethrown as is.
+ */
+export async function deliveryAttempt<T>(send: () => Promise<T>): Promise<T> {
   try {
-    return await fetch(url, init);
+    return await send();
   } catch (error) {
     const code = errorCode(error);
     if (code && NOT_SENT_CODES.has(code)) {
@@ -43,6 +42,11 @@ export async function deliveryFetch(
     }
     throw error;
   }
+}
+
+/** `fetch` that turns "never left this machine" failures into a retryable {@link DeliveryError}. */
+export function deliveryFetch(fetch: FetchLike, url: string | URL, init: RequestInit): Promise<Response> {
+  return deliveryAttempt(() => fetch(url, init));
 }
 
 /** Reads a JSON body, tolerating empty or non-JSON error pages. */

@@ -32,6 +32,8 @@ export interface ConnectFormView {
   invalid?: string[];
   /** Shown when the service also supports OAuth. */
   oauthUrl?: string;
+  /** The quick way, offered above the form: confirm in the service's own app (a QR code). */
+  quickUrl?: string;
   /** Where to get the key or password, step by step. */
   guide?: ResolvedSetupGuide | undefined;
   /** Picks the guide's variant from the form (e.g. the mail provider). */
@@ -248,6 +250,17 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
         <div class="card connect-form-card">
           {view.reconnecting ? (
             <div class="notice info small">{t('connect.formReconnect', { label: view.reconnecting })}</div>
+          ) : null}
+          {view.quickUrl ? (
+            <div class="quick-offer">
+              <p>
+                <strong>{t('connect.quickTitle')}</strong>
+                {t('connect.quickText', { service: view.service })}
+              </p>
+              <a class="btn primary" href={view.quickUrl}>
+                {t('connect.quickButton')} <Icon name="arrow" />
+              </a>
+            </div>
           ) : null}
           {view.guide?.summary ? (
             <p class="guide-summary">

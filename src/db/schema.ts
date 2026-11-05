@@ -1084,6 +1084,90 @@ export const messengerOutbox = pgTable(
   ],
 );
 
+/**
+ * Telegram Chat Automation: a person adds the hub's own bot to their Telegram account (Settings →
+ * Chat Automation) and it reads and replies in the chats they picked. A one-time link ties that
+ * Telegram account to a workspace; see docs/MESSENGERS.md.
+ */
+export type TelegramLinkState =
+  /** Shown as a QR code; nobody has opened it in Telegram yet. */
+  | 'pending'
+  /** Opened in the bot (`/start`): waiting for the person to tap Connect. */
+  | 'opened'
+  /** Confirmed in the bot: waiting for Telegram to report the bot in Chat Automation. */
+  | 'confirmed'
+  /** The account is connected (or being created: `accountId` is set once it exists). */
+  | 'connected'
+  /** The account could not be created (`error` says why). */
+  | 'failed'
+  /** Cancelled in the bot or on the page. */
+  | 'cancelled';
+
+/** A one-time link (QR code) that connects a Telegram account to a workspace through the hub's bot. */
+export const telegramLinks = pgTable(
+  'telegram_links',
+  {
+    id: text().primaryKey(),
+    /** SHA-256 of the code in the bot's deep link. */
+    codeHash: text().notNull().unique(),
+    /** The code itself, encrypted (SecretBox, AAD = link id), so the page can show the QR code again. */
+    codeEncrypted: text().notNull(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Who made the link: only they see its page, and the account is theirs (or the team's). */
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** The account to create: name, label, owner in a team. */
+    draft: jsonb().$type<ConnectDraft>().notNull().default({}),
+    /** The account this link connects again. */
+    reconnectAccountId: text().references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Hub-relative path to go to afterwards. */
+    returnTo: text(),
+    state: text().$type<TelegramLinkState>().notNull().default('pending'),
+    /** Keyed hash of the Telegram user who opened the link: only they can finish it. */
+    telegramUserKey: text(),
+    /** Their @username or name, shown on the page while the link is in progress. */
+    telegramLabel: text(),
+    accountId: text().references(() => accounts.id, { onDelete: 'set null' }),
+    error: text(),
+    /** Language of the page, for the bot's messages. */
+    locale: text(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.telegramUserKey), index().on(t.userId), index().on(t.expiresAt)],
+);
+
+/**
+ * A business connection of the hub's bot: a person added it under Settings → Chat Automation. One
+ * per Telegram user (Telegram connects one bot to an account), routed to the account it connects.
+ * Without an account (added before opening a link, or disconnected) its messages are not stored.
+ */
+export const telegramConnections = pgTable('telegram_connections', {
+  id: text().primaryKey(),
+  /** Keyed hash of the Telegram user who connected the bot. */
+  telegramUserKey: text().notNull().unique(),
+  /** Keyed hash of the current business connection id: how updates are routed. */
+  connectionKey: text().notNull().unique(),
+  /** Encrypted `{ connectionId, userChatId, username, name }` (SecretBox, AAD = the user key). */
+  infoEncrypted: text().notNull(),
+  /** What the person allowed the bot: the BusinessBotRights flags that are on (`can_reply`...). */
+  rights: text().array().notNull().default(sql`'{}'::text[]`),
+  /** False while the bot is removed or paused in Telegram. */
+  enabled: boolean().notNull().default(true),
+  accountId: text()
+    .unique()
+    .references(() => accounts.id, { onDelete: 'set null' }),
+  /** The language the person's Telegram app is set to, for the bot's messages. */
+  locale: text(),
+  connectedAt: timestamp({ withTimezone: true }).notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 // ---------------------------------------------------------------------------
 // Plans, limits and the admin panel
 // ---------------------------------------------------------------------------
