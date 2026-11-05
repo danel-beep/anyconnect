@@ -17,16 +17,27 @@ export interface ClientGuide {
   code?: (url: string) => string;
   /** Optional one-click install link. */
   install?: (url: string) => { href: string; label: { ru: string; en: string } };
+  /**
+   * Chat apps: the client's own page where a connector is added (opens in a new tab).
+   * `skipsFirstStep`: the page is where the first step leads, so the dashboard leaves that step out.
+   */
+  open?: { href: string; skipsFirstStep: boolean };
+  /**
+   * Agent apps that edit their own config: where `code` goes and how the user signs in afterwards
+   * (`{name}` is the server name). Turns into a ready prompt, see `setupPrompt`.
+   */
+  agent?: { where: { ru: string; en: string }; signIn: { ru: string; en: string } };
 }
 
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 /**
  * The server name in the client's config: `manyplug`, or `manyplug-work` for the address of the
- * access profile `work`, so adding a profile never replaces the main connection.
+ * access profile `work` (or of the team `work`, `/mcp/team/work`), so adding a profile or a team never
+ * replaces the main connection.
  */
 export function serverName(url: string): string {
-  const profile = /\/mcp\/([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
+  const profile = /\/mcp\/(?:team\/)?([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
   return profile ? `manyplug-${profile}` : 'manyplug';
 }
 
@@ -53,6 +64,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'In a chat, click “+” → Connectors, turn Manyplug on and ask: “Connect my email”.',
       ],
     },
+    open: { href: 'https://claude.ai/settings/connectors', skipsFirstStep: true },
   },
   {
     id: 'chatgpt',
@@ -76,6 +88,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
         'Sign in to Manyplug and allow access. In a chat, pick Manyplug under “+” → More.',
       ],
     },
+    open: { href: 'https://chatgpt.com/#settings/Connectors', skipsFirstStep: false },
   },
   {
     id: 'claude-code',
@@ -93,6 +106,13 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ],
     },
     code: (url) => `claude mcp add --transport http --scope user ${serverName(url)} ${url}`,
+    agent: {
+      where: { ru: 'Выполни эту команду в терминале', en: 'Run this command in the terminal' },
+      signIn: {
+        ru: 'скажи мне ввести /mcp, выбрать {name} и войти в браузере.',
+        en: 'tell me to type /mcp, pick {name} and sign in in the browser.',
+      },
+    },
   },
   {
     id: 'cursor',
@@ -110,6 +130,13 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ],
     },
     code: (url) => json({ mcpServers: { [serverName(url)]: { url } } }),
+    agent: {
+      where: { ru: 'Добавь это в ~/.cursor/mcp.json', en: 'Add this to ~/.cursor/mcp.json' },
+      signIn: {
+        ru: 'скажи мне открыть Cursor Settings → MCP и нажать Login рядом с {name}.',
+        en: 'tell me to open Cursor Settings → MCP and click Login next to {name}.',
+      },
+    },
     install: (url) => ({
       href: `cursor://anysphere.cursor-deeplink/mcp/install?name=${serverName(url)}&config=${encodeURIComponent(
         Buffer.from(JSON.stringify({ url })).toString('base64'),
@@ -133,6 +160,16 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ],
     },
     code: (url) => json({ servers: { [serverName(url)]: { type: 'http', url } } }),
+    agent: {
+      where: {
+        ru: 'Добавь это в .vscode/mcp.json этого проекта',
+        en: 'Add this to .vscode/mcp.json in this workspace',
+      },
+      signIn: {
+        ru: 'скажи мне запустить {name} в списке MCP и войти, когда VS Code попросит.',
+        en: 'tell me to start {name} in the MCP list and sign in when VS Code asks.',
+      },
+    },
     install: (url) => ({
       href: `vscode:mcp/install?${encodeURIComponent(JSON.stringify({ name: serverName(url), type: 'http', url }))}`,
       label: { ru: 'Установить в VS Code', en: 'Install in VS Code' },
@@ -154,6 +191,13 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       ],
     },
     code: (url) => `[mcp_servers.${serverName(url)}]\nurl = "${url}"`,
+    agent: {
+      where: { ru: 'Добавь это в ~/.codex/config.toml', en: 'Add this to ~/.codex/config.toml' },
+      signIn: {
+        ru: 'выполни codex mcp login {name}, чтобы я вошёл в браузере.',
+        en: 'run codex mcp login {name} so I can sign in in the browser.',
+      },
+    },
   },
   {
     id: 'gemini',
@@ -165,6 +209,13 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       en: ['Run the command.', 'In Gemini CLI type /mcp auth manyplug and sign in.'],
     },
     code: (url) => `gemini mcp add --transport http ${serverName(url)} ${url}`,
+    agent: {
+      where: { ru: 'Выполни эту команду в терминале', en: 'Run this command in the terminal' },
+      signIn: {
+        ru: 'скажи мне ввести /mcp auth {name} и войти.',
+        en: 'tell me to type /mcp auth {name} and sign in.',
+      },
+    },
   },
   {
     id: 'windsurf',
@@ -179,6 +230,16 @@ export const CLIENT_GUIDES: ClientGuide[] = [
       en: ['Add the server to ~/.codeium/windsurf/mcp_config.json.', 'Refresh the MCP servers and sign in.'],
     },
     code: (url) => json({ mcpServers: { [serverName(url)]: { serverUrl: url } } }),
+    agent: {
+      where: {
+        ru: 'Добавь это в ~/.codeium/windsurf/mcp_config.json',
+        en: 'Add this to ~/.codeium/windsurf/mcp_config.json',
+      },
+      signIn: {
+        ru: 'скажи мне обновить список MCP-серверов и войти.',
+        en: 'tell me to refresh the MCP servers and sign in.',
+      },
+    },
   },
   {
     id: 'other',
@@ -203,3 +264,36 @@ export const CLIENT_GUIDES: ClientGuide[] = [
 
 export const clientName = (guide: ClientGuide, lang: string) =>
   guide.id === 'other' && lang !== 'ru' ? 'Other clients' : guide.name;
+
+/** Guides longest name first, so "Claude Code" wins over "Claude" and "VS Code" over "Code". */
+const BY_NAME = CLIENT_GUIDES.filter((g) => g.id !== 'other').sort((a, b) => b.name.length - a.name.length);
+
+/**
+ * The guide of a known AI client, found by the name an app gave itself on sign-in (e.g.
+ * "Claude Code", "claude-ai", "Cursor (work)"), for its logo. Undefined for unknown clients.
+ */
+export function guideForApp(...names: (string | null | undefined)[]): ClientGuide | undefined {
+  const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  for (const name of names) {
+    if (!name) continue;
+    const n = flat(name);
+    const hit = BY_NAME.find((g) => n.includes(flat(g.name)) || n.includes(g.id));
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/**
+ * A ready prompt for an agent app (Claude Code, Cursor…): pasted into its chat, the agent adds the
+ * server to its own config and tells the user how to sign in. `undefined` for chat apps.
+ */
+export function setupPrompt(guide: ClientGuide, url: string, lang: string): string | undefined {
+  if (!guide.agent || !guide.code) return undefined;
+  const ru = lang === 'ru';
+  const name = serverName(url);
+  const where = ru ? guide.agent.where.ru : guide.agent.where.en;
+  const signIn = (ru ? guide.agent.signIn.ru : guide.agent.signIn.en).replaceAll('{name}', name);
+  return ru
+    ? `Подключи MCP-сервер Manyplug (${url}), чтобы ты мог работать с моими сервисами: почтой, календарём, чатами.\n\n${where}, не удаляя уже настроенные серверы:\n\n${guide.code(url)}\n\nКогда закончишь, ${signIn}`
+    : `Add the Manyplug MCP server (${url}) so you can work with my services: mail, calendar, chats.\n\n${where}, keeping any MCP servers that are already set up:\n\n${guide.code(url)}\n\nWhen you are done, ${signIn}`;
+}

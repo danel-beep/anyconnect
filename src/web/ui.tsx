@@ -159,16 +159,20 @@ export const ServiceLogo: FC<{
   );
 };
 
-/** A read-only value with a copy button (the button needs JS; the text stays selectable without it). */
-export const CopyField: FC<{ t: Translate; id: string; value: string; label: string }> = ({
+/**
+ * A read-only value with a copy button (the button needs JS; the text stays selectable without it).
+ * `quiet` makes the button secondary when another action on the screen is the main one.
+ */
+export const CopyField: FC<{ t: Translate; id: string; value: string; label: string; quiet?: boolean }> = ({
   t,
   id,
   value,
   label,
+  quiet,
 }) => (
   <div class="copy">
     <input id={id} type="text" readonly value={value} aria-label={label} data-select-on-focus />
-    <button type="button" class="primary" data-copy={`#${id}`}>
+    <button type="button" class={quiet ? undefined : 'primary'} data-copy={`#${id}`}>
       <Icon name="copy" />
       <span class="copy-label">{t('ui.copy')}</span>
       <span class="copy-done">{t('ui.copied')}</span>
@@ -200,20 +204,8 @@ export const AskAi: FC<{ t: Translate; id: string; title: string; text?: Child; 
     </div>
     <ul class="prompts">
       {prompts.map((prompt, i) => (
-        <li class="prompt">
-          <span class="prompt-text" id={`${id}-${i}`}>
-            {prompt}
-          </span>
-          <button
-            type="button"
-            class="sm"
-            data-copy={`#${id}-${i}`}
-            aria-label={`${t('ui.copy')}: ${prompt}`}
-          >
-            <Icon name="copy" />
-            <span class="copy-label">{t('ui.copy')}</span>
-            <span class="copy-done">{t('ui.copied')}</span>
-          </button>
+        <li>
+          <CopyText t={t} id={`${id}-${i}`} text={prompt} prompt />
         </li>
       ))}
     </ul>
@@ -235,6 +227,40 @@ export const CodeBlock: FC<{ t: Translate; id: string; code: string }> = ({ t, i
     </div>
   </div>
 );
+
+/**
+ * Ready text to paste somewhere else (a message for a teammate), shown as it will be pasted, with
+ * one button that copies all of it. Line breaks in `text` are kept. `prompt`: a request for the AI,
+ * where the whole card is the button (one tap copies it).
+ */
+export const CopyText: FC<{ t: Translate; id: string; text: string; label?: string; prompt?: boolean }> = ({
+  t,
+  id,
+  text,
+  label,
+  prompt,
+}) =>
+  prompt ? (
+    <button type="button" class="copy-text prompt" data-copy={`#${id}`}>
+      <span class="prompt-text" id={id}>
+        {text}
+      </span>
+      <span class="prompt-action">
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </span>
+    </button>
+  ) : (
+    <div class="copy-text">
+      <p id={id}>{text}</p>
+      <button type="button" class="sm" data-copy={`#${id}`}>
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </button>
+    </div>
+  );
 
 /** Width class for a 0–100 % value in 5 % steps (no inline styles under the CSP). */
 export const pctClass = (prefix: 'w' | 'h', used: number, limit: number | null): string => {
@@ -321,15 +347,17 @@ export const Prefs: FC<{ t: Translate; lang: string; path?: string }> = ({ t, la
 
 /**
  * Tabs: buttons switch panels with JS; without JS every panel is shown under its own heading.
- * `remember` keeps the chosen tab across pages (e.g. the AI client).
+ * `remember` keeps the chosen tab across pages (e.g. the AI client). `tiles` shows the tabs as a grid
+ * of cards (labels with a logo, e.g. the AI app picker) instead of an underlined row.
  */
 export const Tabs: FC<{
   id: string;
   remember?: string;
+  variant?: 'tiles';
   tabs: { id: string; label: Child; panel: Child }[];
-}> = ({ id, remember, tabs }) => (
+}> = ({ id, remember, variant, tabs }) => (
   <div data-tabs={id} data-remember={remember}>
-    <div class="tabs" role="tablist">
+    <div class={variant ? `tabs ${variant}` : 'tabs'} role="tablist">
       {tabs.map((tab, i) => (
         <button
           type="button"

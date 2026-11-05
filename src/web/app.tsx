@@ -2,7 +2,7 @@ import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan, yearlyFreeMonths } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, SAMPLE_SERVICES, searchText, serviceMeta } from './catalog.js';
-import { CLIENT_GUIDES, clientName } from './clients.js';
+import { CLIENT_GUIDES, type ClientGuide, clientName, guideForApp, setupPrompt } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
@@ -13,6 +13,7 @@ import {
   Brand,
   CodeBlock,
   CopyField,
+  CopyText,
   fmtAgo,
   fmtDate,
   fmtDay,
@@ -21,6 +22,7 @@ import {
   Icon,
   type IconName,
   initials,
+  Meter,
   Prefs,
   pctClass,
   ServiceLogo,
@@ -408,7 +410,13 @@ export const CallsTable: FC<{
   );
 };
 
-const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx, usage, extra }) => {
+/** `here`: shown on the plan page itself, so without the link to it. */
+const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child; here?: boolean }> = ({
+  ctx,
+  usage,
+  extra,
+  here,
+}) => {
   const { t, lang } = ctx;
   const exhausted = usage.actions.limit !== null && usage.actions.used >= usage.actions.limit;
   return (
@@ -425,9 +433,11 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
           label={t('app.usage.actions')}
           {...usage.actions}
           lines={[
-            <a href="/app/billing">
-              {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
-            </a>,
+            here ? undefined : (
+              <a href="/app/billing">
+                {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
+              </a>
+            ),
             usage.actions.limit === null
               ? t('app.usage.noLimit')
               : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) }),
@@ -438,12 +448,12 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
           label={t('app.usage.accounts')}
           {...usage.accounts}
           lines={[
-            usage.phase?.kind === 'trial'
+            usage.phase?.kind === 'trial' && !here
               ? t('app.usage.trial', {
                   plan: t(`plan.${usage.phase.asPlan ?? 'pro'}.name` as 'plan.free.name'),
                   date: fmtDate(lang, usage.phase.until),
                 })
-              : usage.phase
+              : usage.phase?.kind === 'step'
                 ? t('app.usage.step', { date: fmtDate(lang, usage.phase.until) })
                 : t('app.usage.accountsHint'),
           ]}
@@ -565,17 +575,33 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
 }) => {
   const { t } = ctx;
   const allDone = view.steps.ai && view.steps.service && view.steps.call;
-  // Same order as on the website: services first, then the address for the AI, then a first request.
-  const steps: { done: boolean; title: string; text: string; href: string }[] = [
+  // The AI first: once it is connected, services can be connected right from the chat ("Connect my email").
+  const steps: { done: boolean; title: string; text: string; cta: string; href: string }[] = [
+    {
+      done: view.steps.ai,
+      title: t('app.onb.ai'),
+      text: t('app.onb.aiText'),
+      cta: t('app.onb.aiCta'),
+      href: '#connect-ai',
+    },
     {
       done: view.steps.service,
       title: t('app.onb.service'),
       text: t('app.onb.serviceText'),
+      cta: t('app.onb.serviceCta'),
       href: '/app/services',
     },
-    { done: view.steps.ai, title: t('app.onb.ai'), text: t('app.onb.aiText'), href: '#connect-ai' },
-    { done: view.steps.call, title: t('app.onb.call'), text: t('app.onb.callText'), href: '/docs#services' },
+    {
+      done: view.steps.call,
+      title: t('app.onb.call'),
+      text: t('app.onb.callText'),
+      cta: t('app.onb.callCta'),
+      href: '/docs#services',
+    },
   ];
+  const doneCount = steps.filter((s) => s.done).length;
+  /** The first step left to do is highlighted. */
+  const current = steps.findIndex((s) => !s.done);
   return (
     <AppShell ctx={ctx} shell={shell} section="overview" title={t('app.nav.overview')}>
       <PageHead
@@ -598,17 +624,33 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
       ) : null}
       <BrokenAccounts ctx={ctx} accounts={view.accounts} />
       {allDone ? null : (
-        <div class="onboard">
-          {steps.map((s, i) => (
-            <a class={`onboard-step${s.done ? ' done' : ''}`} href={s.href}>
-              <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
-              <span>
-                <strong>{s.title}</strong>
-                <span>{s.text}</span>
-              </span>
-            </a>
-          ))}
-        </div>
+        <section class="onboard" aria-labelledby="onboard-title">
+          <div class="onboard-head">
+            <h2 id="onboard-title">{t('app.onb.title')}</h2>
+            <span class="onboard-count">{t('app.onb.progress', { done: doneCount })}</span>
+            <Meter used={doneCount} limit={steps.length} label={t('app.onb.title')} />
+          </div>
+          <div class="onboard-steps">
+            {steps.map((s, i) => (
+              <a
+                class={`onboard-step${s.done ? ' done' : i === current ? ' current' : ''}`}
+                href={s.href}
+                aria-current={i === current ? 'step' : undefined}
+              >
+                <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
+                <span class="onboard-body">
+                  <strong>{s.title}</strong>
+                  <span>{s.text}</span>
+                  {s.done ? null : (
+                    <span class="onboard-cta">
+                      {s.cta} <Icon name={s.href.startsWith('#') ? 'chevron' : 'arrow'} />
+                    </span>
+                  )}
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
       )}
       {/* Until an AI app is connected, its address is the main thing on this page. */}
       {view.steps.ai ? null : <ConnectAiCard ctx={ctx} />}
@@ -692,9 +734,109 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
   );
 };
 
-/** The MCP URL with per-client instructions; compact once an app is connected. */
+/** First requests to paste into the AI once it is connected: setup from the chat comes first. */
+const TRY_PROMPTS = ['app.ai.try1', 'app.ai.try2', 'app.ai.try3'] as const;
+
 /**
- * The MCP address with steps for each AI app. `profile` shows a profile's own address instead of
+ * One AI app's setup: the fastest way first (one-click install, a setup prompt for agents, or
+ * "copy the address and open the app's settings" for chat apps), then the steps with the config
+ * under the first one. Where the fastest way does it all, the manual steps are folded.
+ */
+const ClientSetup: FC<{ ctx: PageCtx; guide: ClientGuide; url: string }> = ({ ctx, guide: g, url }) => {
+  const { t, lang } = ctx;
+  const ru = lang === 'ru';
+  const client = clientName(g, lang);
+  const install = g.install?.(url);
+  const prompt = setupPrompt(g, url, lang);
+  const promptId = `client-prompt-${g.id}`;
+  const text = install
+    ? t('app.ai.installText', { client })
+    : prompt
+      ? t('app.ai.promptText', { client })
+      : g.open
+        ? t('app.ai.openText', { client })
+        : null;
+  // Steps the "open settings" button already does are left out; the rest read as "then in the app".
+  const skip = g.open?.skipsFirstStep && !install && !prompt ? 1 : 0;
+  const steps = (
+    <ol class="ai-steps">
+      {(ru ? g.steps.ru : g.steps.en).slice(skip).map((s, i) => (
+        <li>
+          {s}
+          {i === 0 && g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
+        </li>
+      ))}
+    </ol>
+  );
+  return (
+    <div class="ai-setup">
+      {text ? (
+        <div class="ai-quick">
+          <div class="ai-quick-text">
+            <span class="ai-quick-label">
+              <Icon name="zap" /> {t('app.ai.fastest')}
+            </span>
+            <span>{text}</span>
+            <span class="ai-quick-note">
+              <strong>{t('app.ai.note')}</strong> {ru ? g.note.ru : g.note.en}
+            </span>
+          </div>
+          <div class="ai-quick-do">
+            {install ? (
+              <a class="btn primary" href={install.href}>
+                {ru ? install.label.ru : install.label.en}
+              </a>
+            ) : null}
+            {prompt ? (
+              <button type="button" class={install ? undefined : 'primary'} data-copy={`#${promptId}`}>
+                <Icon name="copy" />
+                <span class="copy-label">{t('app.ai.promptCopy')}</span>
+                <span class="copy-done">{t('ui.copied')}</span>
+              </button>
+            ) : null}
+            {g.open && !install && !prompt ? (
+              // Copies the address and opens the app's settings in a new tab: one click, then paste.
+              <a class="btn primary" href={g.open.href} target="_blank" rel="noopener" data-copy="#mcp-url">
+                <Icon name="copy" />
+                <span class="copy-label">{t('app.ai.openCopy', { client })}</span>
+                <span class="copy-done">{t('app.ai.openDone', { client })}</span>
+                <Icon name="external" />
+              </a>
+            ) : null}
+          </div>
+          {prompt ? (
+            <details class="ai-prompt">
+              <summary>{t('app.ai.promptShow')}</summary>
+              <pre class="block" id={promptId}>
+                <code>{prompt}</code>
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+      {install || prompt ? (
+        <details class="ai-manual">
+          <summary>{t('app.ai.manual')}</summary>
+          {steps}
+        </details>
+      ) : (
+        <>
+          <h3 class="ai-steps-title">{skip ? t('app.ai.then', { client }) : t('app.ai.steps')}</h3>
+          {steps}
+        </>
+      )}
+      {text ? null : (
+        <p class="hint">
+          <strong>{t('app.ai.note')}</strong> {ru ? g.note.ru : g.note.en}
+        </p>
+      )}
+    </div>
+  );
+};
+
+/**
+ * The MCP address with setup for each AI app, then first requests to try. `compact` (an app is
+ * already connected) keeps only the address. `profile` shows a profile's own address instead of
  * the main one (the steps are the same).
  */
 export const ConnectAiCard: FC<{
@@ -704,44 +846,74 @@ export const ConnectAiCard: FC<{
 }> = ({ ctx, compact, profile }) => {
   const { t, lang } = ctx;
   const url = profile?.url ?? ctx.mcpUrl;
-  return (
-    <div class="card" id="connect-ai">
-      <div class="card-head">
-        <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
-        <a class="btn sm" href="/docs">
-          <Icon name="book" /> {t('app.ai.docs')}
-        </a>
-      </div>
-      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} />
+  const address = (
+    <>
+      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} quiet={!compact} />
       <p class="hint">{profile ? profile.hint : t('app.ai.hint')}</p>
-      {compact ? null : (
-        <div class="stack">
-          <Tabs
-            id="clients"
-            remember="client"
-            tabs={CLIENT_GUIDES.filter((g) => g.id !== 'other').map((g) => ({
-              id: g.id,
-              label: clientName(g, lang),
-              panel: (
-                <div class="guide-compact">
-                  <ol class="bullets">
-                    {(lang === 'ru' ? g.steps.ru : g.steps.en).map((s) => (
-                      <li>{s}</li>
-                    ))}
-                  </ol>
-                  {g.install ? (
-                    <p>
-                      <a class="btn sm primary" href={g.install(url).href}>
-                        {lang === 'ru' ? g.install(url).label.ru : g.install(url).label.en}
-                      </a>
-                    </p>
-                  ) : null}
-                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
-                </div>
-              ),
-            }))}
-          />
+    </>
+  );
+  // A profile's own address and the compact card lead with the address; the full card leads with
+  // the app picker (each app has its own one-click action) and keeps the address for manual setup.
+  const addressFirst = compact || profile;
+  return (
+    <div class={compact ? 'card' : 'card connect-ai'} id="connect-ai">
+      <div class="card-head">
+        <div>
+          <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
+          {compact || profile ? null : <p class="hint">{t('app.ai.sub')}</p>}
         </div>
+        {compact ? (
+          <a class="btn sm" href="/app/apps#connect-ai">
+            <Icon name="plus" /> {t('app.ai.another')}
+          </a>
+        ) : (
+          <a class="btn sm" href="/docs">
+            <Icon name="book" /> {t('app.ai.docs')}
+          </a>
+        )}
+      </div>
+      {addressFirst ? address : null}
+      {compact ? null : (
+        <>
+          <div class="ai-clients">
+            <Tabs
+              id="clients"
+              remember="client"
+              variant="tiles"
+              tabs={CLIENT_GUIDES.filter((g) => g.id !== 'other').map((g) => ({
+                id: g.id,
+                label: (
+                  <>
+                    <ServiceLogo icon={g.icon} glyph={g.glyph} name={g.name} size="sm" />
+                    <span class="tab-name">{clientName(g, lang)}</span>
+                  </>
+                ),
+                panel: <ClientSetup ctx={ctx} guide={g} url={url} />,
+              }))}
+            />
+          </div>
+          {addressFirst ? null : (
+            <div class="ai-address">
+              <h3>{t('app.ai.address')}</h3>
+              {address}
+            </div>
+          )}
+          <div class="ai-try">
+            <div>
+              <h3>{t('app.ai.tryTitle')}</h3>
+              <p class="hint">{t('app.ai.tryHint')}</p>
+            </div>
+            <div class="ai-try-list">
+              {TRY_PROMPTS.map((key, i) => (
+                <button type="button" class="try-chip" data-copy={`#ai-try-${i}`}>
+                  <span id={`ai-try-${i}`}>{t(key)}</span>
+                  <Icon name="copy" class="copy-label" />
+                  <Icon name="check" class="copy-done" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
@@ -1300,173 +1472,245 @@ const AppName: FC<{ id: string | null; name: string }> = ({ id, name }) =>
     <strong>{name}</strong>
   );
 
+/** Signed in within this many days counts as active (green dot). */
+const ACTIVE_DAYS = 7;
+
+/** One signed-in AI app: its logo, how recently it worked, and its actions. */
+const AppTile: FC<{ ctx: PageCtx; g: AppsView['grants'][number] }> = ({ ctx, g }) => {
+  const { t, lang } = ctx;
+  const guide = guideForApp(g.client, g.name);
+  const linked = g.appId !== null;
+  const active = g.lastUsedAt !== null && Date.now() - g.lastUsedAt.getTime() < ACTIVE_DAYS * 86_400_000;
+  return (
+    <li class={linked ? 'app-tile linked' : 'app-tile'} id={`app-${g.id}`}>
+      <ServiceLogo icon={guide?.icon} glyph={guide?.glyph ?? 'zap'} name={g.name} />
+      <div class="grow">
+        <div class="app-tile-name">
+          {g.appId ? (
+            <a class="app-tile-link stretch" href={`/app/apps/${encodeURIComponent(g.appId)}`}>
+              {g.name}
+            </a>
+          ) : (
+            <strong>{g.name}</strong>
+          )}
+          {g.profile ? <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span> : null}
+        </div>
+        <p class="app-tile-meta">
+          <span class={active ? 'dot ok' : 'dot off'} />
+          <span>
+            {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('aiapp.neverUsed')} ·{' '}
+            {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })}
+          </span>
+        </p>
+      </div>
+      <div class="app-tile-actions">
+        <form
+          method="post"
+          action={`/grants/${g.id}/revoke`}
+          data-confirm={t('app.apps.revokeConfirm', { name: g.name })}
+        >
+          <input type="hidden" name="csrf" value={ctx.csrf} />
+          <button class="sm ghost app-tile-revoke" type="submit">
+            {t('home.revoke')}
+          </button>
+        </form>
+      </div>
+    </li>
+  );
+};
+
+/** Logos of the AI apps the hub has guides for, shown while none is connected. */
+const APP_LOGOS = CLIENT_GUIDES.filter((g) => g.id !== 'other').slice(0, 6);
+
 export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = ({ ctx, shell, view }) => {
   const { t, lang } = ctx;
+  const apps = view.grants.length > 0;
   return (
     <AppShell ctx={ctx} shell={shell} section="apps" title={t('app.nav.apps')}>
       <PageHead title={t('app.nav.apps')} sub={t('app.apps.sub')} />
       <Flash flash={view.flash} />
-      <ConnectAiCard ctx={ctx} />
-      <div class="card flush">
-        <div class="card-head pad">
-          <h2>{t('app.apps.connected')}</h2>
-        </div>
-        {view.grants.length === 0 ? (
-          <p class="muted pad-x">{t(view.tokens.length ? 'aiapp.noSignIns' : 'home.noApps')}</p>
-        ) : (
-          <ul class="plain pad-x">
+      {apps ? (
+        <section class="card" id="connected-apps" aria-labelledby="connected-apps-h">
+          <div class="card-head">
+            <h2 id="connected-apps-h" class="apps-head">
+              {t('app.apps.yours')} <span class="badge tiny-badge">{view.grants.length}</span>
+            </h2>
+            <a class="btn sm" href="#connect-ai">
+              <Icon name="plus" /> {t('app.apps.addAnother')}
+            </a>
+          </div>
+          <ul class="app-grid">
             {view.grants.map((g) => (
-              <li>
-                <span class="grow">
-                  <AppName id={g.appId} name={g.name} />
-                  {g.client && g.client !== g.name ? <span class="badge">{g.client}</span> : null}
-                  {g.profile ? (
-                    <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span>
-                  ) : null}
-                  <div class="small muted">
-                    {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })} ·{' '}
-                    {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('home.never')}
-                  </div>
-                </span>
-                <form
-                  method="post"
-                  action={`/grants/${g.id}/revoke`}
-                  data-confirm={t('app.apps.revokeConfirm', { name: g.name })}
-                >
-                  <input type="hidden" name="csrf" value={ctx.csrf} />
-                  <button class="sm danger" type="submit">
-                    {t('home.revoke')}
-                  </button>
-                </form>
-              </li>
+              <AppTile ctx={ctx} g={g} />
             ))}
           </ul>
-        )}
-      </div>
-      <div class="card" id="profiles">
-        <div class="card-head">
-          <h2>{t('profiles.title')}</h2>
-          <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
-            {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
-          </a>
-        </div>
-        <p class="muted">{t('profiles.appsText')}</p>
-        {view.profiles.length ? (
-          <ul class="plain">
-            {view.profiles.map((p) => (
-              <li>
-                <span class="grow">
-                  <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
-                    <strong>{p.name}</strong>
-                  </a>{' '}
-                  <code class="small">/mcp/{p.slug}</code>
-                </span>
-                <span class="small muted">
-                  {t('profiles.accountsN', { n: p.accounts })} ·{' '}
-                  {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
-                </span>
-              </li>
+        </section>
+      ) : null}
+      <ConnectAiCard ctx={ctx} />
+      {apps ? null : (
+        <section class="card apps-empty" id="connected-apps">
+          <div class="apps-empty-logos">
+            {APP_LOGOS.map((g) => (
+              <span class="apps-empty-logo">
+                <ServiceLogo icon={g.icon} glyph={g.glyph} name={clientName(g, lang)} />
+                <span class="apps-empty-name">{clientName(g, lang)}</span>
+              </span>
             ))}
-          </ul>
-        ) : null}
-      </div>
-      <div class="card" id="tokens">
-        <h2>{t('app.tokens.title')}</h2>
-        <p class="muted">{t('app.tokens.text')}</p>
-        {view.newToken ? (
-          <div class="notice ok" data-replace-url="/app/apps">
-            <p>
-              <strong>{t('app.tokens.created')}</strong> {t('app.tokens.once')}
-            </p>
-            <CopyField t={t} id="new-token" value={view.newToken} label={t('app.tokens.title')} />
           </div>
-        ) : null}
-        {view.tokens.length ? (
-          <ul class="plain">
-            {view.tokens.map((tok) => (
-              <li>
-                <span class="grow">
-                  <AppName id={tok.appId} name={tok.name} />
-                  {tok.profile ? (
-                    <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
-                  ) : null}
-                  <span class={tok.api ? 'badge warn' : 'badge'}>
-                    {t(tok.api ? 'app.tokens.scopeApi' : 'app.tokens.scopeMcp')}
-                  </span>
-                  <div class="small muted">
-                    {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
-                    {tok.lastUsedAt
-                      ? t('app.apps.used', { ago: fmtAgo(lang, tok.lastUsedAt) })
-                      : t('home.never')}
-                    {tok.expiresAt
-                      ? ` · ${t('app.tokens.expires', { date: fmtDate(lang, tok.expiresAt) })}`
-                      : ''}
-                  </div>
-                </span>
-                <form
-                  method="post"
-                  action={`/app/tokens/${tok.id}/revoke`}
-                  data-confirm={t('app.tokens.revokeConfirm', { name: tok.name })}
-                >
-                  <input type="hidden" name="csrf" value={ctx.csrf} />
-                  <button class="sm danger" type="submit">
-                    {t('home.revoke')}
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <form method="post" action="/app/tokens" class="inline-form">
-          <input type="hidden" name="csrf" value={ctx.csrf} />
-          <div class="wide-2">
-            <label for="tok-name">{t('app.tokens.name')}</label>
-            <input
-              id="tok-name"
-              type="text"
-              name="name"
-              required
-              maxlength={80}
-              placeholder={t('app.tokens.placeholder')}
-            />
-          </div>
+          <h2>{t('app.apps.emptyTitle')}</h2>
+          <p class="muted">{t(view.tokens.length ? 'aiapp.noSignIns' : 'app.apps.emptyText')}</p>
+        </section>
+      )}
+      <h2 class="section-label">{t('app.apps.more')}</h2>
+      <details class="card fold" id="profiles" open={view.profiles.length > 0}>
+        <summary>
+          <span class="fold-icon" aria-hidden="true">
+            <Icon name="layers" />
+          </span>
+          <span class="grow">
+            <span class="fold-title">
+              {t('profiles.title')}
+              {view.profiles.length ? <span class="badge tiny-badge">{view.profiles.length}</span> : null}
+            </span>
+            <span class="muted small fold-sub">{t('profiles.appsText')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
           {view.profiles.length ? (
-            <div>
-              <label for="tok-profile">{t('profiles.tokenFor')}</label>
-              <select id="tok-profile" name="profile">
-                <option value="">{t('profiles.tokenMain')}</option>
-                {view.profiles.map((p) => (
-                  <option value={p.id}>{p.name}</option>
-                ))}
-              </select>
+            <ul class="plain">
+              {view.profiles.map((p) => (
+                <li>
+                  <span class="grow">
+                    <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
+                      <strong>{p.name}</strong>
+                    </a>{' '}
+                    <code class="small">/mcp/{p.slug}</code>
+                  </span>
+                  <span class="small muted">
+                    {t('profiles.accountsN', { n: p.accounts })} ·{' '}
+                    {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p>
+            <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
+              {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
+            </a>
+          </p>
+        </div>
+      </details>
+      <details class="card fold" id="tokens" open={Boolean(view.newToken) || view.tokens.length > 0}>
+        <summary>
+          <span class="fold-icon" aria-hidden="true">
+            <Icon name="key" />
+          </span>
+          <span class="grow">
+            <span class="fold-title">
+              {t('app.tokens.title')}
+              {view.tokens.length ? <span class="badge tiny-badge">{view.tokens.length}</span> : null}
+            </span>
+            <span class="muted small fold-sub">{t('app.tokens.text')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
+          {view.newToken ? (
+            <div class="notice ok" data-replace-url="/app/apps">
+              <p>
+                <strong>{t('app.tokens.created')}</strong> {t('app.tokens.once')}
+              </p>
+              <CopyField t={t} id="new-token" value={view.newToken} label={t('app.tokens.title')} />
             </div>
           ) : null}
-          <div>
-            <label for="tok-exp">{t('app.tokens.expiry')}</label>
-            <select id="tok-exp" name="days">
-              <option value="30">{t('app.tokens.days', { n: 30 })}</option>
-              <option value="90" selected>
-                {t('app.tokens.days', { n: 90 })}
-              </option>
-              <option value="365">{t('app.tokens.days', { n: 365 })}</option>
-              <option value="0">{t('app.tokens.never')}</option>
-            </select>
-          </div>
-          {/* The API switch and its explanation get their own line under the fields. */}
-          <div class="wide">
-            <label class="check">
-              <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
-            </label>
-            <p class="hint">{t('app.tokens.apiHint')}</p>
-          </div>
-          <div class="wide">
-            <button type="submit" class="primary">
-              {t('app.tokens.create')}
-            </button>
-          </div>
-        </form>
-        {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
-      </div>
+          {view.tokens.length ? (
+            <ul class="plain">
+              {view.tokens.map((tok) => (
+                <li>
+                  <span class="grow">
+                    <AppName id={tok.appId} name={tok.name} />
+                    {tok.profile ? (
+                      <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
+                    ) : null}
+                    <span class={tok.api ? 'badge warn' : 'badge'}>
+                      {t(tok.api ? 'app.tokens.scopeApi' : 'app.tokens.scopeMcp')}
+                    </span>
+                    <div class="small muted">
+                      {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
+                      {tok.lastUsedAt
+                        ? t('app.apps.used', { ago: fmtAgo(lang, tok.lastUsedAt) })
+                        : t('aiapp.neverUsed')}
+                      {tok.expiresAt
+                        ? ` · ${t('app.tokens.expires', { date: fmtDate(lang, tok.expiresAt) })}`
+                        : ''}
+                    </div>
+                  </span>
+                  <form
+                    method="post"
+                    action={`/app/tokens/${tok.id}/revoke`}
+                    data-confirm={t('app.tokens.revokeConfirm', { name: tok.name })}
+                  >
+                    <input type="hidden" name="csrf" value={ctx.csrf} />
+                    <button class="sm danger" type="submit">
+                      {t('home.revoke')}
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <h3 class="fold-sub-h">{t('app.tokens.new')}</h3>
+          <form method="post" action="/app/tokens" class="inline-form">
+            <input type="hidden" name="csrf" value={ctx.csrf} />
+            <div class="wide-2">
+              <label for="tok-name">{t('app.tokens.name')}</label>
+              <input
+                id="tok-name"
+                type="text"
+                name="name"
+                required
+                maxlength={80}
+                placeholder={t('app.tokens.placeholder')}
+              />
+            </div>
+            {view.profiles.length ? (
+              <div>
+                <label for="tok-profile">{t('profiles.tokenFor')}</label>
+                <select id="tok-profile" name="profile">
+                  <option value="">{t('profiles.tokenMain')}</option>
+                  {view.profiles.map((p) => (
+                    <option value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div>
+              <label for="tok-exp">{t('app.tokens.expiry')}</label>
+              <select id="tok-exp" name="days">
+                <option value="30">{t('app.tokens.days', { n: 30 })}</option>
+                <option value="90" selected>
+                  {t('app.tokens.days', { n: 90 })}
+                </option>
+                <option value="365">{t('app.tokens.days', { n: 365 })}</option>
+                <option value="0">{t('app.tokens.never')}</option>
+              </select>
+            </div>
+            {/* The API switch and its explanation get their own line under the fields. */}
+            <div class="wide">
+              <label class="check">
+                <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
+              </label>
+              <p class="hint">{t('app.tokens.apiHint')}</p>
+            </div>
+            <div class="wide">
+              <button type="submit" class="primary">
+                {t('app.tokens.create')}
+              </button>
+            </div>
+          </form>
+          {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
+        </div>
+      </details>
     </AppShell>
   );
 };
@@ -1868,20 +2112,21 @@ const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) =
   const last = schedule[schedule.length - 1];
   return (
     <div class="start-schedule">
-      <h3>{t('app.billing.start')}</h3>
-      <ol class="plain">
+      <h3>{t('plan.hero.next')}</h3>
+      <ol class="timeline">
         {schedule.map((p) => {
           const current = p.from.getTime() <= now && now < p.until.getTime();
           return (
             <li class={current ? 'current' : p.until.getTime() <= now ? 'past' : undefined}>
-              <span>
+              <span class="tl-dot" aria-hidden="true" />
+              <strong>
                 {p.kind === 'trial'
                   ? t('app.billing.startTrial', {
                       plan: t(`plan.${p.asPlan ?? 'pro'}.name` as 'plan.free.name'),
                     })
                   : actions(p.actions)}
                 {current ? <span class="badge accent">{t('app.billing.startNow')}</span> : null}
-              </span>
+              </strong>
               <span class="small muted">
                 {t('app.billing.startDates', {
                   from: fmtDate(lang, p.from),
@@ -1893,7 +2138,8 @@ const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) =
         })}
         {last ? (
           <li class={last.until.getTime() <= now ? 'current' : undefined}>
-            <span>{actions(usage.planLimitActions ?? null)}</span>
+            <span class="tl-dot" aria-hidden="true" />
+            <strong>{actions(usage.planLimitActions ?? null)}</strong>
             <span class="small muted">
               {t('app.billing.startAfter', { date: fmtDate(lang, last.until) })}
             </span>
@@ -1913,9 +2159,66 @@ const InviteCard: FC<{ ctx: PageCtx; invite: NonNullable<BillingView['invite']> 
       <h2>{t('app.invite.title')}</h2>
       <p class="muted">{t('app.invite.text', { days: invite.days })}</p>
       <CopyField t={t} id="invite-link" value={invite.link} label={t('app.invite.link')} />
+      <CopyText
+        t={t}
+        id="invite-message"
+        text={t('plan.invite.message', { link: invite.link })}
+        label={t('plan.invite.copy')}
+      />
       <p class="small muted">
         {t('app.invite.stats', { invited: invite.invited, rewarded: invite.rewarded })}
       </p>
+    </div>
+  );
+};
+
+/**
+ * The top of "Plan and limits": the plan in force (with a trial's days left), what it has used and
+ * the way to a bigger one, then whatever the page adds (schedule, bonuses).
+ */
+const PlanSummary: FC<{ ctx: PageCtx; view: BillingView; children?: Child }> = ({ ctx, view, children }) => {
+  const { t, lang } = ctx;
+  const phase = view.usage.phase;
+  const trialPlan = phase?.kind === 'trial' ? planLabel(ctx, phase.asPlan ?? 'pro') : undefined;
+  const daysLeft = phase ? Math.max(1, Math.ceil((phase.until.getTime() - Date.now()) / 86_400_000)) : 0;
+  const top = PLANS.filter((p) => p.public).at(-1);
+  const canGrow = view.plan.public && view.plan.id !== top?.id;
+  return (
+    <div class="card plan-hero">
+      <div class="plan-hero-head">
+        <div class="grow">
+          <span class="eyebrow">{t('plan.hero.label')}</span>
+          <h2>
+            {planLabel(ctx, view.plan.id)}
+            {trialPlan ? (
+              <span class="badge accent">{t('plan.hero.trial', { plan: trialPlan, n: daysLeft })}</span>
+            ) : view.subscription?.periodEnd && !view.paid ? (
+              <span class="badge">
+                {t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}
+              </span>
+            ) : null}
+          </h2>
+          <p class="muted">
+            {view.plan.id === 'unlimited' && ctx.user?.isAdmin
+              ? t('app.billing.ownerPlan')
+              : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
+          </p>
+        </div>
+        {canGrow ? (
+          <a class="btn primary" href="#plans">
+            {t('plan.hero.compare')}
+          </a>
+        ) : null}
+      </div>
+      {trialPlan && phase ? (
+        <div class="notice info with-icon">
+          <Icon name="check" />
+          <span>{t('plan.hero.trialText', { plan: trialPlan, date: fmtDate(lang, phase.until) })}</span>
+        </div>
+      ) : null}
+      <UsageStats ctx={ctx} usage={view.usage} here />
+      {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
+      {children}
     </div>
   );
 };
@@ -1970,22 +2273,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           />
         </div>
       ) : null}
-      <UsageStats ctx={ctx} usage={view.usage} />
-      <div class="card">
-        <div class="card-head">
-          <h2>{t('app.billing.current', { plan: planLabel(ctx, view.plan.id) })}</h2>
-          {view.subscription?.periodEnd && !view.paid ? (
-            <span class="badge">
-              {t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}
-            </span>
-          ) : null}
-        </div>
-        <p class="muted">
-          {view.plan.id === 'unlimited' && ctx.user?.isAdmin
-            ? t('app.billing.ownerPlan')
-            : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
-        </p>
-        {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
+      <PlanSummary ctx={ctx} view={view}>
         {!view.paid && view.usage.schedule?.length ? <StartSchedule ctx={ctx} usage={view.usage} /> : null}
         <p class="hint">{t('app.usage.actionsHint')}</p>
         {view.grants.length ? (
@@ -2015,7 +2303,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             </ul>
           </>
         ) : null}
-      </div>
+      </PlanSummary>
       {view.teams.length ? <PlanTeamsCard ctx={ctx} view={view} /> : null}
       {view.invite ? <InviteCard ctx={ctx} invite={view.invite} /> : null}
       {!view.plan.public ? null : ctx.billing ? null : view.requested ? (
@@ -2033,7 +2321,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
         </div>
       )}
       {/* A special plan from the admin (e.g. unlimited) has nothing to switch to. */}
-      <div data-interval="month" data-interval-root hidden={!view.plan.public}>
+      <div id="plans" data-interval="month" data-interval-root hidden={!view.plan.public}>
         <div class="row between">
           <h2>{t('app.billing.plans')}</h2>
           <fieldset class="billing-switch">
