@@ -191,7 +191,7 @@ export const ConfirmListPage: FC<{
       </div>
     )}
     {telegram.enabled ? (
-      <div class="card">
+      <div class="card" id="telegram">
         <h2 class="h3">{t('home.telegram')}</h2>
         {telegram.linked ? (
           <form method="post" action="/telegram/unlink">

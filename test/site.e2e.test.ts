@@ -726,6 +726,61 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(await hub.services.personas.list(ws.id)).toEqual([]);
     expect((await browser.request(path)).headers.get('location')).toBe('/app/profiles');
   });
+
+  it("shows an AI app's own page: its tokens, rule and actions; renames, disconnects and removes it", async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-app', email: 'aiapp@example.com' });
+    const ws = await workspaceOf((await userByEmail('aiapp@example.com')).id);
+    const { csrf } = TestBrowser.hiddenInputs(await (await browser.request('/app/apps')).text());
+    await browser.request('/app/tokens', { form: { csrf: csrf!, name: 'Cursor', days: '0' } });
+    const [token] = await hub.services.apiTokens.list(ws.id);
+    const appId = token!.aiClientId!;
+    const base = `/app/apps/${appId}`;
+    // One call with this app's token, one with another credential.
+    await hub.services.database.pool.query(
+      `INSERT INTO tool_calls (workspace_id, connector_id, action, tool_name, principal_type, principal_id, status, duration_ms, created_at)
+       VALUES ($1, 'demo', 'echo', 'demo_echo', 'api_token', $2, 'ok', 5, now() - interval '2 minutes'),
+              ($1, 'demo', 'fail', 'demo_fail', 'api_token', 'tok_other', 'error', 5, now() - interval '1 minute')`,
+      [ws.id, token!.id],
+    );
+
+    expect(await (await browser.request('/app/apps')).text()).toContain(`href="${base}"`);
+    const page = await (await browser.request(base)).text();
+    expect(page).toContain('<h1>Cursor</h1>');
+    expect(page).toContain(`action="/app/tokens/${token!.id}/revoke"`);
+    expect(page).toContain('title="demo_echo"');
+    expect(page).not.toContain('title="demo_fail"');
+
+    // Its rule is set from its page and comes back there; the rules page links to it.
+    const rule = await browser.request('/app/rules/scoped', {
+      form: { csrf: csrf!, kind: 'app', id: appId, access: 'read', confirm: '', back: base },
+    });
+    expect(rule.headers.get('location')).toBe(base);
+    expect(await hub.services.policies.listRules(ws.id)).toContainEqual(
+      expect.objectContaining({ aiClientId: appId, access: 'read' }),
+    );
+    expect(await (await browser.request('/app/rules')).text()).toContain(`href="${base}"`);
+
+    const renamed = await browser.request(`${base}/rename`, {
+      form: { csrf: csrf!, name: 'Cursor at work' },
+    });
+    expect(renamed.headers.get('location')).toBe(base);
+    expect((await hub.services.aiClients.get(ws.id, appId)).name).toBe('Cursor at work');
+    // The token is listed under the app's new name.
+    expect(await (await browser.request('/app/apps')).text()).toContain('Cursor at work');
+
+    // Disconnecting ends the token and keeps the rule; then the app can be removed with it.
+    const disconnected = await browser.request(`${base}/disconnect`, { form: { csrf: csrf! } });
+    expect(disconnected.headers.get('location')).toBe(base);
+    expect(await hub.services.apiTokens.list(ws.id)).toEqual([]);
+    const after = await (await browser.request(base)).text();
+    expect(after).toContain(`action="${base}/forget"`);
+    expect(await hub.services.policies.listRules(ws.id)).toHaveLength(1);
+    const removed = await browser.request(`${base}/forget`, { form: { csrf: csrf! } });
+    expect(removed.headers.get('location')).toBe('/app/apps');
+    expect(await hub.services.policies.listRules(ws.id)).toEqual([]);
+    expect((await browser.request(base)).headers.get('location')).toBe('/app/apps');
+  });
 });
 
 describe('website: public pages', () => {

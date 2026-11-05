@@ -52,6 +52,12 @@ const SLUGS = [
   'typeform',
   'wordpress',
   'mailchimp',
+  'vercel',
+  'cloudflare',
+  'bitbucket',
+  'brevo',
+  'caldotcom',
+  'webflow',
 ];
 
 const out = {};

@@ -20,6 +20,7 @@ import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
 import type { ErrorReporter } from '../ops/errors.js';
+import type { WorkspaceApps } from './app-tools.js';
 import type { WorkspaceBilling } from './billing-tools.js';
 import { BUILTIN_TOOLS, MAX_BATCH_CALLS } from './builtin-tools.js';
 import {
@@ -56,6 +57,7 @@ import {
   type ToolCallResult,
   toTransport,
 } from './result.js';
+import type { UserSecurity } from './security-tools.js';
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
@@ -100,6 +102,8 @@ export interface HubDeps {
     admin: WorkspaceAdmin;
     billing?: WorkspaceBilling;
     profiles?: WorkspaceProfiles;
+    apps?: WorkspaceApps;
+    security?: UserSecurity;
   };
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
@@ -745,6 +749,8 @@ export class Hub {
       admin: setup.admin,
       ...(setup.billing ? { billing: setup.billing } : {}),
       ...(setup.profiles ? { profiles: setup.profiles } : {}),
+      ...(setup.apps ? { apps: setup.apps } : {}),
+      ...(setup.security ? { security: setup.security } : {}),
       signal,
     };
     const call: CallContext = {

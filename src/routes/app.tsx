@@ -4,7 +4,6 @@ import { isMetric, type Metric, PLANS } from '../billing/plans.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
-import type { toolCalls } from '../db/schema.js';
 import { isSetupConnector } from '../hub/setup-tools.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
@@ -17,7 +16,6 @@ import {
   AppsPage,
   type AppsView,
   BillingPage,
-  type CallView,
   groupByService,
   OverviewPage,
   ServicesAppPage,
@@ -33,6 +31,8 @@ import {
   type AppAuth,
   appAction,
   appPage,
+  callViews,
+  connectionBack,
   cookieOpts,
   pageCtx,
   saveLocale,
@@ -40,13 +40,10 @@ import {
   shellInfo,
   takeFlash,
 } from './page-helpers.js';
-import { profileBack } from './profiles.js';
 
 const DAY = 86_400_000;
 /** Ids of AI apps and accounts, as rule rows name them (and the rules page links to them). */
 const RULE_ID = /^[\w-]{1,64}$/;
-
-type ToolCallRow = typeof toolCalls.$inferSelect;
 
 function accountView(a: AccountRow, serviceName: string, oauth: boolean): AccountView {
   return {
@@ -115,50 +112,6 @@ export function appRoutes() {
           Boolean(byId.get(a.connectorId)?.oauth),
         ),
       );
-  };
-
-  const callViews = async (c: AppContext, workspaceId: string, rows: ToolCallRow[]): Promise<CallView[]> => {
-    const s = c.get('services');
-    const clients = new Map((await s.aiClients.list(workspaceId)).map((x) => [x.id, x.name]));
-    const grants = new Map(
-      (await s.oauth.listGrants(workspaceId)).map((g) => [g.clientId, g.clientName ?? g.clientId]),
-    );
-    const tokens = new Map((await s.apiTokens.list(workspaceId)).map((x) => [x.id, x.name]));
-    const t = c.get('t');
-    const clientOf = (r: ToolCallRow): string | null => {
-      if (r.principalType === 'session') return t('app.call.dashboard');
-      if (r.clientId) return grants.get(r.clientId) ?? clients.get(r.clientId) ?? null;
-      if (r.principalType === 'api_token' && r.principalId) return tokens.get(r.principalId) ?? null;
-      return null;
-    };
-    const [connectors, accounts] = await Promise.all([
-      s.connectors.list(workspaceId),
-      s.accounts.list(workspaceId),
-    ]);
-    const connectorById = new Map(connectors.map((x) => [x.id, x]));
-    const labels = new Map(accounts.map((a) => [a.id, a.label]));
-    const titleOf = (r: ToolCallRow): string => {
-      const connector = r.connectorId ? connectorById.get(r.connectorId) : undefined;
-      const action = connector?.actions.find((a) => a.name === r.action);
-      if (connector && action) return actionText(connector, action, c.get('locale')).title;
-      // An action the service no longer has (or a custom server's tool): its name, readable.
-      const prefix = `${r.connectorId ?? ''}_`;
-      const name = r.action ?? (r.toolName.startsWith(prefix) ? r.toolName.slice(prefix.length) : r.toolName);
-      const words = name.replace(/[_-]+/g, ' ').trim();
-      return words ? words[0]!.toUpperCase() + words.slice(1) : r.toolName;
-    };
-    return rows.map((r) => ({
-      toolName: r.toolName,
-      connectorId: r.connectorId ?? '',
-      status: r.status,
-      outcome: r.outcome,
-      createdAt: r.createdAt,
-      durationMs: r.durationMs,
-      client: clientOf(r),
-      title: titleOf(r),
-      account: r.accountId ? (labels.get(r.accountId) ?? null) : null,
-      error: r.status === 'error' ? r.errorMessage : null,
-    }));
   };
 
   // --- Overview ---------------------------------------------------------------
@@ -472,13 +425,16 @@ export function appRoutes() {
             id: g.id,
             name: g.clientName ?? g.clientId,
             client: g.aiClientId ? (clientNames.get(g.aiClientId) ?? null) : null,
+            appId: g.aiClientId,
             profile: profileOf(g.personaId),
             createdAt: g.createdAt,
             lastUsedAt: g.lastUsedAt,
           })),
           tokens: tokens.map((tok) => ({
             id: tok.id,
-            name: tok.name,
+            // Renaming the app (here or from the chat) renames its token too.
+            name: (tok.aiClientId && clientNames.get(tok.aiClientId)) || tok.name,
+            appId: tok.aiClientId,
             profile: profileOf(tok.personaId),
             createdAt: tok.createdAt,
             lastUsedAt: tok.lastUsedAt,
@@ -528,7 +484,7 @@ export function appRoutes() {
 
   app.post(
     '/app/tokens/:id/revoke',
-    action(profileBack, async (c, auth) => {
+    action(connectionBack, async (c, auth) => {
       await c.get('services').apiTokens.revoke(auth.workspace.id, c.req.param('id')!);
       setFlash(c, 'ok', 'app.flash.tokenRevoked');
     }),
@@ -763,19 +719,16 @@ export function appRoutes() {
     page('/app/rules', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [security, rules, allClients, grants, tokens, accounts, shell] = await Promise.all([
+      const [security, rules, allApps, accounts, shell] = await Promise.all([
         s.admin.security(ws),
         s.policies.listRules(ws),
-        s.aiClients.list(ws),
-        s.oauth.listGrants(ws),
-        s.apiTokens.list(ws),
+        s.aiApps.list(ws),
         accountsOf(c, ws),
         shellInfo(c, ws),
       ]);
       // Apps with live access (as on the AI apps page), plus any that already have a rule here.
-      const live = new Set([...grants, ...tokens].map((x) => x.aiClientId).filter(Boolean));
       const ruled = new Set(rules.map((r) => r.aiClientId).filter(Boolean));
-      const clients = allClients.filter((x) => live.has(x.id) || ruled.has(x.id));
+      const clients = allApps.filter((x) => x.connections.length > 0 || ruled.has(x.id));
       const simple = (r: (typeof rules)[number]) => r.personaId === null && r.connectorId === null;
       const appRule = (id: string) =>
         rules.find((r) => simple(r) && r.aiClientId === id && r.accountId === null);
@@ -803,6 +756,7 @@ export function appRoutes() {
                 c.get('t')('app.rules.added', { date: fmtDate(c.get('locale'), x.createdAt) }),
                 `${c.get('t')('home.lastUsed')}: ${x.lastUsedAt ? fmtAgo(c.get('locale'), x.lastUsedAt) : c.get('t')('home.never')}`,
               ].join(' · '),
+              href: `/app/apps/${encodeURIComponent(x.id)}`,
               access: appRule(x.id)?.access ?? null,
               confirm: appRule(x.id)?.confirm ?? null,
             })),

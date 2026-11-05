@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import type { ChatView, MessageView, MessagingPort } from './messaging.js';
+import { fileNameFromUrl } from './messaging-http.js';
 import {
   type ActionDefinition,
   type ActionFactory,
@@ -268,7 +269,7 @@ export function messengerActions<TConfig, TCredentials>(
     action({
       name: 'send',
       title: 'Send message',
-      description: `Sends a text message from this ${serviceName} account. Messages go through a queue with human-like pacing (typing, pauses, daily limits) to protect the account; the result is "sent" or "queued" with an eta. A repeated identical request within 10 minutes is not sent twice. Writing to someone who never wrote to this account first needs the user's explicit approval.`,
+      description: `Sends a text, or a file by https link, from this ${serviceName} account via a paced queue that protects it. Result: "sent", or "queued" with an eta. An identical request within 10 minutes is not sent twice. A first message to someone who never wrote to this account needs the user's explicit approval.`,
       input: z.object({
         chat: z.string().max(64).optional().describe('Chat id from list_chats (preferred)'),
         to: z
@@ -276,8 +277,23 @@ export function messengerActions<TConfig, TCredentials>(
           .max(64)
           .optional()
           .describe('For a new conversation: phone number in international format or @username'),
-        text: z.string().trim().min(1).max(4096).describe('Message text'),
+        text: z
+          .string()
+          .trim()
+          .max(4096)
+          .default('')
+          .describe('Message text (with a file: its caption, max 1024)'),
         reply_to: z.string().max(64).optional().describe('Message id to reply to (same chat)'),
+        file_url: z
+          .url({ protocol: /^https$/ })
+          .max(2048)
+          .optional()
+          .describe('Public https link of a file to send'),
+        file_kind: z
+          .enum(['photo', 'video', 'audio', 'document'])
+          .optional()
+          .describe('Default: by extension'),
+        file_name: z.string().trim().min(1).max(200).optional().describe('Shown file name'),
       }),
       hints: { readOnly: false, destructive: false, openWorld: true },
       // Sending is what the user approves by default (same as mail and Slack); see assessRisk below.
@@ -309,10 +325,21 @@ export function messengerActions<TConfig, TCredentials>(
       },
       run: async (input, ctx) => {
         if (!input.chat && !input.to) throw new ConnectorError('invalid_input', 'Pass chat or to.');
+        if (!input.text && !input.file_url)
+          throw new ConnectorError('invalid_input', 'Pass text or file_url.');
         const result = await port.forAccount(ctx.account.id).send({
           ...(input.chat ? { chatId: input.chat } : { to: input.to! }),
           text: input.text,
           ...(input.reply_to ? { replyTo: input.reply_to } : {}),
+          ...(input.file_url
+            ? {
+                file: {
+                  url: input.file_url,
+                  kind: input.file_kind ?? fileKindOf(input.file_url),
+                  name: input.file_name ?? fileNameFromUrl(input.file_url),
+                },
+              }
+            : {}),
         });
         if (result.status === 'failed')
           throw new ConnectorError('upstream', `Not sent: ${result.error ?? 'unknown error'}`);
@@ -395,7 +422,7 @@ export function messengerUiTexts(
         send: {
           title: 'Отправка сообщения',
           description:
-            'Пишет в чат через очередь: пауза и «печатает…», как у человека, без дублей. Первое сообщение новому человеку — только с вашего согласия.',
+            'Пишет в чат через очередь: пауза и «печатает…», как у человека, без дублей. Можно приложить файл по ссылке. Первое сообщение новому человеку — только с вашего согласия.',
         },
         mark_read: {
           title: 'Отметить прочитанным',
@@ -432,7 +459,7 @@ export function messengerUiTexts(
         send: {
           title: 'Send a message',
           description:
-            'Writes to a chat through a queue: human-like pauses and typing, never twice. A first message to someone new needs your OK.',
+            'Writes to a chat through a queue: human-like pauses and typing, never twice. Files can be attached by link. A first message to someone new needs your OK.',
         },
         mark_read: { title: 'Mark as read', description: 'Marks every message of a chat as read.' },
         get_attachment: {
@@ -447,4 +474,16 @@ export function messengerUiTexts(
       },
     },
   };
+}
+
+/**
+ * Guesses how to send a file from its link's extension. Only formats both Telegram and WhatsApp
+ * show as photo, video or audio get those kinds; everything else goes as a document.
+ */
+export function fileKindOf(url: string): 'photo' | 'video' | 'audio' | 'document' {
+  const ext = /\.([a-z0-9]{1,5})$/i.exec(new URL(url).pathname)?.[1]?.toLowerCase();
+  if (ext && ['jpg', 'jpeg', 'png'].includes(ext)) return 'photo';
+  if (ext && ['mp4', '3gp'].includes(ext)) return 'video';
+  if (ext && ['mp3', 'm4a', 'ogg', 'opus', 'aac', 'amr'].includes(ext)) return 'audio';
+  return 'document';
 }

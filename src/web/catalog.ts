@@ -240,6 +240,36 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'docs',
     blurb: { ru: 'Записи, черновики, публикация, комментарии.', en: 'Posts, drafts, publishing, comments.' },
   },
+  vercel: {
+    icon: 'vercel',
+    category: 'dev',
+    blurb: { ru: 'Деплои, логи сборки, домены.', en: 'Deployments, build logs, domains.' },
+  },
+  cloudflare: {
+    icon: 'cloudflare',
+    category: 'dev',
+    blurb: { ru: 'DNS-записи и сброс кэша.', en: 'DNS records and cache purges.' },
+  },
+  bitbucket: {
+    icon: 'bitbucket',
+    category: 'dev',
+    blurb: { ru: 'Pull request’ы, ревью и пайплайны.', en: 'Pull requests, reviews and pipelines.' },
+  },
+  brevo: {
+    icon: 'brevo',
+    category: 'crm',
+    blurb: { ru: 'Контакты, списки, рассылки, письма.', en: 'Contacts, lists, campaigns, emails.' },
+  },
+  calcom: {
+    icon: 'caldotcom',
+    category: 'calendar',
+    blurb: { ru: 'Записи на встречи и типы встреч.', en: 'Bookings and event types.' },
+  },
+  webflow: {
+    icon: 'webflow',
+    category: 'docs',
+    blurb: { ru: 'CMS: черновики, правка, публикация.', en: 'CMS: drafts, edits, publishing.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',

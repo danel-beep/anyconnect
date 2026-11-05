@@ -15,6 +15,7 @@ import {
   ServiceDetailPage,
   ServicesPage,
 } from '../web/site.js';
+import { StatusPage } from '../web/status-page.js';
 import type { AppContext, AppEnv } from './context.js';
 import { currentUser } from './context.js';
 import { pageCtx, saveLocale } from './page-helpers.js';
@@ -55,6 +56,39 @@ export function siteRoutes() {
     c.body(FAVICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': HOURLY }),
   );
   app.get('/favicon.ico', (c) => c.redirect('/favicon.svg', 301));
+
+  // --- Status page ---------------------------------------------------------------
+  app.get('/status', async (c) => {
+    const data = await c.get('services').ops.status.page();
+    return c.html(<StatusPage ctx={pageCtx(c, await currentUser(c))} data={data} />);
+  });
+
+  // For external monitors and embeds: the same data, without internal details.
+  app.get('/status.json', async (c) => {
+    const data = await c.get('services').ops.status.page({ days: 30 });
+    return c.json(
+      {
+        status: data.updatedAt ? data.overall : 'unknown',
+        updatedAt: data.updatedAt?.toISOString() ?? null,
+        stale: data.stale,
+        components: data.components.map((x) => ({
+          id: x.id,
+          status: x.status,
+          since: x.since.toISOString(),
+          uptime30d: x.uptime,
+          ...(x.note ? { affected: x.note } : {}),
+        })),
+        incidents: data.incidents.map((i) => ({
+          component: i.component,
+          status: i.status,
+          startedAt: i.startedAt.toISOString(),
+          endedAt: i.endedAt?.toISOString() ?? null,
+        })),
+      },
+      200,
+      { 'Cache-Control': 'public, max-age=30', 'Access-Control-Allow-Origin': '*' },
+    );
+  });
 
   // --- Language switch --------------------------------------------------------
   app.get('/prefs/lang', async (c) => {

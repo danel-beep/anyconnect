@@ -45,8 +45,9 @@ import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
-import { createOps, type Ops, watchJobs } from './ops/index.js';
-import { WorkspaceProfileTools } from './security/assistant.js';
+import { createOps, type Ops, watchConnections, watchJobs } from './ops/index.js';
+import { AiAppService } from './security/apps.js';
+import { UserSecurityTools, WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
 import { NotificationChannels } from './security/notifications.js';
@@ -107,6 +108,8 @@ export interface Services {
   oauth: OAuthServer;
   verifier: HubTokenVerifier;
   aiClients: AiClientService;
+  /** AI apps with their sign-ins and tokens (rename, disconnect). */
+  aiApps: AiAppService;
   personas: PersonaService;
   policies: PolicyService;
   /** Calls held back for the user's confirmation or an undo window. */
@@ -247,7 +250,7 @@ export function createServices(
     monitor: ops.jobRuns,
     onError: (error, job) => ops.errors.capture(error, { source: 'job', context: { job } }),
   });
-  for (const job of builtinJobs({ health, customServices })) jobs.register(job);
+  for (const job of builtinJobs({ health, customServices, status: ops.status })) jobs.register(job);
   messaging = createMessaging({
     publicUrl: config.publicUrl,
     gatewayConfig: config.gateway,
@@ -260,6 +263,11 @@ export function createServices(
     logger,
   });
   watchJobs(ops, jobs);
+  watchConnections(
+    ops,
+    db,
+    () => new Map(connectors.builtin.all().map((c) => [c.id, connectorText(c, 'en').name] as const)),
+  );
   const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const idempotency = new MemoryIdempotencyStore();
@@ -267,6 +275,13 @@ export function createServices(
   // Security layer: who may do what, confirmations, undo windows.
   const personas = new PersonaService(db, config.mcpUrl);
   const aiClients = new AiClientService(db);
+  const aiApps = new AiAppService({
+    db,
+    clients: aiClients,
+    // The OAuth server is built further down; grants are revoked only after start-up.
+    revokeGrant: (workspaceId, grantId) => oauth.revokeGrant(workspaceId, grantId),
+    tokens: apiTokens,
+  });
   const policies = new PolicyService(db);
   const pendingCalls = new PendingCallService(db, secrets, { confirmationTtlMs: config.confirmations.ttlMs });
   const notificationChannels = new NotificationChannels(db);
@@ -342,6 +357,19 @@ export function createServices(
       admin,
       billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
       profiles: new WorkspaceProfileTools(personas),
+      apps: new WorkspaceAppTools(aiApps, personas),
+      // Users, sessions and second factors are built further down; read only when the tool runs.
+      security: new UserSecurityTools({
+        secondFactors: (userId) => secondFactors.summary(userId),
+        signIn: async (userId) => {
+          const [user, identities] = await Promise.all([users.get(userId), users.identities(userId)]);
+          return { password: Boolean(user?.passwordHash), providers: identities.map((i) => i.provider) };
+        },
+        sessions: async (userId) => (await sessions.list(userId)).length,
+        telegram: telegramBot ? notificationChannels : undefined,
+        requireSecondFactor: config.auth.requireSecondFactor,
+        publicUrl: config.publicUrl,
+      }),
     },
     rateLimiter,
     idempotency,
@@ -441,6 +469,7 @@ export function createServices(
     oauth,
     verifier,
     aiClients,
+    aiApps,
     personas,
     policies,
     pendingCalls,
