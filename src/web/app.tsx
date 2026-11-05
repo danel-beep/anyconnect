@@ -38,6 +38,7 @@ export type AppSection =
   | 'activity'
   | 'confirm'
   | 'rules'
+  | 'teams'
   | 'billing'
   | 'security'
   | 'settings'
@@ -68,6 +69,7 @@ const NAV: {
   { id: 'activity', href: '/app/activity', icon: 'activity', key: 'app.nav.activity', group: 'main' },
   { id: 'confirm', href: '/confirm', icon: 'bell', key: 'app.nav.confirm', group: 'main' },
   { id: 'rules', href: '/app/rules', icon: 'shield', key: 'app.nav.rules', group: 'main' },
+  { id: 'teams', href: '/app/teams', icon: 'users', key: 'app.nav.teams', group: 'main' },
   { id: 'billing', href: '/app/billing', icon: 'card', key: 'app.nav.billing', group: 'account' },
   { id: 'security', href: '/security', icon: 'lock', key: 'app.nav.security', group: 'account' },
   { id: 'settings', href: '/app/settings', icon: 'settings', key: 'app.nav.settings', group: 'account' },
@@ -1557,6 +1559,10 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                   <span class="btn block" aria-disabled="true">
                     {t('app.billing.yours')}
                   </span>
+                ) : plan.audience === 'team' ? (
+                  <a class="btn block" href="/app/teams">
+                    {t('app.billing.forTeams')}
+                  </a>
                 ) : plan.priceMonthly === 0 ? (
                   view.paid ? (
                     <span class="small muted">{t('app.billing.freeByCancel')}</span>

@@ -1,7 +1,7 @@
 import type { Child } from 'hono/jsx';
 import { z } from 'zod';
 import { getDefaultWorkspace } from '../core/identity.js';
-import type { AppError } from '../lib/errors.js';
+import { AppError } from '../lib/errors.js';
 import { type AppSection, AppShell, type ShellInfo } from '../web/app.js';
 import { type Frame, PageFrame } from '../web/frame.js';
 import { clearCookie, csrfToken, readCookie, setSecureCookie, verifyCsrf } from '../web/http.js';
@@ -9,7 +9,14 @@ import type { Key, Locale } from '../web/i18n.js';
 import type { PageCtx } from '../web/page-context.js';
 import { ErrorPage } from '../web/pages.js';
 import type { SessionUser, WebSession } from '../web/sessions.js';
-import { type AppContext, currentSession, currentUser, loginUrl, secondFactorRedirect } from './context.js';
+import {
+  type AppContext,
+  bodyParams,
+  currentSession,
+  currentUser,
+  loginUrl,
+  secondFactorRedirect,
+} from './context.js';
 
 /** Remembers the chosen interface language (set by the RU/EN switch and the profile form). */
 export const LANG_COOKIE = 'ac_lang';
@@ -74,7 +81,8 @@ export async function shellInfo(c: AppContext, workspaceId: string): Promise<She
   const user = await currentUser(c);
   const [subscription, open, accounts, planRequests] = await Promise.all([
     s.entitlements.subscription(workspaceId),
-    s.pendingCalls.listOpen(workspaceId),
+    // The user's own held-back actions, in teams too (what `/confirm` lists).
+    user ? s.pendingCalls.listOpenFor(user.id) : s.pendingCalls.listOpen(workspaceId),
     s.accounts.list(workspaceId),
     user?.role === 'admin' ? s.entitlements.countOpenRequests() : undefined,
   ]);
@@ -181,3 +189,42 @@ export function uiError(c: AppContext, error: AppError | z.ZodError): string {
   const key = ERROR_TEXTS[error.code];
   return key ? t(key) : error.message;
 }
+
+/** Error text for a failed form action: our own messages are user-safe, others are not shown. */
+export const errorText = (c: AppContext, error: unknown): string =>
+  error instanceof AppError ? uiError(c, error) : c.get('t')('error.internal');
+
+/** Runs a GET page of the dashboard for the signed-in user. */
+export const appPage =
+  (path: string, render: (c: AppContext, auth: AppAuth) => Promise<Response>) => async (c: AppContext) => {
+    const auth = await requireApp(c, new URL(c.req.url).pathname + new URL(c.req.url).search || path);
+    if ('redirect' in auth) return c.redirect(auth.redirect, 302);
+    return render(c, auth);
+  };
+
+/** Runs a dashboard form post: CSRF, session, then the action; errors come back as a flash note. */
+export const appAction =
+  (
+    /** Where to go afterwards: a fixed page, or one picked from the posted form or the request. */
+    to: string | ((form: Record<string, string>, c: AppContext) => string),
+    run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
+  ) =>
+  async (c: AppContext) => {
+    const form = await bodyParams(c);
+    const back = typeof to === 'string' ? to : to(form, c);
+    if (!csrfOk(c, form)) return csrfFailedPage(c);
+    const auth = await requireApp(c, back);
+    if ('redirect' in auth) return c.redirect(auth.redirect, 303);
+    try {
+      const response = await run(c, auth, form);
+      if (response) return response;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setFlash(c, 'bad', 'app.flash.invalid');
+        return c.redirect(back, 303);
+      }
+      if (!(error instanceof AppError)) c.get('services').logger.error({ err: error }, 'dashboard action failed');
+      setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
+    }
+    return c.redirect(back, 303);
+  };

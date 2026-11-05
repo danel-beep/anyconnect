@@ -3,6 +3,7 @@ import { AppError } from './lib/errors.js';
 import { adminRoutes } from './routes/admin.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
+import { teamRoutes } from './routes/team.js';
 import { billingRoutes } from './routes/billing.js';
 import { canonicalHost } from './routes/canonical-host.js';
 import { confirmRoutes } from './routes/confirm.js';
@@ -61,6 +62,7 @@ export function createApp(services: Services) {
   app.route('/', confirmRoutes());
   app.route('/', connectRoutes());
   app.route('/', appRoutes());
+  app.route('/', teamRoutes());
   app.route('/', adminRoutes());
   app.route('/', billingRoutes());
   app.route('/', webRoutes());

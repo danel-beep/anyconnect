@@ -21,6 +21,7 @@ export interface TestSubscription {
   customerId: string;
   workspaceId: string;
   priceId: string;
+  quantity: number;
   interval: BillingInterval;
   status: 'active' | 'past_due' | 'canceled';
   periodEnd: Date;
@@ -33,6 +34,7 @@ const CheckoutToken = z.object({
   workspaceId: z.string(),
   planId: z.string(),
   priceId: z.string(),
+  quantity: z.number().int().positive(),
   interval: z.enum(['month', 'year']),
   customerId: z.string().nullable(),
   successUrl: z.string(),
@@ -66,6 +68,7 @@ export class TestBillingProvider implements BillingProvider {
       workspaceId: input.workspaceId,
       planId: input.planId,
       priceId: input.priceId,
+      quantity: input.quantity,
       interval: input.interval,
       customerId: input.customerId,
       successUrl: input.successUrl,
@@ -93,6 +96,7 @@ export class TestBillingProvider implements BillingProvider {
       customerId: input.customerId ?? `cus_${randomBytes(6).toString('hex')}`,
       workspaceId: input.workspaceId,
       priceId: input.priceId,
+      quantity: input.quantity,
       interval: input.interval,
       status: 'active',
       periodEnd: new Date(this.now().getTime() + days * 86_400_000),
@@ -132,11 +136,15 @@ export class TestBillingProvider implements BillingProvider {
     await this.emit(what === 'end' ? 'subscription.canceled' : 'subscription.updated', sub);
   }
 
-  async changePrice(subscription: ProviderSubscriptionRef, priceId: string): Promise<void> {
+  async changeSubscription(
+    subscription: ProviderSubscriptionRef,
+    change: { priceId: string; quantity: number },
+  ): Promise<void> {
     const sub = this.subs.get(subscription.externalId);
     if (!sub) throw new Error('Unknown test subscription (the hub restarted?)');
-    sub.priceId = priceId;
-    sub.interval = priceId.endsWith('_year') ? 'year' : 'month';
+    sub.priceId = change.priceId;
+    sub.quantity = change.quantity;
+    sub.interval = change.priceId.endsWith('_year') ? 'year' : 'month';
     await this.emit('subscription.updated', sub);
   }
 
@@ -174,6 +182,7 @@ export class TestBillingProvider implements BillingProvider {
       externalId: sub.id,
       customerId: sub.customerId,
       priceId: sub.priceId,
+      quantity: sub.quantity,
       interval: sub.interval,
       status: sub.status,
       periodEnd: sub.periodEnd,

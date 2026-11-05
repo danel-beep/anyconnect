@@ -1,9 +1,9 @@
 /**
  * Database schema (Drizzle ORM, PostgreSQL).
  *
- * Ownership model: everything a person connects lives in a *workspace*. Today every user has one
- * personal workspace; teams/commercial plans can later add members to the same workspace without
- * changing the data model.
+ * Ownership model: everything a person connects lives in a *workspace*. Every user has one
+ * personal workspace; a *team* is a workspace with several members, where each connected account
+ * belongs to one member (or to the whole team) and is shared explicitly (see `docs/TEAMS.md`).
  *
  * Migrations are generated from this file with `npm run db:generate` and committed in /drizzle.
  * Keep this file free of runtime imports from the app (drizzle-kit loads it standalone).
@@ -126,9 +126,16 @@ export interface SecuritySettings {
   undoWindowSeconds?: number;
 }
 
+export type WorkspaceKind = 'personal' | 'team';
+export type MemberRole = 'owner' | 'admin' | 'member';
+
 export const workspaces = pgTable('workspaces', {
   id: text().primaryKey(),
   name: text().notNull(),
+  /** `personal`: one person's own space; `team`: several members, each with their own accounts. */
+  kind: text().$type<WorkspaceKind>().notNull().default('personal'),
+  /** Teams: the address part of the team's MCP URL (`/mcp/team/<slug>`); never changes. */
+  slug: text().unique(),
   settings: jsonb().$type<WorkspaceSettings>().notNull().default({}),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -143,10 +150,41 @@ export const workspaceMembers = pgTable(
     userId: text()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: text().$type<'owner' | 'admin' | 'member'>().notNull().default('owner'),
+    role: text().$type<MemberRole>().notNull().default('owner'),
+    /**
+     * Teams: the member's short name, unique in the team. Their accounts are named after it
+     * (`ann`, `ann_work`), so "Ann's mail" is easy to say and to pick.
+     */
+    handle: text(),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.workspaceId, t.userId] }), index().on(t.userId)],
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index().on(t.userId),
+    uniqueIndex().on(t.workspaceId, t.handle),
+  ],
+);
+
+/** Invitations to a team, bound to an email address; the link carries a token stored as a hash. */
+export const workspaceInvitations = pgTable(
+  'workspace_invitations',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Normalized (lowercase); only a user signed in with this address can accept. */
+    email: text().notNull(),
+    role: text().$type<Exclude<MemberRole, 'owner'>>().notNull().default('member'),
+    tokenHash: text().notNull().unique(),
+    invitedBy: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    acceptedAt: timestamp({ withTimezone: true }),
+    acceptedBy: text().references(() => users.id, { onDelete: 'set null' }),
+    revokedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.workspaceId), index().on(t.email)],
 );
 
 /** Browser sessions for the hub's own pages (login, consent, panel). */
@@ -296,6 +334,11 @@ export const apiTokens = pgTable(
     aiClientId: text().references(() => aiClients.id, { onDelete: 'set null' }),
     /** Restricts the token to one persona's MCP URL. */
     personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
+    /**
+     * Teams: the team's shared connection, not tied to one person. It only sees what the whole
+     * team may use (team accounts and accounts shared with everyone) and cannot change the setup.
+     */
+    shared: boolean().notNull().default(false),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
     expiresAt: timestamp({ withTimezone: true }),
@@ -332,6 +375,11 @@ export const accounts = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     /** Connector type, e.g. `gmail`, `telegram`, `demo`. */
     connectorId: text().notNull(),
+    /**
+     * The member it belongs to: only they (and whoever they share it with) can use it. Null: the
+     * team's own account, which every member can use and the team admins manage.
+     */
+    ownerUserId: text().references(() => users.id, { onDelete: 'cascade' }),
     /** Short machine name shown to the AI, unique per connector in a workspace (e.g. `work`). */
     name: text().notNull(),
     /** Human label, e.g. "Рабочая почта". */
@@ -358,7 +406,44 @@ export const accounts = pgTable(
     /** Last connection test (on creation, on demand, by the periodic health check). */
     checkedAt: timestamp({ withTimezone: true }),
   },
-  (t) => [uniqueIndex().on(t.workspaceId, t.connectorId, t.name), index().on(t.workspaceId)],
+  (t) => [
+    uniqueIndex().on(t.workspaceId, t.connectorId, t.name),
+    index().on(t.workspaceId),
+    index().on(t.ownerUserId),
+  ],
+);
+
+export type ShareLevel = 'read' | 'write' | 'full';
+
+/**
+ * Who else in a team may use an account, and how much: one row per member, or `userId` null for the
+ * whole team. A member's account without rows is private to them; a team account without a
+ * whole-team row is fully usable by every member.
+ */
+export const accountShares = pgTable(
+  'account_shares',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** The member it is shared with; null: everyone in the team. */
+    userId: text().references(() => users.id, { onDelete: 'cascade' }),
+    access: text().$type<ShareLevel>().notNull(),
+    createdBy: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index().on(t.workspaceId),
+    uniqueIndex().on(t.accountId, t.userId),
+    uniqueIndex('account_shares_team_unique')
+      .on(t.accountId)
+      .where(sql`${t.userId} is null`),
+  ],
 );
 
 /** Audit trail of every tool call made by an AI client. Arguments are not stored. */
@@ -519,6 +604,8 @@ export interface PendingCallPrincipal {
   credentialId?: string;
   aiClientId?: string;
   personaId?: string;
+  /** A team's shared connection (see `Principal.shared`). */
+  shared?: boolean;
 }
 
 /**
@@ -743,6 +830,8 @@ export interface ConnectDraft {
   label?: string;
   description?: string;
   config?: Record<string, unknown>;
+  /** In a team: whose the new account is (a member's user id, or null for the team's). */
+  owner?: { userId: string | null };
 }
 
 /** A pending "connect account" OAuth flow, single use, short-lived. */
@@ -1016,6 +1105,8 @@ export const subscriptions = pgTable(
     customerId: text(),
     /** Billing interval of a paid subscription. */
     interval: text().$type<'month' | 'year'>(),
+    /** Units bought: seats on plans priced per person (`Plan.perSeat`), otherwise 1. */
+    quantity: integer().notNull().default(1),
     /**
      * When the provider last changed the subscription (its event time). Webhooks can arrive out of
      * order; an older event never overwrites a newer state.

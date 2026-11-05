@@ -10,11 +10,12 @@ import type { SetupActionSpec } from './setup-tools.js';
 export interface WorkspaceBilling {
   /** Plan, limits, usage, subscription and what can be bought: plain JSON for the AI. */
   status(workspaceId: string): Promise<Record<string, unknown>>;
-  /** A link to the billing page with the plan ready to buy or switch to. */
+  /** A link to the billing page with the plan ready to buy or switch to (`seats`: per-person plans). */
   buyLink(
     workspaceId: string,
     planId: string,
     interval: 'month' | 'year',
+    seats?: number,
   ): Promise<{ url: string; switching: boolean }>;
   /** Cancels the paid subscription at the end of its period (`false` takes that back). */
   setCancelAtPeriodEnd(
@@ -57,11 +58,19 @@ export function billingActions(
       input: z.object({
         plan: z.string().min(1).max(40).describe('Plan id, e.g. "pro"'),
         interval: z.enum(['month', 'year']).default('month'),
+        seats: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe('Plans priced per person (e.g. "team"): how many people'),
       }),
       risk: 'read',
       hints: { readOnly: true, idempotent: true, openWorld: false },
-      async run({ plan, interval }, ctx) {
-        const link = await billing(ctx).buyLink(ctx.principal.workspaceId, plan, interval);
+      async run({ plan, interval, seats }, ctx) {
+        await ctx.admin.authorize(ctx.principal, 'admin');
+        const link = await billing(ctx).buyLink(ctx.principal.workspaceId, plan, interval, seats);
         return {
           url: link.url,
           instructions: link.switching
@@ -80,6 +89,7 @@ export function billingActions(
       requiresConfirmation: true,
       hints: { destructive: true, idempotent: true, openWorld: false },
       async run({ undo }, ctx) {
+        await ctx.admin.authorize(ctx.principal, 'admin');
         const result = await billing(ctx).setCancelAtPeriodEnd(ctx.principal.workspaceId, !undo);
         return undo
           ? { resumed: true, plan: result.planId, renews: result.until }

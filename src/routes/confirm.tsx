@@ -71,7 +71,8 @@ export function confirmRoutes() {
     const auth = await session(c, '/confirm');
     if ('redirect' in auth) return c.redirect(auth.redirect, 302);
     const [rows, channels, security] = await Promise.all([
-      s.pendingCalls.listOpen(auth.workspace.id),
+      // The user's own held-back actions, in their personal workspace and in their teams.
+      s.pendingCalls.listOpenFor(auth.user.id),
       s.notificationChannels.status(auth.user.id),
       s.admin.security(auth.workspace.id),
     ]);
@@ -103,7 +104,7 @@ export function confirmRoutes() {
     const id = c.req.param('id');
     const auth = await session(c, `/confirm/${id}`);
     if ('redirect' in auth) return c.redirect(auth.redirect, 302);
-    const row = await s.pendingCalls.getInWorkspace(auth.workspace.id, id);
+    const row = await s.pendingCalls.getForUser(auth.user.id, id);
     return renderInApp(
       c,
       auth.user,
@@ -125,7 +126,7 @@ export function confirmRoutes() {
       return csrfFailed(c);
     const auth = await session(c, `/confirm/${id}`);
     if ('redirect' in auth) return c.redirect(auth.redirect, 303);
-    await s.pendingCalls.getInWorkspace(auth.workspace.id, id);
+    await s.pendingCalls.getForUser(auth.user.id, id);
     const decision = form.decision;
     if (decision === 'approve' || decision === 'deny' || decision === 'cancel') {
       await s.confirmations.decide(id, decision, 'web');

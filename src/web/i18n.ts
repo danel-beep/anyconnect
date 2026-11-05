@@ -5,6 +5,7 @@ import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { siteEn, siteRu } from './i18n/site.js';
+import { teamEn, teamRu } from './i18n/team.js';
 
 export type Locale = 'ru' | 'en';
 
@@ -93,6 +94,12 @@ const coreEn = {
   'consent.persona': 'Persona',
   'consent.personaHint': 'Through this address the app only sees the accounts of this persona.',
   'consent.personaMissing': 'This address belongs to a persona that does not exist in your workspace.',
+  'consent.access.team':
+    'use the team as you: your own accounts and the ones shared with you ({count}\u00a0active)',
+  'consent.team': 'Team',
+  'consent.teamHint': 'Teammates do not see your accounts unless you share them.',
+  'consent.teamMissing':
+    'This is the connector address of a team you are not a member of. Ask the team’s admin for an invitation, accept it while signed in with the invited email address, then connect again.',
   'consent.clientAs': 'Remember as',
   'consent.clientNew': '{name} (new app)',
   'consent.clientHint': 'Access rules of the chosen app apply to it.',
@@ -192,6 +199,7 @@ const en = {
   ...accountEn,
   ...confirmEn,
   ...problemsEn,
+  ...teamEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -283,6 +291,12 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'consent.persona': 'Персона',
   'consent.personaHint': 'По этому адресу приложение видит только аккаунты этой персоны.',
   'consent.personaMissing': 'Этот адрес принадлежит персоне, которой нет в вашем пространстве.',
+  'consent.access.team':
+    'работать в команде от вашего имени: с вашими аккаунтами и теми, которыми с вами поделились (активных:\u00a0{count})',
+  'consent.team': 'Команда',
+  'consent.teamHint': 'Коллеги не видят ваши аккаунты, пока вы ими не поделитесь.',
+  'consent.teamMissing':
+    'Это адрес коннектора команды, в которой вы не состоите. Попросите администратора команды пригласить вас, примите приглашение, войдя с тем адресом почты, на который оно пришло, и подключитесь снова.',
   'consent.clientAs': 'Запомнить как',
   'consent.clientNew': '{name} (новое)',
   'consent.clientHint': 'К нему применяются правила доступа выбранного приложения.',
@@ -382,6 +396,7 @@ const ru: Record<Key, string> = {
   ...accountRu,
   ...confirmRu,
   ...problemsRu,
+  ...teamRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

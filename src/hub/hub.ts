@@ -28,10 +28,14 @@ import {
   type Catalog,
   type CatalogAccount,
   type CatalogAllow,
+  type CatalogTeam,
   type CatalogTool,
   type ClientProfile,
   DEFAULT_PROFILE,
   describeAccount,
+  MY_ACCOUNTS,
+  ownAccounts,
+  ownerText,
 } from './catalog.js';
 import { searchTools } from './discovery.js';
 import {
@@ -94,6 +98,8 @@ export interface HubDeps {
   setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin; billing?: WorkspaceBilling };
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
+  /** Team workspaces: who is calling and whose each account is (labels, `account: "mine"`). */
+  team?: (principal: Principal) => Promise<CatalogTeam | undefined>;
 }
 
 export interface CallOptions {
@@ -159,13 +165,14 @@ export class Hub {
 
   async getCatalog(principal: Principal): Promise<Catalog> {
     const { workspaceId } = principal;
-    const [workspace, connectors, accounts, allow, usage, client] = await Promise.all([
+    const [workspace, connectors, accounts, allow, usage, client, team] = await Promise.all([
       getWorkspace(this.deps.db, workspaceId),
       this.deps.connectors.list(workspaceId),
       this.deps.accounts.list(workspaceId),
       this.deps.catalogFilter?.(principal),
       this.usage(workspaceId),
       this.clientProfile(principal),
+      this.deps.team?.(principal),
     ]);
     if (!workspace) throw notFound('Workspace');
     return buildCatalog({
@@ -177,6 +184,7 @@ export class Hub {
       usage,
       ...(allow ? { allow } : {}),
       ...(this.deps.setup ? { setup: this.deps.setup.connector } : {}),
+      ...(team ? { team } : {}),
     });
   }
 
@@ -416,6 +424,7 @@ export class Hub {
           label: a.label,
           description: a.description ?? undefined,
           identity: typeof a.metadata.identity === 'string' ? a.metadata.identity : undefined,
+          ...(catalog.team?.owners[a.id] ? { owner: ownerText(catalog.team.owners[a.id]) } : {}),
           enabled: a.enabled,
           status: a.enabled ? a.status : 'disabled',
           statusMessage: a.statusMessage ?? undefined,
@@ -517,7 +526,20 @@ export class Hub {
     // 1. Pick the account(s).
     let targets: CatalogAccount[];
     if (!accountArgument) targets = accounts.slice(0, 1);
-    else if (isEmpty(requested) || requested === ALL_ACCOUNTS) {
+    else if (requested === MY_ACCOUNTS && !accounts.some((a) => a.name === MY_ACCOUNTS)) {
+      const own = ownAccounts(accounts);
+      if (own.length === 0) {
+        return reject(
+          `None of these accounts is the user’s own; pass "${ACCOUNT_ARGUMENT}" with one of: ${accounts.map(describeAccount).join('; ')}.`,
+        );
+      }
+      if (own.length > 1 && !fanOut) {
+        return reject(
+          `The user has several accounts here; pass "${ACCOUNT_ARGUMENT}" with one of: ${own.map(describeAccount).join('; ')}.`,
+        );
+      }
+      targets = own;
+    } else if (isEmpty(requested) || requested === ALL_ACCOUNTS) {
       if (accounts.length === 1) targets = accounts;
       else if (fanOut) targets = accounts;
       else {
@@ -610,7 +632,16 @@ export class Hub {
       impl.accounts.map((account) => ({ impl, account })),
     );
     let targets = all;
-    if (!isEmpty(requested) && requested !== ALL_ACCOUNTS) {
+    if (requested === MY_ACCOUNTS) {
+      targets = all.filter(({ account }) => account.owner?.kind === 'self');
+      if (targets.length === 0) {
+        return {
+          rejected: errorResult(
+            `None of these accounts is the user’s own. Use one of: ${all.map(({ impl, account }) => accountKey(impl.connectorId, account.name)).join(', ')}.`,
+          ),
+        };
+      }
+    } else if (!isEmpty(requested) && requested !== ALL_ACCOUNTS) {
       const value = String(requested);
       targets = all.filter(
         ({ impl, account }) =>

@@ -7,11 +7,13 @@ import {
   type AccessLevel,
   type ConfirmLevel,
   type SecuritySettings,
+  type ShareLevel,
   type WorkspaceSettings,
   workspaces,
 } from '../db/schema.js';
-import { badRequest, notFound } from '../lib/errors.js';
+import { badRequest, forbidden, notFound } from '../lib/errors.js';
 import type { AiClientRow, AiClientService } from '../security/clients.js';
+import { isTeamAdmin } from '../security/members.js';
 import { DEFAULT_SECURITY, type Loosening, type PolicyTarget, type RuleChange } from '../security/policy.js';
 import type { PolicyService } from '../security/policy-service.js';
 import type { AccountRow, AccountService, UpdateAccountInput } from './accounts.js';
@@ -19,6 +21,20 @@ import type { AddServiceInput, CustomServiceManager, ServiceView } from './custo
 import { getWorkspace } from './identity.js';
 import type { OAuthAppService } from './oauth-apps.js';
 import type { Principal } from './principal.js';
+import type { TeamMember, TeamService, TeamView } from './teams.js';
+
+/** One account by `service:name`, a name that is unique, or its id. */
+function matchAccount(all: AccountRow[], ref: AccountRef, service?: string): AccountRow {
+  const [first, second] = ref.includes(':') ? ref.split(':', 2) : [service, ref];
+  const matches = all.filter(
+    (a) => a.id === ref || (a.name === second && (first === undefined || a.connectorId === first)),
+  );
+  if (matches.length === 1) return matches[0]!;
+  if (matches.length === 0) throw notFound(`Account "${ref}"`);
+  throw badRequest(
+    `"${ref}" is ambiguous: use one of ${matches.map((a) => `${a.connectorId}:${a.name}`).join(', ')}.`,
+  );
+}
 
 /** Rule levels and changes, for the setup tools (the hub does not depend on the security layer). */
 export { ACCESS_LEVELS, CONFIRM_LEVELS, type RuleChange } from '../security/policy.js';
@@ -65,6 +81,15 @@ export interface ConnectLink {
 /** `service:account`, `account` (when unambiguous) or an account id. */
 export type AccountRef = string;
 
+/**
+ * What a setup operation needs from the caller in a team (personal workspaces allow everything):
+ * `read` anyone, `member` a person (not the team's shared connection), `admin` the owner or an admin.
+ */
+export type TeamNeed = 'read' | 'member' | 'admin';
+
+const SHARED_CONNECTION =
+  'This is the team’s shared connection, which is not tied to one person: it cannot change the setup. A member does that signed in with their own account.';
+
 /** The access rules as the chat shows them (see `WorkspaceAdmin.rulesOverview`). */
 export interface RulesOverview {
   defaults: Required<SecuritySettings>;
@@ -93,10 +118,54 @@ export class WorkspaceAdmin {
       apps: OAuthAppService;
       policies: PolicyService;
       aiClients: AiClientService;
+      /** Teams: who may change what (personal workspaces: the owner, everything). */
+      teams?: TeamService;
       publicUrl: string;
       logger: ConnectorLogger;
     },
   ) {}
+
+  // --- Who may do what (teams) ---------------------------------------------------
+
+  /** The caller's view of their team; undefined in a personal workspace. */
+  teamView(principal: Principal): Promise<TeamView | undefined> {
+    return this.deps.teams?.view(principal) ?? Promise.resolve(undefined);
+  }
+
+  /** Throws a user-safe error when the caller may not do this in their team. */
+  async authorize(principal: Principal, need: TeamNeed): Promise<TeamView | undefined> {
+    const view = await this.teamView(principal);
+    if (!view || need === 'read') return view;
+    if (!view.member) throw forbidden(SHARED_CONNECTION);
+    if (need === 'admin' && !isTeamAdmin(view.member.role)) {
+      throw forbidden('Only the team’s owner and admins can change this; ask one of them.');
+    }
+    return view;
+  }
+
+  /**
+   * An account the caller can see (with `manage`: may change). In a team that is their own
+   * accounts, the team's, and what others shared with them; only owners (and admins, for team
+   * accounts) manage an account.
+   */
+  async accountFor(
+    principal: Principal,
+    ref: AccountRef,
+    opts: { manage?: boolean; service?: string } = {},
+  ): Promise<AccountRow> {
+    const view = opts.manage ? await this.authorize(principal, 'member') : await this.teamView(principal);
+    const all = await this.deps.accounts.list(principal.workspaceId);
+    const visible = view ? all.filter((a) => a.id in view.access.access) : all;
+    const account = matchAccount(visible, ref, opts.service);
+    if (opts.manage && view && !view.access.manages.has(account.id)) {
+      throw forbidden(
+        account.ownerUserId === null
+          ? 'Only the team’s owner and admins can change team accounts.'
+          : 'Only the account’s owner can change it.',
+      );
+    }
+    return account;
+  }
 
   // --- Services --------------------------------------------------------------
 
@@ -194,9 +263,12 @@ export class WorkspaceAdmin {
    * whatever the service needs: the provider's sign-in, an API key, a QR code.
    */
   async connectLink(
-    workspaceId: string,
-    input: { service: string; label?: string; name?: string; reconnect?: AccountRef },
+    principal: Principal,
+    input: { service: string; label?: string; name?: string; reconnect?: AccountRef; forTeam?: boolean },
   ): Promise<ConnectLink> {
+    const workspaceId = principal.workspaceId;
+    const view = await this.authorize(principal, input.forTeam ? 'admin' : 'member');
+    if (input.forTeam && !view) throw badRequest('Team accounts exist only in a team.');
     const connector = await this.deps.connectors.get(workspaceId, input.service);
     if (!connector) throw badRequest(`Unknown service "${input.service}". List them with the services tool.`);
     let method = this.connectMethod(connector);
@@ -207,8 +279,14 @@ export class WorkspaceAdmin {
       method = route.via;
     }
     const url = new URL(`/connect/${encodeURIComponent(connector.id)}`, this.deps.publicUrl);
+    // The page connects into this team, as the member who opens it (or for the whole team).
+    if (view) {
+      url.searchParams.set('team', view.team.slug);
+      url.searchParams.set('returnTo', `/app/team/${view.team.slug}`);
+    }
+    if (input.forTeam) url.searchParams.set('owner', 'team');
     if (input.reconnect) {
-      const account = await this.findAccount(workspaceId, input.reconnect, connector.id);
+      const account = await this.accountFor(principal, input.reconnect, { manage: true, service: connector.id });
       url.searchParams.set('account', account.id);
     } else {
       if (input.name && (await this.deps.accounts.findByName(workspaceId, connector.id, input.name))) {
@@ -222,16 +300,7 @@ export class WorkspaceAdmin {
   }
 
   async findAccount(workspaceId: string, ref: AccountRef, service?: string): Promise<AccountRow> {
-    const all = await this.deps.accounts.list(workspaceId);
-    const [first, second] = ref.includes(':') ? ref.split(':', 2) : [service, ref];
-    const matches = all.filter(
-      (a) => a.id === ref || (a.name === second && (first === undefined || a.connectorId === first)),
-    );
-    if (matches.length === 1) return matches[0]!;
-    if (matches.length === 0) throw notFound(`Account "${ref}"`);
-    throw badRequest(
-      `"${ref}" is ambiguous: use one of ${matches.map((a) => `${a.connectorId}:${a.name}`).join(', ')}.`,
-    );
+    return matchAccount(await this.deps.accounts.list(workspaceId), ref, service);
   }
 
   async updateAccount(
@@ -274,6 +343,113 @@ export class WorkspaceAdmin {
     const account = await this.findAccount(workspaceId, ref);
     const test = await this.deps.accounts.test(workspaceId, account.id, this.deps.logger);
     return { account: await this.deps.accounts.get(workspaceId, account.id), test };
+  }
+
+  // --- Teams ---------------------------------------------------------------------
+
+  private teams(): TeamService {
+    if (!this.deps.teams) throw badRequest('Teams are not available on this server.');
+    return this.deps.teams;
+  }
+
+  /** A member by handle, email or name (any case). */
+  async findMember(workspaceId: string, ref: string): Promise<TeamMember> {
+    const wanted = ref.trim().toLowerCase().replace(/^@/, '');
+    const members = await this.teams().members(workspaceId);
+    const matches = members.filter(
+      (m) => m.handle === wanted || m.email === wanted || m.name.toLowerCase() === wanted,
+    );
+    if (matches.length === 1) return matches[0]!;
+    if (matches.length === 0) throw notFound(`Team member "${ref}"`);
+    throw badRequest(`"${ref}" matches several members: use one of ${matches.map((m) => m.handle).join(', ')}.`);
+  }
+
+  /** The team as the caller sees it: members, whose each account is, what is shared, invitations. */
+  async teamOverview(principal: Principal) {
+    const view = await this.teamView(principal);
+    if (!view) {
+      const teams = await this.deps.teams?.teamsOf(principal.userId);
+      return { personal: true as const, teams: teams ?? [] };
+    }
+    const teams = this.teams();
+    const admin = isTeamAdmin(view.member?.role);
+    const [members, accounts, shares, invitations] = await Promise.all([
+      teams.members(view.team.id),
+      this.deps.accounts.list(view.team.id),
+      teams.shares(view.team.id),
+      admin ? teams.invitations(view.team.id) : Promise.resolve([]),
+    ]);
+    const handleOf = new Map(members.map((m) => [m.userId, m.handle]));
+    const visible = accounts.filter((a) => a.id in view.access.access);
+    return {
+      personal: false as const,
+      view,
+      url: teams.teamUrl(view.team.slug),
+      members,
+      accounts: visible.map((a) => ({
+        account: a,
+        owner: view.access.owners[a.id]!,
+        access: view.access.access[a.id]!,
+        manages: view.access.manages.has(a.id),
+        // Only who manages an account sees whom it is shared with.
+        sharedWith: view.access.manages.has(a.id)
+          ? shares
+              .filter((sh) => sh.accountId === a.id)
+              .map((sh) => ({ with: sh.userId ? (handleOf.get(sh.userId) ?? sh.userId) : 'team', access: sh.access }))
+          : [],
+      })),
+      invitations,
+    };
+  }
+
+  /**
+   * Whether sharing an account this way gives anyone more than now (a new share, a higher level):
+   * that waits for the owner's confirmation, while narrowing or ending a share applies at once.
+   */
+  async shareWidens(
+    principal: Principal,
+    ref: AccountRef,
+    withRef: string,
+    level: ShareLevel | null,
+  ): Promise<boolean> {
+    if (level === null) return false;
+    const { account, userId } = await this.shareTarget(principal, ref, withRef);
+    const current = (await this.teams().shares(principal.workspaceId)).find(
+      (sh) => sh.accountId === account.id && sh.userId === userId,
+    );
+    const order = { read: 1, write: 2, full: 3 } as const;
+    if (account.ownerUserId === null && userId === null) return order[level] > order[current?.access ?? 'full'];
+    return !current || order[level] > order[current.access];
+  }
+
+  private async shareTarget(principal: Principal, ref: AccountRef, withRef: string) {
+    const account = await this.accountFor(principal, ref, { manage: true });
+    const userId =
+      withRef.trim().toLowerCase() === 'team' ? null : (await this.findMember(principal.workspaceId, withRef)).userId;
+    return { account, userId };
+  }
+
+  async shareAccount(
+    principal: Principal,
+    ref: AccountRef,
+    withRef: string,
+    level: ShareLevel | null,
+  ): Promise<{ account: AccountRow; with: string }> {
+    const { account, userId } = await this.shareTarget(principal, ref, withRef);
+    await this.teams().share(principal.userId, principal.workspaceId, account.id, userId, level);
+    return { account, with: userId === null ? 'team' : withRef };
+  }
+
+  async inviteMember(principal: Principal, input: { email: string; role?: 'admin' | 'member' }) {
+    await this.authorize(principal, 'admin');
+    return this.teams().invite(principal.userId, principal.workspaceId, input);
+  }
+
+  async removeMember(principal: Principal, memberRef: string) {
+    await this.authorize(principal, 'admin');
+    const member = await this.findMember(principal.workspaceId, memberRef);
+    const outcome = await this.teams().removeMember(principal.userId, principal.workspaceId, member.userId);
+    return { member, ...outcome };
   }
 
   // --- Workspace settings ------------------------------------------------------
@@ -320,13 +496,19 @@ export class WorkspaceAdmin {
   /** Defaults, the rules for apps and accounts, and what applies to the caller on each account. */
   async rulesOverview(principal: Principal): Promise<RulesOverview> {
     const workspaceId = principal.workspaceId;
-    const [defaults, rules, clients, accounts, policy] = await Promise.all([
+    const [defaults, allRules, clients, allAccounts, policy, view] = await Promise.all([
       this.security(workspaceId),
       this.deps.policies.listRules(workspaceId),
       this.deps.aiClients.list(workspaceId),
       this.deps.accounts.list(workspaceId),
       this.deps.policies.forPrincipal(principal),
+      this.teamView(principal),
     ]);
+    // In a team, rules on accounts the caller cannot see stay as private as the accounts.
+    const accounts = view ? allAccounts.filter((a) => a.id in view.access.access) : allAccounts;
+    const rules = view
+      ? allRules.filter((r) => r.accountId === null || r.accountId in view.access.access)
+      : allRules;
     const appName = new Map(clients.map((c) => [c.id, c.name]));
     const ref = new Map(accounts.map((a) => [a.id, `${a.connectorId}:${a.name}`]));
     const simple = rules.filter((r) => r.personaId === null && r.connectorId === null);

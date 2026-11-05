@@ -63,6 +63,8 @@ export class UserService {
       accounts: AccountService;
       oauth: OAuthServer;
       apiTokens: ApiTokenService;
+      /** Teams the user belongs to: their accounts there go, a team they own passes on. */
+      teams?: { forgetUser(userId: string): Promise<void> };
       /** Lower-cased emails that are promoted to admin when they sign in. */
       adminEmails: string[];
       signups: 'open' | 'closed';
@@ -227,6 +229,7 @@ export class UserService {
    */
   async delete(userId: string): Promise<void> {
     await this.require(userId);
+    await this.deps.teams?.forgetUser(userId);
     for (const workspace of await this.ownedWorkspaces(userId)) {
       const members = await this.deps.db
         .select({ userId: workspaceMembers.userId })
@@ -244,6 +247,34 @@ export class UserService {
 
 const ACTIVE_CACHE_MS = 15_000;
 const activeCache = new Map<string, { at: number; active: boolean }>();
+const memberCache = new Map<string, { at: number; member: boolean }>();
+
+/**
+ * `(user, workspace) → is the user still a member`, for the token verifier: a person removed from a
+ * team has their tokens revoked at once; this is the backstop. Cached for 15 s per process.
+ */
+export function memberCheck(db: Db): (userId: string, workspaceId: string) => Promise<boolean> {
+  return async (userId, workspaceId) => {
+    const key = `${userId}:${workspaceId}`;
+    const now = Date.now();
+    const hit = memberCache.get(key);
+    if (hit && now - hit.at < ACTIVE_CACHE_MS) return hit.member;
+    const [row] = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.workspaceId, workspaceId)))
+      .limit(1);
+    const member = Boolean(row);
+    memberCache.set(key, { at: now, member });
+    if (memberCache.size > 10_000) memberCache.delete(memberCache.keys().next().value!);
+    return member;
+  };
+}
+
+/** Forgets cached memberships of a workspace (after someone left it). */
+export function forgetMembership(userId: string, workspaceId: string): void {
+  memberCache.delete(`${userId}:${workspaceId}`);
+}
 
 /**
  * `userId → is the user active`, for the token verifier on every MCP/API request. Cached for 15 s

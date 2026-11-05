@@ -57,6 +57,7 @@ function account(connectorId: string): AccountRow {
     createdAt: now,
     updatedAt: now,
     lastUsedAt: null,
+    ownerUserId: null,
     checkedAt: null,
   };
 }

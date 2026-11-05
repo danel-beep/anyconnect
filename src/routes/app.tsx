@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { isMetric, type Metric, PLANS } from '../billing/plans.js';
+import { isMetric, type Metric, PLANS, planFits } from '../billing/plans.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
@@ -31,6 +31,8 @@ import { fmtAgo, fmtDate } from '../web/ui.js';
 import { type AppContext, type AppEnv, bodyParams, SESSION_COOKIE } from './context.js';
 import {
   type AppAuth,
+  appAction,
+  appPage,
   cookieOpts,
   csrfFailedPage,
   csrfOk,
@@ -66,10 +68,6 @@ function accountView(a: AccountRow, serviceName: string, oauth: boolean): Accoun
   };
 }
 
-/** Error text for a failed form action: our own messages are user-safe, others are not shown. */
-const errorText = (c: AppContext, error: unknown): string =>
-  error instanceof AppError ? uiError(c, error) : c.get('t')('error.internal');
-
 /**
  * The signed-in dashboard (`/app/...`): overview, services and accounts, AI apps and tokens,
  * activity, plan and limits, settings. Every page needs a session (and the second factor when the
@@ -78,41 +76,8 @@ const errorText = (c: AppContext, error: unknown): string =>
 export function appRoutes() {
   const app = new Hono<AppEnv>();
 
-  /** Runs a GET page for the signed-in user. */
-  const page =
-    (path: string, render: (c: AppContext, auth: AppAuth) => Promise<Response>) => async (c: AppContext) => {
-      const auth = await requireApp(c, new URL(c.req.url).pathname + new URL(c.req.url).search || path);
-      if ('redirect' in auth) return c.redirect(auth.redirect, 302);
-      return render(c, auth);
-    };
-
-  /** Runs a form post: CSRF, session, then the action; errors come back as a flash note. */
-  const action =
-    (
-      /** Where to go afterwards: a fixed page, or one picked from the posted form. */
-      to: string | ((form: Record<string, string>) => string),
-      run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
-    ) =>
-    async (c: AppContext) => {
-      const form = await bodyParams(c);
-      const back = typeof to === 'string' ? to : to(form);
-      if (!csrfOk(c, form)) return csrfFailedPage(c);
-      const auth = await requireApp(c, back);
-      if ('redirect' in auth) return c.redirect(auth.redirect, 303);
-      try {
-        const response = await run(c, auth, form);
-        if (response) return response;
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          setFlash(c, 'bad', 'app.flash.invalid');
-          return c.redirect(back, 303);
-        }
-        if (!(error instanceof AppError))
-          c.get('services').logger.error({ err: error }, 'dashboard action failed');
-        setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
-      }
-      return c.redirect(back, 303);
-    };
+  const page = appPage;
+  const action = appAction;
 
   const usageOf = async (c: AppContext, workspaceId: string): Promise<UsageView> => {
     const summary = await c.get('services').entitlements.summary(workspaceId);
@@ -212,7 +177,7 @@ export function appRoutes() {
         s.apiTokens.list(ws),
         s.activity.recent(ws, { limit: 6 }),
         s.activity.countSince(ws, new Date(Date.now() - 7 * DAY)),
-        s.pendingCalls.listOpen(ws),
+        s.pendingCalls.listOpenFor(auth.user.id),
         shellInfo(c, ws),
       ]);
       const asking = open.filter((row) => row.status === 'awaiting_confirmation');
@@ -384,7 +349,7 @@ export function appRoutes() {
   ) =>
     app.post(
       `/app/accounts/:id/${name}`,
-      action(accountBack, async (c, auth, form) => {
+      action((form) => accountBack(form), async (c, auth, form) => {
         const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
         await run(c, auth, account, form);
         return undefined;
@@ -669,7 +634,9 @@ export function appRoutes() {
         .safeParse({ plan: c.req.query('plan'), interval: c.req.query('interval') });
       const focus =
         query.success && query.data.plan && query.data.plan !== entitlements.plan.id
-          ? PLANS.find((p) => p.id === query.data.plan && p.public && p.priceMonthly > 0)
+          ? PLANS.find(
+              (p) => p.id === query.data.plan && p.public && p.priceMonthly > 0 && planFits(p, 'personal'),
+            )
           : undefined;
       const buyable = PLANS.flatMap((p) =>
         (['month', 'year'] as const).filter((i) => s.billing.canBuy(p.id, i)).map((i) => `${p.id}:${i}`),

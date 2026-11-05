@@ -37,6 +37,7 @@ function rows(services: string[]) {
       createdAt: now,
       updatedAt: now,
       lastUsedAt: null,
+      ownerUserId: null,
       checkedAt: null,
     })),
   );

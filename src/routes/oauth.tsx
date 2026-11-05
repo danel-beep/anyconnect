@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { getDefaultWorkspace } from '../core/identity.js';
+import { getDefaultWorkspace, type Workspace } from '../core/identity.js';
+import type { MemberRole } from '../db/schema.js';
 import { OAuthProtocolError } from '../oauth/clients.js';
 import { isLoopbackRedirect, knownClientName } from '../oauth/redirect.js';
 import type { AuthorizationRequest } from '../oauth/server.js';
@@ -68,12 +69,40 @@ function displayName(request: AuthorizationRequest): { clientName: string; verif
   return verifiedDomain ? { clientName, verifiedDomain } : { clientName };
 }
 
-/** The persona of the requested MCP URL, `null` for the root URL, `undefined` if it does not exist. */
-async function personaOf(c: AppContext, workspaceId: string, resource: string) {
+type PersonaRow = NonNullable<Awaited<ReturnType<AppContext['var']['services']['personas']['bySlug']>>>;
+
+/** Where an app that asks for an MCP URL connects, and how many accounts it will see there. */
+type ConsentTarget =
+  | { kind: 'personal'; workspace: Workspace; persona: PersonaRow | null; visible: number }
+  | { kind: 'team'; workspace: Workspace; role: MemberRole; visible: number }
+  | { kind: 'error'; message: string; status: 403 | 404 | 500 };
+
+/**
+ * The workspace behind the requested MCP URL: a team the user belongs to (`/mcp/team/<slug>`), or
+ * their personal workspace, maybe through a persona (`/mcp/<persona>`). Someone outside a team gets
+ * the same answer whether the team exists or not.
+ */
+async function consentTarget(c: AppContext, userId: string, resource: string): Promise<ConsentTarget> {
   const s = c.get('services');
+  const t = c.get('t');
+  const teamSlug = s.teams.slugOfResource(resource);
+  if (teamSlug) {
+    const team = await s.teams.bySlug(teamSlug);
+    const membership = team ? await s.teams.forMember(team.id, userId).catch(() => undefined) : undefined;
+    if (!team || !membership) return { kind: 'error', message: t('consent.teamMissing'), status: 403 };
+    const view = await s.teams.view({ kind: 'session', userId, workspaceId: team.id, scopes: [] });
+    const visible = (await s.accounts.list(team.id)).filter((a) => a.enabled && view?.access.access[a.id]);
+    return { kind: 'team', workspace: team, role: membership.role, visible: visible.length };
+  }
+  const workspace = await getDefaultWorkspace(s.db, userId);
+  if (!workspace) return { kind: 'error', message: 'No workspace', status: 500 };
   const slug = s.personas.slugOfResource(resource);
-  if (!slug) return null;
-  return s.personas.bySlug(workspaceId, slug);
+  const persona = slug ? await s.personas.bySlug(workspace.id, slug) : null;
+  if (persona === undefined) return { kind: 'error', message: t('consent.personaMissing'), status: 404 };
+  const visible = (await s.accounts.list(workspace.id)).filter(
+    (a) => a.enabled && (!persona || persona.accountIds.includes(a.id)),
+  );
+  return { kind: 'personal', workspace, persona, visible: visible.length };
 }
 
 const NEW_CLIENT = 'new';
@@ -96,18 +125,11 @@ async function clientChoice(c: AppContext, workspaceId: string, request: Authori
 async function renderConsent(c: AppContext, request: AuthorizationRequest, params: Record<string, string>) {
   const s = c.get('services');
   const user = (await currentUser(c))!;
-  const workspace = await getDefaultWorkspace(s.db, user.id);
-  if (!workspace)
-    return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message="No workspace" />, 500);
-  const persona = await personaOf(c, workspace.id, request.resource);
-  if (persona === undefined)
-    return c.html(
-      <ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('consent.personaMissing')} />,
-      404,
-    );
-  const visible = (await s.accounts.list(workspace.id)).filter(
-    (a) => a.enabled && (!persona || persona.accountIds.includes(a.id)),
-  );
+  const target = await consentTarget(c, user.id, request.resource);
+  if (target.kind === 'error')
+    return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message={target.message} />, target.status);
+  const { workspace } = target;
+  const persona = target.kind === 'personal' ? target.persona : null;
   const choice = await clientChoice(c, workspace.id, request);
   const redirect = new URL(request.redirectUri);
   const redirectHost = redirect.host || `${redirect.protocol}//`;
@@ -125,8 +147,9 @@ async function renderConsent(c: AppContext, request: AuthorizationRequest, param
         ...(knownApp && redirect.protocol === 'https:' ? { knownApp } : {}),
         loopback: isLoopbackRedirect(request.redirectUri),
         workspaceName: workspace.name,
-        activeAccounts: visible.length,
+        activeAccounts: target.visible,
         ...(persona ? { persona: { name: persona.name, slug: persona.slug } } : {}),
+        ...(target.kind === 'team' ? { team: { name: workspace.name } } : {}),
         clientChoice: { selected: choice.selected, options: choice.options },
         email: user.email,
         csrf: csrfToken(c, { secure: s.config.secureCookies }),
@@ -149,12 +172,18 @@ export function oauthRoutes() {
   app.get('/.well-known/oauth-protected-resource/mcp', (c) =>
     c.json(c.get('services').oauth.protectedResourceMetadata()),
   );
-  app.get('/.well-known/oauth-protected-resource/mcp/:persona', (c) => {
+  const subResourceMetadata = (c: AppContext, path: string) => {
     const s = c.get('services');
-    const resource = s.oauth.canonicalResource(`${s.config.mcpUrl}/${c.req.param('persona')}`);
+    const resource = s.oauth.canonicalResource(`${s.config.mcpUrl}/${path}`);
     if (!resource) return c.json({ error: 'not_found' }, 404);
     return c.json(s.oauth.protectedResourceMetadata(resource));
-  });
+  };
+  app.get('/.well-known/oauth-protected-resource/mcp/team/:team', (c) =>
+    subResourceMetadata(c, `team/${c.req.param('team')}`),
+  );
+  app.get('/.well-known/oauth-protected-resource/mcp/:persona', (c) =>
+    subResourceMetadata(c, c.req.param('persona')),
+  );
 
   // --- Client registration, token, revocation (machine endpoints) ----------
   app.use('/oauth/register', publicCors());
@@ -240,15 +269,14 @@ export function oauthRoutes() {
     }
     if (validation.kind === 'error_redirect') return c.redirect(validation.location, 303);
     if (form.decision !== 'approve') return c.redirect(s.oauth.deny(validation.request), 303);
-    const workspace = await getDefaultWorkspace(s.db, user.id);
-    if (!workspace)
-      return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message="No workspace" />, 500);
-    const persona = await personaOf(c, workspace.id, validation.request.resource);
-    if (persona === undefined)
+    const target = await consentTarget(c, user.id, validation.request.resource);
+    if (target.kind === 'error')
       return c.html(
-        <ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('consent.personaMissing')} />,
-        404,
+        <ErrorPage t={c.get('t')} lang={c.get('locale')} message={target.message} />,
+        target.status,
       );
+    const { workspace } = target;
+    const persona = target.kind === 'personal' ? target.persona : null;
     // Link the app to an AI client entity: the one the user picked, or the suggested identity.
     const { identity } = await clientChoice(c, workspace.id, validation.request);
     const picked = form.ai_client && form.ai_client !== NEW_CLIENT ? form.ai_client : undefined;
@@ -260,7 +288,12 @@ export function oauthRoutes() {
       ...(persona ? { personaId: persona.id } : {}),
     });
     s.logger.info(
-      { clientId: validation.request.client.id, userId: user.id, aiClientId: aiClient.id },
+      {
+        clientId: validation.request.client.id,
+        userId: user.id,
+        aiClientId: aiClient.id,
+        ...(target.kind === 'team' ? { teamId: workspace.id } : {}),
+      },
       'oauth access approved',
     );
     return c.redirect(location, 303);

@@ -54,10 +54,17 @@ export interface PolicyPersona {
   maxAccess: AccessLevel;
 }
 
+/** What one team member may do at most on each account (see `members.ts`); a missing account is invisible. */
+export interface PolicyMember {
+  access: Readonly<Record<string, AccessLevel>>;
+}
+
 export interface PolicySubject {
   aiClientId?: string | undefined;
   /** The persona of the MCP URL the call came through, if any. */
   persona?: PolicyPersona | undefined;
+  /** Team workspaces: the caller's own accounts, the team's and what others shared with them. */
+  member?: PolicyMember | undefined;
 }
 
 export interface PolicyTarget {
@@ -74,7 +81,7 @@ export interface PolicyDecision {
   confirm: boolean;
   undoWindowSeconds: number;
   /** Machine-readable reason when not allowed. */
-  reason?: 'persona' | 'access';
+  reason?: 'persona' | 'member' | 'access';
   /** Rules that decided each field (for the audit log and the panel). */
   ruleIds: string[];
 }
@@ -135,6 +142,18 @@ export function accountPolicy(
       ruleIds: [],
     };
   }
+  // In a team, another member's account that was not shared with the caller does not exist for them.
+  const memberCap =
+    subject.member && target.accountId !== null ? (subject.member.access[target.accountId] ?? 'none') : undefined;
+  if (memberCap === 'none') {
+    return {
+      access: 'none',
+      confirmLevel: defaults.defaultConfirm,
+      undoWindowSeconds: 0,
+      reason: 'member',
+      ruleIds: [],
+    };
+  }
   const applicable = rules
     .filter((rule) => matches(rule, subject, target))
     .map((rule) => ({ rule, score: specificity(rule) }));
@@ -154,8 +173,10 @@ export function accountPolicy(
     (v) => v,
   );
   let level = access?.value ?? defaults.defaultAccess;
-  const cap = subject.persona?.maxAccess;
-  if (cap && ACCESS_ORDER[cap] < ACCESS_ORDER[level]) level = cap;
+  // Rules can only lower what a persona or a share allows, never raise it.
+  for (const cap of [subject.persona?.maxAccess, memberCap]) {
+    if (cap && ACCESS_ORDER[cap] < ACCESS_ORDER[level]) level = cap;
+  }
   return {
     access: level,
     confirmLevel: confirm?.value ?? defaults.defaultConfirm,
