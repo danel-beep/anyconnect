@@ -69,15 +69,16 @@ function shown(el){return !el.hidden&&!(el.closest&&el.closest('[data-chip-off]'
 $$('[data-filter]').forEach(function(input){var box=d.querySelector(input.getAttribute('data-filter'));if(!box)return;
 function sel(a){var v=input.getAttribute(a);return v?d.querySelector(v):null}
 var expand=sel('data-filter-expand'),hide=sel('data-filter-hide'),count=sel('data-filter-count'),clear=sel('data-filter-clear'),wasOpen=null;
-function run(){var q=input.value.trim().toLowerCase(),words=q?q.split(/\\s+/):[];if(q)box.dispatchEvent(new Event('filtering'));
+function run(){var q=input.value.trim().toLowerCase(),words=q?q.split(/\\s+/):[];
 $$('[data-search]',box).forEach(function(el){var text=el.getAttribute('data-search').toLowerCase();el.hidden=!words.every(function(w){return text.indexOf(w)>=0})});
 $$('[data-filter-group]',box).forEach(function(g){g.hidden=$$('[data-search]',g).every(function(el){return el.hidden})});
 if(hide)hide.hidden=q!=='';if(clear)clear.hidden=input.value==='';
 if(expand){if(q!==''){if(wasOpen===null)wasOpen=expand.open;expand.open=true;expand.setAttribute('data-searching','')}else{expand.removeAttribute('data-searching');if(wasOpen!==null)expand.open=wasOpen;wasOpen=null}}
 var n=$$('[data-search]',box).filter(shown).length;
-if(count)count.textContent=q?(count.getAttribute('data-template')||'{n}').replace('{n}',String(n)):'';
+var narrowed=q!==''||$$('[data-chip-off]',box).length>0;if(count)count.textContent=narrowed?(count.getAttribute('data-template')||'{n}').replace('{n}',String(n)):'';
 var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=n>0}
-input.addEventListener('input',run);box.addEventListener('chips',run);
+/* Typing searches every category again (a chip picked afterwards narrows the results) */
+input.addEventListener('input',function(){if(input.value.trim())box.dispatchEvent(new Event('filtering'));run()});box.addEventListener('chips',run);
 if(clear)clear.addEventListener('click',function(){input.value='';run();input.focus()});
 input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';run()}
 if(e.key==='Enter'&&input.hasAttribute('data-filter-enter')){e.preventDefault();var first=$$('[data-search]',box).filter(shown).map(function(el){return el.querySelector('a.stretch')}).filter(Boolean)[0];if(first)first.click()}})});
@@ -87,7 +88,7 @@ $$('[data-chips]').forEach(function(bar){var box=d.querySelector(bar.getAttribut
 function pick(v){chips.forEach(function(x){x.setAttribute('aria-pressed',x.getAttribute('data-chip')===v?'true':'false')});
 $$('[data-group]',box).forEach(function(g){if(v&&g.getAttribute('data-group')!==v)g.setAttribute('data-chip-off','');else g.removeAttribute('data-chip-off')})}
 /* Typing a search looks through every category */
-box.addEventListener('filtering',function(){if($$('[data-chip-off]',box).length)pick('')});
+box.addEventListener('filtering',function(){if($$('[data-chip-off]',box).length){pick('');bar.scrollLeft=0}});
 chips.forEach(function(c){c.addEventListener('click',function(){pick(c.getAttribute('data-chip'));box.dispatchEvent(new Event('chips'));
 /* Keep the start of the list right under the (sticky) bar instead of leaving the page scrolled into nothing */
 var stick=bar.closest('[data-sticky-bar]')||bar.parentElement,r=box.getBoundingClientRect(),under=stick.getBoundingClientRect().bottom;if(r.top<under)window.scrollBy(0,r.top-under-8)})})});
@@ -97,6 +98,10 @@ $$('[data-collapse]').forEach(function(b){var t=d.querySelector(b.getAttribute('
 b.addEventListener('click',function(){t.open=false;
 var h=location.hash&&d.getElementById(location.hash.slice(1));if(h&&t.contains(h)&&history.replaceState)history.replaceState(null,'',location.pathname+location.search);
 var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight)s.scrollIntoView({block:'center'})}})});
+
+/* A <details> that moves focus on opening (data-focus-on-open="#search"), e.g. when its summary hides itself */
+$$('details[data-focus-on-open]').forEach(function(det){var to=d.querySelector(det.getAttribute('data-focus-on-open'));if(!to)return;
+det.addEventListener('toggle',function(){var a=d.activeElement;if(det.open&&(!a||a===d.body||a.tagName==='SUMMARY'&&det.contains(a)))to.focus({preventScroll:true})})});
 
 /* A link to a folded section (#custom) or to something inside one (#add-gmail) opens it */
 function openTarget(){var id=location.hash.slice(1);if(!id)return;var t=null;try{t=d.getElementById(decodeURIComponent(id))}catch(e){}

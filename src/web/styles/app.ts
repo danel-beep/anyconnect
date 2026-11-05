@@ -113,12 +113,12 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .add-card:has(details.svc-all[open]) .svc-chips:not([hidden]){display:flex}
 .add-card:has(details.svc-all[open]) .svc-bar{position:sticky;top:0;z-index:6;background:var(--card);margin:0 -24px;padding:12px 24px;border-bottom:1px solid var(--border);box-shadow:0 10px 18px -16px rgba(0,0,0,.45)}
 .add-card:has(details.svc-all[open]) #popular{display:none}
-.svc-chips{border:0;min-width:0;gap:6px;flex-wrap:wrap;margin:0;padding:0}
+.svc-chips{border:0;min-width:0;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -24px;padding:0 24px;mask-image:linear-gradient(to right,#000 88%,transparent);-webkit-mask-image:linear-gradient(to right,#000 88%,transparent)}
 .svc-chips::-webkit-scrollbar{display:none}
 .svc-chips button{flex:none;min-height:32px;padding:0 12px;font-size:13px;font-weight:540;border-radius:99px;border:1px solid var(--border);background:var(--card);color:var(--muted)}
 .svc-chips button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
 [data-chip-off]{display:none!important}
-.svc-section{font:600 12px/1.2 ${SANS};letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:20px 0 10px;scroll-margin-top:150px}
+.svc-section{font:600 12px/1.2 ${SANS};letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:20px 0 10px;scroll-margin-top:170px}
 .svc-section .muted{text-transform:none;letter-spacing:0;font-weight:500}
 [data-searching] .svc-section .muted{display:none}
 #popular .svc-section{margin-top:14px}
@@ -171,9 +171,7 @@ details.svc-all>div{padding:0;color:inherit;max-width:none}
   .svc-grid{grid-template-columns:1fr;gap:6px}
   .svc-grid.popular .svc-tile:nth-child(n+7){display:none}
   .svc-tile{padding:9px 10px;gap:10px}
-  .svc-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -24px;padding:0 24px;mask-image:linear-gradient(to right,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,#000 85%,transparent)}
-  .svc-fewer .btn-label{display:none}
-  .svc-fewer{padding-inline:10px}
+  .svc-all .svc-tile p{-webkit-line-clamp:1}
   .add-jump .btn-label{display:none}
   .add-jump{padding-inline:10px}
 }

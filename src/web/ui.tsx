@@ -1,6 +1,7 @@
 import type { Child, FC } from 'hono/jsx';
 import { BRAND } from '../brand.js';
 import { BRAND_ICONS } from './brand-icons.js';
+import { BRAND_MONOGRAMS } from './brand-monograms.js';
 import type { Translate } from './i18n.js';
 
 /**
@@ -127,26 +128,34 @@ export const BrandIcon: FC<{ slug: string }> = ({ slug }) => {
   );
 };
 
-/** A service's logo tile: its brand mark, an interface icon, or the first letter. */
+/** A service's logo tile: its brand mark, its brand letters, an interface icon, or the first letter. */
 export const ServiceLogo: FC<{
   icon?: string | undefined;
   glyph?: IconName | undefined;
   name: string;
   size?: 'sm' | 'lg';
-}> = ({ icon, glyph, name, size }) => (
-  <span
-    class={`logo-tile${size ? ` ${size}` : ''}${icon && BRAND_ICONS[icon] ? ` branded bi-${icon}` : ''}`}
-    aria-hidden="true"
-  >
-    {icon && BRAND_ICONS[icon] ? (
-      <BrandIcon slug={icon} />
-    ) : glyph ? (
-      <Icon name={glyph} />
-    ) : (
-      <span class="mono-letter">{name.slice(0, 1).toUpperCase()}</span>
-    )}
-  </span>
-);
+}> = ({ icon, glyph, name, size }) => {
+  const mark = icon ? BRAND_ICONS[icon] : undefined;
+  const letters = icon && !mark ? BRAND_MONOGRAMS[icon] : undefined;
+  return (
+    <span
+      class={`logo-tile${size ? ` ${size}` : ''}${mark || letters ? ` branded bi-${icon}` : ''}`}
+      aria-hidden="true"
+    >
+      {mark && icon ? (
+        <BrandIcon slug={icon} />
+      ) : letters ? (
+        <span class={`mono-letter brand-letters${letters.text.length > 1 ? ' two' : ''}`}>
+          {letters.text}
+        </span>
+      ) : glyph ? (
+        <Icon name={glyph} />
+      ) : (
+        <span class="mono-letter">{name.slice(0, 1).toUpperCase()}</span>
+      )}
+    </span>
+  );
+};
 
 /** A read-only value with a copy button (the button needs JS; the text stays selectable without it). */
 export const CopyField: FC<{ t: Translate; id: string; value: string; label: string }> = ({

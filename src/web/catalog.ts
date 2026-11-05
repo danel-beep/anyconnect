@@ -56,7 +56,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     alternative: { connectorId: 'imap', values: { 'config.provider': 'gmail' } },
   },
   outlook: {
-    glyph: 'mail',
+    icon: 'outlook',
     category: 'mail',
     blurb: {
       ru: 'Почта и календарь Microsoft 365 и Outlook.com.',
@@ -203,10 +203,12 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Разговоры с клиентами и контакты.', en: 'Customer conversations and contacts.' },
   },
   pipedrive: {
+    icon: 'pipedrive',
     category: 'crm',
     blurb: { ru: 'Сделки, люди и организации.', en: 'Deals, people and organizations.' },
   },
   freshdesk: {
+    icon: 'freshdesk',
     category: 'crm',
     blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
   },
@@ -216,6 +218,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Подписчики, теги, отчёты рассылок.', en: 'Subscribers, tags, campaign reports.' },
   },
   monday: {
+    icon: 'monday',
     category: 'tasks',
     blurb: { ru: 'Доски, элементы, статусы и апдейты.', en: 'Boards, items, statuses and updates.' },
   },
@@ -280,18 +283,22 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Доски, стикеры и карточки.', en: 'Boards, stickies and cards.' },
   },
   sendgrid: {
+    icon: 'sendgrid',
     category: 'marketing',
     blurb: { ru: 'Письма, шаблоны, контакты, статистика.', en: 'Emails, templates, contacts, stats.' },
   },
   smartsheet: {
+    icon: 'smartsheet',
     category: 'tasks',
     blurb: { ru: 'Таблицы, строки и комментарии.', en: 'Sheets, rows and comments.' },
   },
   twilio: {
+    icon: 'twilio',
     category: 'messengers',
-    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'Texts, numbers and the call log.' },
+    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'SMS, numbers and the call log.' },
   },
   postmark: {
+    icon: 'postmark',
     category: 'marketing',
     blurb: { ru: 'Транзакционные письма и доставка.', en: 'Transactional email and delivery.' },
   },
@@ -436,12 +443,12 @@ export function serviceAlternative(
 /** Everyday words people search a category by, in both languages ("почта" finds Gmail). */
 const CATEGORY_WORDS: Record<ServiceCategory, string> = {
   mail: 'почта письма ящик имейл mail email e-mail inbox',
-  messengers: 'мессенджер чат сообщения смс messenger chat messages sms texts',
+  messengers: 'мессенджер чат сообщения messenger chat messages',
   calendar: 'календарь встречи события calendar meetings events',
   files: 'файлы диск документы files drive storage',
   docs: 'документы заметки база знаний docs notes wiki',
   tasks: 'задачи дела проекты tasks todo projects',
-  dev: 'код репозиторий разработка code repository dev',
+  dev: 'код репозиторий разработка баг ошибки code repository dev bug bugs',
   payments: 'платежи оплата счета payments billing invoices',
   crm: 'клиенты сделки продажи поддержка crm customers deals sales support',
   marketing: 'рассылки маркетинг письма почта newsletter marketing campaigns email e-mail',

@@ -1054,7 +1054,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
         <p class="muted svc-none" id="catalog-none" hidden>
           {t('app.services.noMatch')} <a href="#custom">{t('app.services.noMatchCustom')}</a>
         </p>
-        <details class="svc-all" id="all-services">
+        <details class="svc-all" id="all-services" data-focus-on-open="#svc-q">
           <summary>
             <span class="when-closed">
               {t('app.services.showAll', { n: total })} <Icon name="chevron" />

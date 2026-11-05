@@ -1,4 +1,6 @@
+import { SANS } from '../assets.js';
 import { BRAND_ICONS } from '../brand-icons.js';
+import { BRAND_MONOGRAMS } from '../brand-monograms.js';
 import { contrastRatio, THEMES } from '../theme.js';
 
 /**
@@ -15,7 +17,7 @@ const DARK = (rules: string) =>
 function brandRules(): string {
   const light: string[] = [];
   const dark: string[] = [];
-  for (const [slug, { hex }] of Object.entries(BRAND_ICONS)) {
+  for (const [slug, { hex }] of Object.entries({ ...BRAND_ICONS, ...BRAND_MONOGRAMS })) {
     const color = hex.toLowerCase();
     if (!/^#[0-9a-f]{6}$/.test(color)) continue;
     const fg = (card: string) => (contrastRatio(color, card) >= MIN_CONTRAST ? color : 'var(--text)');
@@ -30,4 +32,6 @@ export const BRAND_CSS = `
 .logo-tile.branded{color:var(--bf,var(--text));background:color-mix(in srgb,var(--bh) 8%,var(--card));border-color:color-mix(in srgb,var(--bh) 22%,var(--border))}
 ${DARK('.logo-tile.branded{background:color-mix(in srgb,var(--bh) 14%,var(--card));border-color:color-mix(in srgb,var(--bh) 30%,var(--border))}')}
 ${brandRules()}
+.logo-tile .brand-letters{font:750 15px/1 ${SANS};letter-spacing:-.03em}
+.logo-tile .brand-letters.two{font-size:12.5px}
 `;
