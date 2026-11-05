@@ -41,6 +41,8 @@ export function pageAnalytics(): MiddlewareHandler<AppEnv> {
       // Speculative loads (link prefetch, prerender) are not views until the page is shown.
       const purpose = `${c.req.header('sec-purpose') ?? ''} ${c.req.header('purpose') ?? ''}`;
       if (/prefetch|prerender/i.test(purpose)) return;
+      // A live update (`data-poll` in site.js) re-reads a page the user is already on.
+      if (c.req.header('x-live-update')) return;
       analytics.pageView(analyticsRequest(c));
     } catch (error) {
       c.get('services').ops.errors.capture(error, { source: 'analytics' });

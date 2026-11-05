@@ -176,6 +176,50 @@ export const CopyField: FC<{ t: Translate; id: string; value: string; label: str
   </div>
 );
 
+/**
+ * "Ask your AI": ready-made requests the user copies into their AI chat with one tap. Everything in
+ * the dashboard can also be done by asking the AI (chat-first), so pages offer the requests here
+ * instead of explaining tools. `id` keeps the copy targets unique when a page shows several lists.
+ */
+export const AskAi: FC<{ t: Translate; id: string; title: string; text?: Child; prompts: string[] }> = ({
+  t,
+  id,
+  title,
+  text,
+  prompts,
+}) => (
+  <section class="ask-ai" aria-labelledby={`${id}-title`}>
+    <div class="ask-ai-head">
+      <span class="ask-ai-icon" aria-hidden="true">
+        <Icon name="chat" />
+      </span>
+      <div>
+        <h3 id={`${id}-title`}>{title}</h3>
+        {text ? <p class="small muted">{text}</p> : null}
+      </div>
+    </div>
+    <ul class="prompts">
+      {prompts.map((prompt, i) => (
+        <li class="prompt">
+          <span class="prompt-text" id={`${id}-${i}`}>
+            {prompt}
+          </span>
+          <button
+            type="button"
+            class="sm"
+            data-copy={`#${id}-${i}`}
+            aria-label={`${t('ui.copy')}: ${prompt}`}
+          >
+            <Icon name="copy" />
+            <span class="copy-label">{t('ui.copy')}</span>
+            <span class="copy-done">{t('ui.copied')}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  </section>
+);
+
 /** A code block with a copy button. */
 export const CodeBlock: FC<{ t: Translate; id: string; code: string }> = ({ t, id, code }) => (
   <div class="stack">

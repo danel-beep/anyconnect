@@ -9,6 +9,7 @@ import type { PageCtx } from './page-context.js';
 import { callReason, classifyProblem, needsReconnect, ProblemText, problemText } from './problems.js';
 import { PlanCard } from './site.js';
 import {
+  AskAi,
   Brand,
   CodeBlock,
   CopyField,
@@ -1498,6 +1499,9 @@ export interface ActivityView {
   };
 }
 
+/** Requests a new user can paste into their AI to see the first actions appear here. */
+export const FIRST_PROMPTS = ['app.prompt.accounts', 'app.prompt.whatCan', 'app.prompt.inbox'] as const;
+
 export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityView }> = ({
   ctx,
   shell,
@@ -1506,123 +1510,211 @@ export const ActivityPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ActivityVi
   const { t, lang } = ctx;
   const max = Math.max(1, ...view.daily.map((d) => d.calls));
   const maxSvc = Math.max(1, ...view.byService.map((s) => s.calls));
+  const filtered = Boolean(view.filters.account || view.filters.service || view.filters.errors);
+  // Nothing ever happened: one clear "how to start" card instead of an empty chart, list and log.
+  const blank = view.total === 0 && view.calls.length === 0 && !filtered && !view.paged;
+  const ok = view.total - view.errors;
+  const okShare = view.total ? Math.round((ok / view.total) * 100) : null;
+  const days = view.daily.length;
   return (
     <AppShell ctx={ctx} shell={shell} section="activity" title={t('app.nav.activity')}>
       <PageHead title={t('app.nav.activity')} sub={t('app.activity.sub')} />
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-head">
-            <h2>{t('app.activity.chart')}</h2>
-            <span class="small muted">
-              {t('app.activity.total', { n: fmtNumber(lang, view.total) })} ·{' '}
-              {t('app.activity.errors', { n: fmtNumber(lang, view.errors) })}
+      {/* Updates on its own (the first-run card turns into the log once the AI acts); an older page
+          of the log stays as the user paged it. */}
+      <div id="activity-live" {...(view.paged ? {} : { 'data-poll': '10' })}>
+        {blank ? (
+          <div class="card empty-state start-state">
+            <span class="empty-icon accent" aria-hidden="true">
+              <Icon name="activity" />
             </span>
+            <h2>{t('app.activity.emptyTitle')}</h2>
+            <p class="muted">{t('app.activity.emptyText')}</p>
+            <AskAi
+              t={t}
+              id="activity-try"
+              title={t('app.activity.tryTitle')}
+              text={t('app.activity.tryText')}
+              prompts={FIRST_PROMPTS.map((k) => t(k))}
+            />
+            <p class="small muted">
+              {t('app.activity.emptyNoAi')} <a href="/app">{t('app.activity.emptyConnect')}</a>
+            </p>
           </div>
-          <div class="chart" role="img" aria-label={t('app.activity.chart')}>
-            {view.daily.map((d) => (
-              <div
-                class={`col${d.calls === 0 ? ' zero' : ''}`}
-                title={`${d.day}: ${t('app.activity.dayTitle', { n: d.calls, errors: d.errors })}`}
-              >
-                {/* Failed calls sit on top of the bar in red, so a bad day stands out. */}
-                {d.errors ? <span class={`err ${pctClass('h', d.errors, max)}`} /> : null}
-                <span class={pctClass('h', d.calls - d.errors, max)} />
-              </div>
-            ))}
-          </div>
-          <div class="chart-axis">
-            <span>{view.daily[0] ? fmtDay(ctx.lang, view.daily[0].day) : null}</span>
-            <span>{view.daily.length ? fmtDay(ctx.lang, view.daily.at(-1)!.day) : null}</span>
-          </div>
-        </div>
-        <div class="card">
-          <h2>{t('app.activity.byService')}</h2>
-          {view.byService.length === 0 ? (
-            <p class="muted">{t('app.activity.none')}</p>
-          ) : (
-            <div class="top-list">
-              {view.byService.map((s) => (
-                <div class="bar">
-                  <span class="name">{s.name}</span>
-                  <div class="meter">
-                    <span class={pctClass('w', s.calls, maxSvc)} />
-                  </div>
-                  <span class="num small">{fmtNumber(lang, s.calls)}</span>
+        ) : (
+          <>
+            <div class="stats">
+              <div class="stat">
+                <span class="label">{t('app.activity.statTotal', { n: days })}</span>
+                <div class="value">{fmtNumber(lang, view.total)}</div>
+                <div class="sub">
+                  {(view.daily.at(-1)?.calls ?? 0) === view.total
+                    ? t('app.activity.statAllToday')
+                    : t('app.activity.statToday', { n: fmtNumber(lang, view.daily.at(-1)?.calls ?? 0) })}
                 </div>
-              ))}
+              </div>
+              <div class="stat">
+                <span class="label">{t('app.activity.statOk')}</span>
+                <div class={`value${okShare !== null && okShare < 80 ? ' warn' : ''}`}>
+                  {okShare === null ? '—' : `${okShare}%`}
+                </div>
+                <div class="sub">
+                  {t('app.activity.statOkSub', {
+                    n: fmtNumber(lang, ok),
+                    total: fmtNumber(lang, view.total),
+                  })}
+                </div>
+              </div>
+              <a class="stat" href="/app/activity?status=error#log">
+                <span class="label">
+                  {t('app.activity.statErrors')}
+                  <Icon name="arrow" />
+                </span>
+                <div class={`value${view.errors ? ' bad' : ''}`}>{fmtNumber(lang, view.errors)}</div>
+                <div class="sub">
+                  {t(view.errors ? 'app.activity.statErrorsSub' : 'app.activity.statErrorsNone')}
+                </div>
+              </a>
+              <a class="stat" href="/confirm">
+                <span class="label">
+                  {t('app.activity.statWaiting')}
+                  <Icon name="arrow" />
+                </span>
+                <div class={`value${shell.pendingConfirmations ? ' accent' : ''}`}>
+                  {fmtNumber(lang, shell.pendingConfirmations)}
+                </div>
+                <div class="sub">
+                  {t(
+                    shell.pendingConfirmations
+                      ? 'app.activity.statWaitingSub'
+                      : 'app.activity.statWaitingNone',
+                  )}
+                </div>
+              </a>
             </div>
-          )}
-        </div>
-      </div>
-      <div class="card flush" id="log">
-        <div class="card-head pad">
-          <h2>{t('app.activity.log')}</h2>
-          <span class="small muted">
-            {view.historyDays ? t('app.activity.kept', { n: view.historyDays }) : null}
-          </span>
-        </div>
-        <form method="get" action="/app/activity#log" class="log-filters pad-x" data-autosubmit>
-          <label class="sr-only" for="f-account">
-            {t('app.activity.filterAccount')}
-          </label>
-          <select id="f-account" name="account">
-            <option value="">{t('app.activity.allAccounts')}</option>
-            {view.filters.accounts.map((a) => (
-              <option value={a.id} selected={view.filters.account === a.id}>
-                {a.label === a.service ? a.service : `${a.label} · ${a.service}`}
-                {a.detail ? ` · ${a.detail}` : ''}
-              </option>
-            ))}
-          </select>
-          <label class="sr-only" for="f-service">
-            {t('app.activity.filterService')}
-          </label>
-          <select id="f-service" name="service">
-            <option value="">{t('app.activity.allServices')}</option>
-            {view.filters.services.map((x) => (
-              <option value={x.id} selected={view.filters.service === x.id}>
-                {x.name}
-              </option>
-            ))}
-          </select>
-          <label class="check">
-            <input type="checkbox" name="status" value="error" checked={view.filters.errors} />{' '}
-            {t('app.activity.errorsOnly')}
-          </label>
-          <button type="submit" class="sm">
-            {t('app.activity.apply')}
-          </button>
-          {view.filters.account || view.filters.service || view.filters.errors ? (
-            <a class="small" href="/app/activity#log">
-              {t('app.activity.reset')}
-            </a>
-          ) : null}
-        </form>
-        <CallsTable
-          ctx={ctx}
-          calls={view.calls}
-          empty={t(
-            view.filters.account || view.filters.service || view.filters.errors
-              ? 'app.activity.noneFiltered'
-              : 'app.activity.none',
-          )}
-          withClient
-        />
-        {view.more || view.paged ? (
-          <div class="actions start pad-x">
-            {view.paged ? (
-              <a class="btn sm" href={view.newest ?? '/app/activity#log'}>
-                {t('app.activity.newest')}
-              </a>
-            ) : null}
-            {view.more ? (
-              <a class="btn sm" href={view.more}>
-                {t('app.activity.more')}
-              </a>
-            ) : null}
-          </div>
-        ) : null}
-        <p class="hint pad-x">{t('app.activity.privacy')}</p>
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-head">
+                  <h2>{t('app.activity.chart')}</h2>
+                  <span class="chart-legend small muted" aria-hidden="true">
+                    <span class="key">{t('app.call.ok')}</span>
+                    <span class="key bad">{t('app.call.error')}</span>
+                  </span>
+                </div>
+                <div class="chart" role="img" aria-label={t('app.activity.chart')}>
+                  {view.daily.map((d) => (
+                    <div
+                      class={`col${d.calls === 0 ? ' zero' : ''}`}
+                      title={`${d.day}: ${t('app.activity.dayTitle', { n: d.calls, errors: d.errors })}`}
+                    >
+                      {/* Failed calls sit on top of the bar in red, so a bad day stands out. */}
+                      {d.errors ? <span class={`err ${pctClass('h', d.errors, max)}`} /> : null}
+                      <span class={pctClass('h', d.calls - d.errors, max)} />
+                    </div>
+                  ))}
+                </div>
+                <div class="chart-axis">
+                  <span>{view.daily[0] ? fmtDay(ctx.lang, view.daily[0].day) : null}</span>
+                  <span>{view.daily.length ? fmtDay(ctx.lang, view.daily.at(-1)!.day) : null}</span>
+                </div>
+              </div>
+              <div class="card">
+                <h2>{t('app.activity.byService')}</h2>
+                {view.byService.length === 0 ? (
+                  <p class="muted">{t('app.activity.noneMonth')}</p>
+                ) : (
+                  <div class="top-list">
+                    {view.byService.map((s) => {
+                      const meta = serviceMeta(s.connectorId);
+                      return (
+                        <div class="bar">
+                          <span class="name">
+                            <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={s.name} size="sm" />
+                            <span class="name-text">{s.name}</span>
+                          </span>
+                          <div class="meter">
+                            <span class={pctClass('w', s.calls, maxSvc)} />
+                          </div>
+                          <span class="num small">{fmtNumber(lang, s.calls)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div class="card flush" id="log">
+              <div class="card-head pad">
+                <div>
+                  <h2>{t('app.activity.log')}</h2>
+                  <p class="small muted">{t('app.activity.logText')}</p>
+                </div>
+                <span class="small muted">
+                  {view.historyDays ? t('app.activity.kept', { n: view.historyDays }) : null}
+                </span>
+              </div>
+              <form method="get" action="/app/activity#log" class="log-filters pad-x" data-autosubmit>
+                <label class="sr-only" for="f-account">
+                  {t('app.activity.filterAccount')}
+                </label>
+                <select id="f-account" name="account">
+                  <option value="">{t('app.activity.allAccounts')}</option>
+                  {view.filters.accounts.map((a) => (
+                    <option value={a.id} selected={view.filters.account === a.id}>
+                      {a.label === a.service ? a.service : `${a.label} · ${a.service}`}
+                      {a.detail ? ` · ${a.detail}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <label class="sr-only" for="f-service">
+                  {t('app.activity.filterService')}
+                </label>
+                <select id="f-service" name="service">
+                  <option value="">{t('app.activity.allServices')}</option>
+                  {view.filters.services.map((x) => (
+                    <option value={x.id} selected={view.filters.service === x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+                <label class="check">
+                  <input type="checkbox" name="status" value="error" checked={view.filters.errors} />{' '}
+                  {t('app.activity.errorsOnly')}
+                </label>
+                <button type="submit" class="sm">
+                  {t('app.activity.apply')}
+                </button>
+                {filtered ? (
+                  <a class="small" href="/app/activity#log">
+                    {t('app.activity.reset')}
+                  </a>
+                ) : null}
+              </form>
+              <CallsTable
+                ctx={ctx}
+                calls={view.calls}
+                empty={t(filtered ? 'app.activity.noneFiltered' : 'app.activity.none')}
+                withClient
+              />
+              {view.more || view.paged ? (
+                <div class="actions start pad-x">
+                  {view.paged ? (
+                    <a class="btn sm" href={view.newest ?? '/app/activity#log'}>
+                      {t('app.activity.newest')}
+                    </a>
+                  ) : null}
+                  {view.more ? (
+                    <a class="btn sm" href={view.more}>
+                      {t('app.activity.more')}
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
+              <p class="hint pad-x">
+                <Icon name="lock" /> {t('app.activity.privacy')}
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </AppShell>
   );

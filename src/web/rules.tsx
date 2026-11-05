@@ -4,7 +4,7 @@ import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
 import { serviceMeta } from './catalog.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { Hidden, ServiceLogo } from './ui.js';
+import { AskAi, Hidden, Icon, ServiceLogo } from './ui.js';
 
 /**
  * "Rules" in the dashboard: when the AI must ask before acting, and per AI app / per account
@@ -55,7 +55,16 @@ const ScopedTable: FC<{
   const inheritConfirm = t('app.rules.inheritAs', {
     value: t(`app.rules.confirmShort.${defaults.confirm}` as Key),
   });
-  if (!rows.length) return <p class="muted">{empty}</p>;
+  if (!rows.length) {
+    return (
+      <div class="rule-empty">
+        <p class="muted">{empty}</p>
+        <a class="btn sm" href={kind === 'app' ? '/app' : '/app/services'}>
+          <Icon name="plus" /> {t(kind === 'app' ? 'app.rules.connectApp' : 'app.rules.connectAccount')}
+        </a>
+      </div>
+    );
+  }
   return (
     <div class="rule-list">
       <div class="rule-row rule-head" aria-hidden="true">
@@ -155,7 +164,10 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
               <label class="choice">
                 <input type="radio" name="confirm" value={c} checked={view.defaultConfirm === c} />
                 <span>
-                  <strong>{t(`app.rules.confirm.${c}` as Key)}</strong>
+                  <strong>
+                    {t(`app.rules.confirm.${c}` as Key)}
+                    {c === 'dangerous' ? <span class="badge ok">{t('app.rules.recommended')}</span> : null}
+                  </strong>
                   <span class="small muted">{t(`app.rules.confirmHint.${c}` as Key)}</span>
                 </span>
               </label>
@@ -181,6 +193,31 @@ export const RulesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: RulesView }> 
           </div>
         </form>
       </div>
+      <AskAi
+        t={t}
+        id="rules-try"
+        title={t('app.rules.chatTitle')}
+        text={t('app.rules.chatText')}
+        prompts={[t('app.rules.chat.show'), t('app.rules.chat.ask'), t('app.rules.chat.readOnly')]}
+      />
+      <details class="card fold" id="levels">
+        <summary>
+          <span class="grow">
+            <span class="fold-title">{t('app.rules.levelsTitle')}</span>
+            <span class="muted small fold-sub">{t('app.rules.levelsText')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
+          <dl class="level-list">
+            {ACCESSES.map((a) => (
+              <div>
+                <dt>{t(`app.rules.access.${a}` as Key)}</dt>
+                <dd class="small muted">{t(`app.rules.accessHint.${a}` as Key)}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </details>
       <div class="card">
         <h2>{t('app.rules.byApp')}</h2>
         <p class="muted">{t('app.rules.byAppText')}</p>
