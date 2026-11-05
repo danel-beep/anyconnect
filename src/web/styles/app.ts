@@ -40,7 +40,9 @@ export const APP_SHELL_CSS = `
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;min-width:0}
 .stat .label{font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
-.stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+/* Words rather than a number (a plan, "two-step sign-in on"): smaller, so they fit a half-width card. */
+.stat .value.small-value{font-size:18px;letter-spacing:-.01em;line-height:1.3}
 .stat .sub{font-size:12.5px;color:var(--muted)}
 .stat .meter{margin-top:10px}
 a.stat{color:inherit;text-decoration:none}
@@ -51,7 +53,7 @@ a.stat:hover{border-color:var(--border-strong)}
 .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 @media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:minmax(0,1fr)}}
 .grid-2>.card,.grid-3>.card{margin:0}
-.grid-2,.grid-3{margin-bottom:16px;align-items:start}
+.grid-2,.grid-3{margin-bottom:16px;align-items:stretch}
 
 /* Onboarding */
 .onboard{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px}
@@ -78,7 +80,7 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .menu{position:relative}
 .menu>summary{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border-strong);color:var(--muted)}
 .menu>summary:hover{color:var(--text)}
-.menu>summary svg{width:16px;height:16px}
+.menu>summary svg{width:18px;height:18px;stroke-width:3.2}
 .menu-pop{position:absolute;right:0;top:38px;z-index:10;min-width:220px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px -12px rgba(0,0,0,.3);padding:6px;display:flex;flex-direction:column}
 .menu-pop form{margin:0}
 .menu-pop button,.menu-pop a{width:100%;justify-content:flex-start;border:0;background:none;min-height:36px;padding:0 10px;border-radius:8px;font-weight:500;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:8px}
@@ -212,7 +214,9 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 .chart .col span.err+span{border-radius:0}
 .log-filters{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding-bottom:14px}
 .log-filters select{width:auto;min-width:180px;max-width:100%;min-height:36px;padding:6px 10px;font-size:14px}
-.log-filters .check{margin:0;font-size:14px}
+.log-filters .check{margin:0;font-size:14px;align-items:center}
+.log-filters .check>input{margin:0}
+.log-filters button{min-height:36px}
 @media (max-width:640px){.log-filters select{flex:1 1 100%}}
 .chart-axis{display:flex;justify-content:space-between;font:500 11.5px/1 ${SANS};font-variant-numeric:tabular-nums;color:var(--muted);padding-top:8px}
 .top-list{display:flex;flex-direction:column;gap:10px}
@@ -259,17 +263,20 @@ ul.plain.pad-x{padding:0 24px 6px}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
 .filters input[type=search]{max-width:320px}
 .filters select{width:auto;min-width:150px}
+.filters button{min-height:42px}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--border);font-size:13px;color:var(--muted)}
 .user-cell{display:flex;align-items:center;gap:10px;min-width:0}
-.user-cell a{font-weight:560;color:var(--text);text-decoration:none}
+.user-cell a{font-weight:560;color:var(--text);text-decoration:none;overflow-wrap:anywhere;min-width:0}
 .user-cell a:hover{text-decoration:underline}
 .inline-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
 .inline-form label{margin:0 0 6px}
 .inline-form .wide{grid-column:1/-1}
+/* A button next to a field is exactly as tall as the field. */
+.inline-form button,.inline-form .btn{min-height:42px}
 @media (max-width:520px){.copy{flex-direction:column}.copy button{width:100%}}
 @media (max-width:640px){.lang-link,.crumbs a,.icon-btn{min-height:40px;min-width:40px;display:inline-grid;place-items:center}}
 .choice-list{border:0;padding:0;margin:0 0 16px;display:grid;gap:8px}
-.choice{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:12px;cursor:pointer}
+.choice{margin:0;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:12px;cursor:pointer}
 .choice:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .choice input{margin-top:3px;width:auto}
 .choice span{display:flex;flex-direction:column;gap:2px}
@@ -309,6 +316,8 @@ ul.plain.pad-x{padding:0 24px 6px}
 @media (max-width:640px){
   .table-wrap{background:linear-gradient(to right,var(--card) 30%,transparent) left/32px 100% no-repeat local,linear-gradient(to left,var(--card) 30%,transparent) right/32px 100% no-repeat local,radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.18),transparent) left/10px 100% no-repeat scroll,radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.18),transparent) right/10px 100% no-repeat scroll}
   .table-wrap table{min-width:520px}
+  /* A table that turns into stacked rows on a phone must not keep the scrolling width. */
+  .table-wrap table.stack-sm{min-width:0}
 }
 @media (max-width:640px){.acc:has(.ops.inline){grid-template-columns:auto minmax(0,1fr) auto}.acc .ops.inline{grid-column:auto}}
 @media (max-width:640px){
@@ -401,6 +410,7 @@ select.narrow{max-width:320px}
 .pk .pk-name{overflow-wrap:anywhere}
 .pk .sub{white-space:normal}
 .pk{scroll-margin-top:16px}
+.pk.acc{padding:14px 24px}
 .pk:target{animation:pk-new 2.4s ease-out}
 @keyframes pk-new{from{background:var(--accent-soft)}to{background:transparent}}
 @media (max-width:640px){.pk-add{align-items:stretch;width:100%}.pk-add .error{text-align:left}.pk.acc{grid-template-columns:auto minmax(0,1fr) auto}.pk.acc .ops{grid-column:auto}}
@@ -445,5 +455,6 @@ select.narrow{max-width:320px}
 .heat-9{background:color-mix(in srgb,var(--accent) 74%,transparent)}
 .heat-10{background:color-mix(in srgb,var(--accent) 82%,transparent)}
 .an-note{margin-top:8px}
-@media (max-width:640px){.top-list.an-list .bar{grid-template-columns:minmax(0,1fr) 48px 40px 36px}.an-funnel .bar{grid-template-columns:minmax(0,1fr) 60px 52px 48px}}
+/* On a phone a funnel step's name gets its own line above the bar. */
+@media (max-width:640px){.top-list.an-list .bar{grid-template-columns:minmax(0,1fr) 48px 40px 36px}.an-funnel .bar{grid-template-columns:minmax(0,1fr) 60px 48px;gap:4px 12px}.an-funnel .bar .name{grid-column:1/-1}}
 `;

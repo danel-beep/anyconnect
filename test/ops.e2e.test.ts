@@ -5,6 +5,7 @@ import { ConnectorRegistry } from '../src/connectors/registry.js';
 import { defineConnector } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import { migrationState } from '../src/ops/builtin-checks.js';
+import { translator } from '../src/web/i18n.js';
 import { enableTotp, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
 /** A service whose action crashes (a connector bug), to see what the AI, the logs and the admin get. */
@@ -60,6 +61,15 @@ describe('operations: request ids, error tracking, health checks, job runs', () 
   });
 
   const flushErrors = () => hub.services.ops.errorStore.flush();
+
+  it('names every health check on the admin System page in both languages', async () => {
+    for (const locale of ['en', 'ru'] as const) {
+      const t = translator(locale);
+      for (const name of hub.services.ops.health.names) {
+        expect(t(`admin.health.${name}` as 'admin.health.database'), `${locale}: ${name}`).toBeTruthy();
+      }
+    }
+  });
 
   it('gives every response a request id, keeping a sane one from the caller', async () => {
     const own = await fetch(`${hub.baseUrl}/healthz`, { headers: { 'x-request-id': 'trace-abc-123' } });

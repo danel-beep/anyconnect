@@ -1436,14 +1436,15 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <option value="0">{t('app.tokens.never')}</option>
             </select>
           </div>
-          <div class="wide-2">
+          {/* The API switch and its explanation get their own line under the fields. */}
+          <div class="wide">
             <label class="check">
               <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
             </label>
             <p class="hint">{t('app.tokens.apiHint')}</p>
           </div>
-          <div>
-            <button type="submit" class="block">
+          <div class="wide">
+            <button type="submit" class="primary">
               {t('app.tokens.create')}
             </button>
           </div>
@@ -2107,6 +2108,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
             <li>
               <span>
                 {agentName(s.userAgent) ?? t('app.settings.unknownDevice')}
+                {s.current ? ' ' : null}
                 {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
               </span>
               <span class="small muted">
