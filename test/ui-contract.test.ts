@@ -1,7 +1,14 @@
 /// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest';
 import { APP_CSS } from '../src/web/styles.js';
-import { classIsStyled, cssCompounds, isComponent, type JsxElement, scanTsx } from './ui/markup.js';
+import {
+  blankJsxComments,
+  classIsStyled,
+  cssCompounds,
+  isComponent,
+  type JsxElement,
+  scanTsx,
+} from './ui/markup.js';
 
 /**
  * The markup contract of the website, dashboard and admin panel. A layout that "floats" usually
@@ -43,8 +50,13 @@ describe('UI contract', () => {
     expect(sheet.compounds.length).toBeGreaterThan(1000);
     // Every `class=` in the sources belongs to an element the scanner read: a tag it cannot parse
     // would otherwise drop out of the checks below without a word.
-    const written = Object.values(sources).reduce((n, src) => n + (src.match(/\sclass=/g)?.length ?? 0), 0);
-    expect(elements.filter((e) => e.classSource !== undefined).length).toBe(written);
+    const unread = Object.entries(sources).flatMap(([path, source]) => {
+      const file = path.replace(/^\.\.\//, '');
+      const written = blankJsxComments(source).match(/\sclass=/g)?.length ?? 0;
+      const read = elements.filter((e) => e.file === file && e.classSource !== undefined).length;
+      return written === read ? [] : [`${file}: ${written} class= written, ${read} read`];
+    });
+    expect(unread, 'tags the scanner could not read (see test/ui/markup.ts)').toEqual([]);
   });
 
   it('styles every class used in the markup', () => {
@@ -99,6 +111,12 @@ describe('UI contract scanner', () => {
     expect(one('<b class={`bar-${kind}-wide edge`} />').classes).toEqual([
       { name: 'bar-', prefix: true },
       { name: 'edge', prefix: false },
+    ]);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: TSX source text under test
+    expect(one("<a class={`${big ? 'lg' : 'sm'}-btn wide`} />").classes).toEqual([
+      { name: 'lg', prefix: true },
+      { name: 'sm', prefix: true },
+      { name: 'wide', prefix: false },
     ]);
     // Commented-out markup is not markup.
     expect(

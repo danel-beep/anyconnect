@@ -199,7 +199,11 @@ function stringPieces(expr: string): Piece[] {
           i++;
         }
         const hole = expr.slice(start, i - 1);
-        if (!inCall()) pieces.push(...stringPieces(hole));
+        // `${big ? 'lg' : 'sm'}-btn`: text glued after the hole makes the hole's words beginnings.
+        const glued = i < expr.length && !/[\s`]/.test(expr[i]!) && !(expr[i] === '$' && expr[i + 1] === '{');
+        if (!inCall()) {
+          pieces.push(...stringPieces(hole).map((piece) => (glued ? { ...piece, endsAtHole: true } : piece)));
+        }
         chunkAfterHole = true;
         continue;
       }
@@ -300,11 +304,18 @@ function readBraces(src: string, start: number): { inner: string; end: number } 
   return { inner: src.slice(start + 1), end: src.length };
 }
 
+/**
+ * Commented-out JSX (`{/* … *\/}`) is not markup: it is blanked out with its line breaks kept, so
+ * line numbers stay right.
+ */
+export function blankJsxComments(source: string): string {
+  return source.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, (m) => m.replace(/[^\n]/g, ' '));
+}
+
 /** Every JSX element of a `.tsx` source with its tag, attributes and possible classes. */
 export function scanTsx(file: string, source: string): JsxElement[] {
   const elements: JsxElement[] = [];
-  // `{/* <p class="old"> */}` is not markup; blanked out with lines kept, so line numbers stay right.
-  const src = source.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, (m) => m.replace(/[^\n]/g, ' '));
+  const src = blankJsxComments(source);
   const lineAt = (index: number) => src.slice(0, index).split('\n').length;
   const tagStart = /<([a-zA-Z][\w.]*)(?=[\s/>])/g;
   for (let match = tagStart.exec(src); match; match = tagStart.exec(src)) {
