@@ -1,5 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
-import { type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { type Metric, PLANS, type Plan, yearlyFreeMonths } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, SAMPLE_SERVICES, searchText, serviceMeta } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
@@ -1928,7 +1928,10 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
               {t('pricing.monthly')}
             </button>
             <button type="button" aria-pressed="false" data-interval-set="year">
-              {t('pricing.yearly')} <span class="save">{t('pricing.save')}</span>
+              {t('pricing.yearly')}{' '}
+              {yearlyFreeMonths() ? (
+                <span class="save">{t('pricing.save', { n: yearlyFreeMonths() })}</span>
+              ) : null}
             </button>
           </fieldset>
         </div>

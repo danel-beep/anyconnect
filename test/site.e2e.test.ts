@@ -855,6 +855,28 @@ describe('website: public pages', () => {
     expect(await russian.text()).toContain('<html lang="ru"');
   });
 
+  it('builds the landing from sections the header links to, with motion that needs no inline code', async () => {
+    const html = await (await fetch(`${hub.baseUrl}/`)).text();
+    // The header on the home page jumps within the page.
+    for (const id of ['features', 'services', 'security', 'pricing']) {
+      expect(html).toContain(`href="#${id}"`);
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(html).toContain('id="how"');
+    // CSP allows no inline styles or scripts: animation delays live in the stylesheet.
+    expect(html).not.toMatch(/\sstyle="/);
+    const scripts = html.match(/<script\b[^>]*>/gi) ?? [];
+    expect(scripts.filter((s) => !s.includes(' src=') && !s.includes('application/ld+json'))).toEqual([]);
+    // Content is in the markup itself; site.js only decides when it animates.
+    expect(html).toContain('data-reveal');
+    expect(html).toContain('Anything that sends or deletes waits for your OK');
+    // One count everywhere, straight from the services that connect on this server.
+    const total = Number(/See all (\d+)/.exec(html)?.[1]);
+    expect(total).toBeGreaterThan(3);
+    expect(html).toContain(`${total} services, several accounts each`);
+    expect(html).toContain(`Notion and ${total - 3} more services`);
+  });
+
   it('answers unknown pages with a styled 404 and keeps robots and the sitemap', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     const missing = await fetch(`${hub.baseUrl}/no-such-page`, { headers: { accept: 'text/html' } });
