@@ -92,6 +92,7 @@ function serviceSearch() {
     'data-filter-empty': '#none',
     'data-filter-expand': '#all',
     'data-filter-hide': '#popular',
+    'data-filter-count': '#count',
   };
   const input = {
     value: '',
@@ -107,6 +108,8 @@ function serviceSearch() {
   const items = [item('gmail mail'), item('slack chat'), item('notion docs')];
   const group = { hidden: false, querySelectorAll: () => items };
   const list = {
+    addEventListener: () => {},
+    dispatchEvent: () => {},
     querySelectorAll: (sel: string) =>
       sel === '[data-search]' ? items : sel === '[data-filter-group]' ? [group] : [],
   };
@@ -122,7 +125,9 @@ function serviceSearch() {
   };
   const popular = { hidden: false };
   const none = { hidden: true };
+  const count = { textContent: '', getAttribute: () => '{n} found' };
   const byId: Record<string, unknown> = {
+    '#count': count,
     '#list': list,
     '#all': details,
     '#popular': popular,
@@ -159,7 +164,7 @@ function serviceSearch() {
   const press = (key: string) => {
     for (const fn of listeners.keydown ?? []) fn({ key, preventDefault: noop });
   };
-  return { type, press, items, details, popular, none };
+  return { type, press, items, details, popular, none, count };
 }
 
 describe('service search in site.js', () => {
@@ -171,8 +176,11 @@ describe('service search in site.js', () => {
     expect(page.details.flags.has('data-searching')).toBe(true);
     expect(page.popular.hidden).toBe(true);
 
+    expect(page.count.textContent).toBe('1 found');
+
     page.type('nothing like this');
     expect(page.none.hidden).toBe(false);
+    expect(page.count.textContent).toBe('0 found');
 
     // Escape clears the box; the list goes back to folded because it was folded before.
     page.press('Escape');
@@ -181,6 +189,15 @@ describe('service search in site.js', () => {
     expect(page.details.flags.has('data-searching')).toBe(false);
     expect(page.popular.hidden).toBe(false);
     expect(page.none.hidden).toBe(true);
+    expect(page.count.textContent).toBe('');
+  });
+
+  it('matches every word on its own, in any order', () => {
+    const page = serviceSearch();
+    page.type('chat  slack');
+    expect(page.items.map((i) => i.hidden)).toEqual([true, false, true]);
+    page.type('slack docs');
+    expect(page.none.hidden).toBe(false);
   });
 
   it('keeps the list open after a search when it was open before', () => {

@@ -887,7 +887,6 @@ const ServiceTile: FC<{ ctx: PageCtx; s: CatalogEntryView; full: boolean; anchor
       {s.ready ? (
         <span class="svc-go" aria-hidden="true">
           <Icon name="plus" />
-          <span class="svc-go-text">{action}</span>
         </span>
       ) : null}
     </div>
@@ -905,7 +904,7 @@ const SampleAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ ctx, ac
       <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={first.service} />
       <div class="grow">
         <div class="title">
-          {t('app.samples.title', { service: first.service })} <span class="badge">{accounts.length}</span>
+          {t('app.samples.title')} <span class="badge">{accounts.length}</span>
         </div>
         <div class="sub sub-wrap">{t('app.samples.text', { service: first.service })}</div>
       </div>
@@ -951,8 +950,8 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
             </span>
           </h2>
           {real.length ? (
-            <a class="btn sm ghost" href="#add">
-              <Icon name="plus" /> {t('app.services.addService')}
+            <a class="btn sm ghost add-jump" href="#add" aria-label={t('app.services.addService')}>
+              <Icon name="plus" /> <span class="btn-label">{t('app.services.addService')}</span>
             </a>
           ) : null}
         </div>
@@ -981,24 +980,67 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
       ) : null}
       <div class="card add-card" id="add">
         <div class="card-head add-head">
-          <div>
-            <h2>{t('app.services.addService')}</h2>
-            <p class="muted small">{t('app.services.addHint')}</p>
-          </div>
-          <div class="search-box">
-            <Icon name="search" />
-            <input
-              type="search"
-              placeholder={t('app.services.search', { n: total })}
-              aria-label={t('services.search')}
-              data-filter="#svc-all-list"
-              data-filter-empty="#catalog-none"
-              data-filter-expand="#all-services"
-              data-filter-hide="#popular"
-              autocomplete="off"
-            />
-          </div>
+          <h2>{t('app.services.addService')}</h2>
+          <p class="muted small">{t('app.services.addHint')}</p>
         </div>
+        <div class="svc-bar">
+          <div class="svc-bar-row">
+            <div class="search-box">
+              <Icon name="search" />
+              <input
+                type="search"
+                id="svc-q"
+                placeholder={t('services.search')}
+                aria-label={t('services.search')}
+                data-filter="#svc-all-list"
+                data-filter-empty="#catalog-none"
+                data-filter-expand="#all-services"
+                data-filter-hide="#popular"
+                data-filter-count="#svc-count"
+                data-filter-clear="#svc-clear"
+                data-filter-enter=""
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                class="search-clear"
+                id="svc-clear"
+                aria-label={t('app.services.clear')}
+                title={t('app.services.clear')}
+                hidden
+              >
+                <Icon name="x" />
+              </button>
+            </div>
+            <button
+              type="button"
+              class="sm svc-fewer"
+              data-collapse="#all-services"
+              aria-label={t('app.services.showFewer')}
+              title={t('app.services.showFewer')}
+              hidden
+            >
+              <span class="btn-label">{t('app.services.showFewer')}</span> <Icon name="chevron" class="up" />
+            </button>
+          </div>
+          <fieldset class="svc-chips" data-chips="#svc-all-list" hidden>
+            <legend class="sr-only">{t('app.services.categories')}</legend>
+            <button type="button" data-chip="" aria-pressed="true">
+              {t('app.services.allCategories')}
+            </button>
+            {layout.groups.map(([category]) => (
+              <button type="button" data-chip={category} aria-pressed="false">
+                {t(`category.${category}`)}
+              </button>
+            ))}
+            {layout.unavailable.length ? (
+              <button type="button" data-chip="unavailable" aria-pressed="false">
+                {t('app.services.notReady')}
+              </button>
+            ) : null}
+          </fieldset>
+        </div>
+        <p class="sr-only" id="svc-count" aria-live="polite" data-template={t('app.services.found')} />
         <section id="popular" aria-labelledby="popular-title">
           <h3 class="svc-section" id="popular-title">
             {t('app.services.popular')}
@@ -1022,23 +1064,30 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
             </span>
           </summary>
           <div id="svc-all-list">
-            <nav class="svc-cats-nav" aria-label={t('app.services.categories')}>
-              {layout.groups.map(([category]) => (
-                <a href={`#cat-${category}`}>{t(`category.${category}`)}</a>
-              ))}
-              {layout.unavailable.length ? <a href="#cat-unavailable">{t('app.services.notReady')}</a> : null}
-            </nav>
             {layout.groups.map(([category, entries]) => (
-              <section data-filter-group class="svc-cat" aria-labelledby={`cat-${category}`}>
+              <section
+                data-filter-group
+                data-group={category}
+                class="svc-cat"
+                aria-labelledby={`cat-${category}`}
+              >
                 <h3 class="svc-section" id={`cat-${category}`}>
-                  {t(`category.${category}`)} <span class="muted">· {entries.length}</span>
+                  {t(`category.${category}`)}{' '}
+                  <span class="muted">· {entries.length + (category === 'custom' ? 1 : 0)}</span>
                 </h3>
                 <div class="svc-grid">
                   {entries.map((s) => (
                     <ServiceTile ctx={ctx} s={s} full={full} anchor />
                   ))}
                   {category === 'custom' ? (
-                    <div class="svc-tile" data-search={searchText('mcp', 'MCP', t('app.custom.text'))}>
+                    <div
+                      class="svc-tile"
+                      data-search={searchText(
+                        'mcp',
+                        'MCP',
+                        `${t('app.custom.tile')} ${t('app.custom.text')}`,
+                      )}
+                    >
                       <ServiceLogo glyph="layers" name="MCP" />
                       <div class="grow">
                         <div class="svc-name">
@@ -1057,7 +1106,12 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
               </section>
             ))}
             {layout.unavailable.length ? (
-              <section data-filter-group class="svc-cat" aria-labelledby="cat-unavailable">
+              <section
+                data-filter-group
+                data-group="unavailable"
+                class="svc-cat"
+                aria-labelledby="cat-unavailable"
+              >
                 <h3 class="svc-section" id="cat-unavailable">
                   {t('app.services.notReady')} <span class="muted">· {layout.unavailable.length}</span>
                 </h3>

@@ -60,23 +60,45 @@ window.addEventListener('resize',placeOpen);window.addEventListener('scroll',pla
 d.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false})});
 d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});setNav(false)});
 
-/* Live filter. Optional: data-filter-expand opens a <details> while searching (and restores it after),
-   data-filter-hide hides a block (e.g. a short "popular" row) while searching. Escape clears. */
+/* Live filter: every word typed must appear in an item's data-search. Optional attributes:
+   data-filter-expand opens a <details> while searching (and restores it after), data-filter-hide hides a
+   block (e.g. a short "popular" row), data-filter-count announces "{n} found" in a live region,
+   data-filter-clear shows a clear button, data-filter-enter opens the first match on Enter. Escape
+   clears. Items inside a group switched off by category chips (data-chip-off) count as hidden. */
+function shown(el){return !el.hidden&&!(el.closest&&el.closest('[data-chip-off]'))}
 $$('[data-filter]').forEach(function(input){var box=d.querySelector(input.getAttribute('data-filter'));if(!box)return;
 function sel(a){var v=input.getAttribute(a);return v?d.querySelector(v):null}
-var expand=sel('data-filter-expand'),hide=sel('data-filter-hide'),wasOpen=null;
-input.addEventListener('input',function(){var q=input.value.trim().toLowerCase();$$('[data-search]',box).forEach(function(el){el.hidden=q!==''&&el.getAttribute('data-search').toLowerCase().indexOf(q)<0});
+var expand=sel('data-filter-expand'),hide=sel('data-filter-hide'),count=sel('data-filter-count'),clear=sel('data-filter-clear'),wasOpen=null;
+function run(){var q=input.value.trim().toLowerCase(),words=q?q.split(/\\s+/):[];if(q)box.dispatchEvent(new Event('filtering'));
+$$('[data-search]',box).forEach(function(el){var text=el.getAttribute('data-search').toLowerCase();el.hidden=!words.every(function(w){return text.indexOf(w)>=0})});
 $$('[data-filter-group]',box).forEach(function(g){g.hidden=$$('[data-search]',g).every(function(el){return el.hidden})});
-if(hide)hide.hidden=q!=='';
+if(hide)hide.hidden=q!=='';if(clear)clear.hidden=input.value==='';
 if(expand){if(q!==''){if(wasOpen===null)wasOpen=expand.open;expand.open=true;expand.setAttribute('data-searching','')}else{expand.removeAttribute('data-searching');if(wasOpen!==null)expand.open=wasOpen;wasOpen=null}}
-var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=!$$('[data-search]',box).every(function(el){return el.hidden})});
-input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';input.dispatchEvent(new Event('input'))}})});
+var n=$$('[data-search]',box).filter(shown).length;
+if(count)count.textContent=q?(count.getAttribute('data-template')||'{n}').replace('{n}',String(n)):'';
+var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=n>0}
+input.addEventListener('input',run);box.addEventListener('chips',run);
+if(clear)clear.addEventListener('click',function(){input.value='';run();input.focus()});
+input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';run()}
+if(e.key==='Enter'&&input.hasAttribute('data-filter-enter')){e.preventDefault();var first=$$('[data-search]',box).filter(shown).map(function(el){return el.querySelector('a.stretch')}).filter(Boolean)[0];if(first)first.click()}})});
 
-/* Buttons that close a <details> (e.g. "Show fewer" under a long list) and bring its top back into view */
+/* Category chips: show one category of a list (data-chips="#list", buttons data-chip="<group>", "" for all) */
+$$('[data-chips]').forEach(function(bar){var box=d.querySelector(bar.getAttribute('data-chips'));if(!box)return;bar.hidden=false;var chips=$$('[data-chip]',bar);
+function pick(v){chips.forEach(function(x){x.setAttribute('aria-pressed',x.getAttribute('data-chip')===v?'true':'false')});
+$$('[data-group]',box).forEach(function(g){if(v&&g.getAttribute('data-group')!==v)g.setAttribute('data-chip-off','');else g.removeAttribute('data-chip-off')})}
+/* Typing a search looks through every category */
+box.addEventListener('filtering',function(){if($$('[data-chip-off]',box).length)pick('')});
+chips.forEach(function(c){c.addEventListener('click',function(){pick(c.getAttribute('data-chip'));box.dispatchEvent(new Event('chips'));
+/* Keep the start of the list right under the (sticky) bar instead of leaving the page scrolled into nothing */
+var stick=bar.closest('[data-sticky-bar]')||bar.parentElement,r=box.getBoundingClientRect(),under=stick.getBoundingClientRect().bottom;if(r.top<under)window.scrollBy(0,r.top-under-8)})})});
+
+/* Buttons that close a <details> (e.g. "Show fewer") and bring its top back into view */
 $$('[data-collapse]').forEach(function(b){var t=d.querySelector(b.getAttribute('data-collapse'));if(!t)return;b.hidden=false;
-b.addEventListener('click',function(){t.open=false;var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight)s.scrollIntoView({block:'center'})}})});
+b.addEventListener('click',function(){t.open=false;
+var h=location.hash&&d.getElementById(location.hash.slice(1));if(h&&t.contains(h)&&history.replaceState)history.replaceState(null,'',location.pathname+location.search);
+var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight)s.scrollIntoView({block:'center'})}})});
 
-/* A link to a folded section (#custom) opens it */
+/* A link to a folded section (#custom) or to something inside one (#add-gmail) opens it */
 function openTarget(){var id=location.hash.slice(1);if(!id)return;var t=null;try{t=d.getElementById(decodeURIComponent(id))}catch(e){}
 var det=t&&(t.tagName==='DETAILS'?t:t.closest('details'));while(det){det.open=true;det=det.parentElement&&det.parentElement.closest('details')}}
 openTarget();window.addEventListener('hashchange',openTarget);

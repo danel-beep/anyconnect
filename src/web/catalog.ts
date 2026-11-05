@@ -17,6 +17,7 @@ export type ServiceCategory =
   | 'dev'
   | 'payments'
   | 'crm'
+  | 'marketing'
   | 'custom'
   | 'other';
 
@@ -30,6 +31,7 @@ export const CATEGORY_ORDER: ServiceCategory[] = [
   'dev',
   'payments',
   'crm',
+  'marketing',
   'custom',
   'other',
 ];
@@ -201,22 +203,19 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Разговоры с клиентами и контакты.', en: 'Customer conversations and contacts.' },
   },
   pipedrive: {
-    glyph: 'users',
     category: 'crm',
     blurb: { ru: 'Сделки, люди и организации.', en: 'Deals, people and organizations.' },
   },
   freshdesk: {
-    glyph: 'users',
     category: 'crm',
     blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
   },
   mailchimp: {
     icon: 'mailchimp',
-    category: 'crm',
+    category: 'marketing',
     blurb: { ru: 'Подписчики, теги, отчёты рассылок.', en: 'Subscribers, tags, campaign reports.' },
   },
   monday: {
-    glyph: 'grid',
     category: 'tasks',
     blurb: { ru: 'Доски, элементы, статусы и апдейты.', en: 'Boards, items, statuses and updates.' },
   },
@@ -257,7 +256,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   },
   brevo: {
     icon: 'brevo',
-    category: 'crm',
+    category: 'marketing',
     blurb: { ru: 'Контакты, списки, рассылки, письма.', en: 'Contacts, lists, campaigns, emails.' },
   },
   calcom: {
@@ -281,23 +280,19 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Доски, стикеры и карточки.', en: 'Boards, stickies and cards.' },
   },
   sendgrid: {
-    glyph: 'mail',
-    category: 'crm',
+    category: 'marketing',
     blurb: { ru: 'Письма, шаблоны, контакты, статистика.', en: 'Emails, templates, contacts, stats.' },
   },
   smartsheet: {
-    glyph: 'grid',
     category: 'tasks',
     blurb: { ru: 'Таблицы, строки и комментарии.', en: 'Sheets, rows and comments.' },
   },
   twilio: {
-    glyph: 'bell',
     category: 'messengers',
     blurb: { ru: 'SMS, номера и журнал звонков.', en: 'Texts, numbers and the call log.' },
   },
   postmark: {
-    glyph: 'mail',
-    category: 'crm',
+    category: 'marketing',
     blurb: { ru: 'Транзакционные письма и доставка.', en: 'Transactional email and delivery.' },
   },
   pagerduty: {
@@ -440,21 +435,26 @@ export function serviceAlternative(
 
 /** Everyday words people search a category by, in both languages ("почта" finds Gmail). */
 const CATEGORY_WORDS: Record<ServiceCategory, string> = {
-  mail: 'почта письма ящик mail email inbox',
-  messengers: 'мессенджер чат сообщения messenger chat messages',
+  mail: 'почта письма ящик имейл mail email e-mail inbox',
+  messengers: 'мессенджер чат сообщения смс messenger chat messages sms texts',
   calendar: 'календарь встречи события calendar meetings events',
   files: 'файлы диск документы files drive storage',
   docs: 'документы заметки база знаний docs notes wiki',
   tasks: 'задачи дела проекты tasks todo projects',
   dev: 'код репозиторий разработка code repository dev',
   payments: 'платежи оплата счета payments billing invoices',
-  crm: 'клиенты сделки продажи crm customers deals sales',
+  crm: 'клиенты сделки продажи поддержка crm customers deals sales support',
+  marketing: 'рассылки маркетинг письма почта newsletter marketing campaigns email e-mail',
   custom: 'свой api сервер custom server',
   other: '',
 };
 
-/** Text a service is found by in the search boxes: name, id, description and category words. */
+/**
+ * Text a service is found by in the search boxes: name, id, description, its blurb in both languages
+ * (people search in either) and category words.
+ */
 export function searchText(id: string, name: string, description: string): string {
   const meta = serviceMeta(id);
-  return `${name} ${id} ${description} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
+  const blurbs = meta ? `${meta.blurb.en} ${meta.blurb.ru}` : '';
+  return `${name} ${id} ${description} ${blurbs} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
 }
