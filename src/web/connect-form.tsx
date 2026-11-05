@@ -1,11 +1,17 @@
 import type { FC } from 'hono/jsx';
-import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
+import type { ResolvedSetupGuide, RiskLevel } from '../connectors/sdk.js';
 import type { FormField } from '../core/connect-form.js';
 import { serviceMeta } from './catalog.js';
 import type { Translate } from './i18n.js';
 import { Layout } from './pages.js';
 import { ProblemText } from './problems.js';
-import { type GuideVariantPicker, PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
+import {
+  GuideSummary,
+  type GuideVariantPicker,
+  PromptList,
+  RiskBadge,
+  SetupGuideView,
+} from './setup-guide.js';
 import { Icon, ServiceLogo } from './ui.js';
 
 export interface ConnectFormView {
@@ -26,7 +32,7 @@ export interface ConnectFormView {
   /** Shown when the service also supports OAuth. */
   oauthUrl?: string;
   /** Where to get the key or password, step by step. */
-  guide?: SetupGuide | undefined;
+  guide?: ResolvedSetupGuide | undefined;
   /** Picks the guide's variant from the form (e.g. the mail provider). */
   picker?: GuideVariantPicker | undefined;
   /** What the AI can do with the account: action titles and risk. */
@@ -244,7 +250,7 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
           ) : null}
           {view.guide?.summary ? (
             <p class="guide-summary">
-              <Icon name="clock" /> {view.guide.summary}
+              <GuideSummary t={t} guide={view.guide} />
               {/* On narrow screens the form comes first and the guide below it: a way down to the steps. */}
               <a class="to-guide" href="#connect-guide">
                 {t('connect.seeSteps')}

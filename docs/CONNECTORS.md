@@ -391,36 +391,73 @@ ui: {
   locales: {
     en: {
       setup: {
-        oauth: { steps: [{ text: 'Click Connect and sign in with Google.' }] }, // вход через сервис
-        form: {                                                                   // ключ или пароль
-          summary: 'A Todoist API token. Takes about a minute.',
+        form: {
+          summary: 'You copy your API token from Todoist settings and paste it here.',
+          minutes: 1,
+          needs: ['A Todoist account (any plan)'],
           steps: [
             {
-              text: 'Open Settings → Integrations → Developer.',
-              link: { label: 'Open Todoist settings', url: 'https://app.todoist.com/app/settings/integrations/developer' },
+              text: 'In Todoist, open **Settings → Integrations → Developer**.',
+              link: { label: 'Open Todoist → Developer', url: 'https://app.todoist.com/app/settings/integrations/developer' },
             },
-            { text: 'Copy the API token and paste it into the form.' },
+            { text: 'Click **Copy API token** and paste it into the form.', fills: ['token'] },
           ],
-          variantsTitle: 'App password: steps for your provider', // если есть variants
-          variants: { gmail: { title: 'Gmail', steps: [/* ... */] } },
-          tips: ['You can revoke the token in the same place at any time.'],
+          tips: ['The token opens your whole Todoist. To cut access, issue a new token on the same page.'],
+          problems: [
+            { problem: '“Invalid token”', fix: 'Copy the token again with the **Copy API token** button: a space or a missing letter breaks it.' },
+            { problem: 'There is no Developer tab', fix: 'Open Todoist in a browser, not the mobile app: the tab is only on the web and desktop.' },
+          ],
         },
       },
-      prompts: ['What tasks are due today?', 'Add “Call Anna” for tomorrow at 10'],
+      prompts: ['What tasks are due today?', 'Add “Call Anna” for tomorrow at 10', 'What did I finish this week?'],
     },
-    ru: { /* те же ключи */ },
+    ru: { /* то же самое, той же структуры */ },
   },
 }
 ```
 
-- Шаги пишутся словами меню самого сервиса; ссылки — только `https` на сайт сервиса. Форму
-  называйте «форма» («вставьте в форму»), а не «Manyplug».
+#### Стандарт инструкции
+
+Инструкцию читает человек, который видит сервис впервые и не знает слов «токен», «вебхук» и «API».
+Она должна быть понятной с первого прочтения: короткой, но без пропущенных шагов. Тест
+`test/connectors/setup-guides.test.ts` проверяет каждое правило, которое можно проверить
+автоматически, и валит CI; TypeScript не даёт пропустить обязательные части.
+
+1. **Сводка (`summary`)** — одно предложение о том, что человек сделает: «Вы создаёте токен в
+   Todoist и вставляете его сюда». Не больше 160 символов, без времени.
+2. **Время (`minutes`)** — честная оценка в минутах для человека, который делает это впервые
+   (сайт пишет «Около N мин»).
+3. **Что понадобится (`needs`)** — 1–5 пунктов: аккаунт, тариф, права администратора, телефон.
+   Всё, без чего человек застрянет на середине.
+4. **Важно знать заранее (`notice`)** — только если есть вещь, из-за которой люди идут не туда
+   («Это подключает номер WhatsApp Business, а не WhatsApp на вашем телефоне»).
+5. **Шаги (`steps`)** — 2–8 шагов (вход через сервис: 2–6), один шаг — одно действие, не больше двух
+   предложений и 260 символов. Точные названия кнопок и пунктов меню — как в самом сервисе, в
+   `**двойных звёздочках**` (сайт выделяет их жирным); путь по меню через «→». У шага, который
+   открывает страницу, есть `link` прямо на неё (только `https`).
+6. **Куда вставить (`fills`)** — шаг, на котором человек получает значение для формы, перечисляет
+   ключи полей; сайт пишет под шагом «Вставьте в поле: <подпись поля>». Каждое обязательное поле и
+   каждое поле из `primaryFields` должно быть в `fills` какого-то шага.
+7. **Советы (`tips`)** — до 4 коротких заметок после подключения: какие права дать, как отозвать
+   доступ, ограничения сервиса.
+8. **Если что-то не получилось (`problems`)** — частые ошибки и что делать: 2–6 для формы, 1–6 для
+   входа через сервис. `problem` — то, что человек видит (текст ошибки или симптом), `fix` — одно-два
+   конкретных действия.
+9. **Примеры запросов (`prompts`)** — 3–5, конкретные, теми словами, которыми люди просят ИИ.
+
+Язык: простые слова, «вы», активный залог, глагол в начале шага («Откройте», «Нажмите»,
+«Скопируйте»). Нельзя: «просто», «легко», «и т. д.», «т. е.», внутреннее слово «хаб» (пишите
+«Manyplug» или «форма»), а в английском — simply, just, easy, etc., e.g., i.e., hub. Форму называйте
+«форма» («вставьте в форму»). Русская и английская версии одинаковы по структуре: то же время, то же
+число пунктов, те же `fills` и ссылки на тех же шагах (это тоже проверяет тест).
+
+Новый коннектор не попадает в `main`, пока его инструкция не проходит тест. Перед мержем полезно дать
+инструкцию прочитать человеку (или ИИ-рецензенту) без контекста: сможет ли он подключиться, ни разу
+не открыв справку сервиса.
+
 - `oauth` нужен только коннекторам с `oauth`; если хаб не настроен на вход через сервис, форма
-  показывает инструкцию `form`.
+  показывает инструкцию `form`. Коннектору с `oauth` и полями `credentials` нужны обе.
 - Ключи `variants` — значения поля из `setupVariants.field` (это список); для ключей доменов то же.
-- Примеры запросов — три–пять, конкретные, теми словами, которыми люди просят ИИ.
-- Тест `test/connectors/ui-texts.test.ts` проверяет, что инструкции и примеры есть на обоих языках
-  или ни на одном, у вариантов одинаковые ключи, а ссылки ведут на `https`.
 
 Новый аккаунт, проверка которого (`test`) не прошла, не сохраняется: форма возвращается с причиной
 и галочкой «Всё равно сохранить». Переподключение существующего аккаунта сохраняется всегда.

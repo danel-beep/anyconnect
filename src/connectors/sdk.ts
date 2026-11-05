@@ -367,34 +367,68 @@ export interface SetupLink {
   url: string;
 }
 
-/** One step of a setup guide, in the words of the service's own menus. */
-export interface SetupStep {
+/**
+ * One step of a setup guide: one action, in the words of the service's own menus ("Click
+ * **Create token**"). Exact button and menu names go in `**double asterisks**` (shown in bold).
+ */
+export interface SetupStep<TFieldKey extends string = string> {
   text: string;
   link?: SetupLink;
+  /**
+   * The connect form fields this step gives a value for (keys of `config` / `credentials`). The page
+   * shows "Paste into: <field label>" under the step, so people always know where a value goes.
+   */
+  fills?: TFieldKey[];
 }
 
 /** Steps that apply to one value of a form field, e.g. the app password steps of one mail provider. */
-export interface SetupVariant {
+export interface SetupVariant<TFieldKey extends string = string> {
   /** E.g. "Gmail / Google Workspace". */
   title: string;
-  steps: SetupStep[];
+  steps: SetupStep<TFieldKey>[];
+}
+
+/** A common problem while connecting and what to do about it. */
+export interface SetupProblem {
+  /** What the person sees: the error text or the symptom ("The Token tab is missing"). */
+  problem: string;
+  /** What to do, as one or two concrete actions. */
+  fix: string;
 }
 
 /**
- * How a person connects an account, in one language: what they need, where to get it and what to
- * pick there. The website shows it next to the connect form and on the service's page, so people
- * do not have to search the service's help pages for an API key or an app password.
+ * How a person connects an account, in one language. The website shows it next to the connect form
+ * and on the service's page, so people never have to search the service's help pages.
+ *
+ * Every guide follows the writing standard in docs/CONNECTORS.md ("Стандарт инструкции"), and
+ * test/connectors/setup-guides.test.ts fails CI when a built-in connector breaks it.
  */
-export interface SetupGuide {
-  /** What is needed and how long it takes, e.g. "A Todoist API token. Takes about a minute." */
-  summary?: string;
-  steps: SetupStep[];
+export interface SetupGuide<TFieldKey extends string = string> {
+  /** One sentence on what the person does, e.g. "You create an API token in Todoist and paste it here." */
+  summary: string;
+  /** About how long it takes, in whole minutes. */
+  minutes: number;
+  /** What to have before starting: accounts, plans, admin rights ("A Stripe account with admin access"). */
+  needs: string[];
+  /**
+   * The one thing people get wrong before they start, shown above the steps, e.g. "This connects a
+   * WhatsApp Business number, not the WhatsApp app on your phone." Only when there is such a thing.
+   */
+  notice?: string;
+  steps: SetupStep<TFieldKey>[];
   /** Steps per value of the field named in `ConnectorUi.setupVariants` (keys are its values). */
-  variants?: Record<string, SetupVariant>;
+  variants?: Record<string, SetupVariant<TFieldKey>>;
   /** Heading above the variants, e.g. "App password: steps for your provider". */
   variantsTitle?: string;
-  /** Short notes: which permissions to pick, how to revoke access, known limits. */
+  /** Short notes after connecting: permissions, how to revoke access, known limits. */
   tips?: string[];
+  /** Common problems and their fixes, shown under "If something goes wrong". */
+  problems: SetupProblem[];
+}
+
+/** A setup guide ready to show: `fieldLabels` names the fields its steps fill, in the guide's language. */
+export interface ResolvedSetupGuide extends SetupGuide {
+  fieldLabels: Record<string, string>;
 }
 
 /** A connector's website texts in one language. */
@@ -409,7 +443,7 @@ export interface ConnectorLocale<TFieldKey extends string = string> {
    * How to connect an account: `oauth` when the hub signs in on the service's page, `form` when
    * the user pastes a key or an app password. A service with optional OAuth can describe both.
    */
-  setup?: { oauth?: SetupGuide; form?: SetupGuide };
+  setup?: { oauth?: SetupGuide<TFieldKey>; form?: SetupGuide<TFieldKey> };
   /**
    * Requests people can try with the AI once an account is connected, e.g. "What did Anna send me
    * this week?". Three to five, concrete, in the words people use.
@@ -599,11 +633,22 @@ export function connectorGuide(
   connector: Pick<ConnectorDefinition, 'ui'>,
   language: UiLanguage,
   via: 'oauth' | 'form',
-): { setup?: SetupGuide; prompts: string[] } {
+): { setup?: ResolvedSetupGuide; prompts: string[] } {
   const locales = uiLocales(connector, language);
-  const setup = locales.find((l) => l.setup?.[via])?.setup?.[via];
+  const source = locales.find((l) => l.setup?.[via]);
+  const setup = source?.setup?.[via];
+  const fieldLabels: Record<string, string> = {};
+  if (setup) {
+    const steps = [...setup.steps, ...Object.values(setup.variants ?? {}).flatMap((v) => v.steps)];
+    for (const key of steps.flatMap((step) => step.fills ?? [])) {
+      fieldLabels[key] =
+        source?.fields?.[key]?.label ??
+        locales.find((l) => l.fields?.[key]?.label)?.fields?.[key]?.label ??
+        key;
+    }
+  }
   return {
-    ...(setup ? { setup } : {}),
+    ...(setup ? { setup: { ...setup, fieldLabels } } : {}),
     prompts: locales.find((l) => l.prompts?.length)?.prompts ?? [],
   };
 }

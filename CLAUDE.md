@@ -40,6 +40,10 @@ develop further. In practice:
   `src/connectors/index.ts`. Never add inputs named `account` or `fields` (reserved by the hub).
   Give write actions an explicit `risk`; shared interfaces live in `src/connectors/capabilities.ts`
   (see `docs/CONNECTORS.md`).
+- Every connector ships a setup guide (`ui.locales.{en,ru}.setup`) written to the standard in
+  `docs/CONNECTORS.md` ("Стандарт инструкции"): time, what you need, one action per step with exact
+  button names in `**bold**`, `fills` for each form field, common problems. `test/connectors/setup-guides.test.ts`
+  enforces it; have someone without context read the guide before merging.
 - Messengers (`docs/MESSENGERS.md`): connectors declare `messenger` and use `messengerActions`;
   storage, search, outbox and pacing live in `src/messaging/`; long-lived sessions run in the
   gateway process (`src/gateway/`, `node dist/gateway/index.js`) behind `SessionDriver`. Message

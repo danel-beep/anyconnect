@@ -678,7 +678,10 @@ export function createWhatsAppConnector(port: MessagingPort) {
         identity: number.display_phone_number ?? number.verified_name ?? phoneNumberId(ctx),
         ...(ctx.config.wabaId
           ? {}
-          : { message: `Set the webhook in Meta: URL ${hook.url}, verify token from the account page.` }),
+          : {
+              message:
+                'Add the WhatsApp Business Account ID with Reconnect: Manyplug then turns on incoming messages by itself.',
+            }),
       };
     },
     ui: {
@@ -686,27 +689,76 @@ export function createWhatsAppConnector(port: MessagingPort) {
       locales: {
         ru: {
           description:
-            'Номер WhatsApp Business через официальный Cloud API от Meta: чаты, поиск, ответы клиентам.',
+            'Ваш номер WhatsApp Business через официальный Cloud API от Meta: ИИ читает чаты с клиентами, ищет по ним и отвечает.',
           setup: {
             form: {
-              summary: 'Приложение Meta с продуктом WhatsApp и постоянный токен. Около 15 минут.',
+              summary:
+                'Вы создаёте бесплатное приложение в Meta for Developers, копируете из него четыре значения и вставляете их сюда.',
+              minutes: 20,
+              needs: [
+                'Аккаунт Facebook, чтобы войти в Meta for Developers',
+                'Бизнес-портфолио Meta (его можно бесплатно создать по ходу настройки)',
+                'Номер для WhatsApp Business, который не используется в приложении WhatsApp, или бесплатный тестовый номер Meta, чтобы попробовать',
+              ],
+              notice:
+                'Так подключается номер **WhatsApp Business** через официальный Cloud API от Meta: ИИ читает сообщения, которые клиенты пишут на этот номер, и отвечает на них. Ваш личный WhatsApp на телефоне так не подключить.',
               steps: [
                 {
-                  text: 'Создайте приложение типа Business и добавьте в него продукт WhatsApp.',
+                  text: 'Откройте Meta for Developers, нажмите **Create app**, выберите сценарий **Connect with customers through WhatsApp** и пройдите мастер до конца.',
                   link: { label: 'Открыть Meta for Developers', url: 'https://developers.facebook.com/apps' },
                 },
                 {
-                  text: 'В WhatsApp → API Setup скопируйте Phone number ID и WhatsApp Business Account ID.',
+                  text: 'В меню приложения слева откройте **WhatsApp → API Setup**. В поле **From** выберите свой номер (или оставьте тестовый) и скопируйте **Phone number ID** и **WhatsApp Business Account ID**.',
+                  fills: ['phoneNumberId', 'wabaId'],
                 },
                 {
-                  text: 'В настройках компании создайте системного пользователя, выдайте ему права whatsapp_business_messaging и whatsapp_business_management и создайте постоянный токен.',
-                  link: { label: 'Открыть Business Settings', url: 'https://business.facebook.com/settings' },
+                  text: 'Откройте настройки компании → **Users → System users**, нажмите **Add**, назовите пользователя Manyplug, выберите роль **Admin** и нажмите **Create system user**.',
+                  link: {
+                    label: 'Открыть System users',
+                    url: 'https://business.facebook.com/settings/system-users',
+                  },
                 },
-                { text: 'В приложении: Settings → Basic → App Secret. Вставьте все значения в форму.' },
+                {
+                  text: 'Нажмите **Assign assets**: в **Apps** выберите своё приложение, в **WhatsApp accounts** — свой аккаунт, дайте обоим **Full control** и сохраните.',
+                },
+                {
+                  text: 'Нажмите **Generate new token**, выберите приложение, срок действия **Never**, отметьте **whatsapp_business_messaging** и **whatsapp_business_management** и скопируйте токен.',
+                  fills: ['accessToken'],
+                },
+                {
+                  text: 'Вернитесь в приложение, откройте **App settings → Basic**, нажмите **Show** рядом с **App secret** и скопируйте его.',
+                  fills: ['appSecret'],
+                },
+                {
+                  text: 'Нажмите **Подключить**. Manyplug проверит номер и сам включит приём входящих сообщений.',
+                },
               ],
               tips: [
-                'Вне 24 часов после последнего сообщения клиента WhatsApp разрешает писать только шаблонами.',
-                'Хаб сам подписывает вебхук, если указан WhatsApp Business Account ID.',
+                'Свободно писать можно только в течение 24 часов после последнего сообщения клиента. Позже WhatsApp пропускает только одобренные шаблоны.',
+                'Шаблоны Meta тарифицирует по своим ценам: перед отправкой добавьте способ оплаты в WhatsApp Manager.',
+                'Чтобы отозвать доступ, удалите токен системного пользователя в настройках компании или удалите аккаунт здесь.',
+              ],
+              problems: [
+                {
+                  problem: '«Meta rejected the access token»',
+                  fix: 'Скорее всего, это временный токен со страницы API Setup или у него нет нужного права. Создайте новый по шагам 3–5 со сроком **Never** и обоими правами whatsapp_ и нажмите **Переподключить**.',
+                },
+                {
+                  problem: '«Set the App Secret»',
+                  fix: 'Скопируйте **App secret** из **App settings → Basic** (шаг 6) и вставьте его в форму.',
+                },
+                {
+                  problem: 'Сообщения клиентов не появляются',
+                  fix: 'Проверьте, что поле **WhatsApp Business Account ID** заполнено, и нажмите **Проверить** на странице аккаунта: Manyplug заново включит приём сообщений.',
+                },
+                {
+                  problem: 'Отправка падает с ошибкой «Recipient phone number not in allowed list»',
+                  fix: 'Тестовый номер Meta пишет только на номера из списка **To** на странице **API Setup**. Добавьте номер туда или подключите свой номер.',
+                },
+                {
+                  problem: 'Моего номера нет в списке **From**',
+                  fix: 'Добавьте его внизу страницы **API Setup** кнопкой **Add phone number** и подтвердите по SMS. Номер из приложения WhatsApp сначала нужно удалить из приложения (чаты оттуда не переносятся).',
+                },
               ],
             },
           },
@@ -718,10 +770,16 @@ export function createWhatsAppConnector(port: MessagingPort) {
           fields: {
             mode: { label: 'Как подключить', options: { cloud: 'Cloud API (Meta)' } },
             phoneNumberId: { label: 'Phone number ID' },
-            wabaId: { label: 'WhatsApp Business Account ID', hint: 'Тогда хаб сам подпишет вебхук.' },
+            wabaId: {
+              label: 'WhatsApp Business Account ID',
+              hint: 'С ним Manyplug сам включит приём входящих сообщений.',
+            },
             graphApiUrl: { label: 'Адрес Graph API' },
             apiVersion: { label: 'Версия Graph API' },
-            accessToken: { label: 'Постоянный токен' },
+            accessToken: {
+              label: 'Токен доступа',
+              hint: 'Токен системного пользователя со сроком Never (шаг 5).',
+            },
             appSecret: { label: 'App Secret', hint: 'Нужен, чтобы проверять, что сообщения пришли от Meta.' },
             pacing: texts.ru.pacing,
           },
@@ -740,27 +798,76 @@ export function createWhatsAppConnector(port: MessagingPort) {
         },
         en: {
           description:
-            'A WhatsApp Business number through the official Cloud API by Meta: chats, search, replies.',
+            'Your WhatsApp Business number through Meta’s official Cloud API: the AI reads customer chats, searches them and replies.',
           setup: {
             form: {
-              summary: 'A Meta app with the WhatsApp product and a permanent token. About 15 minutes.',
+              summary:
+                'You create a free app in Meta for Developers, copy four values from it and paste them here.',
+              minutes: 20,
+              needs: [
+                'A Facebook account to sign in to Meta for Developers',
+                'A Meta business portfolio (you can create one for free during setup)',
+                'A phone number for WhatsApp Business that is not used in the WhatsApp app, or Meta’s free test number to try it out',
+              ],
+              notice:
+                'This connects a **WhatsApp Business** number through Meta’s official Cloud API: the AI reads and answers the messages customers send to that number. Your personal WhatsApp on your phone is not connected this way.',
               steps: [
                 {
-                  text: 'Create a Business type app and add the WhatsApp product to it.',
+                  text: 'Open Meta for Developers, click **Create app**, pick the use case **Connect with customers through WhatsApp** and finish the wizard.',
                   link: { label: 'Open Meta for Developers', url: 'https://developers.facebook.com/apps' },
                 },
                 {
-                  text: 'In WhatsApp → API Setup copy the Phone number ID and the WhatsApp Business Account ID.',
+                  text: 'In the app’s left menu, open **WhatsApp → API Setup**. Under **From**, pick your number (or keep the test number) and copy the **Phone number ID** and the **WhatsApp Business Account ID**.',
+                  fills: ['phoneNumberId', 'wabaId'],
                 },
                 {
-                  text: 'In Business Settings create a system user, give it whatsapp_business_messaging and whatsapp_business_management and generate a permanent token.',
-                  link: { label: 'Open Business Settings', url: 'https://business.facebook.com/settings' },
+                  text: 'Open Business Settings → **Users → System users**, click **Add**, name the user Manyplug, choose the **Admin** role and click **Create system user**.',
+                  link: {
+                    label: 'Open System users',
+                    url: 'https://business.facebook.com/settings/system-users',
+                  },
                 },
-                { text: 'In the app: Settings → Basic → App Secret. Paste all values into the form.' },
+                {
+                  text: 'Click **Assign assets**: under **Apps** pick your app, under **WhatsApp accounts** pick your account, give both **Full control** and save.',
+                },
+                {
+                  text: 'Click **Generate new token**, pick your app, set the expiry to **Never**, tick **whatsapp_business_messaging** and **whatsapp_business_management** and copy the token.',
+                  fills: ['accessToken'],
+                },
+                {
+                  text: 'Back in the app, open **App settings → Basic**, click **Show** next to **App secret** and copy it.',
+                  fills: ['appSecret'],
+                },
+                {
+                  text: 'Click **Connect**. Manyplug checks the number and turns on incoming messages by itself.',
+                },
               ],
               tips: [
-                'More than 24 hours after the customer last wrote, WhatsApp only allows template messages.',
-                'With the WhatsApp Business Account ID set, the hub subscribes the webhook itself.',
+                'You can write freely only within 24 hours after the customer’s last message. After that, WhatsApp only lets approved templates through.',
+                'Meta charges for template messages at its own rates: add a payment method in WhatsApp Manager before sending them.',
+                'To cut access, delete the system user’s token in Business Settings or remove the account here.',
+              ],
+              problems: [
+                {
+                  problem: '“Meta rejected the access token”',
+                  fix: 'It is most likely the temporary token from API Setup, or it lacks a permission. Create a new one as in steps 3–5 with the expiry **Never** and both whatsapp_ permissions, then click **Reconnect**.',
+                },
+                {
+                  problem: '“Set the App Secret”',
+                  fix: 'Copy the **App secret** from **App settings → Basic** (step 6) and paste it into the form.',
+                },
+                {
+                  problem: 'Messages from customers do not show up',
+                  fix: 'Check that **WhatsApp Business Account ID** is filled in and click **Check** on the account page: Manyplug turns incoming messages on again.',
+                },
+                {
+                  problem: 'Sending fails with “Recipient phone number not in allowed list”',
+                  fix: 'Meta’s test number only writes to the numbers listed under **To** on the **API Setup** page. Add the number there, or connect your own number.',
+                },
+                {
+                  problem: 'My number is not listed under **From**',
+                  fix: 'Add it at the bottom of **API Setup** with **Add phone number** and confirm it by SMS. A number used in the WhatsApp app has to be removed from the app first (its chats do not move over).',
+                },
               ],
             },
           },
@@ -774,11 +881,14 @@ export function createWhatsAppConnector(port: MessagingPort) {
             phoneNumberId: { label: 'Phone number ID' },
             wabaId: {
               label: 'WhatsApp Business Account ID',
-              hint: 'The hub then subscribes the webhook itself.',
+              hint: 'With it, Manyplug turns on incoming messages by itself.',
             },
             graphApiUrl: { label: 'Graph API address' },
             apiVersion: { label: 'Graph API version' },
-            accessToken: { label: 'Permanent token' },
+            accessToken: {
+              label: 'Access token',
+              hint: 'The system user token with the expiry Never (step 5).',
+            },
             appSecret: { label: 'App Secret', hint: 'Used to check that messages really come from Meta.' },
             pacing: texts.en.pacing,
           },
