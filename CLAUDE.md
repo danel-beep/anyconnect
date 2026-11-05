@@ -55,6 +55,9 @@ develop further. In practice:
   Connectors throw `ConnectorError` for user-safe errors.
 - Unexpected errors go through `services.ops.errors.capture()` (scrubbed, grouped, shown in the admin
   panel, optionally Sentry), never a bare `logger.error`; see `docs/OPERATIONS.md`.
+- Analytics (`docs/ANALYTICS.md`): count product events with `services.analytics.track(name, key)`;
+  page views are counted by middleware. Cookieless: never store IPs or user agents, only the daily
+  visitor hash and aggregates; reports go in `AnalyticsReports` (`src/analytics/reports.ts`).
 - `src/oauth/server.ts` is framework-free; HTTP lives in `src/routes/`.
 - Secrets only via env vars. Credentials are encrypted with `SecretBox` (AAD = account id).
   Tokens are stored as SHA-256 hashes. Never log arguments, tokens or credentials.

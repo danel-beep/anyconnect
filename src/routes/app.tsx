@@ -23,7 +23,7 @@ import {
   SettingsPage,
   type UsageView,
 } from '../web/app.js';
-import { serviceAlternative } from '../web/catalog.js';
+import { SAMPLE_SERVICES, serviceAlternative } from '../web/catalog.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
 import { fmtAgo, fmtDate } from '../web/ui.js';
@@ -395,6 +395,19 @@ export function appRoutes() {
     }),
   );
 
+  /** Removes the sample accounts a new hub starts with (the Demo service), all at once. */
+  app.post(
+    '/app/samples/remove',
+    action('/app/services', async (c, auth) => {
+      const s = c.get('services');
+      const samples = (await s.accounts.list(auth.workspace.id)).filter((a) =>
+        SAMPLE_SERVICES.has(a.connectorId),
+      );
+      for (const account of samples) await s.accounts.delete(auth.workspace.id, account.id);
+      setFlash(c, 'ok', 'app.flash.samplesRemoved', { n: String(samples.length) });
+    }),
+  );
+
   app.post(
     '/app/custom/:id/delete',
     action('/app/services', async (c, auth) => {
@@ -690,6 +703,7 @@ export function appRoutes() {
         successUrl: `${s.config.publicUrl}/app/billing?paid=1`,
         cancelUrl: `${s.config.publicUrl}/app/billing`,
       });
+      s.analytics.track('checkout.start', `${input.plan}_${input.interval}`);
       if (outcome.kind === 'redirect') return c.redirect(outcome.url, 303);
       setFlash(c, 'ok', 'app.flash.planChanging', {
         plan: c.get('t')(`plan.${outcome.planId}.name` as 'plan.free.name'),

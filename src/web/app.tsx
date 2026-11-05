@@ -1,7 +1,7 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
-import { searchText, serviceMeta } from './catalog.js';
+import { arrangeCatalog, SAMPLE_SERVICES, searchText, serviceMeta } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
@@ -45,6 +45,7 @@ export type AppSection =
   | 'admin'
   | 'admin-users'
   | 'admin-revenue'
+  | 'admin-analytics'
   | 'admin-audit'
   | 'admin-errors'
   | 'admin-system';
@@ -76,6 +77,13 @@ const NAV: {
   { id: 'security', href: '/security', icon: 'lock', key: 'app.nav.security', group: 'account' },
   { id: 'settings', href: '/app/settings', icon: 'settings', key: 'app.nav.settings', group: 'account' },
   { id: 'admin', href: '/admin', icon: 'chart', key: 'admin.nav.overview', group: 'admin' },
+  {
+    id: 'admin-analytics',
+    href: '/admin/analytics',
+    icon: 'activity',
+    key: 'admin.nav.analytics',
+    group: 'admin',
+  },
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
   { id: 'admin-revenue', href: '/admin/revenue', icon: 'card', key: 'admin.nav.revenue', group: 'admin' },
   { id: 'admin-audit', href: '/admin/audit', icon: 'book', key: 'admin.nav.audit', group: 'admin' },
@@ -828,13 +836,114 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
   );
 };
 
+const connectHref = (s: CatalogEntryView) => `/connect/${s.service}?returnTo=%2Fapp%2Fservices`;
+
+/**
+ * One service in the "Add a service" card. A service that can be connected is one big link (the name
+ * stretches over the tile); one that cannot yet shows why and the other way in, if there is one.
+ */
+const ServiceTile: FC<{ ctx: PageCtx; s: CatalogEntryView; full: boolean; anchor?: boolean }> = ({
+  ctx,
+  s,
+  full,
+  anchor,
+}) => {
+  const { t, lang } = ctx;
+  const meta = serviceMeta(s.service);
+  const desc = meta ? (lang === 'ru' ? meta.blurb.ru : meta.blurb.en) : s.description;
+  const action = full
+    ? t('app.billing.upgrade')
+    : s.accounts > 0
+      ? t('app.services.addAnother')
+      : t('app.services.connect');
+  return (
+    <div
+      class={`svc-tile${s.ready ? '' : ' off'}`}
+      id={anchor ? `add-${s.service}` : undefined}
+      data-search={anchor ? searchText(s.service, s.name, desc) : undefined}
+    >
+      <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={s.name} />
+      <div class="grow">
+        <div class="svc-name">
+          {s.ready ? (
+            <a class="stretch" href={full ? '/app/billing' : connectHref(s)}>
+              {s.name}
+              <span class="sr-only">: {action}</span>
+            </a>
+          ) : (
+            <strong>{s.name}</strong>
+          )}
+          {s.accounts > 0 ? (
+            <span class="badge ok tiny-badge">{t('app.services.nConnected', { n: s.accounts })}</span>
+          ) : null}
+        </div>
+        <p>{desc}</p>
+        {s.ready ? null : (
+          <span class="cat-unavailable small muted">
+            <span class="badge">{t('app.services.notReady')}</span>
+            {s.alternative ? (
+              <a
+                href={`${s.alternative.url}${s.alternative.url.includes('?') ? '&' : '?'}returnTo=%2Fapp%2Fservices`}
+              >
+                {t('app.services.useAlt', { alternative: s.alternative.service })}
+              </a>
+            ) : null}
+            {ctx.user?.isAdmin ? <a href="/admin/system#apps">{t('app.services.setUp')}</a> : null}
+          </span>
+        )}
+      </div>
+      {s.ready ? (
+        <span class="svc-go" aria-hidden="true">
+          <Icon name="plus" />
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
+/** Sample accounts (the Demo service) folded into one row, with one button that removes them. */
+const SampleAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ ctx, accounts }) => {
+  const { t } = ctx;
+  const first = accounts[0];
+  if (!first) return null;
+  const meta = serviceMeta(first.connectorId);
+  return (
+    <div class="acc acc-sample">
+      <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={first.service} />
+      <div class="grow">
+        <div class="title">
+          {t('app.samples.title')} <span class="badge">{accounts.length}</span>
+        </div>
+        <div class="sub sub-wrap">{t('app.samples.text', { service: first.service })}</div>
+      </div>
+      <div class="ops">
+        <form
+          method="post"
+          action="/app/samples/remove"
+          class="inline"
+          data-confirm={t('app.samples.confirm', { n: accounts.length })}
+        >
+          <input type="hidden" name="csrf" value={ctx.csrf} />
+          <button type="submit" class="sm">
+            <Icon name="trash" /> {t('app.samples.remove')}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ServicesView }> = ({
   ctx,
   shell,
   view,
 }) => {
-  const { t, lang } = ctx;
+  const { t } = ctx;
   const full = view.usage.accounts.limit !== null && view.usage.accounts.used >= view.usage.accounts.limit;
+  const samples = view.accounts.filter((a) => SAMPLE_SERVICES.has(a.connectorId));
+  const real = view.accounts.filter((a) => !SAMPLE_SERVICES.has(a.connectorId));
+  const layout = arrangeCatalog(view.catalog);
+  const total = view.catalog.length;
   return (
     <AppShell ctx={ctx} shell={shell} section="services" title={t('app.nav.services')}>
       <PageHead title={t('app.nav.services')} sub={t('app.services.sub')} />
@@ -848,12 +957,16 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
               {view.usage.accounts.limit === null ? '' : ` / ${view.usage.accounts.limit}`}
             </span>
           </h2>
+          {real.length ? (
+            <a class="btn sm ghost add-jump" href="#add" aria-label={t('app.services.addService')}>
+              <Icon name="plus" /> <span class="btn-label">{t('app.services.addService')}</span>
+            </a>
+          ) : null}
         </div>
-        {view.accounts.length === 0 ? (
-          <p class="muted pad-x">{t('app.services.none')}</p>
-        ) : (
+        {real.length === 0 ? <p class="muted pad-x">{t('app.services.none')}</p> : null}
+        {real.length || samples.length ? (
           <div class="acc-list">
-            {groupByService(view.accounts).map(([service, accounts]) => (
+            {groupByService(real).map(([service, accounts]) => (
               <>
                 <div class="acc-group">
                   {service} <span class="muted">· {accounts.length}</span>
@@ -863,8 +976,9 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                 ))}
               </>
             ))}
+            <SampleAccounts ctx={ctx} accounts={samples} />
           </div>
-        )}
+        ) : null}
       </div>
       {full ? (
         <div class="notice">
@@ -872,132 +986,249 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
           <a href="/app/billing">{t('app.billing.upgrade')}</a>
         </div>
       ) : null}
-      <div class="card" id="add">
-        <div class="card-head">
-          <h2>{t('app.services.add')}</h2>
-          <input
-            type="search"
-            class="search-sm"
-            placeholder={t('services.search')}
-            aria-label={t('services.search')}
-            data-filter="#catalog"
-            data-filter-empty="#catalog-none"
-            autocomplete="off"
-          />
+      <div class="card add-card" id="add">
+        <div class="card-head add-head">
+          <h2>{t('app.services.addService')}</h2>
+          <p class="muted small">{t('app.services.addHint')}</p>
         </div>
-        <p class="hint">{t('app.services.addHint')}</p>
-        <p class="muted" id="catalog-none" hidden>
-          {t('services.none')}
-        </p>
-        <div class="catalog" id="catalog">
-          {view.catalog.map((s) => {
-            const meta = serviceMeta(s.service);
-            const desc = meta ? (lang === 'ru' ? meta.blurb.ru : meta.blurb.en) : s.description;
-            return (
-              <div class="cat-item" id={`add-${s.service}`} data-search={searchText(s.service, s.name, desc)}>
-                <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={s.name} />
-                <div class="grow">
-                  <strong>{s.name}</strong>
-                  {s.accounts > 0 ? <span class="badge ok tiny-badge">{s.accounts}</span> : null}
-                  <p>{desc}</p>
-                  {s.ready ? (
-                    full ? (
-                      <a class="btn sm" href="/app/billing">
-                        {t('app.billing.upgrade')}
-                      </a>
-                    ) : (
-                      <a class="btn sm" href={`/connect/${s.service}?returnTo=%2Fapp%2Fservices`}>
-                        <Icon name="plus" />{' '}
-                        {s.accounts > 0 ? t('app.services.addAnother') : t('app.services.connect')}
-                      </a>
-                    )
-                  ) : (
-                    <span class="cat-unavailable small muted">
-                      <span class="badge">{t('app.services.notReady')}</span>
-                      {s.alternative ? (
-                        <a
-                          href={`${s.alternative.url}${s.alternative.url.includes('?') ? '&' : '?'}returnTo=%2Fapp%2Fservices`}
-                        >
-                          {t('app.services.useAlt', { alternative: s.alternative.service })}
-                        </a>
-                      ) : null}
-                      {ctx.user?.isAdmin ? <a href="/admin/system#apps">{t('app.services.setUp')}</a> : null}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div class="card" id="custom">
-        <h2>{t('app.custom.title')}</h2>
-        <p class="muted">{t('app.custom.text')}</p>
-        {view.custom.length ? (
-          <ul class="plain">
-            {view.custom.map((c) => (
-              <li>
-                <span class="grow">
-                  <strong>{c.name}</strong>{' '}
-                  <span class="small muted">
-                    {c.kind === 'mcp' ? 'MCP' : 'HTTP'} · {t('app.custom.tools', { n: c.tools })}
-                    {c.url ? ` · ${c.url}` : ''}
-                  </span>
-                  {c.lastError ? <div class="small error">{c.lastError}</div> : null}
-                </span>
-                <form
-                  method="post"
-                  action={`/app/custom/${c.connectorId}/delete`}
-                  data-confirm={t('app.custom.deleteConfirm', { name: c.name })}
-                >
-                  <input type="hidden" name="csrf" value={ctx.csrf} />
-                  <button type="submit" class="sm danger">
-                    {t('app.acc.delete')}
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {view.customDraft ? <Flash flash={view.flash} /> : null}
-        <form method="post" action="/app/custom" class="inline-form">
-          <input type="hidden" name="csrf" value={ctx.csrf} />
-          <div>
-            <label for="mcp-name">{t('app.custom.name')}</label>
-            <input
-              id="mcp-name"
-              type="text"
-              name="name"
-              required
-              maxlength={60}
-              placeholder="CRM"
-              value={view.customDraft?.name ?? ''}
-            />
-          </div>
-          <div class="wide-2">
-            <label for="mcp-url-in">{t('app.custom.url')}</label>
-            <input
-              id="mcp-url-in"
-              type="url"
-              name="url"
-              required
-              placeholder="https://example.com/mcp"
-              value={view.customDraft?.url ?? ''}
-            />
-          </div>
-          <div class="wide">
-            <label for="mcp-token">{t('app.custom.token')}</label>
-            <input id="mcp-token" type="password" name="token" autocomplete="off" maxlength={4000} />
-            <p class="hint">{t('app.custom.tokenHint')}</p>
-          </div>
-          <div>
-            <button type="submit" class="block">
-              <Icon name="plus" /> {t('app.custom.add')}
+        <div class="svc-bar">
+          <div class="svc-bar-row">
+            <div class="search-box">
+              <Icon name="search" />
+              <input
+                type="search"
+                id="svc-q"
+                placeholder={t('services.search')}
+                aria-label={t('services.search')}
+                data-filter="#svc-all-list"
+                data-filter-empty="#catalog-none"
+                data-filter-empty-chip="#catalog-none-chip"
+                data-filter-expand="#all-services"
+                data-filter-hide="#popular"
+                data-filter-count="#svc-count"
+                data-filter-clear="#svc-clear"
+                data-filter-enter=""
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                class="search-clear"
+                id="svc-clear"
+                aria-label={t('app.services.clear')}
+                title={t('app.services.clear')}
+                hidden
+              >
+                <Icon name="x" />
+              </button>
+            </div>
+            <button
+              type="button"
+              class="sm svc-fewer"
+              data-collapse="#all-services"
+              aria-label={t('app.services.showFewer')}
+              title={t('app.services.showFewer')}
+              hidden
+            >
+              <span class="label-long">{t('app.services.showFewer')}</span>
+              <span class="label-short">{t('app.services.less')}</span> <Icon name="chevron" class="up" />
             </button>
           </div>
-        </form>
-        <p class="hint">{t('app.custom.hint')}</p>
+          <div class="svc-chips-wrap">
+            <fieldset class="svc-chips" data-chips="#svc-all-list" hidden>
+              <legend class="sr-only">{t('app.services.categories')}</legend>
+              <button type="button" data-chip="" aria-pressed="true">
+                {t('app.services.allCategories')}
+              </button>
+              {layout.groups.map(([category]) => (
+                <button type="button" data-chip={category} aria-pressed="false">
+                  {t(`category.${category}`)}
+                </button>
+              ))}
+              {layout.unavailable.length ? (
+                <button type="button" data-chip="unavailable" aria-pressed="false">
+                  {t('app.services.notReady')}
+                </button>
+              ) : null}
+            </fieldset>
+            <span class="chips-arrow prev" data-chips-prev aria-hidden="true" hidden>
+              <Icon name="chevron" />
+            </span>
+            <span class="chips-arrow next" data-chips-next aria-hidden="true" hidden>
+              <Icon name="chevron" />
+            </span>
+          </div>
+        </div>
+        <p class="sr-only" id="svc-count" aria-live="polite" data-template={t('app.services.found')} />
+        <section id="popular" aria-labelledby="popular-title">
+          <h3 class="svc-section" id="popular-title">
+            {t('app.services.popular')}
+          </h3>
+          <div class="svc-grid popular">
+            {layout.popular.map((s) => (
+              <ServiceTile ctx={ctx} s={s} full={full} />
+            ))}
+          </div>
+        </section>
+        <p class="muted svc-none" id="catalog-none" hidden>
+          {t('app.services.noMatch')} <a href="#custom">{t('app.services.noMatchCustom')}</a>
+        </p>
+        <p class="muted svc-none" id="catalog-none-chip" hidden>
+          {t('app.services.noMatchInCategory')}{' '}
+          <button type="button" class="link-btn" data-chips-reset="#svc-all-list" data-focus-after="#svc-q">
+            {t('app.services.searchAll')}
+          </button>
+        </p>
+        <details class="svc-all" id="all-services" data-focus-on-open="#svc-q" data-scroll-on-open="#add">
+          <summary>
+            <span class="when-closed">
+              {t('app.services.showAll', { n: total })} <Icon name="chevron" />
+            </span>
+            <span class="when-open">
+              {t('app.services.showFewer')} <Icon name="chevron" class="up" />
+            </span>
+          </summary>
+          <div id="svc-all-list">
+            {layout.groups.map(([category, entries]) => (
+              <section
+                data-filter-group
+                data-group={category}
+                class="svc-cat"
+                aria-labelledby={`cat-${category}`}
+              >
+                <h3 class="svc-section" id={`cat-${category}`}>
+                  {t(`category.${category}`)}{' '}
+                  <span class="muted">· {entries.length + (category === 'custom' ? 1 : 0)}</span>
+                </h3>
+                <div class="svc-grid">
+                  {entries.map((s) => (
+                    <ServiceTile ctx={ctx} s={s} full={full} anchor />
+                  ))}
+                  {category === 'custom' ? (
+                    <div
+                      class="svc-tile"
+                      data-search={searchText(
+                        'mcp',
+                        'MCP',
+                        `${t('app.custom.tile')} ${t('app.custom.text')}`,
+                      )}
+                    >
+                      <ServiceLogo glyph="layers" name="MCP" />
+                      <div class="grow">
+                        <div class="svc-name">
+                          <a class="stretch" href="#custom">
+                            {t('app.custom.tile')}
+                          </a>
+                        </div>
+                        <p>{t('app.custom.tileText')}</p>
+                      </div>
+                      <span class="svc-go" aria-hidden="true">
+                        <Icon name="arrow" />
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            ))}
+            {layout.unavailable.length ? (
+              <section
+                data-filter-group
+                data-group="unavailable"
+                class="svc-cat"
+                aria-labelledby="cat-unavailable"
+              >
+                <h3 class="svc-section" id="cat-unavailable">
+                  {t('app.services.notReady')} <span class="muted">· {layout.unavailable.length}</span>
+                </h3>
+                <div class="svc-grid">
+                  {layout.unavailable.map((s) => (
+                    <ServiceTile ctx={ctx} s={s} full={full} anchor />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            <button type="button" class="ghost sm block svc-collapse" data-collapse="#all-services" hidden>
+              <Icon name="chevron" class="up" /> {t('app.services.showFewer')}
+            </button>
+          </div>
+        </details>
       </div>
+      <details class="card fold" id="custom" open={Boolean(view.customDraft) || view.custom.length > 0}>
+        <summary>
+          <span class="grow">
+            <span class="fold-title">
+              {t('app.custom.title')}
+              {view.custom.length ? <span class="badge tiny-badge">{view.custom.length}</span> : null}
+            </span>
+            <span class="muted small fold-sub">{t('app.custom.text')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
+          {view.custom.length ? (
+            <ul class="plain">
+              {view.custom.map((c) => (
+                <li>
+                  <span class="grow">
+                    <strong>{c.name}</strong>{' '}
+                    <span class="small muted">
+                      {c.kind === 'mcp' ? 'MCP' : 'HTTP'} · {t('app.custom.tools', { n: c.tools })}
+                      {c.url ? ` · ${c.url}` : ''}
+                    </span>
+                    {c.lastError ? <div class="small error">{c.lastError}</div> : null}
+                  </span>
+                  <form
+                    method="post"
+                    action={`/app/custom/${c.connectorId}/delete`}
+                    data-confirm={t('app.custom.deleteConfirm', { name: c.name })}
+                  >
+                    <input type="hidden" name="csrf" value={ctx.csrf} />
+                    <button type="submit" class="sm danger">
+                      {t('app.acc.delete')}
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {view.customDraft ? <Flash flash={view.flash} /> : null}
+          <form method="post" action="/app/custom" class="inline-form">
+            <input type="hidden" name="csrf" value={ctx.csrf} />
+            <div>
+              <label for="mcp-name">{t('app.custom.name')}</label>
+              <input
+                id="mcp-name"
+                type="text"
+                name="name"
+                required
+                maxlength={60}
+                placeholder="CRM"
+                value={view.customDraft?.name ?? ''}
+              />
+            </div>
+            <div class="wide-2">
+              <label for="mcp-url-in">{t('app.custom.url')}</label>
+              <input
+                id="mcp-url-in"
+                type="url"
+                name="url"
+                required
+                placeholder="https://example.com/mcp"
+                value={view.customDraft?.url ?? ''}
+              />
+            </div>
+            <div class="wide">
+              <label for="mcp-token">{t('app.custom.token')}</label>
+              <input id="mcp-token" type="password" name="token" autocomplete="off" maxlength={4000} />
+              <p class="hint">{t('app.custom.tokenHint')}</p>
+            </div>
+            <div>
+              <button type="submit" class="block">
+                <Icon name="plus" /> {t('app.custom.add')}
+              </button>
+            </div>
+          </form>
+          <p class="hint">{t('app.custom.hint')}</p>
+        </div>
+      </details>
     </AppShell>
   );
 };

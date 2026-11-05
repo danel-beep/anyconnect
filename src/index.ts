@@ -24,6 +24,7 @@ async function main() {
   await bootstrap(services);
   const stopMaintenance = scheduleMaintenance(services);
   services.pendingRunner.start();
+  services.analytics.start();
   if (config.jobs.enabled) await services.jobs.start();
   services.messaging.start();
 

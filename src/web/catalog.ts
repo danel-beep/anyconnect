@@ -17,6 +17,7 @@ export type ServiceCategory =
   | 'dev'
   | 'payments'
   | 'crm'
+  | 'marketing'
   | 'custom'
   | 'other';
 
@@ -30,6 +31,7 @@ export const CATEGORY_ORDER: ServiceCategory[] = [
   'dev',
   'payments',
   'crm',
+  'marketing',
   'custom',
   'other',
 ];
@@ -39,6 +41,8 @@ export interface ServiceMeta {
   glyph?: IconName;
   category: ServiceCategory;
   blurb: { ru: string; en: string };
+  /** Extra words people search this service by (other spellings, the other language). */
+  keywords?: string;
   /**
    * Another way in while this service cannot be connected here (its sign-in app is not set up):
    * a connector and form values to start it with, e.g. Gmail through IMAP with an app password.
@@ -54,7 +58,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     alternative: { connectorId: 'imap', values: { 'config.provider': 'gmail' } },
   },
   outlook: {
-    glyph: 'mail',
+    icon: 'outlook',
     category: 'mail',
     blurb: {
       ru: 'Почта и календарь Microsoft 365 и Outlook.com.',
@@ -201,22 +205,22 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Разговоры с клиентами и контакты.', en: 'Customer conversations and contacts.' },
   },
   pipedrive: {
-    glyph: 'users',
+    icon: 'pipedrive',
     category: 'crm',
     blurb: { ru: 'Сделки, люди и организации.', en: 'Deals, people and organizations.' },
   },
   freshdesk: {
-    glyph: 'users',
+    icon: 'freshdesk',
     category: 'crm',
     blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
   },
   mailchimp: {
     icon: 'mailchimp',
-    category: 'crm',
+    category: 'marketing',
     blurb: { ru: 'Подписчики, теги, отчёты рассылок.', en: 'Subscribers, tags, campaign reports.' },
   },
   monday: {
-    glyph: 'grid',
+    icon: 'monday',
     category: 'tasks',
     blurb: { ru: 'Доски, элементы, статусы и апдейты.', en: 'Boards, items, statuses and updates.' },
   },
@@ -257,7 +261,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   },
   brevo: {
     icon: 'brevo',
-    category: 'crm',
+    category: 'marketing',
     blurb: { ru: 'Контакты, списки, рассылки, письма.', en: 'Contacts, lists, campaigns, emails.' },
   },
   calcom: {
@@ -281,23 +285,24 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Доски, стикеры и карточки.', en: 'Boards, stickies and cards.' },
   },
   sendgrid: {
-    glyph: 'mail',
-    category: 'crm',
+    icon: 'sendgrid',
+    category: 'marketing',
     blurb: { ru: 'Письма, шаблоны, контакты, статистика.', en: 'Emails, templates, contacts, stats.' },
   },
   smartsheet: {
-    glyph: 'grid',
+    icon: 'smartsheet',
     category: 'tasks',
     blurb: { ru: 'Таблицы, строки и комментарии.', en: 'Sheets, rows and comments.' },
   },
   twilio: {
-    glyph: 'bell',
+    icon: 'twilio',
+    keywords: 'sms смс',
     category: 'messengers',
-    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'Texts, numbers and the call log.' },
+    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'SMS, numbers and the call log.' },
   },
   postmark: {
-    glyph: 'mail',
-    category: 'crm',
+    icon: 'postmark',
+    category: 'marketing',
     blurb: { ru: 'Транзакционные письма и доставка.', en: 'Transactional email and delivery.' },
   },
   pagerduty: {
@@ -347,6 +352,71 @@ export const PLANNED_SERVICES: {
   { name: 'Discord', icon: 'discord', category: 'messengers' },
 ];
 
+/**
+ * The services most people connect first, most common first. The dashboard shows the first few that
+ * can be connected here before the full list; reorder this list to change what people see first.
+ */
+export const POPULAR_SERVICES: readonly string[] = [
+  'gmail',
+  'gcal',
+  'outlook',
+  'slack',
+  'telegram',
+  'notion',
+  'gdrive',
+  'github',
+  'whatsapp',
+  'imap',
+  'todoist',
+  'hubspot',
+  'gsheets',
+  'linear',
+  'jira',
+];
+
+/**
+ * Sample services: their accounts are test data a new hub starts with (`SEED_DEMO_ACCOUNTS`), so the
+ * dashboard folds them into one row with a button that removes them all.
+ */
+export const SAMPLE_SERVICES: ReadonlySet<string> = new Set(['demo']);
+
+/** What the dashboard's "Add a service" card shows: a short popular row and the full list by category. */
+export interface CatalogLayout<T> {
+  popular: T[];
+  groups: [ServiceCategory, T[]][];
+  unavailable: T[];
+}
+
+/**
+ * Splits the catalog for the dashboard (pure, so it is easy to test): `popular` holds up to `limit`
+ * services that can be connected now, in `POPULAR_SERVICES` order and topped up by name; `groups`
+ * holds every connectable service by category in `CATEGORY_ORDER` (the user's own servers under
+ * "custom"), by name; `unavailable` holds the services that cannot be connected here yet, by name.
+ */
+export function arrangeCatalog<T extends { service: string; name: string; ready: boolean; custom?: boolean }>(
+  entries: readonly T[],
+  limit = 9,
+): CatalogLayout<T> {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name);
+  const rank = (id: string) => {
+    const i = POPULAR_SERVICES.indexOf(id);
+    return i < 0 ? POPULAR_SERVICES.length : i;
+  };
+  const ready = entries.filter((e) => e.ready);
+  const popular = [...ready]
+    .sort((a, b) => rank(a.service) - rank(b.service) || byName(a, b))
+    .slice(0, limit);
+  const groups: [ServiceCategory, T[]][] = [];
+  for (const category of CATEGORY_ORDER) {
+    const inCategory = ready
+      .filter((e) => (e.custom ? 'custom' : (serviceMeta(e.service)?.category ?? 'other')) === category)
+      .sort(byName);
+    if (inCategory.length) groups.push([category, inCategory]);
+  }
+  const unavailable = entries.filter((e) => !e.ready).sort(byName);
+  return { popular, groups, unavailable };
+}
+
 /** Hidden from public listings (test connector, the hub's own setup tools). */
 export const HIDDEN_SERVICES = new Set(['demo', BRAND.slug, ...LEGACY_SLUGS]);
 
@@ -375,21 +445,26 @@ export function serviceAlternative(
 
 /** Everyday words people search a category by, in both languages ("почта" finds Gmail). */
 const CATEGORY_WORDS: Record<ServiceCategory, string> = {
-  mail: 'почта письма ящик mail email inbox',
+  mail: 'почта письма ящик имейл mail email e-mail inbox',
   messengers: 'мессенджер чат сообщения messenger chat messages',
   calendar: 'календарь встречи события calendar meetings events',
   files: 'файлы диск документы files drive storage',
   docs: 'документы заметки база знаний docs notes wiki',
   tasks: 'задачи дела проекты tasks todo projects',
-  dev: 'код репозиторий разработка code repository dev',
+  dev: 'код репозиторий разработка баг ошибки code repository dev bug bugs',
   payments: 'платежи оплата счета payments billing invoices',
-  crm: 'клиенты сделки продажи crm customers deals sales',
+  crm: 'клиенты сделки продажи поддержка crm customers deals sales support',
+  marketing: 'рассылки маркетинг письма почта newsletter marketing campaigns email e-mail',
   custom: 'свой api сервер custom server',
   other: '',
 };
 
-/** Text a service is found by in the search boxes: name, id, description and category words. */
+/**
+ * Text a service is found by in the search boxes: name, id, description, its blurb in both languages
+ * (people search in either) and category words.
+ */
 export function searchText(id: string, name: string, description: string): string {
   const meta = serviceMeta(id);
-  return `${name} ${id} ${description} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
+  const blurbs = meta ? `${meta.blurb.en} ${meta.blurb.ru}` : '';
+  return `${name} ${id} ${description} ${blurbs} ${meta?.keywords ?? ''} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
 }

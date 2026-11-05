@@ -298,6 +298,7 @@ export const siteEn = {
   'category.dev': 'Development',
   'category.payments': 'Payments',
   'category.crm': 'CRM and sales',
+  'category.marketing': 'Email marketing',
   'category.custom': 'Your own',
   'category.other': 'Other',
 
@@ -692,7 +693,8 @@ export const siteRu: Record<SiteKey, string> = {
   'category.dev': 'Разработка',
   'category.payments': 'Платежи',
   'category.crm': 'CRM и продажи',
-  'category.custom': 'Свои',
+  'category.marketing': 'Рассылки',
+  'category.custom': 'Свои серверы',
   'category.other': 'Другое',
 
   'services.title': 'Сервисы · Manyplug',

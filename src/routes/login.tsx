@@ -18,6 +18,7 @@ import {
 import { ErrorPage, type LoginMode, LoginPage } from '../web/pages.js';
 import { PENDING_LOGIN_TTL_SECONDS } from '../web/pending-logins.js';
 import { VerifyPage } from '../web/security-pages.js';
+import { analyticsRequest } from './analytics.js';
 import {
   type AppContext,
   type AppEnv,
@@ -195,6 +196,9 @@ export function loginRoutes() {
       if (created) {
         s.logger.info({ userId: user.id, provider: providerId }, 'user signed up');
         await attachReferral(c, user.id);
+        s.analytics.track('signup', providerId);
+        // Where they came from: the visit of the same browser today or yesterday (docs/ANALYTICS.md).
+        await s.analytics.attributeSignup(user.id, analyticsRequest(c));
       }
       if (await s.secondFactors.hasAny(user.id)) {
         const pending = await s.pendingLogins.create(user.id, ['fed']);

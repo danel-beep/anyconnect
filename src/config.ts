@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { AnalyticsConfig } from './analytics/index.js';
 import { type BillingConfig, BillingConfigError, readBillingConfig } from './billing/config.js';
 import { BRAND } from './brand.js';
 import { CLIENT_POLICY_IDS } from './hub/client-policies.js';
@@ -149,6 +150,16 @@ const EnvSchema = z.object({
    * from ENCRYPTION_KEY. A separate key lets backups be restored after ENCRYPTION_KEY rotation.
    */
   BACKUP_ENCRYPTION_KEY: optionalString,
+  /** First-party analytics of the site and the product (admin panel → Analytics, docs/ANALYTICS.md). */
+  ANALYTICS: bool(true),
+  /** Days visits and daily counters are kept. */
+  ANALYTICS_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(400),
+  /** Headers with the visitor's country set by a CDN in front of the hub (comma separated). */
+  ANALYTICS_COUNTRY_HEADERS: z.string().default('cf-ipcountry,x-vercel-ip-country,cloudfront-viewer-country'),
+  /** IP-to-country database (MaxMind format): a file path, or `off`. Default: the bundled one. */
+  ANALYTICS_GEOIP_DB: optionalString,
+  /** How often buffered page views and events are written, in seconds. */
+  ANALYTICS_FLUSH_SECONDS: z.coerce.number().min(0.05).max(300).default(5),
   /** Commit of the running build; set by Render. Shown in the admin panel and sent with errors. */
   RENDER_GIT_COMMIT: optionalString,
   RENDER_INSTANCE_ID: optionalString,
@@ -248,6 +259,8 @@ export interface AppConfig {
   mail: MailConfig;
   /** Database backups (see `src/ops/backups.ts`); undefined when no bucket is configured. */
   backups: BackupConfig | undefined;
+  /** First-party analytics (see `src/analytics/`). */
+  analytics: AnalyticsConfig;
   /** Error tracking and build identity (see `src/ops/`). */
   ops: {
     sentryDsn: string | undefined;
@@ -560,6 +573,15 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     billing: billingConfig(source, isProduction),
     mail: mailConfig(source, publicUrl),
     backups: backupConfig(env),
+    analytics: {
+      enabled: env.ANALYTICS,
+      retentionDays: env.ANALYTICS_RETENTION_DAYS,
+      countryHeaders: env.ANALYTICS_COUNTRY_HEADERS.split(',')
+        .map((h) => h.trim().toLowerCase())
+        .filter(Boolean),
+      geoipDb: env.ANALYTICS_GEOIP_DB?.toLowerCase() === 'off' ? false : env.ANALYTICS_GEOIP_DB,
+      flushMs: Math.round(env.ANALYTICS_FLUSH_SECONDS * 1000),
+    },
     ops: {
       sentryDsn: sentryDsn(env.SENTRY_DSN),
       environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
