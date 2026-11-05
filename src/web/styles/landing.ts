@@ -28,13 +28,14 @@ export const LANDING_CSS = `
 .section.subtle{background:var(--bg-subtle)}
 
 /* Hero */
-.hero{padding:64px 0 40px;position:relative;isolation:isolate;overflow:hidden}
-.hero::before{content:"";position:absolute;z-index:-1;pointer-events:none;width:760px;height:760px;right:-180px;top:-240px;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 17%,transparent),transparent)}
+.hero{padding:64px 0 40px;position:relative;isolation:isolate;overflow-x:clip}
+@supports not (overflow:clip){.hero{overflow:hidden}}
+.hero::before{content:"";position:absolute;z-index:-1;pointer-events:none;width:760px;height:760px;right:-180px;top:-200px;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 17%,transparent),transparent);-webkit-mask-image:linear-gradient(transparent 200px,#000 420px);mask-image:linear-gradient(transparent 200px,#000 420px)}
 .hero::after{content:"";position:absolute;z-index:-2;inset:0;pointer-events:none;background-image:radial-gradient(color-mix(in srgb,var(--text) 13%,transparent) 1px,transparent 1.4px);background-size:22px 22px;-webkit-mask-image:radial-gradient(ellipse 55% 52% at 74% 36%,#000,transparent 70%);mask-image:radial-gradient(ellipse 55% 52% at 74% 36%,#000,transparent 70%)}
 .hero .wrap{display:grid;grid-template-columns:minmax(0,1.04fr) minmax(0,1fr);gap:56px;align-items:center}
 .hero .eyebrow{margin-bottom:18px}
 .hero h1{font-size:clamp(40px,5.3vw,64px);line-height:1.03;letter-spacing:-.045em;font-weight:660;margin:0 0 22px}
-.hero h1 .mark{display:inline-block;color:var(--accent-ink);background:linear-gradient(var(--accent),var(--accent)) no-repeat 0 96%/100% .07em}
+.hero h1 .mark{display:block;color:var(--accent-ink);text-decoration:underline var(--accent) .06em;text-underline-offset:.13em;text-decoration-skip-ink:auto}
 .hero .lead{max-width:560px;margin:0 0 28px}
 .hero-actions .btn .i{transition:transform .2s}
 .hero-actions .btn:hover .i:last-child{transform:translateX(3px)}
@@ -63,9 +64,13 @@ export const LANDING_CSS = `
 .approve .who{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;color:var(--accent-ink)}
 .approve .who .brand-mark{width:18px;height:18px}
 .approve p{margin:6px 0 10px;font-size:13.5px;line-height:1.45}
-.approve .btns,.ask .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.approve .btns span,.ask .btns span{text-align:center;padding:7px;border-radius:8px;border:1px solid var(--border-strong);background:var(--card);font-weight:560;font-size:13px}
-.approve .btns .yes,.ask .btns .yes{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.approve .decide{display:grid}
+.approve .decide>*{grid-area:1/1}
+.approve .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;opacity:0;visibility:hidden}
+.approve .btns span{text-align:center;padding:7px;border-radius:8px;border:1px solid var(--border-strong);background:var(--card);font-weight:560;font-size:13px}
+.approve .btns .yes{border-color:var(--accent);background:var(--accent);color:var(--accent-text)}
+.approve .approved{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;background:var(--ok-soft);color:var(--ok);font-weight:600;font-size:13px}
+.approve .approved svg{width:15px;height:15px;stroke-width:2.6}
 .demo .typing{position:absolute;left:0;top:8px;width:30px;height:8px;opacity:0;background:radial-gradient(circle,var(--muted) 3px,transparent 3.6px) 0 0/10px 8px repeat-x}
 .demo-input{display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;color:var(--muted);font-size:14px}
 .demo-input svg{width:16px;height:16px;flex:none}
@@ -76,29 +81,35 @@ export const LANDING_CSS = `
 .works .wrap{display:flex;flex-direction:column;align-items:center;gap:16px}
 .works p{margin:0;font:500 12px/1.3 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
 .works ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:8px 10px}
-.works a{display:inline-flex;align-items:center;gap:8px;padding:4px 14px 4px 4px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--text);text-decoration:none;font-weight:540;font-size:14px;transition:border-color .15s,transform .15s}
+.works a{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 15px 0 12px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--text);text-decoration:none;font-weight:540;font-size:14px;white-space:nowrap;transition:border-color .15s,transform .15s}
 .works a:hover{border-color:var(--accent);transform:translateY(-1px)}
-.works .logo-tile.sm{width:28px;height:28px;border-radius:999px}
-.works .logo-tile.sm svg{width:14px;height:14px}
-.works .logo-tile .mono-letter{font-size:12px}
+.works a svg{width:16px;height:16px;flex:none;color:var(--muted)}
+.works a svg:not([fill=none]){fill:currentColor}
+@media (max-width:640px){
+  .works{padding-bottom:48px}
+  .works ul{flex-wrap:nowrap;justify-content:flex-start;align-self:stretch;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;scroll-padding:0 16px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
+  .works ul::-webkit-scrollbar{display:none}
+}
 
 /* Graphite band: the hub diagram */
-.section.ink{background:var(--ink-surface);color:${INK_TEXT};position:relative;overflow:hidden;isolation:isolate}
+.section.ink{background:var(--ink-surface);color:${INK_TEXT};position:relative;overflow:hidden;isolation:isolate;border-block:1px solid ${INK_LINE}}
 .section.ink::before{content:"";position:absolute;z-index:-1;inset:auto -10% -40% -10%;height:70%;pointer-events:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 16%,transparent),transparent)}
 .section.ink .section-head{margin-bottom:56px}
 .section.ink .section-head p:not(.eyebrow),.section.ink .eyebrow{color:${INK_MUTED}}
-.hubmap{--map-h:320px;--wire-w:120px;display:grid;grid-template-columns:minmax(0,1fr) var(--wire-w) auto var(--wire-w) minmax(0,1.2fr);height:var(--map-h)}
+/* Symmetric: equal side columns around a fixed-width hub, the same number of rows on each side */
+.hubmap{--map-h:320px;--wire-w:120px;display:grid;grid-template-columns:minmax(0,1fr) var(--wire-w) 216px var(--wire-w) minmax(0,1fr);height:var(--map-h)}
 .hubmap-col{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .hubmap-col li{flex:1;display:flex;align-items:center;min-width:0}
 .hubmap .node{width:100%;display:flex;align-items:center;gap:10px;height:46px;padding:0 14px;border:1px solid ${INK_LINE};border-radius:12px;background:rgba(255,255,255,.045);font-weight:540;color:${INK_TEXT};white-space:nowrap;min-width:0}
 .hubmap .node svg{width:18px;height:18px;flex:none}
 .hubmap .node svg:not([fill=none]){fill:currentColor}
-.hubmap .accs{margin-left:auto;display:flex;gap:4px;min-width:0;overflow:hidden}
-.hubmap .acc{font:500 11px/1 ${MONO};color:${INK_MUTED};border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px}
+.map-accs{margin-left:auto;display:flex;gap:4px;min-width:0;overflow:hidden}
+.map-acc{display:inline-flex;font:500 11px/1 ${MONO};color:${INK_MUTED};border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 7px}
 .wires{display:block;width:var(--wire-w);height:var(--map-h);overflow:visible}
 .wire{fill:none;stroke:rgba(255,255,255,.24);stroke-width:1.5}
 .pulse{fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:12 300;stroke-dashoffset:12;opacity:0}
-.hub-core{align-self:center;display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 28px;border-radius:18px;text-align:center;min-width:200px;background:color-mix(in srgb,var(--accent) 9%,#262629);border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 9%,transparent),0 24px 60px -18px color-mix(in srgb,var(--accent) 50%,transparent)}
+.hub-core{position:relative;align-self:center;display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 20px;border-radius:18px;text-align:center;background:color-mix(in srgb,var(--accent) 9%,#262629);border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 9%,transparent),0 24px 60px -18px color-mix(in srgb,var(--accent) 50%,transparent)}
+.core-glow{position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:0 0 0 12px color-mix(in srgb,var(--accent) 6%,transparent),0 24px 70px -10px color-mix(in srgb,var(--accent) 60%,transparent);opacity:0}
 .hub-core .brand-mark{width:42px;height:42px}
 .hub-core strong{font-size:18px;letter-spacing:-.02em}
 .hub-core .mono{font-size:12px;color:${INK_MUTED}}
@@ -112,14 +123,16 @@ export const LANDING_CSS = `
 .vs-card.after h3{color:${INK_TEXT}}
 .vs-card.after h3 svg{color:var(--accent)}
 .map-compare{margin:22px 0 0}
-.section.ink .map-compare a{color:#ffad74;font-weight:540}
-.map-compare svg{width:16px;height:16px;vertical-align:-3px;margin-left:4px}
+.section.ink .map-compare a{color:#ffad74;font-weight:540;text-decoration:none}
+.map-compare a span{text-decoration:underline;text-underline-offset:3px}
+.map-compare a:hover span{text-decoration-thickness:2px}
+.map-compare svg{width:16px;height:16px;vertical-align:-3px;margin-left:6px}
 @media (max-width:960px){
   .hubmap{display:flex;flex-direction:column;height:auto}
   .wires{display:none}
   .hubmap-col{gap:8px}
-  .hubmap-col.clients{flex-direction:row;flex-wrap:wrap}
-  .hubmap-col.clients li{flex:1 1 140px}
+  .hubmap-col.clients{display:grid;grid-template-columns:1fr 1fr}
+  .hubmap-col.clients li:last-child:nth-child(odd){grid-column:1/-1}
   .hub-core{position:relative;margin:36px auto}
   .hub-core::before,.hub-core::after{content:"";position:absolute;left:50%;width:2px;height:36px;margin-left:-1px;background:repeating-linear-gradient(var(--accent) 0 4px,transparent 4px 8px)}
   .hub-core::before{bottom:100%}
@@ -159,10 +172,12 @@ export const LANDING_CSS = `
 .codebox{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font:450 12.5px/1.6 ${MONO};white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted)}
 .codebox b{color:var(--text);font-weight:600}
 .codebox i{font-style:normal;color:var(--accent-ink)}
-.ask{border:1px solid var(--border);border-radius:12px;padding:12px 14px;background:var(--bg-subtle);font-size:13.5px}
-.ask .who{font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px}
-.ask .who svg{width:14px;height:14px;color:var(--accent-ink)}
-.ask .btns{margin-top:10px}
+.codebox .res{white-space:nowrap}
+.rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rules li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px 8px 12px;border:1px solid var(--border);border-radius:10px;background:var(--bg-subtle);font-size:13.5px}
+.rules .lvl{flex:none;font-size:12px;font-weight:600;padding:4px 8px;border-radius:999px;background:var(--ok-soft);color:var(--ok)}
+.rules .r-ask .lvl{background:var(--accent-soft);color:var(--accent-ink)}
+.rules .r-block .lvl{background:var(--danger-soft);color:var(--danger)}
 .mini-chat{display:flex;flex-direction:column;gap:8px}
 .bubble{max-width:90%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.45}
 .bubble.me{align-self:flex-end;background:var(--bg-subtle);border:1px solid var(--border);border-bottom-right-radius:4px}
@@ -176,9 +191,12 @@ export const LANDING_CSS = `
 .ok-pill{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 ${SANS};color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:5px 9px}
 .bars{display:flex;flex-direction:column;gap:10px;font-size:13px}
 .bars-label{font:500 11px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.bar{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:10px;align-items:center}
+.bar{display:grid;grid-template-columns:78px minmax(0,1fr) 84px;gap:10px;align-items:center}
+.bar .tiny{text-align:right}
 .track{height:8px;border-radius:99px;background:var(--bg-subtle);border:1px solid var(--border);overflow:hidden}
-.fill{display:block;height:100%;width:24%;background:var(--ok);border-radius:99px;transform-origin:left;transition:transform 1s cubic-bezier(.2,.7,.2,1) .5s}
+.fill{display:block;height:100%;border-radius:99px;transform-origin:left;transition:transform 1.1s cubic-bezier(.2,.7,.2,1) .5s}
+.bar.all .fill{width:100%;background:color-mix(in srgb,var(--danger) 70%,var(--card))}
+.bar.ours .fill{width:6%;min-width:8px;background:var(--ok)}
 
 /* Services */
 .logo-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
@@ -233,6 +251,7 @@ export const LANDING_CSS = `
 .faq-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr);gap:56px;align-items:start}
 .faq-layout .section-head{margin-bottom:16px}
 .faq-more{margin:0}
+.faq-list summary:focus-visible{outline-offset:6px}
 @media (max-width:860px){.faq-layout{grid-template-columns:1fr;gap:8px}}
 
 /* Final call to action */
@@ -246,22 +265,24 @@ export const LANDING_CSS = `
 @keyframes lp-press{0%,55%{background:var(--card);color:var(--accent-ink);transform:none}70%{transform:scale(.95)}100%{transform:none}}
 @keyframes lp-typing{0%{opacity:0}15%,85%{opacity:1}100%{opacity:0}}
 @keyframes lp-dots{0%,100%{background-position:0 0}50%{background-position:0 -3px}}
-@keyframes lp-sweep{from{background-size:0 .07em}}
+@keyframes lp-hold{0%,90%{opacity:1;visibility:visible}100%{opacity:0;visibility:visible}}
+@keyframes lp-glow{0%,100%{opacity:0}50%{opacity:1}}
 @keyframes lp-pulse{0%{stroke-dashoffset:12;opacity:1}60%{stroke-dashoffset:-100;opacity:1}61%,100%{stroke-dashoffset:-100;opacity:0}}
-@keyframes lp-glow{0%,100%{box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 9%,transparent),0 24px 60px -18px color-mix(in srgb,var(--accent) 50%,transparent)}50%{box-shadow:0 0 0 12px color-mix(in srgb,var(--accent) 5%,transparent),0 24px 70px -14px color-mix(in srgb,var(--accent) 65%,transparent)}}
 @keyframes lp-drift{to{transform:translate(-60px,40px)}}
 @media (prefers-reduced-motion:no-preference){
   /* Hero: the copy settles in on load (the heading stays put: it is the page's main paint) */
-  .hero h1 .mark{animation:lp-sweep .9s cubic-bezier(.2,.7,.2,1) .35s backwards}
   .hero .lead,.hero-actions,.hero-note{animation:lp-rise .7s cubic-bezier(.2,.7,.2,1) backwards}
   .hero .lead{animation-delay:.08s}.hero .hero-actions{animation-delay:.16s}.hero .hero-note{animation-delay:.24s}
   .hero .demo{animation:lp-rise .8s cubic-bezier(.2,.7,.2,1) .1s backwards}
-  /* The chat plays its request once */
-  .demo .step{animation:lp-step .45s cubic-bezier(.2,.7,.2,1) backwards}
-  .demo .s1{animation-delay:.3s}.demo .s2{animation-delay:1.2s}.demo .s3{animation-delay:1.8s}.demo .s4{animation-delay:2.5s}.demo .s5{animation-delay:4.2s}.demo .s6{animation-delay:4.7s}
-  .demo .approve .yes{animation:lp-press .9s ease 3.1s backwards}
-  .demo .typing{animation:lp-typing .8s linear 4.7s backwards,lp-dots .5s ease-in-out 4.7s 2}
-  .demo .s6 .text{animation:lp-fade .4s ease 5.4s backwards}
+  /* The chat plays its request once: the question is there from the first paint, the AI works,
+     asks, the Allow button is pressed and the card settles into "Approved by you". */
+  .demo .step:not(.s1){animation:lp-step .45s cubic-bezier(.2,.7,.2,1) backwards}
+  .demo .step.s2{animation-delay:.5s}.demo .step.s3{animation-delay:1s}.demo .step.s4{animation-delay:1.6s}.demo .step.s5{animation-delay:3.7s}.demo .step.s6{animation-delay:4.1s}
+  .demo .approve .btns{animation:lp-hold 3.4s linear}
+  .demo .approve .yes{animation:lp-press .9s ease 2.3s backwards}
+  .demo .approve .approved{animation:lp-fade .35s ease 3.2s backwards}
+  .demo .typing{animation:lp-typing .8s linear 4.1s backwards,lp-dots .5s ease-in-out 4.1s 2}
+  .demo .s6 .text{animation:lp-fade .4s ease 4.8s backwards}
   .reveal .demo:not(.in) *{animation-play-state:paused}
   /* Sections rise in once as they come into view */
   .reveal [data-reveal=""]:not(.in),.reveal [data-reveal=kids]:not(.in)>*{opacity:0}
@@ -272,14 +293,16 @@ export const LANDING_CSS = `
   .reveal .bento:not(.in) .light-up .chip.on{background:var(--bg-subtle);border-color:var(--border);color:var(--text)}
   .light-up .chip.on:nth-child(1){transition-delay:.5s}.light-up .chip.on:nth-child(2){transition-delay:.7s}.light-up .chip.on:nth-child(3){transition-delay:.9s}
   .reveal .bento:not(.in) .fill{transform:scaleX(0)}
-  .reveal .bento.in .ask .yes{animation:lp-press .9s ease .9s backwards}
+  .reveal .bento.in .rules li{animation:lp-step .4s cubic-bezier(.2,.7,.2,1) backwards}
+  .reveal .bento.in .rules li:nth-child(2){animation-delay:.6s}.reveal .bento.in .rules li:nth-child(3){animation-delay:.75s}
+  .reveal .bento.in .rules li:first-child{animation-delay:.45s}
   .reveal .bento.in .bubble.ai{animation:lp-rise .5s cubic-bezier(.2,.7,.2,1) 1s backwards}
   .reveal .bento.in .ok-pill{animation:lp-fade .4s ease 1s backwards}
   /* The hub: packets run along the wires while it is on screen */
   .pulse{animation:lp-pulse 3.2s cubic-bezier(.45,0,.55,1) infinite}
-  .wires.w-in .p2{animation-delay:.8s}.wires.w-in .p3{animation-delay:1.6s}.wires.w-in .p4{animation-delay:2.4s}
-  .wires.w-out .p1{animation-delay:.5s}.wires.w-out .p2{animation-delay:1.14s}.wires.w-out .p3{animation-delay:1.78s}.wires.w-out .p4{animation-delay:2.42s}.wires.w-out .p5{animation-delay:3.06s}
-  .hub-core{animation:lp-glow 3.2s ease-in-out infinite}
+  .wires.w-in .p2{animation-delay:.64s}.wires.w-in .p3{animation-delay:1.28s}.wires.w-in .p4{animation-delay:1.92s}.wires.w-in .p5{animation-delay:2.56s}
+  .wires.w-out .p1{animation-delay:.32s}.wires.w-out .p2{animation-delay:.96s}.wires.w-out .p3{animation-delay:1.6s}.wires.w-out .p4{animation-delay:2.24s}.wires.w-out .p5{animation-delay:2.88s}
+  .core-glow{animation:lp-glow 3.2s ease-in-out infinite}
   .reveal [data-live]:not(.live) *{animation-play-state:paused}
   .cta-band.glow::before{animation:lp-drift 14s ease-in-out infinite alternate}
 }

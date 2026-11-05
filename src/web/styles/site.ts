@@ -19,13 +19,26 @@ export const SITE_CSS = `
   .site-nav{display:none;position:absolute;left:0;right:0;top:64px;background:var(--bg);border-bottom:1px solid var(--border);flex-direction:column;padding:8px 16px 16px;margin:0}
   .site-nav a{padding:12px 10px;font-size:16px}
   .nav-open .site-nav{display:flex}
-  .menu-btn{display:inline-grid}
+  .js .menu-btn{display:inline-grid;width:44px;height:44px}
   .site-header .wrap{gap:12px}
-  .site-cta{margin-left:auto}
+  .site-cta{margin-left:auto;gap:4px}
   .site-cta .hide-sm{display:none}
-  .site-cta .cta-main{display:none}
-  .nav-extra{display:flex;gap:8px;padding-top:12px;margin-top:8px;border-top:1px solid var(--border)}
+  /* The main call to action stays in the header, compact; sign-in moves into the menu */
+  .site-cta .cta-main{min-height:38px;padding:0 14px;font-size:14px;margin-left:4px}
+  .nav-extra{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:12px;margin-top:8px;border-top:1px solid var(--border)}
   .nav-extra .btn{flex:1}
+  .nav-extra .prefs{display:none}
+  .nav-extra:not(:has(.btn)){display:none}
+  /* Without JavaScript there is no menu button: the links stay in reach as a scrollable row */
+  html:not(.js) .site-header .wrap{flex-wrap:wrap;height:auto;min-height:64px;padding-block:10px;row-gap:6px}
+  html:not(.js) .site-nav{display:flex;position:static;order:3;flex-direction:row;width:100%;overflow-x:auto;padding:0;border:0;background:none}
+  html:not(.js) .site-nav a{padding:8px 10px;font-size:14px;white-space:nowrap}
+  html:not(.js) .nav-extra{display:none}
+}
+@media (max-width:420px){
+  .site-cta>.prefs{display:none}
+  .nav-extra .prefs{display:flex;order:-1;width:100%;justify-content:flex-end}
+  .nav-extra:not(:has(.btn)){display:flex}
 }
 
 /* Sections */

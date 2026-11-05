@@ -1,15 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import { getPlan, PLANS, yearlyFreeMonths } from '../src/billing/plans.js';
-import { roughCount } from '../src/web/landing.js';
+import { createBuiltinRegistry } from '../src/connectors/index.js';
+import type { AccountRow } from '../src/core/accounts.js';
+import { buildCatalog } from '../src/hub/catalog.js';
 
-describe('landing helpers', () => {
-  it('rounds service counts down so the page never claims more than it has', () => {
-    expect(roughCount(0)).toBe('0');
-    expect(roughCount(7)).toBe('7');
-    expect(roughCount(10)).toBe('10');
-    expect(roughCount(47)).toBe('45+');
-    expect(roughCount(50)).toBe('50');
-    expect(roughCount(53)).toBe('50+');
+function account(connectorId: string): AccountRow {
+  const now = new Date();
+  return {
+    id: `acc_${connectorId}`,
+    workspaceId: 'wsp_1',
+    connectorId,
+    name: connectorId,
+    label: connectorId,
+    description: null,
+    config: {},
+    dataKeyEncrypted: null,
+    credentialsEncrypted: null,
+    enabled: true,
+    status: 'active',
+    statusMessage: null,
+    settings: {},
+    metadata: {},
+    createdAt: now,
+    updatedAt: now,
+    lastUsedAt: null,
+    ownerUserId: null,
+    checkedAt: null,
+    reauthNotifiedAt: null,
+  };
+}
+
+describe('landing claims', () => {
+  it('keeps the tool list short with 40 services, against 45k+ tokens for every tool up front', () => {
+    // The "40 services, still a short menu" tile (landing.f.context.*) quotes these numbers.
+    const connectors = createBuiltinRegistry()
+      .all()
+      .filter((c) => c.id !== 'demo' && c.id !== 'http' && c.actions.length > 0)
+      .slice(0, 40);
+    expect(connectors).toHaveLength(40);
+    const { stats } = buildCatalog({ connectors, accounts: connectors.map((c) => account(c.id)) });
+    expect(stats.directTokens).toBeGreaterThan(45_000);
+    expect(stats.listedTokens).toBeLessThan(3_000);
   });
 
   it('promises only the free months every public paid plan really gives on yearly billing', () => {

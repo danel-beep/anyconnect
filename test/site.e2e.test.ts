@@ -863,8 +863,11 @@ describe('website: public pages', () => {
     // Content is in the markup itself; site.js only decides when it animates.
     expect(html).toContain('data-reveal');
     expect(html).toContain('needs your OK');
-    // Counts are rounded down ("45+"), never inflated.
-    expect(html).toMatch(/and (\d+\+?) more services/);
+    // One count everywhere, straight from the services that connect on this server.
+    const total = Number(/See all (\d+)/.exec(html)?.[1]);
+    expect(total).toBeGreaterThan(3);
+    expect(html).toContain(`${total} services, several accounts each`);
+    expect(html).toContain(`Notion and ${total - 3} more services`);
   });
 
   it('answers unknown pages with a styled 404 and keeps robots and the sitemap', async () => {

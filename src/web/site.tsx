@@ -51,21 +51,13 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
               {label}
             </a>
           ))}
-          {/* Phones: the header has room only for the logo and the menu, so the buttons live here. */}
+          {/* Phones: the header keeps the logo, the main button and the menu; the rest lives here. */}
           <div class="nav-extra">
-            {ctx.user ? (
-              <a class="btn primary" href="/app">
-                {t('site.cta.dashboard')}
+            <Prefs t={t} lang={ctx.lang} path={ctx.path} />
+            {ctx.user ? null : (
+              <a class="btn" href="/login">
+                {t('site.cta.signIn')}
               </a>
-            ) : (
-              <>
-                <a class="btn" href="/login">
-                  {t('site.cta.signIn')}
-                </a>
-                <a class="btn primary" href="/signup">
-                  {t('site.cta.start')}
-                </a>
-              </>
             )}
           </div>
         </nav>

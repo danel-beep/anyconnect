@@ -1,7 +1,7 @@
 import type { Child, FC } from 'hono/jsx';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, serviceMeta } from './catalog.js';
-import { CLIENT_GUIDES } from './clients.js';
+import { CLIENT_GUIDES, type ClientGuide } from './clients.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { clientGuidePath } from './seo/client-pages.js';
@@ -32,12 +32,17 @@ const LANDING_FAQ: FaqKey[] = ['mcp', 'why', 'compare', 'secrets', 'action', 'li
 
 /** Service tiles on the landing page (the last one links to the full list). */
 const SERVICE_TILES = 17;
+/** Connectors the services lead names in words ("any IMAP mailbox, any REST API"), not as tiles. */
+const NAMED_IN_LEAD = new Set(['imap', 'http']);
 
-/** "45+" for a count shown in copy: rounded down to a multiple of five, so it never overstates. */
-export const roughCount = (n: number): string => {
-  if (n < 10) return String(n);
-  const base = Math.floor(n / 5) * 5;
-  return base < n ? `${base}+` : String(base);
+/** A client's or service's mark: its brand logo when there is one, otherwise an interface icon. */
+const Mark: FC<{ icon?: string | undefined; glyph?: IconName | undefined }> = ({ icon, glyph }) =>
+  icon ? <BrandIcon slug={icon} /> : <Icon name={glyph ?? 'plug'} />;
+
+const client = (id: string): ClientGuide => {
+  const guide = CLIENT_GUIDES.find((c) => c.id === id);
+  if (!guide) throw new Error(`Unknown AI client: ${id}`);
+  return guide;
 };
 
 export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ ctx, services }) => {
@@ -57,13 +62,13 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
         faqPage(faqItems(t, LANDING_FAQ)),
       ]}
     >
-      <Hero ctx={ctx} more={roughCount(Math.max(ready.length - 3, 0))} />
+      <Hero ctx={ctx} more={Math.max(ready.length - 3, 0)} />
       <WorksWith ctx={ctx} />
       <HubMap ctx={ctx} />
       <Steps ctx={ctx} />
       <Features t={t} />
       <Services ctx={ctx} ready={ready} />
-      <Security t={t} />
+      <Security ctx={ctx} />
       <section class="section border" id="pricing">
         <div class="wrap">
           <SectionHead eyebrow={t('landing.pricing.eyebrow')} title={t('landing.pricing.title')}>
@@ -124,7 +129,7 @@ const SectionHead: FC<{ eyebrow: string; title: string; children?: Child; id?: s
 
 // --- Hero --------------------------------------------------------------------
 
-const Hero: FC<{ ctx: PageCtx; more: string }> = ({ ctx, more }) => {
+const Hero: FC<{ ctx: PageCtx; more: number }> = ({ ctx, more }) => {
   const { t } = ctx;
   return (
     <section class="hero">
@@ -159,7 +164,10 @@ const Hero: FC<{ ctx: PageCtx; more: string }> = ({ ctx, more }) => {
   );
 };
 
-/** A chat that plays one request: two searches, a question to the user, the send, the answer. */
+/**
+ * A chat that plays one request: a search, a read, a question to the user that they approve, the
+ * send and the answer. Its final (static) state shows the request already approved.
+ */
 const DemoChat: FC<{ t: Translate }> = ({ t }) => (
   <div class="demo" role="img" aria-label={t('landing.demo.label')} data-reveal="play">
     <div class="demo-bar">
@@ -192,9 +200,14 @@ const DemoChat: FC<{ t: Translate }> = ({ t }) => (
           <BrandMark /> {t('landing.demo.approveWho')}
         </div>
         <p>{t('landing.demo.approveText')}</p>
-        <div class="btns">
-          <span>{t('landing.demo.deny')}</span>
-          <span class="yes">{t('landing.demo.allow')}</span>
+        <div class="decide">
+          <div class="btns">
+            <span>{t('landing.demo.deny')}</span>
+            <span class="yes">{t('landing.demo.allow')}</span>
+          </div>
+          <div class="approved">
+            <Icon name="check" /> {t('landing.demo.approved')}
+          </div>
         </div>
       </div>
       <div class="call step s5">
@@ -227,7 +240,7 @@ const WorksWith: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           {clients.map((c) => (
             <li>
               <a href={localizedPath(clientGuidePath(c.id)!, ctx.lang)}>
-                <ServiceLogo icon={c.icon} glyph={c.glyph} name={c.name} size="sm" />
+                <Mark icon={c.icon} glyph={c.glyph} />
                 {c.name}
               </a>
             </li>
@@ -240,12 +253,8 @@ const WorksWith: FC<{ ctx: PageCtx }> = ({ ctx }) => {
 
 // --- Hub diagram ---------------------------------------------------------------
 
-const MAP_CLIENTS: { name: string; icon?: string; glyph?: IconName }[] = [
-  { name: 'Claude', icon: 'claude' },
-  { name: 'ChatGPT', glyph: 'zap' },
-  { name: 'Cursor', icon: 'cursor' },
-  { name: 'Claude Code', glyph: 'terminal' },
-];
+/** As many AI apps as services, so both columns of the diagram share the same rows. */
+const MAP_CLIENTS = ['claude', 'chatgpt', 'cursor', 'claude-code', 'vscode'].map(client);
 
 const MAP_SERVICES: { name: string; icon?: string; glyph?: IconName; accounts?: string[] }[] = [
   { name: 'Gmail', icon: 'gmail', accounts: ['work', 'personal'] },
@@ -284,7 +293,7 @@ const Wires: FC<{ count: number; side: 'in' | 'out' }> = ({ count, side }) => (
 
 const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
   const { t } = ctx;
-  const services = [...MAP_SERVICES, { name: t('landing.map.api'), glyph: 'braces' as IconName }];
+  const services = [...MAP_SERVICES, { name: t('landing.map.api'), glyph: 'plug' as IconName }];
   return (
     <section class="section ink" aria-labelledby="map-title">
       <div class="wrap">
@@ -296,7 +305,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             {MAP_CLIENTS.map((c) => (
               <li>
                 <span class="node">
-                  {c.icon ? <BrandIcon slug={c.icon} /> : <Icon name={c.glyph ?? 'zap'} />}
+                  <Mark icon={c.icon} glyph={c.glyph} />
                   {c.name}
                 </span>
               </li>
@@ -304,6 +313,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </ul>
           <Wires count={MAP_CLIENTS.length} side="in" />
           <div class="hub-core">
+            <span class="core-glow" aria-hidden="true" />
             <BrandMark />
             <strong>{BRAND.name}</strong>
             <span class="mono">{t('landing.map.core')}</span>
@@ -313,12 +323,12 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             {services.map((s) => (
               <li>
                 <span class="node">
-                  {s.icon ? <BrandIcon slug={s.icon} /> : <Icon name={s.glyph ?? 'plug'} />}
+                  <Mark icon={s.icon} glyph={s.glyph} />
                   {s.name}
                   {'accounts' in s && s.accounts ? (
-                    <span class="accs">
+                    <span class="map-accs">
                       {s.accounts.map((a) => (
-                        <span class="acc">{a}</span>
+                        <span class="map-acc">{a}</span>
                       ))}
                     </span>
                   ) : null}
@@ -345,7 +355,8 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
         </div>
         <p class="map-compare" data-reveal>
           <a href={localizedPath('/compare', ctx.lang)}>
-            {t('landing.map.compare')} <Icon name="arrow" />
+            <span>{t('landing.map.compare')}</span>
+            <Icon name="arrow" />
           </a>
         </p>
       </div>
@@ -409,6 +420,13 @@ const Steps: FC<{ ctx: PageCtx }> = ({ ctx }) => {
 
 // --- Features ----------------------------------------------------------------
 
+/** The approval tile: what the AI may do on its own, what asks first and what a rule blocks. */
+const CONFIRM_RULES = [
+  ['read', 'allow'],
+  ['send', 'ask'],
+  ['personal', 'block'],
+] as const;
+
 const Features: FC<{ t: Translate }> = ({ t }) => (
   <section class="section border" id="features">
     <div class="wrap">
@@ -441,23 +459,22 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
               </span>
             </div>
             <div class="codebox">
-              <b>mail_search</b>(account: <i>"all"</i>) → {t('landing.f.accounts.result')}
+              <b>mail_search</b>(account: <i>"all"</i>){' '}
+              <span class="res">→ {t('landing.f.accounts.result')}</span>
             </div>
           </div>
         </article>
         <article class="tile c2">
           <h3>{t('landing.f.confirm.title')}</h3>
           <p>{t('landing.f.confirm.text')}</p>
-          <div class="visual ask">
-            <div class="who">
-              <Icon name="bell" /> {BRAND.name}
-            </div>
-            {t('landing.f.confirm.message')}
-            <div class="btns">
-              <span>{t('landing.demo.deny')}</span>
-              <span class="yes">{t('landing.demo.allow')}</span>
-            </div>
-          </div>
+          <ul class="visual rules">
+            {CONFIRM_RULES.map(([what, level]) => (
+              <li class={`r-${level}`}>
+                <span>{t(`landing.f.confirm.${what}`)}</span>
+                <span class="lvl">{t(`landing.f.confirm.${level}`)}</span>
+              </li>
+            ))}
+          </ul>
         </article>
         <article class="tile c3">
           <h3>{t('landing.f.chat.title')}</h3>
@@ -500,21 +517,22 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
         <article class="tile c3">
           <h3>{t('landing.f.context.title')}</h3>
           <p>{t('landing.f.context.text')}</p>
+          {/* Measured on the built-in catalog; test/landing.test.ts keeps these numbers true. */}
           <div class="visual bars">
             <span class="bars-label">{t('landing.f.context.label')}</span>
-            <div class="bar">
-              <span>{t('landing.f.context.few')}</span>
+            <div class="bar all">
+              <span>{t('landing.f.context.all')}</span>
               <span class="track">
                 <span class="fill" />
               </span>
-              <span class="mono tiny">{t('landing.f.context.tokens')}</span>
+              <span class="mono tiny">{t('landing.f.context.allTokens')}</span>
             </div>
-            <div class="bar">
-              <span>{t('landing.f.context.many')}</span>
+            <div class="bar ours">
+              <span>{BRAND.name}</span>
               <span class="track">
                 <span class="fill" />
               </span>
-              <span class="mono tiny">{t('landing.f.context.tokens')}</span>
+              <span class="mono tiny">{t('landing.f.context.ourTokens')}</span>
             </div>
           </div>
         </article>
@@ -528,16 +546,15 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
 const Services: FC<{ ctx: PageCtx; ready: PublicService[] }> = ({ ctx, ready }) => {
   const { t } = ctx;
   const { popular } = arrangeCatalog(
-    ready.map((s) => ({ ...s, service: s.id })),
+    ready.filter((s) => !NAMED_IN_LEAD.has(s.id)).map((s) => ({ ...s, service: s.id })),
     SERVICE_TILES,
   );
-  const count = roughCount(ready.length);
   return (
     <section class="section border" id="services">
       <div class="wrap">
         <SectionHead
           eyebrow={t('landing.services.eyebrow')}
-          title={t('landing.services.title', { n: count })}
+          title={t('landing.services.title', { n: ready.length })}
         >
           {t('landing.services.lead')}
         </SectionHead>
@@ -571,52 +588,35 @@ const Services: FC<{ ctx: PageCtx; ready: PublicService[] }> = ({ ctx, ready }) 
 
 // --- Security ----------------------------------------------------------------
 
-const SECURITY: [IconName, string][] = [
+const SECURITY: [IconName, 'encryption' | 'secrets' | 'injection' | 'audit' | 'delete' | 'status'][] = [
   ['lock', 'encryption'],
   ['key', 'secrets'],
   ['shield', 'injection'],
   ['activity', 'audit'],
-  ['plug', 'disconnect'],
   ['trash', 'delete'],
+  ['globe', 'status'],
 ];
 
 const LOG: {
   time: string;
-  app: string;
-  icon?: string;
-  glyph?: IconName;
+  app: ClientGuide;
   tool: string;
   account: string;
   status: 'ok' | 'approved' | 'blocked';
 }[] = [
-  { time: '10:42', app: 'Claude', icon: 'claude', tool: 'mail_search', account: 'gmail:work', status: 'ok' },
-  {
-    time: '10:43',
-    app: 'Claude',
-    icon: 'claude',
-    tool: 'messages_send',
-    account: 'slack:team',
-    status: 'approved',
-  },
+  { time: '10:42', app: client('claude'), tool: 'mail_search', account: 'gmail:work', status: 'ok' },
+  { time: '10:43', app: client('claude'), tool: 'messages_send', account: 'slack:team', status: 'approved' },
   {
     time: '10:51',
-    app: 'Cursor',
-    icon: 'cursor',
+    app: client('cursor'),
     tool: 'github_create_issue',
     account: 'github:company',
     status: 'ok',
   },
-  {
-    time: '11:05',
-    app: 'ChatGPT',
-    glyph: 'zap',
-    tool: 'gmail_send',
-    account: 'gmail:personal',
-    status: 'blocked',
-  },
+  { time: '11:05', app: client('chatgpt'), tool: 'gmail_send', account: 'gmail:personal', status: 'blocked' },
 ];
 
-const Security: FC<{ t: Translate }> = ({ t }) => (
+const Security: FC<{ ctx: PageCtx }> = ({ ctx: { t, lang } }) => (
   <section class="section border subtle" id="security">
     <div class="wrap">
       <SectionHead eyebrow={t('landing.security.eyebrow')} title={t('landing.security.title')}>
@@ -630,13 +630,21 @@ const Security: FC<{ t: Translate }> = ({ t }) => (
                 <Icon name={icon} />
               </span>
               <div>
-                <h3>{t(`landing.sec.${key}.title` as 'landing.sec.encryption.title')}</h3>
-                <p>{t(`landing.sec.${key}.text` as 'landing.sec.encryption.text')}</p>
+                <h3>{t(`landing.sec.${key}.title`)}</h3>
+                <p>
+                  {t(`landing.sec.${key}.text`)}
+                  {key === 'status' ? (
+                    <>
+                      {' '}
+                      <a href={localizedPath('/status', lang)}>{t('landing.sec.status.link')}</a>
+                    </>
+                  ) : null}
+                </p>
               </div>
             </li>
           ))}
         </ul>
-        <div class="log-card" role="img" aria-label={t('landing.sec.audit.text')} data-reveal>
+        <div class="log-card" role="img" aria-label={t('landing.log.label')} data-reveal>
           <div class="log-head">
             <Icon name="activity" /> {t('landing.log.title')}
           </div>
@@ -645,8 +653,8 @@ const Security: FC<{ t: Translate }> = ({ t }) => (
               <li class={`log-row s-${row.status}`}>
                 <span class="time mono">{row.time}</span>
                 <span class="app">
-                  {row.icon ? <BrandIcon slug={row.icon} /> : <Icon name={row.glyph ?? 'zap'} />}
-                  {row.app}
+                  <Mark icon={row.app.icon} glyph={row.app.glyph} />
+                  {row.app.name}
                 </span>
                 <span class="what mono">
                   <b>{row.tool}</b> {row.account}
