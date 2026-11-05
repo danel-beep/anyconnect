@@ -94,6 +94,7 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 
 /* Catalog in the dashboard: a search bar, a short popular row and the full list folded below it.
    While the list is open the bar sticks to the top with category filters and "Show fewer". */
+.add-card{scroll-margin-top:12px}
 .add-head{display:block}
 .add-head p{margin:4px 0 0}
 .svc-bar{display:flex;flex-direction:column;gap:10px;margin:0 0 4px}
@@ -118,9 +119,12 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .svc-chips:not(.at-end){mask-image:linear-gradient(to right,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,#000 85%,transparent)}
 .svc-chips.scrolled.at-end{mask-image:linear-gradient(to right,transparent,#000 8%);-webkit-mask-image:linear-gradient(to right,transparent,#000 8%)}
 .svc-chips.scrolled:not(.at-end){mask-image:linear-gradient(to right,transparent,#000 8%,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 85%,transparent)}
-.chips-more{display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);width:30px;height:30px;min-height:0;padding:0;border-radius:50%;border:1px solid var(--border-strong);background:var(--card);color:var(--text);place-items:center;box-shadow:0 2px 8px -3px rgba(0,0,0,.3)}
-.chips-more svg{width:16px;height:16px;transform:rotate(-90deg)}
-@media (hover:hover){.add-card:has(details.svc-all[open]) .chips-more:not([hidden]){display:grid}}
+.chips-arrow{display:none;cursor:pointer;position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;min-height:0;padding:0;border-radius:50%;border:1px solid var(--border-strong);background:var(--card);color:var(--text);place-items:center;box-shadow:0 2px 8px -3px rgba(0,0,0,.3);z-index:1}
+.chips-arrow.next{right:14px}
+.chips-arrow.prev{left:14px}
+.chips-arrow svg{width:16px;height:16px;transform:rotate(-90deg)}
+.chips-arrow.prev svg{transform:rotate(90deg)}
+@media (hover:hover){.add-card:has(details.svc-all[open]) .chips-arrow:not([hidden]){display:grid}}
 .label-short{display:none}
 .link-btn{border:0;background:none;padding:0;min-height:0;font:inherit;color:var(--accent-ink);text-decoration:underline;cursor:pointer}
 .svc-chips::-webkit-scrollbar{display:none}
@@ -174,6 +178,7 @@ details.svc-all>div{padding:0;color:inherit;max-width:none}
 @media (max-width:900px){
   .add-card:has(details.svc-all[open]) .svc-bar{top:65px}
   .svc-section{scroll-margin-top:200px}
+  .add-card{scroll-margin-top:76px}
   .svc-tile{scroll-margin-top:210px}
 }
 @media (max-width:640px){

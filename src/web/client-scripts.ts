@@ -79,12 +79,15 @@ var narrowed=q!==''||$$('[data-chip-off]',box).length>0;if(count)count.textConte
 var none=sel('data-filter-empty'),noneChip=sel('data-filter-empty-chip'),byChip=$$('[data-chip-off]',box).length>0;
 if(none)none.hidden=n>0||(byChip&&!!noneChip);if(noneChip)noneChip.hidden=n>0||!byChip}
 /* Typing searches every category again (a chip picked afterwards narrows the results) */
-input.addEventListener('input',function(){box.dispatchEvent(new Event('filtering'));run()});box.addEventListener('chips',run);
-if(clear)clear.addEventListener('click',function(){input.value='';run();input.focus()});
-input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';run()}
+function changed(){box.dispatchEvent(new Event('filtering'));run()}
+input.addEventListener('input',changed);box.addEventListener('chips',run);
+if(clear)clear.addEventListener('click',function(){input.value='';changed();input.focus()});
+input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';changed()}
 if(e.key==='Enter'&&input.hasAttribute('data-filter-enter')){e.preventDefault();var first=$$('[data-search]',box).filter(shown).map(function(el){return el.querySelector('a.stretch')}).filter(Boolean)[0];if(first)first.click()}})});
 
-/* Category chips: show one category of a list (data-chips="#list", buttons data-chip="<group>", "" for all) */
+/* Category chips: show one category of a list (data-chips="#list", buttons data-chip="<group>", "" for all).
+   A row wider than its bar scrolls sideways (touch, trackpad) with arrow buttons at the edges
+   (data-chips-prev / data-chips-next next to it) for a mouse. */
 $$('[data-chips]').forEach(function(bar){var box=d.querySelector(bar.getAttribute('data-chips'));if(!box)return;bar.hidden=false;var chips=$$('[data-chip]',bar);
 function pick(v){chips.forEach(function(x){x.setAttribute('aria-pressed',x.getAttribute('data-chip')===v?'true':'false')});
 $$('[data-group]',box).forEach(function(g){if(v&&g.getAttribute('data-group')!==v)g.setAttribute('data-chip-off','');else g.removeAttribute('data-chip-off')})}
@@ -92,16 +95,18 @@ function reset(){if($$('[data-chip-off]',box).length){pick('');bar.scrollLeft=0;
 /* A new search, closing the list or "Search all categories" (data-chips-reset) go back to every category */
 box.addEventListener('filtering',function(){if($$('[data-chip-off]',box).length){pick('');bar.scrollLeft=0}});
 var det=box.closest('details');if(det)det.addEventListener('toggle',function(){if(!det.open)reset();edge()});
-$$('[data-chips-reset]').forEach(function(b){if(d.querySelector(b.getAttribute('data-chips-reset'))===box)b.addEventListener('click',reset)});
-/* A row wider than the bar scrolls sideways: the mouse wheel scrolls it, a button at the edge shows more */
-var more=bar.parentElement&&bar.parentElement.querySelector('[data-chips-more]');
-function edge(){var end=bar.scrollWidth-bar.clientWidth-bar.scrollLeft<=4;bar.classList.toggle('at-end',end);bar.classList.toggle('scrolled',bar.scrollLeft>4);if(more)more.hidden=end}
+$$('[data-chips-reset]').forEach(function(b){if(d.querySelector(b.getAttribute('data-chips-reset'))!==box)return;b.addEventListener('click',function(){reset();
+var f=b.getAttribute('data-focus-after');var to=f&&d.querySelector(f);if(to)to.focus({preventScroll:true})})});
+var wrap=bar.parentElement,prev=wrap&&wrap.querySelector('[data-chips-prev]'),next=wrap&&wrap.querySelector('[data-chips-next]');
+function edge(){var end=bar.scrollWidth-bar.clientWidth-bar.scrollLeft<=4,start=bar.scrollLeft<=4;bar.classList.toggle('at-end',end);bar.classList.toggle('scrolled',!start);if(next)next.hidden=end;if(prev)prev.hidden=start}
 bar.addEventListener('scroll',edge,{passive:true});window.addEventListener('resize',edge);edge();
-bar.addEventListener('wheel',function(e){if(Math.abs(e.deltaY)<=Math.abs(e.deltaX)||bar.scrollWidth<=bar.clientWidth)return;var before=bar.scrollLeft;bar.scrollLeft+=e.deltaY;if(bar.scrollLeft!==before)e.preventDefault()},{passive:false});
-if(more)more.addEventListener('click',function(){bar.scrollBy({left:Math.max(120,bar.clientWidth*0.6),behavior:'smooth'})});
-chips.forEach(function(c){c.addEventListener('click',function(){pick(c.getAttribute('data-chip'));box.dispatchEvent(new Event('chips'));
+function page(dir){bar.scrollBy({left:dir*Math.max(120,bar.clientWidth*0.6),behavior:'smooth'})}
+if(next)next.addEventListener('click',function(){page(1)});if(prev)prev.addEventListener('click',function(){page(-1)});
+/* The picked chip is scrolled clear of the faded edges */
+function reveal(c){var r=c.getBoundingClientRect(),b=bar.getBoundingClientRect(),pad=48;if(r.left<b.left+pad)bar.scrollLeft-=b.left+pad-r.left;else if(r.right>b.right-pad)bar.scrollLeft+=r.right-(b.right-pad)}
+chips.forEach(function(c){c.addEventListener('click',function(){pick(c.getAttribute('data-chip'));reveal(c);box.dispatchEvent(new Event('chips'));
 /* Keep the start of the list right under the (sticky) bar instead of leaving the page scrolled into nothing */
-var stick=bar.closest('[data-sticky-bar]')||bar.parentElement,r=box.getBoundingClientRect(),under=stick.getBoundingClientRect().bottom;if(r.top<under)window.scrollBy(0,r.top-under-8)})})});
+var stick=wrap&&wrap.parentElement||bar,r=box.getBoundingClientRect(),under=stick.getBoundingClientRect().bottom;if(r.top<under)window.scrollBy(0,r.top-under-8)})})});
 
 /* Buttons that close a <details> (e.g. "Show fewer") and bring its top back into view */
 $$('[data-collapse]').forEach(function(b){var t=d.querySelector(b.getAttribute('data-collapse'));if(!t)return;b.hidden=false;
@@ -109,9 +114,15 @@ b.addEventListener('click',function(){t.open=false;
 var h=location.hash&&d.getElementById(location.hash.slice(1));if(h&&t.contains(h)&&history.replaceState)history.replaceState(null,'',location.pathname+location.search);
 var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight)s.scrollIntoView({block:'center'})}})});
 
-/* A <details> that moves focus on opening (data-focus-on-open="#search"), e.g. when its summary hides itself */
-$$('details[data-focus-on-open]').forEach(function(det){var to=d.querySelector(det.getAttribute('data-focus-on-open'));if(!to)return;
-det.addEventListener('toggle',function(){var a=d.activeElement;if(det.open&&(!a||a===d.body||a.tagName==='SUMMARY'&&det.contains(a)))to.focus({preventScroll:true})})});
+/* A <details> opened from its summary: data-focus-on-open="#search" takes keyboard focus there (not
+   after a tap, where it would pop up the on-screen keyboard), data-scroll-on-open="#card" brings that
+   block's top back into view when the page above it changed (e.g. a popular row hid itself). */
+var lastPointer='';d.addEventListener('pointerdown',function(e){lastPointer=e.pointerType||'mouse'},true);d.addEventListener('keydown',function(){lastPointer=''},true);
+$$('details[data-focus-on-open],details[data-scroll-on-open]').forEach(function(det){var s=det.querySelector('summary');
+function sel(a){var v=det.getAttribute(a);return v?d.querySelector(v):null}
+det.addEventListener('toggle',function(){var a=d.activeElement;if(!det.open||det.hasAttribute('data-searching')||!(a===s||!a||a===d.body))return;
+var top=sel('data-scroll-on-open');if(top&&top.getBoundingClientRect().top<0)top.scrollIntoView({block:'start'});
+var to=sel('data-focus-on-open');if(to&&lastPointer!=='touch'&&lastPointer!=='pen')to.focus({preventScroll:true});else if(s)s.blur()})});
 
 /* A link to a folded section (#custom) or to something inside one (#add-gmail) opens it */
 function openTarget(){var id=location.hash.slice(1);if(!id)return;var t=null;try{t=d.getElementById(decodeURIComponent(id))}catch(e){}

@@ -1042,9 +1042,12 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                 </button>
               ) : null}
             </fieldset>
-            <button type="button" class="chips-more" data-chips-more tabindex={-1} aria-hidden="true" hidden>
+            <span class="chips-arrow prev" data-chips-prev aria-hidden="true" hidden>
               <Icon name="chevron" />
-            </button>
+            </span>
+            <span class="chips-arrow next" data-chips-next aria-hidden="true" hidden>
+              <Icon name="chevron" />
+            </span>
           </div>
         </div>
         <p class="sr-only" id="svc-count" aria-live="polite" data-template={t('app.services.found')} />
@@ -1063,11 +1066,11 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
         </p>
         <p class="muted svc-none" id="catalog-none-chip" hidden>
           {t('app.services.noMatchInCategory')}{' '}
-          <button type="button" class="link-btn" data-chips-reset="#svc-all-list">
+          <button type="button" class="link-btn" data-chips-reset="#svc-all-list" data-focus-after="#svc-q">
             {t('app.services.searchAll')}
           </button>
         </p>
-        <details class="svc-all" id="all-services" data-focus-on-open="#svc-q">
+        <details class="svc-all" id="all-services" data-focus-on-open="#svc-q" data-scroll-on-open="#add">
           <summary>
             <span class="when-closed">
               {t('app.services.showAll', { n: total })} <Icon name="chevron" />
