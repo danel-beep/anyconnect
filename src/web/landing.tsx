@@ -65,9 +65,9 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <Hero ctx={ctx} more={Math.max(ready.length - 3, 0)} />
       <WorksWith ctx={ctx} />
       <HubMap ctx={ctx} />
+      <Services ctx={ctx} ready={ready} />
       <Steps ctx={ctx} />
       <Features t={t} />
-      <Services ctx={ctx} ready={ready} />
       <Security ctx={ctx} />
       <section class="section border" id="pricing">
         <div class="wrap">
@@ -93,7 +93,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
             </p>
           </div>
           <div class="faq-list" data-reveal>
-            <Faq t={t} keys={LANDING_FAQ} />
+            <Faq t={t} lang={ctx.lang} keys={LANDING_FAQ} />
           </div>
         </div>
       </section>
@@ -151,11 +151,10 @@ const Hero: FC<{ ctx: PageCtx; more: number }> = ({ ctx, more }) => {
               <Icon name="check" /> {t('landing.note.free')}
             </li>
             <li>
-              <Icon name="check" /> {t('landing.note.encrypted')}
+              <Icon name="check" /> {t('landing.note.fast')}
             </li>
             <li>
-              <Icon name="check" />{' '}
-              <a href={localizedPath('/status', ctx.lang)}>{t('landing.note.status')}</a>
+              <Icon name="check" /> {t('landing.note.encrypted')}
             </li>
           </ul>
         </div>
@@ -187,7 +186,13 @@ const DemoChat: FC<{ t: Translate }> = ({ t }) => (
         <span class="args">
           <b>mail_search</b> "ACME invoice"
         </span>
-        <span class="res">{t('landing.demo.found')}</span>
+        <span class="res">
+          <span class="tags">
+            <i>work</i>
+            <i>personal</i>
+          </span>
+          {t('landing.demo.found')}
+        </span>
       </div>
       <div class="call step s3">
         <Icon name="check" />
@@ -346,14 +351,14 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <h3>
               <Icon name="x" /> {t('landing.map.before')}
             </h3>
-            <p class="vs-stat mono">{t('landing.map.beforeStat')}</p>
+            <p class="vs-stat">{t('landing.map.beforeStat')}</p>
             <p>{t('landing.map.beforeText')}</p>
           </div>
           <div class="vs-card after">
             <h3>
               <Icon name="check" /> {t('landing.map.after')}
             </h3>
-            <p class="vs-stat mono">{t('landing.map.afterStat')}</p>
+            <p class="vs-stat">{t('landing.map.afterStat')}</p>
             <p>{t('landing.map.afterText')}</p>
           </div>
         </div>
@@ -373,7 +378,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
 const Steps: FC<{ ctx: PageCtx }> = ({ ctx }) => {
   const { t } = ctx;
   return (
-    <section class="section" id="how">
+    <section class="section subtle" id="how">
       <div class="wrap">
         <SectionHead eyebrow={t('landing.how.eyebrow')} title={t('landing.how.title')}>
           {t('landing.how.lead')}
@@ -417,6 +422,10 @@ const Steps: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             </div>
           </li>
         </ol>
+        <div class="steps-cta" data-reveal>
+          <StartButton ctx={ctx} size="lg" />
+          <span class="muted">{t('landing.steps.cta')}</span>
+        </div>
       </div>
     </section>
   );
@@ -432,7 +441,7 @@ const CONFIRM_RULES = [
 ] as const;
 
 const Features: FC<{ t: Translate }> = ({ t }) => (
-  <section class="section border" id="features">
+  <section class="section" id="features">
     <div class="wrap">
       <SectionHead eyebrow={t('landing.features.eyebrow')} title={t('landing.features.title')}>
         {t('landing.features.lead')}
@@ -449,22 +458,32 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
               <span class="chip on">
                 <BrandIcon slug="gmail" /> gmail:personal
               </span>
-              <span class="chip on">
-                <Icon name="mail" /> imap:fastmail
+              <span class="chip">
+                <Icon name="hash" /> slack:team
               </span>
               <span class="chip">
-                <BrandIcon slug="googlecalendar" /> gcal:team
+                <Icon name="hash" /> slack:client
               </span>
               <span class="chip">
                 <BrandIcon slug="notion" /> notion:client
               </span>
-              <span class="chip">
-                <BrandIcon slug="github" /> github:company
-              </span>
             </div>
-            <div class="codebox">
-              <b>mail_search</b>(account: <i>"all"</i>){' '}
-              <span class="res">→ {t('landing.f.accounts.result')}</span>
+            {/* The same search as the hero demo: three emails across both inboxes. */}
+            <div class="codebox results">
+              <span>
+                <b>mail_search</b>(account: <i>"all"</i>)
+              </span>
+              {(
+                [
+                  ['gmail:work', 2],
+                  ['gmail:personal', 1],
+                ] as const
+              ).map(([account, n]) => (
+                <span class="row">
+                  <span>→ {account}</span>
+                  <span class="res">{t('landing.f.accounts.found', { n })}</span>
+                </span>
+              ))}
             </div>
           </div>
         </article>
@@ -480,7 +499,7 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
             ))}
           </ul>
         </article>
-        <article class="tile c3">
+        <article class="tile c2">
           <h3>{t('landing.f.chat.title')}</h3>
           <p>{t('landing.f.chat.text')}</p>
           <div class="visual mini-chat">
@@ -488,7 +507,7 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
             <span class="bubble ai">{t('landing.f.chat.reply')}</span>
           </div>
         </article>
-        <article class="tile c3">
+        <article class="tile c4">
           <h3>{t('landing.f.personas.title')}</h3>
           <p>{t('landing.f.personas.text')}</p>
           <div class="visual routes">
@@ -499,6 +518,12 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
               <span class="rule">{t('landing.f.personas.work')}</span>
             </div>
             <div class="route">
+              <code>/mcp/code</code>
+              <Icon name="arrow" />
+              <span>github:company</span>
+              <span class="rule">{t('landing.f.personas.code')}</span>
+            </div>
+            <div class="route">
               <code>/mcp/personal</code>
               <Icon name="arrow" />
               <span>gmail:personal</span>
@@ -506,19 +531,27 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
             </div>
           </div>
         </article>
-        <article class="tile c3">
+        <article class="tile c4">
           <h3>{t('landing.f.api.title')}</h3>
           <p>{t('landing.f.api.text')}</p>
-          <div class="visual codebox own-server">
-            <span>
-              <b>"url"</b>: <i>"https://crm.example/mcp"</i>
-            </span>
-            <span class="ok-pill">
-              <span class="dot ok" /> {t('landing.f.api.status')}
-            </span>
-          </div>
+          <ul class="visual own-servers">
+            {(
+              [
+                ['MCP', 'https://crm.example/mcp'],
+                ['REST', 'https://api.example.com/v2'],
+              ] as const
+            ).map(([kind, url]) => (
+              <li class="own-server">
+                <span class="kind">{kind}</span>
+                <span class="url">{url}</span>
+                <span class="ok-pill">
+                  <span class="dot ok" /> {t('landing.f.api.status')}
+                </span>
+              </li>
+            ))}
+          </ul>
         </article>
-        <article class="tile c3">
+        <article class="tile c2">
           <h3>{t('landing.f.context.title')}</h3>
           <p>{t('landing.f.context.text')}</p>
           {/* Measured on the built-in catalog; test/landing.test.ts keeps these numbers true. */}
@@ -554,7 +587,7 @@ const Services: FC<{ ctx: PageCtx; ready: PublicService[] }> = ({ ctx, ready }) 
     SERVICE_TILES,
   );
   return (
-    <section class="section border" id="services">
+    <section class="section" id="services">
       <div class="wrap">
         <SectionHead
           eyebrow={t('landing.services.eyebrow')}

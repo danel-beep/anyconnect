@@ -22,11 +22,11 @@ export const siteEn = {
   'site.cta.startShort': 'Start',
   'site.cta.google': 'Start free with Google',
   'site.footer.tagline':
-    'One MCP address for all your services and accounts. Works with Claude, ChatGPT, Cursor and other AI clients.',
+    'One MCP link for all your services and accounts. Works with Claude, ChatGPT, Cursor and other AI clients.',
   'site.footer.product': 'Product',
   'site.footer.account': 'Account',
   'site.footer.security': 'Security',
-  'site.footer.company': 'Manyplug',
+  'site.footer.company': 'Company',
   'site.footer.contact': 'Contact us',
   'site.footer.privacy': 'Privacy policy',
   'site.footer.terms': 'Terms of service',
@@ -87,16 +87,18 @@ export const siteEn = {
     'Each AI app would need its own setup, many services have no MCP server at all, and most of them allow one account only. With Manyplug you connect a service once, keep several accounts, and every AI client gets the same tools and the same rules.',
   'faq.compare.q': 'How is it different from Zapier MCP or Composio?',
   'faq.compare.a':
-    'Zapier MCP covers far more apps (over 9,000 by Zapier’s count) and bills each tool call against your Zapier tasks. Composio is a platform for developers who build their own agents. Manyplug is a ready hub for people who work in AI chat every day: several named accounts per service, your OK before risky actions, and separate rules for each AI app. Our comparison pages go into detail.',
+    'Zapier MCP covers far more apps (over 9,000 by Zapier’s count) and bills each tool call against your Zapier tasks. Composio is a platform for developers who build their own agents. Manyplug is a ready hub for people who work in AI chat every day: several named accounts per service, your OK before risky actions, and separate rules for each AI app.',
+  'faq.compare.link': 'See the comparisons',
   'faq.clients.q': 'Will it work with my Claude or ChatGPT plan?',
   'faq.clients.a':
-    'Claude works on every plan, including Free, which allows one custom connector: Manyplug is one connector for all your services. ChatGPT needs developer mode, available on Plus, Pro, Business, Enterprise and Edu. Claude Code, Cursor, VS Code with Copilot, Codex, Gemini CLI and Windsurf work too, and the docs have a step-by-step guide for each.',
+    'Claude works on every plan, including Free, which allows one custom connector: Manyplug is one connector for all your services. ChatGPT needs developer mode, available on Plus, Pro, Business, Enterprise and Edu. Claude Code, Cursor, VS Code with Copilot, Codex, Gemini CLI and Windsurf work too.',
+  'faq.clients.link': 'Setup guide for each app',
   'faq.secrets.q': 'Where are my passwords and tokens stored?',
   'faq.secrets.a':
-    'In the hub’s database, encrypted with a separate key per account. The AI only sees tool results, never keys. You can disconnect any account at any moment, and its credentials are deleted.',
+    'In Manyplug’s database, encrypted with a separate key per account. The AI only sees tool results, never keys. You can disconnect any account at any moment, and its credentials are deleted.',
   'faq.action.q': 'What counts as an action?',
   'faq.action.a':
-    'One call of a service tool by the AI: a search, reading an email, creating a task. “Find the ACME invoice and send it to Alex” takes about three. Managing Manyplug itself (listing accounts, connecting a new one) is free.',
+    'One call of a service tool by the AI: a search, reading an email, creating a task. “Find the ACME invoice and send it to Alex” takes about three. Managing Manyplug itself (listing accounts, connecting a new one) is free. The Free plan starts with 14 days of Pro, then gives 500 actions until day 30, 300 until day 60 and 150 a month after that.',
   'faq.limit.q': 'What happens when I run out of actions?',
   'faq.limit.a':
     'The AI gets a polite message that the monthly limit is reached and nothing breaks. Your accounts and settings stay. The counter resets on the 1st of the month, or you can switch to a bigger plan.',
@@ -137,9 +139,8 @@ export const siteEn = {
   'plan.unlimited.for': 'Special plan assigned by the administrator',
   'plan.metric.actions': '{n} AI actions a month',
   'plan.metric.actions.unlimited': 'Unlimited AI actions',
-  'plan.metric.trial': 'Free forever, starts with {days} days of {plan}',
-  'plan.metric.actionsSteps': '{n} AI actions a month ({months})',
-  'plan.metric.stepMonth': '{n} in month {m}',
+  'plan.metric.trial': 'Free forever, with {days} days of {plan} to start',
+  'plan.metric.actionsSteps': '{n} AI actions a month, more in your first {months} months',
   'plan.metric.accounts': 'Up to {n} connected accounts',
   'plan.metric.accounts.unlimited': 'Unlimited accounts',
   'plan.metric.messengers': 'Messenger accounts: up to {n} (soon)',
@@ -320,11 +321,11 @@ export const siteRu: Record<SiteKey, string> = {
   'site.cta.startShort': 'Начать',
   'site.cta.google': 'Начать бесплатно с Google',
   'site.footer.tagline':
-    'Один MCP-адрес для всех ваших сервисов и аккаунтов. Работает с Claude, ChatGPT, Cursor и другими ИИ.',
+    'Одна MCP-ссылка для всех ваших сервисов и аккаунтов. Работает с Claude, ChatGPT, Cursor и другими ИИ.',
   'site.footer.product': 'Продукт',
   'site.footer.account': 'Аккаунт',
   'site.footer.security': 'Безопасность',
-  'site.footer.company': 'Manyplug',
+  'site.footer.company': 'Компания',
   'site.footer.contact': 'Написать нам',
   'site.footer.privacy': 'Политика конфиденциальности',
   'site.footer.terms': 'Условия использования',
@@ -384,16 +385,18 @@ export const siteRu: Record<SiteKey, string> = {
     'Тогда каждое ИИ-приложение придётся настраивать отдельно, у многих сервисов нет своего MCP-сервера, а большинство позволяют только один аккаунт. С Manyplug сервис подключается один раз, аккаунтов может быть несколько, и у всех ИИ одинаковые инструменты и правила.',
   'faq.compare.q': 'Чем это отличается от Zapier MCP или Composio?',
   'faq.compare.a':
-    'У Zapier MCP намного больше приложений (по данным Zapier, больше 9000), а каждый вызов инструмента списывается из задач вашего тарифа Zapier. Composio — платформа для разработчиков, которые строят своих агентов. Manyplug — готовый хаб для тех, кто каждый день работает в чате с ИИ: несколько именованных аккаунтов одного сервиса, ваше согласие перед рискованными действиями и отдельные правила для каждого ИИ-приложения. Подробности — на страницах сравнения.',
+    'У Zapier MCP намного больше приложений (по данным Zapier, больше 9000), а каждый вызов инструмента списывается из задач вашего тарифа Zapier. Composio — платформа для разработчиков, которые строят своих агентов. Manyplug — готовый хаб для тех, кто каждый день работает в чате с ИИ: несколько именованных аккаунтов одного сервиса, ваше согласие перед рискованными действиями и отдельные правила для каждого ИИ-приложения.',
+  'faq.compare.link': 'Подробные сравнения',
   'faq.clients.q': 'Заработает ли это с моим тарифом Claude или ChatGPT?',
   'faq.clients.a':
-    'Claude работает на любом тарифе, включая бесплатный: в нём можно добавить один свой коннектор, а Manyplug — один коннектор для всех сервисов. В ChatGPT нужен режим разработчика, он есть в Plus, Pro, Business, Enterprise и Edu. Claude Code, Cursor, VS Code с Copilot, Codex, Gemini CLI и Windsurf тоже подходят, и для каждого в документации есть пошаговая инструкция.',
+    'Claude работает на любом тарифе, включая бесплатный: в нём можно добавить один свой коннектор, а Manyplug — один коннектор для всех сервисов. В ChatGPT нужен режим разработчика, он есть в Plus, Pro, Business, Enterprise и Edu. Claude Code, Cursor, VS Code с Copilot, Codex, Gemini CLI и Windsurf тоже подходят.',
+  'faq.clients.link': 'Инструкции для каждого приложения',
   'faq.secrets.q': 'Где хранятся мои пароли и токены?',
   'faq.secrets.a':
     'В базе Manyplug, зашифрованные отдельным ключом для каждого аккаунта. ИИ видит только результаты инструментов, но не ключи. Любой аккаунт можно отключить в любой момент, и его данные для входа удаляются.',
   'faq.action.q': 'Что считается действием?',
   'faq.action.a':
-    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. «Найди счёт ACME и отправь его Алексу» — это около трёх действий. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются.',
+    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. «Найди счёт ACME и отправь его Алексу» — это около трёх действий. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются. Бесплатный тариф начинается с 14 дней Pro, потом 500 действий до 30-го дня, 300 до 60-го и 150 в месяц дальше.',
   'faq.limit.q': 'Что будет, если действия закончатся?',
   'faq.limit.a':
     'ИИ получит вежливое сообщение, что месячный лимит исчерпан, и ничего не сломается. Аккаунты и настройки сохранятся. Счётчик обнулится 1-го числа, или можно перейти на тариф побольше.',
@@ -434,9 +437,9 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.unlimited.for': 'Особый тариф, назначенный администратором',
   'plan.metric.actions': '{n} действий ИИ в месяц',
   'plan.metric.actions.unlimited': 'Действия ИИ без ограничений',
-  'plan.metric.trial': 'Бесплатно навсегда, первые {days} дней — «{plan}»',
-  'plan.metric.actionsSteps': '{n} действий ИИ в месяц ({months})',
-  'plan.metric.stepMonth': '{m}-й месяц — {n}',
+  'plan.metric.trial': 'Бесплатно навсегда, а первые {days} дней — «{plan}»',
+  'plan.metric.actionsSteps':
+    '{n} действий ИИ в месяц, в первые {months} {months|месяц|месяца|месяцев} — больше',
   'plan.metric.accounts': 'Аккаунтов сервисов: до {n}',
   'plan.metric.accounts.unlimited': 'Аккаунты без ограничений',
   'plan.metric.messengers': 'Аккаунтов мессенджеров: до {n} (скоро)',

@@ -18,8 +18,10 @@ export const SITE_CSS = `
 @media (max-width:860px){
   .site-nav{display:none;position:absolute;left:0;right:0;top:64px;background:var(--bg);border-bottom:1px solid var(--border);flex-direction:column;padding:8px 16px 16px;margin:0}
   .site-nav a{padding:12px 10px;font-size:16px}
-  .nav-open .site-nav{display:flex;box-shadow:0 24px 40px -24px rgba(0,0,0,.35)}
-  .nav-open .site-header::after{content:"";position:fixed;inset:64px 0 0;z-index:-1;background:rgba(20,20,22,.4)}
+  /* The open menu is a full-height sheet; the page behind it stays put */
+  .nav-open .site-nav{display:flex;height:calc(100dvh - 64px);overflow-y:auto}
+  html.nav-open:has(.site-nav) body{overflow:hidden}
+  .nav-open .nav-extra{margin-top:auto}
   .menu-btn .i+.i,.nav-open .menu-btn .i:first-child{display:none}
   .nav-open .menu-btn .i+.i{display:block}
   .js .menu-btn{display:inline-grid;width:44px;height:44px}
@@ -38,9 +40,18 @@ export const SITE_CSS = `
   html:not(.js) .site-nav a{padding:8px 10px;font-size:14px;white-space:nowrap}
   html:not(.js) .nav-extra{display:none}
 }
+/* The narrowest phones: shorter header button, and long labels (Russian) wrap instead of pushing the page sideways */
+.cta-main .short{display:none}
+@media (max-width:359px){
+  .cta-main .long{display:none}
+  .cta-main .short{display:inline}
+  .btn.lg{white-space:normal;text-align:center;line-height:1.25;padding-block:8px}
+  .billing-switch{display:flex}
+  .billing-switch button{flex:1;white-space:normal;line-height:1.2;padding-block:6px}
+}
 @media (max-width:420px){
   .site-cta>.prefs{display:none}
-  .nav-extra .prefs{display:flex;order:-1;width:100%;justify-content:flex-end}
+  .nav-extra .prefs{display:flex;order:-1;width:100%;justify-content:flex-start}
   .nav-extra:not(:has(.btn)){display:flex}
 }
 
@@ -115,7 +126,8 @@ html:not(.js) .when-year{display:none}
 .cta-band p{color:#b4b4b8;margin:0}
 .cta-band .btn:not(.primary){background:transparent;color:#f5f5f4;border-color:#3a3a3f}
 .cta-band .hero-actions{justify-content:flex-end;position:relative;z-index:1}
-@media (max-width:860px){.cta-band{grid-template-columns:1fr;padding:32px}.cta-band .hero-actions{justify-content:flex-start}}
+@media (max-width:860px){.cta-band{grid-template-columns:minmax(0,1fr);padding:32px}.cta-band .hero-actions{justify-content:flex-start}}
+@media (max-width:420px){.cta-band{padding:28px 20px}}
 
 /* Docs (connect guides) */
 .doc-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px;padding:48px 0 96px}
@@ -180,12 +192,12 @@ html:not(.js) .when-year{display:none}
 /* Footer */
 .site-footer{border-top:1px solid var(--border);padding:56px 0 40px;margin-top:32px}
 .footer-grid{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:32px}
-.footer-grid h4{font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:4px 0 14px}
+.footer-grid h2{font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:4px 0 14px}
 .footer-grid a{display:block;color:var(--text);text-decoration:none;font-size:14px;padding:4px 0}
 .footer-grid a:hover{color:var(--accent-ink)}
 .footer-grid a.brand{display:inline-flex}
 .footer-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:40px;padding-top:24px;border-top:1px solid var(--border)}
-@media (max-width:760px){.footer-grid{grid-template-columns:1fr 1fr}.footer-grid>div:first-child{grid-column:span 2}}
+@media (max-width:760px){.footer-grid{grid-template-columns:1fr 1fr}.footer-grid>div:first-child{grid-column:span 2}.footer-grid a{padding:10px 0}}
 .svc-missing{margin-top:24px}
 .plan ul{flex:1}
 .doc-layout h1{font-size:clamp(32px,4vw,44px);letter-spacing:-.035em;line-height:1.05}

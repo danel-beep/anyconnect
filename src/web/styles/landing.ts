@@ -61,7 +61,9 @@ export const LANDING_CSS = `
 .call>svg{width:14px;height:14px;color:var(--ok);stroke-width:2.6}
 .call b{font-weight:600;color:var(--text)}
 .call .args{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.call .res{color:var(--ok);white-space:nowrap}
+.call .res{color:var(--ok);white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.call .tags{display:inline-flex;gap:4px}
+.call .tags i{font-style:normal;font-size:11px;line-height:1;padding:3px 6px;border-radius:5px;border:1px solid var(--border-strong);color:var(--muted);background:var(--card)}
 .approve{border:1px solid color-mix(in srgb,var(--accent) 60%,var(--border));border-radius:12px;padding:12px 14px;background:var(--accent-soft)}
 .approve .who{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;color:var(--accent-ink)}
 .approve .who .brand-mark{width:18px;height:18px}
@@ -81,7 +83,7 @@ export const LANDING_CSS = `
 /* Works with */
 .works{padding:28px 0 64px}
 .works .wrap{display:flex;flex-direction:column;align-items:center;gap:16px}
-.works p{margin:0;font:500 12px/1.3 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
+.works p{margin:0;font-size:14px;line-height:1.4;color:var(--muted);text-align:center}
 .works ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;justify-content:center;gap:8px 10px}
 .works a{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 15px 0 12px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--text);text-decoration:none;font-weight:540;font-size:14px;white-space:nowrap;transition:border-color .15s,transform .15s}
 .works a:hover{border-color:var(--accent);transform:translateY(-1px)}
@@ -121,7 +123,7 @@ export const LANDING_CSS = `
 .vs-card{border:1px solid ${INK_LINE};border-radius:14px;padding:22px 24px;background:rgba(255,255,255,.03)}
 .vs-card h3{display:flex;align-items:center;gap:8px;font-size:15px;margin:0 0 12px;color:${INK_MUTED};font-weight:600}
 .vs-card h3 svg{width:18px;height:18px;stroke-width:2.2}
-.vs-card .vs-stat{font-size:15px;color:${INK_TEXT};margin:0 0 6px}
+.vs-card .vs-stat{font-size:17px;font-weight:620;letter-spacing:-.01em;font-variant-numeric:tabular-nums;color:${INK_TEXT};margin:0 0 6px}
 .vs-card p{color:${INK_MUTED};margin:0;font-size:14.5px}
 .vs-card.after{border-color:color-mix(in srgb,var(--accent) 55%,transparent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .vs-card.after h3{color:${INK_TEXT}}
@@ -136,7 +138,11 @@ export const LANDING_CSS = `
   .wires{display:none}
   .hubmap-col{gap:8px}
   .hubmap::before{display:none}
+  .hubmap-col{width:100%;max-width:560px;margin:0 auto}
   .hubmap-col.clients{flex-direction:row;flex-wrap:wrap;justify-content:center}
+  .hubmap-col.clients::after,.hubmap-col.services::before{content:"";flex:0 0 64%;align-self:center;height:0;border-top:2px dashed color-mix(in srgb,var(--accent) 80%,transparent)}
+  .hubmap-col.clients::after{margin-top:12px}
+  .hubmap-col.services::before{margin-bottom:12px}
   .hubmap-col.clients li{flex:none}
   .hubmap-col.clients .node{width:auto;height:40px;border-radius:999px}
   .hubmap-col.services .node{height:42px}
@@ -159,14 +165,17 @@ export const LANDING_CSS = `
 .signed svg{width:16px;height:16px;color:var(--ok);stroke-width:2.4}
 .url-pill{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px dashed var(--border-strong);border-radius:10px;font:500 13px/1 ${MONO};background:var(--code-bg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .prompt-pill{padding:10px 12px;border-radius:12px;background:var(--bg-subtle);border:1px solid var(--border);font-size:14px}
+.steps-cta{display:flex;align-items:center;justify-content:center;gap:12px 18px;flex-wrap:wrap;margin-top:40px;font-size:14px}
 @media (max-width:860px){.steps{grid-template-columns:1fr}}
+@media (max-width:520px){.steps-cta{flex-direction:column}.steps-cta .btn{width:100%}}
 
 /* Features */
 .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
 .tile{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
 .tile h3{font-size:19px;margin:0;letter-spacing:-.02em}
 .tile p{color:var(--muted);margin:0}
-.tile .visual{margin-top:auto;padding-top:14px}
+/* Mocks sit at the bottom so they line up across a row */
+.tile .visual{margin-top:auto;padding-top:16px}
 .tile.c2{grid-column:span 2}.tile.c3{grid-column:span 3}.tile.c4{grid-column:span 4}
 @media (min-width:641px) and (max-width:960px){.bento{grid-template-columns:1fr 1fr}.tile.c2,.tile.c3{grid-column:span 1}.tile.c4,.tile:last-child:nth-child(even){grid-column:span 2}}
 @media (max-width:640px){.bento{grid-template-columns:minmax(0,1fr)}.tile.c2,.tile.c3,.tile.c4{grid-column:auto}}
@@ -193,10 +202,17 @@ export const LANDING_CSS = `
 .route code{font-size:12px;background:var(--card);color:var(--accent-ink);border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
 .route svg{width:14px;height:14px;color:var(--muted)}
 .route .rule{margin-left:auto;font:500 12px/1 ${SANS};color:var(--muted)}
-.own-server{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+@media (max-width:900px){.route{display:grid;grid-template-columns:auto minmax(0,1fr);row-gap:8px}.route svg{display:none}.route .rule{grid-column:1/-1;margin-left:0}}
+.codebox.results{display:grid;grid-template-columns:minmax(0,1fr);gap:2px}
+.codebox.results .row{display:flex;justify-content:space-between;gap:12px}
+.codebox.results .res{color:var(--ok)}
+.own-servers{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.own-server{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--code-bg);font:450 12.5px/1.3 ${MONO}}
+.own-server .kind{font:600 11px/1 ${MONO};letter-spacing:.04em;color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));background:var(--card);border-radius:6px;padding:4px 6px;min-width:42px;text-align:center}
+.own-server .url{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .ok-pill{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 ${SANS};color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:5px 9px}
 .bars{display:flex;flex-direction:column;gap:10px;font-size:13px}
-.bars-label{font:500 11px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.bars-label{font:500 11px/1.4 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .bar{display:grid;grid-template-columns:78px minmax(0,1fr) 84px;gap:10px;align-items:center}
 .bar .tiny{text-align:right}
 .track{height:8px;border-radius:99px;background:var(--bg-subtle);border:1px solid var(--border);overflow:hidden}
@@ -273,8 +289,9 @@ export const LANDING_CSS = `
 @keyframes lp-typing{0%{opacity:0}15%,85%{opacity:1}100%{opacity:0}}
 @keyframes lp-dots{0%,100%{background-position:0 0}50%{background-position:0 -3px}}
 @keyframes lp-hold{0%,90%{opacity:1;visibility:visible}100%{opacity:0;visibility:visible}}
-@keyframes lp-glow{0%,100%{opacity:0}50%{opacity:1}}
-@keyframes lp-pulse{0%{stroke-dashoffset:12;opacity:1}60%{stroke-dashoffset:-100;opacity:1}61%,100%{stroke-dashoffset:-100;opacity:0}}
+@keyframes lp-glow{0%,100%{opacity:0}35%{opacity:1}}
+@keyframes lp-route{0%{stroke-dashoffset:12;opacity:1}11%{stroke-dashoffset:-100;opacity:1}11.5%,100%{stroke-dashoffset:-100;opacity:0}}
+@keyframes lp-hit{0%,10%{border-color:color-mix(in srgb,var(--accent) 70%,transparent);color:#fff}18%,100%{border-color:${INK_LINE}}}
 @keyframes lp-drift{to{transform:translate(-60px,40px)}}
 @media (prefers-reduced-motion:no-preference){
   /* Hero: the copy settles in on load (the heading stays put: it is the page's main paint) */
@@ -287,7 +304,7 @@ export const LANDING_CSS = `
   .demo .step.s2{animation-delay:.4s}.demo .step.s3{animation-delay:.8s}.demo .step.s4{animation-delay:1.2s}.demo .step.s5{animation-delay:3.7s}.demo .step.s6{animation-delay:4s}
   .demo .approve .btns{animation:lp-hold 3.5s linear}
   .demo .approve .yes{animation:lp-press .9s ease 2.4s backwards}
-  .demo .approve .approved{animation:lp-fade .35s ease 3.25s backwards}
+  .demo .approve .approved{animation:lp-fade .3s ease 3.5s backwards}
   .demo .typing{animation:lp-typing .8s linear 4s backwards,lp-dots .5s ease-in-out 4s 2}
   .demo .s6 .text{animation:lp-fade .4s ease 4.7s backwards}
   .reveal .demo:not(.in) *{animation-play-state:paused}
@@ -306,10 +323,16 @@ export const LANDING_CSS = `
   .reveal .bento.in .bubble.ai{animation:lp-rise .5s cubic-bezier(.2,.7,.2,1) 1s backwards}
   .reveal .bento.in .ok-pill{animation:lp-fade .4s ease 1s backwards}
   /* The hub: packets run along the wires while it is on screen */
-  .pulse{animation:lp-pulse 3.2s cubic-bezier(.45,0,.55,1) infinite}
-  .wires.w-in .p2{animation-delay:.64s}.wires.w-in .p3{animation-delay:1.28s}.wires.w-in .p4{animation-delay:1.92s}.wires.w-in .p5{animation-delay:2.56s}
-  .wires.w-out .p1{animation-delay:.32s}.wires.w-out .p2{animation-delay:.96s}.wires.w-out .p3{animation-delay:1.6s}.wires.w-out .p4{animation-delay:2.24s}.wires.w-out .p5{animation-delay:2.88s}
-  .core-glow{animation:lp-glow 3.2s ease-in-out infinite}
+  /* Three requests in a 7.2s loop: Claude → Gmail work, ChatGPT → Slack client, Cursor → GitHub */
+  .w-in .p1,.w-in .p2,.w-in .p3,.w-out .p1,.w-out .p2,.w-out .p4,.hubmap .clients li:nth-child(-n+3) .node,.hubmap .services li:nth-child(1) .map-acc:first-child,.hubmap .services li:nth-child(2) .map-acc:last-child,.hubmap .services li:nth-child(4) .node{animation:lp-route 7.2s cubic-bezier(.45,0,.55,1) infinite}
+  .hubmap .clients .node,.hubmap .map-acc,.hubmap .services li:nth-child(4) .node{animation-name:lp-hit;animation-timing-function:ease}
+  .w-in .p2,.hubmap .clients li:nth-child(2) .node{animation-delay:2.4s}
+  .w-in .p3,.hubmap .clients li:nth-child(3) .node{animation-delay:4.8s}
+  .w-out .p1{animation-delay:.95s}.w-out .p2{animation-delay:3.35s}.w-out .p4{animation-delay:5.75s}
+  .hubmap .services li:nth-child(1) .map-acc:first-child{animation-delay:1.7s}
+  .hubmap .services li:nth-child(2) .map-acc:last-child{animation-delay:4.1s}
+  .hubmap .services li:nth-child(4) .node{animation-delay:6.5s}
+  .core-glow{animation:lp-glow 2.4s ease-in-out infinite}
   .reveal [data-live]:not(.live) *{animation-play-state:paused}
   .cta-band.glow::before{animation:lp-drift 14s ease-in-out infinite alternate}
 }

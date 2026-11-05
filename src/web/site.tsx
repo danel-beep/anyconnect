@@ -11,7 +11,7 @@ import {
 } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
-import type { Translate } from './i18n.js';
+import type { Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { ARTICLES } from './seo/articles.js';
 import { clientGuidePath } from './seo/client-pages.js';
@@ -32,8 +32,8 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
   // On the landing page the links jump to its sections; elsewhere they open the full pages.
   const home = current === 'home';
   const nav: [Section | 'features' | 'security', string, string][] = [
-    ['features', home ? '#features' : '/#features', t('site.nav.features')],
     ['services', home ? '#services' : '/services', t('site.nav.services')],
+    ['features', home ? '#features' : '/#features', t('site.nav.features')],
     ['security', home ? '#security' : '/#security', t('site.nav.security')],
     ['pricing', home ? '#pricing' : '/pricing', t('site.nav.pricing')],
     ['docs', '/docs', t('site.nav.docs')],
@@ -73,7 +73,8 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
                 {t('site.cta.signIn')}
               </a>
               <a class="btn primary cta-main" href="/signup">
-                {t('site.cta.start')}
+                <span class="long">{t('site.cta.start')}</span>
+                <span class="short">{t('site.cta.startShort')}</span>
               </a>
             </>
           )}
@@ -105,14 +106,14 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <p class="muted small">{t('site.footer.tagline')}</p>
           </div>
           <div>
-            <h4>{t('site.footer.product')}</h4>
+            <h2>{t('site.footer.product')}</h2>
             <a href={localizedPath('/#features', ctx.lang)}>{t('site.nav.features')}</a>
             <a href={localizedPath('/services', ctx.lang)}>{t('site.nav.services')}</a>
             <a href={localizedPath('/pricing', ctx.lang)}>{t('site.nav.pricing')}</a>
             <a href={localizedPath('/docs', ctx.lang)}>{t('site.nav.docs')}</a>
           </div>
           <div>
-            <h4>{t('site.footer.resources')}</h4>
+            <h2>{t('site.footer.resources')}</h2>
             <a href={localizedPath('/guides/what-is-mcp', ctx.lang)}>{t('site.nav.whatIsMcp')}</a>
             <a href={localizedPath('/faq', ctx.lang)}>{t('site.nav.faq')}</a>
             <a href={localizedPath('/use-cases', ctx.lang)}>{t('site.nav.useCases')}</a>
@@ -120,7 +121,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href={localizedPath('/compare', ctx.lang)}>{t('site.nav.compare')}</a>
           </div>
           <div>
-            <h4>{t('site.footer.account')}</h4>
+            <h2>{t('site.footer.account')}</h2>
             {ctx.user ? (
               <a href="/app">{t('site.cta.dashboard')}</a>
             ) : (
@@ -132,7 +133,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href={ctx.user ? '/security' : '/#security'}>{t('site.footer.security')}</a>
           </div>
           <div>
-            <h4>{t('site.footer.company')}</h4>
+            <h2>{t('site.footer.company')}</h2>
             <a href="/support">{t('site.footer.support')}</a>
             {ctx.supportEmail ? <a href={`mailto:${ctx.supportEmail}`}>{t('site.footer.contact')}</a> : null}
             <a href="/status">{t('site.footer.status')}</a>
@@ -335,14 +336,10 @@ const limitText = (t: Translate, lang: string, metric: Metric, value: number | n
 };
 
 /**
- * A plan's start in short: trial length and plan, the steps down ("500 → 300") and the same steps
- * by month ("500 in month 1, 300 in month 2"); a step's month is counted from sign-up.
+ * A plan's start in short: trial length and plan, the steps down ("500 → 300") and how many months
+ * from sign-up they last.
  */
-function startText(
-  t: Translate,
-  lang: string,
-  plan: Plan,
-): { days: number; plan: string; steps: string; months: string } {
+function startText(lang: string, plan: Plan): { days: number; plan: string; steps: string; months: number } {
   const start = plan.start!;
   const steps = start.steps.flatMap((s) =>
     typeof s.limits.actions === 'number' ? [{ n: s.limits.actions, untilDay: s.untilDay }] : [],
@@ -351,9 +348,7 @@ function startText(
     days: start.trial.days,
     plan: start.trial.plan,
     steps: steps.map((s) => fmtNumber(lang, s.n)).join(' → '),
-    months: steps
-      .map((s) => t('plan.metric.stepMonth', { n: fmtNumber(lang, s.n), m: Math.ceil(s.untilDay / 30) }))
-      .join(', '),
+    months: Math.ceil(Math.max(0, ...steps.map((s) => s.untilDay)) / 30),
   };
 }
 
@@ -364,7 +359,7 @@ export const PlanCard: FC<{
   action?: Child;
 }> = ({ ctx, plan, current, action }) => {
   const { t, lang } = ctx;
-  const start = plan.start ? startText(t, lang, plan) : undefined;
+  const start = plan.start ? startText(lang, plan) : undefined;
   // What every plan gives today; features still being built are listed apart in the compare table.
   const features: [Metric, boolean][] = [
     ['actions', true],
@@ -524,14 +519,31 @@ export const productLd = (ctx: PageCtx, description: string): JsonLd =>
     planName: (plan) => ctx.t(`plan.${plan.id}.name` as 'plan.free.name'),
   });
 
-export const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
+/** Answers that point to a page with more: the link goes after the answer's text. */
+const FAQ_LINKS: Partial<Record<FaqKey, { path: string; label: 'faq.compare.link' | 'faq.clients.link' }>> = {
+  compare: { path: '/compare', label: 'faq.compare.link' },
+  clients: { path: '/docs', label: 'faq.clients.link' },
+};
+
+export const Faq: FC<{ t: Translate; lang: Locale; keys: FaqKey[] }> = ({ t, lang, keys }) => (
   <div>
-    {keys.map((key) => (
-      <details>
-        <summary>{t(`faq.${key}.q`)}</summary>
-        <div>{t(`faq.${key}.a`)}</div>
-      </details>
-    ))}
+    {keys.map((key) => {
+      const more = FAQ_LINKS[key];
+      return (
+        <details>
+          <summary>{t(`faq.${key}.q`)}</summary>
+          <div>
+            {t(`faq.${key}.a`)}
+            {more ? (
+              <>
+                {' '}
+                <a href={localizedPath(more.path, lang)}>{t(more.label)}</a>
+              </>
+            ) : null}
+          </div>
+        </details>
+      );
+    })}
   </div>
 );
 
@@ -631,7 +643,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                             {t('pricing.startCell', {
                               days: p.start.trial.days,
                               plan: t(`plan.${p.start.trial.plan}.name` as 'plan.free.name'),
-                              steps: startText(t, lang, p).steps,
+                              steps: startText(lang, p).steps,
                             })}
                           </div>
                         ) : null}
@@ -672,7 +684,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div class="section-head">
             <h2>{t('pricing.faq')}</h2>
           </div>
-          <Faq t={t} keys={PRICING_FAQ} />
+          <Faq t={t} lang={ctx.lang} keys={PRICING_FAQ} />
         </div>
       </section>
     </SiteLayout>
