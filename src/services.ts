@@ -471,15 +471,18 @@ export function createServices(
     reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
     logger,
   });
-  for (const job of builtinJobs({
-    health,
-    alerts,
-    customServices,
-    status: ops.status,
-    backups,
-    billingNotices,
-    analytics,
-  }))
+  for (const job of [
+    ...builtinJobs({
+      health,
+      alerts,
+      customServices,
+      status: ops.status,
+      backups,
+      billingNotices,
+      analytics,
+    }),
+    ...messaging.jobs,
+  ])
     jobs.register(job);
   const hub = new Hub({
     db,

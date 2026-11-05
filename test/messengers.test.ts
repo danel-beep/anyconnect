@@ -584,6 +584,27 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(job?.status).toBe('queued');
   });
 
+  it('deletes finished outgoing jobs after the retention period (privacy policy)', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(4, 'Привет'));
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    expect(json(await call('telegram_send', { chat: chat.id, text: 'Ответ' })).status).toBe('sent');
+    const prune = hub.services.messaging.jobs.find((job) => job.name === 'messaging.prune_outbox');
+    expect(prune?.cron).toBeDefined();
+    const { db } = hub.services;
+
+    // A fresh job stays.
+    await prune!.run({}, {} as never);
+    expect(await db.select().from(messengerOutbox)).toHaveLength(1);
+
+    // One finished more than 30 days ago is deleted; the stored copy of the chat stays.
+    await db.update(messengerOutbox).set({ updatedAt: new Date(Date.now() - 31 * 86_400_000) });
+    await prune!.run({}, {} as never);
+    expect(await db.select().from(messengerOutbox)).toHaveLength(0);
+    const read = json(await call('telegram_read_chat', { chat: chat.id }));
+    expect(read.messages.map((m: { text: string }) => m.text)).toEqual(['Привет', 'Ответ']);
+  });
+
   it('does not let a bot start conversations by phone number', async () => {
     await addBot();
     const result = await call('telegram_send', { to: '+79991234567', text: 'Привет' });
