@@ -91,7 +91,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 
 /* Surfaces */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin:0 0 16px}
-.card.flush{padding:0;overflow:hidden}
+/* A flush card clips to its rounded corners; something wider (a table on a phone) scrolls inside it. */
+.card.flush{padding:0;overflow-x:auto;overflow-y:hidden}
 .card.tight{padding:16px 18px}
 .card>h2:first-child,.card>h3:first-child{margin-top:0}
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;flex-wrap:wrap}

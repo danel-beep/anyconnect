@@ -229,8 +229,12 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
       json: { csrf, name: 'Ноутбук', response: authenticator.create(options) },
     });
     expect(created.status).toBe(200);
-    expect(await created.json()).toEqual({ redirect: '/security#passkeys' });
-    expect(await (await browser.request('/security')).text()).toContain('Ноутбук');
+    const { redirect } = (await created.json()) as { redirect: string };
+    expect(redirect).toMatch(/^\/security#pk-pky_/);
+    const page = await (await browser.request('/security')).text();
+    expect(page).toContain('Ноутбук');
+    // The new row is the anchor the redirect points at (the page highlights it).
+    expect(page).toContain(`id="${redirect.split('#')[1]}"`);
     expect((await sessionAmr(hub))[0]).toEqual(['pwd', 'hwk']);
     await logout(browser);
 
@@ -272,6 +276,29 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     });
     expect(done.status).toBe(200);
     expect(await sessionAmr(hub)).toEqual([['pwd', 'hwk']]);
+  });
+
+  it('names a new passkey after where it is kept, without asking', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    const authenticator = new SoftwareAuthenticator(hub.baseUrl);
+    await browser.login();
+    const { csrf } = await csrfOf(browser, '/security');
+    const add = async (aaguid?: string) => {
+      const options = await json(browser.request('/security/passkeys/options', { json: { csrf } }));
+      const created = await browser.request('/security/passkeys', {
+        json: { csrf, response: authenticator.create(options, aaguid ? { aaguid } : {}) },
+      });
+      expect(created.status).toBe(200);
+    };
+    await add('fbfc3007-154e-4ecc-8c0b-6e020557d7bd');
+    await add('fbfc3007-154e-4ecc-8c0b-6e020557d7bd');
+    await add();
+    // The page has no name field any more; rename and delete live in each row's menu.
+    const page = await (await browser.request('/security')).text();
+    const names = [...page.matchAll(/<span class="pk-name">([^<]+)<\/span>/g)].map((m) => m[1]);
+    expect(names).toEqual(['iCloud Keychain', 'iCloud Keychain 2', 'Ключ доступа']);
+    expect(page).not.toContain('id="passkey-name"');
+    expect(page).toContain('data-confirm="Удалить ключ доступа «iCloud Keychain»?');
   });
 
   it('rejects passkey assertions from another origin or another browser', async () => {

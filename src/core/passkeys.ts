@@ -15,6 +15,7 @@ import { webauthnChallenges, webauthnCredentials } from '../db/schema.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
+import { type AuthenticatorInfo, describeAuthenticator, uniqueName } from './passkey-providers.js';
 
 export type Passkey = typeof webauthnCredentials.$inferSelect;
 
@@ -136,7 +137,17 @@ export class PasskeyService {
     return options;
   }
 
-  async register(userId: string, binding: string, input: unknown, name: string): Promise<Passkey> {
+  /**
+   * Verifies a registration and stores the passkey. `name` is the user's own name for it, or a
+   * function that picks a default from what is known about the authenticator; a default name gets
+   * " 2", " 3"… when the user already has a passkey called that.
+   */
+  async register(
+    userId: string,
+    binding: string,
+    input: unknown,
+    name: string | ((authenticator: AuthenticatorInfo) => string),
+  ): Promise<Passkey> {
     const response = parseResponse(RegistrationResponseSchema, input) as RegistrationResponseJSON;
     const challenge = await this.consumeChallenge(response.response.clientDataJSON, 'registration', binding);
     if (challenge.userId !== userId) throw new PasskeyError('challenge_expired', 'Challenge user mismatch');
@@ -150,7 +161,16 @@ export class PasskeyService {
       throw new PasskeyError('rejected', `Registration rejected: ${(error as Error).message}`);
     });
     if (!result.verified) throw new PasskeyError('rejected', 'Registration not verified');
-    const { credential, credentialDeviceType, credentialBackedUp } = result.registrationInfo;
+    const { credential, credentialDeviceType, credentialBackedUp, aaguid } = result.registrationInfo;
+    const transports = response.response.transports ?? [];
+    const finalName =
+      typeof name === 'string'
+        ? name.trim().slice(0, PASSKEY_NAME_MAX)
+        : uniqueName(
+            name(describeAuthenticator(aaguid, transports)),
+            (await this.list(userId)).map((p) => p.name),
+            PASSKEY_NAME_MAX,
+          );
     const [row] = await this.db
       .insert(webauthnCredentials)
       .values({
@@ -159,10 +179,10 @@ export class PasskeyService {
         credentialId: credential.id,
         publicKey: Buffer.from(credential.publicKey).toString('base64url'),
         counter: credential.counter,
-        transports: response.response.transports ?? [],
+        transports,
         deviceType: credentialDeviceType,
         backedUp: credentialBackedUp,
-        name: name.trim().slice(0, PASSKEY_NAME_MAX),
+        name: finalName,
       })
       .onConflictDoNothing({ target: webauthnCredentials.credentialId })
       .returning();

@@ -47,9 +47,9 @@ a.stat{color:inherit;text-decoration:none}
 a.stat:hover{border-color:var(--border-strong)}
 @media (max-width:1000px){.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:520px){.stats{grid-template-columns:1fr 1fr}}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:1fr}}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:minmax(0,1fr)}}
 .grid-2>.card,.grid-3>.card{margin:0}
 .grid-2,.grid-3{margin-bottom:16px;align-items:start}
 
@@ -202,7 +202,10 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 
 /* Activity chart */
 .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:8px 0 0;border-bottom:1px solid var(--border)}
-.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:3px}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+/* A long period (90 or 365 days) still fits the card: thinner gaps the more bars there are. */
+.chart:has(>.col:nth-child(61)){gap:1px}
+.chart:has(>.col:nth-child(181)){gap:0}
 .chart .col span{display:block;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
 .chart .col.zero span{background:var(--border)}
 .chart .col span.err{background:var(--danger);border-radius:3px 3px 0 0}
@@ -241,6 +244,9 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 
 .pad-x{padding:0 24px 16px;margin:0}
 ul.plain.pad-x{padding:0 24px 6px}
+/* A flush card that opens with plain content (an empty state) still needs its top padding. */
+.pad{padding:20px 24px;margin:0}
+.card.flush>.pad-x:first-child:not(ul){padding-top:20px}
 .wide-2{grid-column:span 2}
 @media (max-width:640px){.wide-2{grid-column:auto}}
 .search-sm{max-width:260px;min-height:36px!important;padding:6px 12px!important}
@@ -387,6 +393,17 @@ select.narrow{max-width:320px}
 .reauth-row .small{flex:1 1 220px}
 .lock-group{border:0;margin:0;padding:0;min-width:0}
 .lock-group:disabled .card{opacity:.6}
+/* Passkeys: one row per key; "Add" sits in the card head and says what failed right under it */
+.pk-add{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin:0}
+.pk-add .error{margin:0;font-size:13px;text-align:right;max-width:340px}
+.pk-list{border-top:1px solid var(--border);margin-top:14px}
+.pk-empty{padding:12px 24px 20px}
+.pk .pk-name{overflow-wrap:anywhere}
+.pk .sub{white-space:normal}
+.pk{scroll-margin-top:16px}
+.pk:target{animation:pk-new 2.4s ease-out}
+@keyframes pk-new{from{background:var(--accent-soft)}to{background:transparent}}
+@media (max-width:640px){.pk-add{align-items:stretch;width:100%}.pk-add .error{text-align:left}.pk.acc{grid-template-columns:auto minmax(0,1fr) auto}.pk.acc .ops{grid-column:auto}}
 .chart{position:relative}
 .chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13.5px}
 .error-list>li+li{border-top:1px solid var(--border)}

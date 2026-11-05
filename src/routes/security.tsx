@@ -221,13 +221,18 @@ export function securityRoutes() {
     if (guard instanceof Response) return guard;
     const { session, body } = guard;
     const name = PasskeyName.safeParse(body.name ?? '');
+    let passkeyId: string;
     try {
-      await s.secondFactors.passkeys.register(
+      ({ id: passkeyId } = await s.secondFactors.passkeys.register(
         session.user.id,
         body.csrf,
         body.response,
-        name.success ? name.data : t('security.passkeyDefaultName'),
-      );
+        // The page no longer asks for a name: the default says where the passkey lives.
+        name.success
+          ? name.data
+          : ({ provider, securityKey }) =>
+              provider ?? (securityKey ? t('security.passkeySecurityKey') : t('security.passkeyDefaultName')),
+      ));
     } catch (error) {
       if (!(error instanceof PasskeyError)) throw error;
       s.logger.warn({ userId: session.user.id, code: error.code }, 'passkey registration failed');
@@ -235,7 +240,8 @@ export function securityRoutes() {
     }
     await s.sessions.addAuthMethod(session.token, 'hwk');
     s.logger.info({ userId: session.user.id }, 'passkey added');
-    return c.json({ redirect: `${securityUrl(optionalNext(body.next))}#passkeys` });
+    // The anchor points at the new row, which the page highlights.
+    return c.json({ redirect: `${securityUrl(optionalNext(body.next))}#pk-${passkeyId}` });
   });
 
   app.post('/security/passkeys/:id/rename', async (c) => {
@@ -245,7 +251,7 @@ export function securityRoutes() {
     const name = PasskeyName.safeParse(guard.form.name ?? '');
     if (name.success)
       await s.secondFactors.passkeys.rename(guard.session.user.id, c.req.param('id'), name.data);
-    return c.redirect(`${securityUrl(guard.next)}#passkeys`, 303);
+    return c.redirect(`${securityUrl(guard.next)}#pk-${encodeURIComponent(c.req.param('id'))}`, 303);
   });
 
   app.post('/security/passkeys/:id/delete', async (c) => {

@@ -1,7 +1,8 @@
 import type { FC } from 'hono/jsx';
 import type { Translate } from './i18n.js';
-import { fmt, Layout, PasskeyForm } from './pages.js';
+import { Layout, PasskeyForm } from './pages.js';
 import { qrMatrix } from './qr.js';
+import { fmtAgo, fmtDate, Icon, ServiceLogo } from './ui.js';
 
 /** Second step of the sign-in: TOTP / recovery code form and, when the user has one, a passkey. */
 export const VerifyPage: FC<{
@@ -104,6 +105,68 @@ export interface SecurityView {
   telegram?: { linked: boolean } | undefined;
 }
 
+type PasskeyView = SecurityView['passkeys'][number];
+
+/** One passkey: where it lives, when it was added and used, and a menu to rename or delete it. */
+const PasskeyRow: FC<{ t: Translate; lang: string; p: PasskeyView; Hidden: FC }> = ({
+  t,
+  lang,
+  p,
+  Hidden,
+}) => (
+  <div class="acc pk" id={`pk-${p.id}`}>
+    <ServiceLogo glyph="key" name={p.name} />
+    <div class="grow">
+      <div class="title">
+        <span class="pk-name">{p.name}</span>
+        {p.backedUp ? (
+          <span class="badge" title={t('security.passkeySyncedHint')}>
+            {t('security.passkeySynced')}
+          </span>
+        ) : null}
+      </div>
+      <div class="sub">
+        {t('security.passkeyAdded', { date: fmtDate(lang, p.createdAt) })} ·{' '}
+        {p.lastUsedAt
+          ? t('security.passkeyUsed', { when: fmtAgo(lang, p.lastUsedAt) })
+          : t('security.passkeyNeverUsed')}
+      </div>
+    </div>
+    <div class="ops">
+      <details class="menu" data-menu>
+        <summary
+          aria-label={t('security.passkeyMore', { name: p.name })}
+          title={t('security.passkeyMore', { name: p.name })}
+        >
+          <Icon name="more" />
+        </summary>
+        <div class="menu-pop">
+          <form method="post" action={`/security/passkeys/${p.id}/rename`} class="rename">
+            <Hidden />
+            <label class="sr-only" for={`pk-name-${p.id}`}>
+              {t('security.passkeyName')}
+            </label>
+            <input id={`pk-name-${p.id}`} type="text" name="name" value={p.name} maxlength={64} required />
+            <button type="submit" class="sm">
+              {t('security.passkeyRename')}
+            </button>
+          </form>
+          <form
+            method="post"
+            action={`/security/passkeys/${p.id}/delete`}
+            data-confirm={t('security.passkeyDeleteConfirm', { name: p.name })}
+          >
+            <Hidden />
+            <button type="submit" class="danger">
+              <Icon name="trash" /> {t('security.passkeyDelete')}
+            </button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </div>
+);
+
 export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }> = ({ t, lang, view }) => {
   const hidden = { csrf: view.csrf, ...(view.next ? { next: view.next } : {}) };
   const Hidden = () => (
@@ -191,72 +254,38 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
           )}
         </div>
 
-        <div class="card" id="passkeys">
-          <h2>{t('security.passkeys')}</h2>
-          <p class="small muted">{t('security.passkeysHint')}</p>
+        <div class="card flush" id="passkeys">
+          <div class="card-head pad">
+            <div>
+              <h2>{t('security.passkeys')}</h2>
+              <p class="small muted">{t('security.passkeysHint')}</p>
+            </div>
+            {/* No name to fill in: the hub names the passkey after where it is kept; rename it later. */}
+            <PasskeyForm
+              mode="register"
+              options="/security/passkeys/options"
+              action="/security/passkeys"
+              error={t('passkey.failed')}
+              hidden={hidden}
+              class="pk-add"
+            >
+              <button class={view.passkeys.length === 0 ? 'primary sm' : 'sm'} type="submit">
+                <Icon name="plus" /> {t('security.passkeyAdd')}
+              </button>
+            </PasskeyForm>
+          </div>
           {view.passkeys.length === 0 ? (
-            <p class="muted">{t('security.passkeysNone')}</p>
+            <p class="muted pk-empty">{t('security.passkeysNone')}</p>
           ) : (
-            <ul class="plain">
+            <div class="acc-list pk-list">
               {view.passkeys.map((p) => (
-                <li>
-                  <span>
-                    <strong>{p.name}</strong>
-                    <span class="small muted">
-                      {' '}
-                      · {t('security.passkeyAdded')} {fmt(p.createdAt)} · {t('home.lastUsed')}:{' '}
-                      {p.lastUsedAt ? fmt(p.lastUsedAt) : t('home.never')}
-                      {p.backedUp ? ` · ${t('security.passkeySynced')}` : ''}
-                    </span>
-                  </span>
-                  <span class="row">
-                    <form class="row" method="post" action={`/security/passkeys/${p.id}/rename`}>
-                      <Hidden />
-                      <input
-                        type="text"
-                        name="name"
-                        required
-                        maxlength={64}
-                        value={p.name}
-                        aria-label={t('security.passkeyName')}
-                      />
-                      <button type="submit">{t('security.passkeyRename')}</button>
-                    </form>
-                    <form class="inline" method="post" action={`/security/passkeys/${p.id}/delete`}>
-                      <Hidden />
-                      <button class="danger" type="submit">
-                        {t('security.passkeyDelete')}
-                      </button>
-                    </form>
-                  </span>
-                </li>
+                <PasskeyRow t={t} lang={lang} p={p} Hidden={Hidden} />
               ))}
-            </ul>
+            </div>
           )}
-          <p class="small muted" data-role="passkey-unsupported">
+          <p class="small muted pk-empty" data-role="passkey-unsupported">
             {t('security.passkeyUnsupported')}
           </p>
-          <PasskeyForm
-            mode="register"
-            options="/security/passkeys/options"
-            action="/security/passkeys"
-            error={t('passkey.failed')}
-            hidden={hidden}
-          >
-            <label for="passkey-name">{t('security.passkeyName')}</label>
-            <input
-              id="passkey-name"
-              type="text"
-              name="name"
-              maxlength={64}
-              placeholder={t('security.passkeyDefaultName')}
-            />
-            <div class="actions start">
-              <button class="primary" type="submit">
-                {t('security.passkeyAdd')}
-              </button>
-            </div>
-          </PasskeyForm>
         </div>
 
         <div class="card" id="recovery">
