@@ -15,6 +15,7 @@ export const authEn = {
   'login.refused.email_unverified':
     'Google has not confirmed this email address. Try another Google account.',
   'login.externalFailed': 'Google sign-in did not complete. Try again.',
+  'login.externalCancelled': 'Google sign-in was cancelled. Choose how to sign in.',
   'login.expired': 'The sign-in took too long or was opened in another browser. Try again.',
   'signup.title': 'Create your Manyplug account',
   'signup.subtitle': 'Free plan, no card. It takes a minute.',
@@ -76,6 +77,7 @@ export const authRu: Record<AuthKey, string> = {
   'login.refused.email_unverified':
     'Google не подтвердил этот адрес почты. Попробуйте другой аккаунт Google.',
   'login.externalFailed': 'Вход через Google не завершился. Попробуйте ещё раз.',
+  'login.externalCancelled': 'Вход через Google отменён. Выберите, как войти.',
   'login.expired': 'Вход занял слишком много времени или был открыт в другом браузере. Попробуйте ещё раз.',
   'signup.title': 'Регистрация в Manyplug',
   'signup.subtitle': 'Бесплатный тариф, без карты. Это займёт минуту.',

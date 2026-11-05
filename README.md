@@ -68,8 +68,10 @@ ChatGPT / Claude / Claude Code / Cursor
 - **Готовые сервисы**: почта IMAP/SMTP (Яндекс, Mail.ru, Gmail, iCloud, любой сервер), Gmail,
   Outlook (почта и календарь), Google Calendar, Google Drive, Slack, Notion, GitHub, Todoist, Stripe
   и любой HTTP API. Как подключить каждый: [docs/SERVICES.md](docs/SERVICES.md).
-- Docker, Render Blueprint, CI (lint, типы, больше 350 тестов включая сквозной OAuth через официальный
-  MCP-клиент, сборка Docker).
+- Docker, Render Blueprint, CI (lint, типы, больше 750 тестов, сборка Docker). Сквозные тесты
+  проводят Claude, Claude Code, ChatGPT, Cursor, VS Code, Gemini CLI и Codex через вход, согласие,
+  инструменты, вызовы сервисов и правила подтверждения против поддельных Google и API:
+  [docs/TESTING.md](docs/TESTING.md).
 
 Дальше по плану: личный Telegram и WhatsApp через шлюз → веб-панель → подключение любого API без
 программирования (по OpenAPI).
@@ -338,8 +340,9 @@ npm run db:generate  # после изменения src/db/schema.ts — соз
 npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 
-Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Мониторинг, логи, ошибки и
-фоновые задачи: [docs/OPERATIONS.md](docs/OPERATIONS.md).
+Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), о тестах:
+[docs/TESTING.md](docs/TESTING.md). Мониторинг, логи, ошибки и фоновые задачи:
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Безопасность
 

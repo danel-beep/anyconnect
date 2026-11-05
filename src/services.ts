@@ -184,6 +184,11 @@ export function createServices(
     connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     /** Tests: fetch Client ID Metadata Documents from localhost. */
     allowPrivateNetwork?: boolean;
+    /**
+     * Outbound network for connectors, provider OAuth and "Sign in with Google" (tests: a fake
+     * internet that answers for the real service hosts, see `test/e2e/fake-internet.ts`).
+     */
+    network?: NetworkPolicy;
     fetchDocument?: typeof safeFetch;
     /** Executor stages to add or replace (security layer: policy, confirm, untrusted). */
     stages?: StageMap;
@@ -232,9 +237,11 @@ export function createServices(
       ? overrides.connectors(builtinDeps)
       : (overrides.connectors ?? createBuiltinRegistry(builtinDeps));
   const connectors = new WorkspaceConnectorResolver(builtin, customStore);
-  const network = createNetworkPolicy({
-    allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
-  });
+  const network =
+    overrides.network ??
+    createNetworkPolicy({
+      allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
+    });
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps, (connector) =>
     connectors.builtin.includes(connector),
   );

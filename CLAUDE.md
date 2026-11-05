@@ -66,3 +66,5 @@ develop further. In practice:
   identifiers. The product was called AnyConnect until Nov 2026: crypto key-derivation labels, the
   migration lock and Render resource names keep that name on purpose (`LEGACY_SLUGS`).
 - Tests: `test/helpers.ts` starts a real hub on a random port; `TestBrowser` walks login/consent.
+  End-to-end connection tests live in `test/e2e/` (fake internet for service hosts, AI client
+  profiles in `ai-clients.ts`); a new AI client is one entry in `AI_CLIENTS`. See `docs/TESTING.md`.

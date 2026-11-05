@@ -78,8 +78,15 @@ const IdTokenClaims = z.object({
 });
 
 export class ExternalLoginError extends AppError {
-  constructor(message: string) {
+  /** Where the user was going, once the sign-in state is known (so a retry can continue there). */
+  readonly next: string | undefined;
+  /** The user cancelled at the provider (as opposed to a failure). */
+  readonly cancelled: boolean;
+
+  constructor(message: string, options: { next?: string; cancelled?: boolean } = {}) {
     super(400, 'external_login_failed', message);
+    this.next = options.next;
+    this.cancelled = options.cancelled ?? false;
   }
 }
 
@@ -265,19 +272,31 @@ export class ExternalLoginService {
       .returning();
     if (!row || row.provider !== provider.id || row.expiresAt.getTime() < Date.now())
       throw new ExternalLoginError('This sign-in link has expired or was already used. Try again.');
-    if (params.error) throw new ExternalLoginError(`${provider.name} sign-in was cancelled`);
-    if (!params.code) throw new ExternalLoginError(`${provider.name} did not return an authorization code`);
+    const next = row.next;
+    if (params.error) {
+      throw new ExternalLoginError(`${provider.name} sign-in was cancelled`, {
+        next,
+        cancelled: params.error === 'access_denied',
+      });
+    }
+    if (!params.code)
+      throw new ExternalLoginError(`${provider.name} did not return an authorization code`, { next });
     const secrets = this.deps.secrets.decryptJson<{ verifier: string; nonce: string }>(
       row.secretsEncrypted,
       `login_state:${stateHash}`,
     );
-    const profile = await provider.complete({
-      code: params.code,
-      codeVerifier: secrets.verifier,
-      nonce: secrets.nonce,
-      redirectUri: this.redirectUri(provider.id),
-      signal: AbortSignal.timeout(15_000),
-    });
-    return { profile, next: row.next };
+    try {
+      const profile = await provider.complete({
+        code: params.code,
+        codeVerifier: secrets.verifier,
+        nonce: secrets.nonce,
+        redirectUri: this.redirectUri(provider.id),
+        signal: AbortSignal.timeout(15_000),
+      });
+      return { profile, next };
+    } catch (error) {
+      if (error instanceof ExternalLoginError) throw new ExternalLoginError(error.message, { next });
+      throw error;
+    }
   }
 }
