@@ -2,7 +2,7 @@ import { bearerAuthChallengeResponse, verifyBearerToken } from '@modelcontextpro
 import { Hono } from 'hono';
 import { VISITOR_CALLABLE } from '../hub/visitor.js';
 import { PERSONA_SLUG } from '../security/personas.js';
-import { clientIp, publicCors } from '../web/http.js';
+import { clientRateKey, publicCors } from '../web/http.js';
 import type { AppContext, AppEnv } from './context.js';
 
 /**
@@ -25,7 +25,7 @@ export function mcpRoutes() {
     const authorization = c.req.header('authorization');
 
     if (!authorization && persona === undefined && s.visitorMcp) {
-      const ip = clientIp(c, s.config.trustProxy);
+      const ip = clientRateKey(c, s.config.trustProxy);
       const limit = s.rateLimiter.consume(`mcp:anon:${ip}`, s.config.anonymousMcp.perMinute, 60_000);
       if (!limit.allowed) {
         return c.json(

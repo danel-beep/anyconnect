@@ -53,6 +53,31 @@ describe('SSRF guard', () => {
     for (const ip of ['1.1.1.1', '8.8.8.8', '2606:4700:4700::1111'])
       expect(isPublicAddress(ip), ip).toBe(true);
   });
+
+  it('sees through IPv6 forms that embed or tunnel to an IPv4 address', () => {
+    for (const ip of [
+      '64:ff9b::7f00:1', // NAT64 of 127.0.0.1 in hex
+      '64:ff9b::a9fe:a9fe', // NAT64 of the cloud metadata address
+      '64:ff9b::127.0.0.1',
+      '64:ff9b:1::a00:1', // local-use NAT64
+      '::7f00:1', // IPv4-compatible
+      '::127.0.0.1',
+      '::ffff:7f00:1',
+      '0:0:0:0:0:ffff:127.0.0.1',
+      '::ffff:0:a00:1', // IPv4-translated 10.0.0.1
+      '2002:7f00:1::', // 6to4 of 127.0.0.1
+      '2002:c0a8:101::1', // 6to4 of 192.168.1.1
+      '2001:0:4136:e378:8000:63bf:3fff:fdd2', // Teredo
+      'fec0::1',
+      'fe80::1%eth0',
+      '::ffff:1.2.3.400',
+      '1:2:3',
+    ]) {
+      expect(isPublicAddress(ip), ip).toBe(false);
+    }
+    for (const ip of ['::ffff:8.8.8.8', '64:ff9b::808:808', '2002:808:808::1', '2a00:1450:4001:82a::200e'])
+      expect(isPublicAddress(ip), ip).toBe(true);
+  });
 });
 
 describe('config', () => {
