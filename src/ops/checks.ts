@@ -20,8 +20,11 @@ export interface HealthCheck {
   name: string;
   /** A failing critical check makes the instance not ready (`/readyz` → 503). */
   critical: boolean;
-  /** Public component it belongs to on the status page; absent = internal only. */
-  component?: StatusComponent;
+  /**
+   * Public components this check affects on the status page (the database affects the website
+   * and the AI connections too); absent = internal only.
+   */
+  components?: readonly StatusComponent[];
   run(signal: AbortSignal): Promise<CheckResult>;
 }
 
@@ -31,7 +34,7 @@ export type StatusComponent = 'web' | 'mcp' | 'database' | 'jobs' | 'connections
 export interface CheckReport extends CheckResult {
   name: string;
   critical: boolean;
-  component?: StatusComponent | undefined;
+  components?: readonly StatusComponent[] | undefined;
   ms: number;
 }
 
@@ -92,7 +95,7 @@ export class HealthRegistry {
 async function runOne(check: HealthCheck, timeoutMs: number): Promise<CheckReport> {
   const started = performance.now();
   const signal = AbortSignal.timeout(timeoutMs);
-  const base = { name: check.name, critical: check.critical, component: check.component };
+  const base = { name: check.name, critical: check.critical, components: check.components };
   try {
     const result = await Promise.race([
       check.run(signal),

@@ -42,7 +42,7 @@ import {
 // Layout
 // ---------------------------------------------------------------------------
 
-type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal';
+export type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal' | 'status';
 
 const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) => {
   const { t } = ctx;
@@ -150,6 +150,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div>
             <h4>{t('site.footer.company')}</h4>
             {ctx.supportEmail ? <a href={`mailto:${ctx.supportEmail}`}>{t('site.footer.contact')}</a> : null}
+            <a href="/status">{t('site.footer.status')}</a>
             <a href="/privacy">{t('site.footer.privacy')}</a>
             <a href="/terms">{t('site.footer.terms')}</a>
           </div>
@@ -177,8 +178,21 @@ export const SiteLayout: FC<{
   ogType?: 'website' | 'article';
   /** Kept out of search results (e.g. a service that cannot be connected on this server). */
   noindex?: boolean;
+  /** Reloads the page every this many seconds (the status page). */
+  refreshSeconds?: number;
   children?: Child;
-}> = ({ ctx, title, description, current, canonicalPath, jsonLd, ogType, noindex, children }) => (
+}> = ({
+  ctx,
+  title,
+  description,
+  current,
+  canonicalPath,
+  jsonLd,
+  ogType,
+  noindex,
+  refreshSeconds,
+  children,
+}) => (
   <Doc
     title={title}
     lang={ctx.lang}
@@ -195,6 +209,7 @@ export const SiteLayout: FC<{
       jsonLd: jsonLd ?? [],
       verification: ctx.verification,
     }}
+    {...(refreshSeconds ? { refreshSeconds } : {})}
   >
     <a class="skip" href="#main">
       {ctx.t('ui.skip')}

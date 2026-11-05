@@ -1813,7 +1813,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
           </form>
         </div>
       </div>
-      <div class="card flush">
+      <div class="card flush" id="sessions">
         <div class="card-head pad">
           <h2>{t('app.settings.sessions')}</h2>
           {view.sessions.length > 1 ? (

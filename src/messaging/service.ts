@@ -1,12 +1,13 @@
 import { eq } from 'drizzle-orm';
-import type {
-  AccountMessaging,
-  DirectTransport,
-  InboundChat,
-  MessagingPort,
-  MessengerTransport,
-  PacingLimits,
-  SendResult,
+import {
+  type AccountMessaging,
+  type DirectTransport,
+  type InboundChat,
+  MAX_CAPTION_LENGTH,
+  type MessagingPort,
+  type MessengerTransport,
+  type PacingLimits,
+  type SendResult,
 } from '../connectors/messaging.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import { type AccountContext, type ConnectorDefinition, ConnectorError } from '../connectors/sdk.js';
@@ -126,6 +127,29 @@ export class MessagingService implements MessagingPort {
         if (request.template && (resolved.transport.kind !== 'direct' || !resolved.transport.templates)) {
           throw new ConnectorError('invalid_input', 'This account cannot send message templates.');
         }
+        if (request.file && (resolved.transport.kind !== 'direct' || !resolved.transport.files)) {
+          throw new ConnectorError('invalid_input', 'This account cannot send files yet.');
+        }
+        if (request.file && request.template) {
+          throw new ConnectorError('invalid_input', 'Send a template or a file, not both.');
+        }
+        if (
+          request.file &&
+          request.text &&
+          resolved.transport.kind === 'direct' &&
+          resolved.transport.captionless?.includes(request.file.kind)
+        ) {
+          throw new ConnectorError(
+            'invalid_input',
+            `This messenger sends ${request.file.kind} without text: send the text as a separate message.`,
+          );
+        }
+        if (request.file && request.text.length > MAX_CAPTION_LENGTH) {
+          throw new ConnectorError(
+            'invalid_input',
+            `With a file the text is its caption: at most ${MAX_CAPTION_LENGTH} characters. Send a longer text as a separate message.`,
+          );
+        }
         let chat: StoredChat;
         if (request.chatId) chat = await requireChat(request.chatId);
         else if (request.to) {
@@ -166,6 +190,7 @@ export class MessagingService implements MessagingPort {
             text: request.text,
             ...(replyToExternalId ? { replyToExternalId } : {}),
             ...(request.template ? { template: request.template } : {}),
+            ...(request.file ? { file: request.file } : {}),
           },
           newContact: !chat.hasInbound,
         });
@@ -193,6 +218,13 @@ export class MessagingService implements MessagingPort {
         const index = Number(/^a(\d+)$/.exec(attachmentId)?.[1] ?? Number.NaN);
         const attachment = message?.body.attachments[index];
         if (!message || !attachment) throw new ConnectorError('not_found', 'Attachment not found.');
+        const sentLink = (attachment.locator as { sentLink?: string } | undefined)?.sentLink;
+        if (sentLink) {
+          throw new ConnectorError(
+            'not_found',
+            `This file was sent by link and the hub keeps no copy of it: ${sentLink}`,
+          );
+        }
         const resolved = await requireResolved();
         if (resolved.transport.kind === 'session') {
           const chat = await requireChat(message.chatId);
