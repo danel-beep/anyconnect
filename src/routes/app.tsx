@@ -436,6 +436,7 @@ export function appRoutes() {
             name: (tok.aiClientId && clientNames.get(tok.aiClientId)) || tok.name,
             appId: tok.aiClientId,
             profile: profileOf(tok.personaId),
+            api: tok.scopes.includes('api'),
             createdAt: tok.createdAt,
             lastUsedAt: tok.lastUsedAt,
             expiresAt: tok.expiresAt,
@@ -464,8 +465,12 @@ export function appRoutes() {
     action('/app/apps', async (c, auth, form) => {
       const s = c.get('services');
       const input = z
-        .object({ name: z.string().trim().min(1).max(80), days: z.coerce.number().int().min(0).max(3650) })
-        .parse({ name: form.name, days: form.days ?? '0' });
+        .object({
+          name: z.string().trim().min(1).max(80),
+          days: z.coerce.number().int().min(0).max(3650),
+          api: z.boolean(),
+        })
+        .parse({ name: form.name, days: form.days ?? '0', api: form.api === '1' });
       // A token for an access profile works only with that profile's address.
       const persona = form.profile ? await s.personas.get(auth.workspace.id, form.profile) : undefined;
       const client = await s.aiClients.createUnique(auth.workspace.id, input.name, 'api_token');
@@ -474,6 +479,8 @@ export function appRoutes() {
         userId: auth.user.id,
         name: input.name,
         ...(input.days > 0 ? { expiresInDays: input.days } : {}),
+        // MCP only unless the user ticks "management API" on purpose (never for a profile).
+        scopes: input.api && !persona ? ['mcp', 'api'] : ['mcp'],
         aiClientId: client.id,
         ...(persona ? { personaId: persona.id } : {}),
       });
