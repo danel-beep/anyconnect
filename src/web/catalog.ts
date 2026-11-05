@@ -290,6 +290,36 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'tasks',
     blurb: { ru: 'Таблицы, строки и комментарии.', en: 'Sheets, rows and comments.' },
   },
+  twilio: {
+    glyph: 'bell',
+    category: 'messengers',
+    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'Texts, numbers and the call log.' },
+  },
+  postmark: {
+    glyph: 'mail',
+    category: 'crm',
+    blurb: { ru: 'Транзакционные письма и доставка.', en: 'Transactional email and delivery.' },
+  },
+  pagerduty: {
+    icon: 'pagerduty',
+    category: 'dev',
+    blurb: { ru: 'Инциденты, заметки, дежурства.', en: 'Incidents, notes, on-call.' },
+  },
+  netlify: {
+    icon: 'netlify',
+    category: 'dev',
+    blurb: { ru: 'Сайты, деплои, сборки, формы.', en: 'Sites, deploys, builds, forms.' },
+  },
+  harvest: {
+    glyph: 'clock',
+    category: 'tasks',
+    blurb: { ru: 'Учёт времени, таймеры, отчёты.', en: 'Time tracking, timers, reports.' },
+  },
+  toggl: {
+    icon: 'toggl',
+    category: 'tasks',
+    blurb: { ru: 'Таймеры и записи времени.', en: 'Timers and time entries.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',

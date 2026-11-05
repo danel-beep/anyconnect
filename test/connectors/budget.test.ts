@@ -58,6 +58,12 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   miro: { total: 1400, tool: 280 },
   sendgrid: { total: 1450, tool: 300 },
   smartsheet: { total: 1380, tool: 335 },
+  twilio: { total: 1110, tool: 295 },
+  postmark: { total: 1630, tool: 390 },
+  pagerduty: { total: 1630, tool: 305 },
+  netlify: { total: 1400, tool: 235 },
+  harvest: { total: 1510, tool: 300 },
+  toggl: { total: 1860, tool: 280 },
   telegram: { total: 2050, tool: 400 },
   // Two more tools than Telegram: message templates (list_templates, send_template).
   whatsapp: { total: 2400, tool: 400 },

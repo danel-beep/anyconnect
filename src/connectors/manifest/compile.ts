@@ -228,8 +228,9 @@ class ManifestRuntime {
       if (pagination.type === 'link' || pagination.type === 'next_url') {
         // The cursor is a full URL from the service: only follow it on the API's own origin, so a
         // crafted cursor can never send the account's credentials elsewhere.
-        const next = new URL(String(cursor));
+        // Relative next links (Twilio's `next_page_uri`) resolve against the API's origin.
         const base = new URL(String(renderString(this.manifest.baseUrl, scope)));
+        const next = new URL(String(cursor), base);
         if (next.origin !== base.origin) throw new ConnectorError('invalid_input', 'Invalid cursor');
         path = next.toString();
         query = {};
