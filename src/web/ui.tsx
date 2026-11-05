@@ -230,6 +230,54 @@ export const CopyText: FC<{ t: Translate; id: string; text: string; label?: stri
     </div>
   );
 
+/**
+ * Ready-made requests to paste into the user's AI app: tapping one copies it. Everything the
+ * dashboard sets up can also be asked in the chat, and this is the shortest way to show it.
+ */
+export const AskAi: FC<{ t: Translate; id: string; title: string; hint: string; prompts: string[] }> = ({
+  t,
+  id,
+  title,
+  hint,
+  prompts,
+}) => (
+  <div class="ask-ai" id={id}>
+    <div class="ask-ai-head">
+      <span class="sec-icon">
+        <Icon name="chat" />
+      </span>
+      <span class="grow">
+        <strong>{title}</strong>
+        <span class="small muted">{hint}</span>
+      </span>
+    </div>
+    <div class="prompt-list">
+      {prompts.map((prompt, i) => (
+        <CopyText t={t} id={`${id}-${i}`} text={prompt} prompt />
+      ))}
+    </div>
+  </div>
+);
+
+/** A card's heading with an icon tile, a one-line explanation and an optional status on the right. */
+export const SectionHead: FC<{ icon: IconName; title: string; hint?: string; aside?: Child }> = ({
+  icon,
+  title,
+  hint,
+  aside,
+}) => (
+  <div class="sec-head">
+    <span class="sec-icon">
+      <Icon name={icon} />
+    </span>
+    <div class="grow">
+      <h2>{title}</h2>
+      {hint ? <p class="small muted">{hint}</p> : null}
+    </div>
+    {aside ?? null}
+  </div>
+);
+
 /** Width class for a 0–100 % value in 5 % steps (no inline styles under the CSP). */
 export const pctClass = (prefix: 'w' | 'h', used: number, limit: number | null): string => {
   if (limit === null || limit <= 0) return `${prefix}-0`;
