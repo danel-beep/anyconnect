@@ -4,6 +4,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['test/visual/**/*.visual.ts'],
+    // Its own database next to TEST_DATABASE_URL, created if missing, like the other tests.
+    setupFiles: ['test/setup/worker-database.ts'],
     fileParallelism: false,
     testTimeout: 900_000,
     hookTimeout: 120_000,
