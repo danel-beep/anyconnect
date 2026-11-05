@@ -90,7 +90,7 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 .back-link{margin:0 0 12px;font-size:14px}.back-link a{color:var(--muted);text-decoration:none}.back-link a:hover{color:var(--text)}
 .hint>svg{width:15px;height:15px;vertical-align:-3px}
 .error{color:var(--danger);margin:8px 0 0}
-.field-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
 @media (max-width:640px){.field-row{grid-template-columns:1fr}}
 
 /* Surfaces */
@@ -101,9 +101,14 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 .card>h2:first-child,.card>h3:first-child{margin-top:0}
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;flex-wrap:wrap}
 .card-head h2,.card-head h3{margin:0}
-/* The head's action stays on the right of the title, also on a phone: the title wraps instead. */
-.card-head>:last-child:not(:first-child){margin-left:auto}
-@media (max-width:640px){.card-head{flex-wrap:nowrap;align-items:flex-start}.card-head>:first-child{min-width:0;flex:1 1 auto}.card-head>:last-child:not(:first-child){flex:none;max-width:50%;text-align:right}}
+/* The head's button stays on the right of the title, also on a phone (the title wraps instead); a note or
+   a description simply goes under the title when there is no room. */
+.card-head>:last-child:not(:first-child):is(form,button,.btn){margin-left:auto}
+@media (max-width:640px){
+  .card-head:has(>:last-child:not(:first-child):is(form,button,.btn)){flex-wrap:nowrap;align-items:flex-start}
+  .card-head:has(>:last-child:not(:first-child):is(form,button,.btn))>:first-child{min-width:0;flex:1 1 auto}
+  .card-head>:last-child:not(:first-child):is(form,button,.btn){flex:none;white-space:nowrap}
+}
 .panel{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
 .warning,.notice{background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:10px;padding:10px 14px;margin:12px 0;color:var(--text)}
 .notice.info{background:var(--accent-soft);border-color:var(--accent)}

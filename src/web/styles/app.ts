@@ -39,9 +39,9 @@ export const APP_SHELL_CSS = `
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;min-width:0}
-/* Cards side by side share their rows (subgrid): a label that wraps in one card does not push only
-   that card's number lower than its neighbour's. */
-.stat{display:grid;grid-row:span 5;grid-template-rows:subgrid;row-gap:0;align-content:start}
+/* Two cards side by side (narrow screens): a label gets room for two lines in every card, so one that
+   wraps does not push only that card's number lower than its neighbour's. */
+@media (max-width:1000px){.stat .label{min-height:2.7em;align-items:flex-start}}
 .stat .label{font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 /* Words rather than a number (a plan, "two-step sign-in on"): smaller, so they fit a half-width card. */
