@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import { isStrongAuth } from '../core/auth-methods.js';
 import type { Principal } from '../core/principal.js';
+import type { VaultSecret } from '../core/vault-scope.js';
 import type { Services } from '../services.js';
 import { readCookie } from '../web/http.js';
 import type { Locale, Translate } from '../web/i18n.js';
@@ -16,6 +17,8 @@ export interface AppEnv {
     principal?: Principal;
     /** Session of this request, looked up once (null = signed out). */
     webSession?: (WebSession & { token: string }) | null;
+    /** This browser's device key for the signed-in user's vault (`webVault`). */
+    vaultDevice?: VaultSecret;
   };
 }
 

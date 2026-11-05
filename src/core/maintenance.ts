@@ -1,6 +1,7 @@
-import { and, lt, notExists, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, lt, notExists, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
+  apiTokens,
   loginStates,
   oauthAuthorizationCodes,
   oauthClients,
@@ -9,6 +10,8 @@ import {
   oauthTokens,
   pendingLogins,
   toolCalls,
+  vaultDeviceRequests,
+  vaultWraps,
   webauthnChallenges,
   webSessions,
 } from '../db/schema.js';
@@ -23,6 +26,40 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
   const now = Date.now();
   await db.delete(oauthAuthorizationCodes).where(lt(oauthAuthorizationCodes.expiresAt, new Date(now - DAY)));
   await db.delete(oauthTokens).where(lt(oauthTokens.expiresAt, new Date(now - DAY)));
+  // Vault wraps of OAuth tokens that no longer exist, and of codes never exchanged.
+  await db
+    .delete(vaultWraps)
+    .where(
+      and(
+        eq(vaultWraps.kind, 'oauth'),
+        notExists(
+          db.select({ one: sql`1` }).from(oauthTokens).where(eq(oauthTokens.tokenHash, vaultWraps.ref)),
+        ),
+      ),
+    );
+  await db
+    .delete(vaultWraps)
+    .where(and(eq(vaultWraps.kind, 'oauth_code'), lt(vaultWraps.createdAt, new Date(now - DAY))));
+  // Personal tokens revoked or expired some other way (a suspended user, an expiry date).
+  await db.delete(vaultWraps).where(
+    and(
+      eq(vaultWraps.kind, 'api_token'),
+      notExists(
+        db
+          .select({ one: sql`1` })
+          .from(apiTokens)
+          .where(
+            and(
+              eq(apiTokens.id, vaultWraps.ref),
+              isNull(apiTokens.revokedAt),
+              or(isNull(apiTokens.expiresAt), gt(apiTokens.expiresAt, new Date(now))),
+            ),
+          ),
+      ),
+    ),
+  );
+  // Browsers that asked to open a vault and were never approved (DEVICE_REQUEST_TTL_MS).
+  await db.delete(vaultDeviceRequests).where(lt(vaultDeviceRequests.createdAt, new Date(now - 7 * DAY)));
   await db.delete(webSessions).where(lt(webSessions.expiresAt, new Date(now)));
   await db.delete(pendingLogins).where(lt(pendingLogins.expiresAt, new Date(now)));
   await db.delete(webauthnChallenges).where(lt(webauthnChallenges.expiresAt, new Date(now)));

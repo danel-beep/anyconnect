@@ -13,6 +13,7 @@ import { profilesEn, profilesRu } from './i18n/profiles.js';
 import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
 import { teamEn, teamRu } from './i18n/team.js';
+import { vaultEn, vaultRu } from './i18n/vault.js';
 
 export type Locale = 'ru' | 'en';
 
@@ -235,6 +236,7 @@ const en = {
   ...appsEn,
   ...botEn,
   ...analyticsEn,
+  ...vaultEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -461,6 +463,7 @@ const ru: Record<Key, string> = {
   ...appsRu,
   ...botRu,
   ...analyticsRu,
+  ...vaultRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

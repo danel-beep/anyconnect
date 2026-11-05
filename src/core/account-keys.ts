@@ -1,4 +1,8 @@
+import { isNull, notLike, or, type SQL } from 'drizzle-orm';
+import { accounts } from '../db/schema.js';
 import { DataKey, type KeyWrapper, type SecretBox } from '../lib/crypto.js';
+import { isSealedKey, type VaultPublicKey } from '../lib/vault.js';
+import { lockedError, type VaultScopes } from './vault-scope.js';
 
 /**
  * Per-account envelope encryption.
@@ -11,11 +15,23 @@ import { DataKey, type KeyWrapper, type SecretBox } from '../lib/crypto.js';
  * Accounts created before envelope encryption have credentials encrypted directly with the master
  * key (`v1.` envelopes). They stay readable and are upgraded on the next write or by
  * {@link AccountService.upgradeEncryption}.
+ *
+ * Sealed accounts (`docs/VAULTS.md`): the DEK is sealed to the owner's vault public key instead of
+ * being wrapped by the master key. Sealing needs only the public key; opening needs the owner's
+ * vault, open in the current request ({@link VaultScopes}). Call {@link prepare} at an async
+ * boundary before the synchronous methods below touch a sealed account.
  */
 export interface AccountKeyMaterial {
   id: string;
   dataKeyEncrypted: string | null;
 }
+
+/**
+ * SQL filter for accounts background jobs may open: not sealed to a vault. Sealed accounts open
+ * only inside a request of their owner, so their tokens refresh and their tests run at call time.
+ */
+export const notSealedAccount = (): SQL =>
+  or(isNull(accounts.dataKeyEncrypted), notLike(accounts.dataKeyEncrypted, 's1.%')) as SQL;
 
 export const dataKeyContext = (accountId: string) => `account:${accountId}:dek`;
 export const credentialsContext = (accountId: string) => `account:${accountId}:credentials`;
@@ -26,21 +42,48 @@ export class AccountKeyring {
     private readonly wrapper: KeyWrapper,
     /** Reads secrets written before envelope encryption existed. */
     private readonly legacy: SecretBox,
+    /** The caller's vault for sealed accounts; without it sealed accounts never open. */
+    private readonly scopes?: VaultScopes,
   ) {}
 
-  /** A fresh data key for a new (or not yet upgraded) account, plus its wrapped form to store. */
-  createKey(accountId: string): { key: DataKey; wrapped: string } {
+  /**
+   * A fresh data key for a new (or not yet upgraded) account, plus its wrapped form to store:
+   * sealed to `sealTo` (the owner's vault) when given, otherwise wrapped by the master key.
+   */
+  createKey(accountId: string, sealTo?: VaultPublicKey): { key: DataKey; wrapped: string } {
     const key = DataKey.generate();
-    return { key, wrapped: key.wrap(this.wrapper, dataKeyContext(accountId)) };
+    const context = dataKeyContext(accountId);
+    return { key, wrapped: key.wrap(sealTo ? sealOnly(sealTo) : this.wrapper, context) };
   }
 
+  isSealed(account: AccountKeyMaterial): boolean {
+    return account.dataKeyEncrypted !== null && isSealedKey(account.dataKeyEncrypted);
+  }
+
+  /** Opens the caller's vault when the account is sealed, so the synchronous methods can use it. */
+  async prepare(account: AccountKeyMaterial): Promise<void> {
+    if (this.isSealed(account)) await this.scopes?.prepare();
+  }
+
+  /** Throws {@link VaultLockedError} for a sealed account whose vault is not open in this request. */
   openKey(account: AccountKeyMaterial): DataKey {
     if (!account.dataKeyEncrypted) throw new Error(`Account ${account.id} has no data key`);
+    if (isSealedKey(account.dataKeyEncrypted)) {
+      const vault = this.scopes?.current();
+      if (!vault) throw lockedError();
+      try {
+        return DataKey.unwrap(vault, account.dataKeyEncrypted, dataKeyContext(account.id));
+      } catch {
+        // Sealed to someone else's vault (another member's account): locked for this caller.
+        throw lockedError();
+      }
+    }
     return DataKey.unwrap(this.wrapper, account.dataKeyEncrypted, dataKeyContext(account.id));
   }
 
   needsRewrap(account: AccountKeyMaterial): boolean {
-    return account.dataKeyEncrypted !== null && this.wrapper.needsRewrap(account.dataKeyEncrypted);
+    if (account.dataKeyEncrypted === null || isSealedKey(account.dataKeyEncrypted)) return false;
+    return this.wrapper.needsRewrap(account.dataKeyEncrypted);
   }
 
   /** Re-wraps the data key with the current master key; the data it protects is untouched. */
@@ -76,4 +119,15 @@ export class AccountKeyring {
   isLegacy(envelope: string | null): boolean {
     return envelope !== null && !DataKey.isEnvelope(envelope);
   }
+}
+
+/** Seals with a vault public key; opening needs the vault itself ({@link UnlockedVault}). */
+function sealOnly(publicKey: VaultPublicKey): KeyWrapper {
+  return {
+    wrapKey: (key, context) => publicKey.sealKey(key, context),
+    unwrapKey: () => {
+      throw lockedError();
+    },
+    needsRewrap: () => false,
+  };
 }

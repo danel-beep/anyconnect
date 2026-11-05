@@ -25,6 +25,8 @@ import type { KeyWrapper } from './crypto.js';
  * Formats (base64url parts, AES-256-GCM, the context string as AAD):
  * - sealed key `s1.<ephemeral public key>.<iv>.<ciphertext+tag>`: ECIES to the vault public key
  * - wrapped private key `w1.<salt>.<iv>.<ciphertext+tag>`: under a key derived from a secret
+ * - private key sealed to a device (`s1.`, as above): for a browser approved from another one, whose
+ *   device secret is the private half of an X25519 key pair (see {@link UnlockedVault.devicePublicKey})
  */
 
 const SEALED_VERSION = 's1';
@@ -123,13 +125,42 @@ export class UnlockedVault implements KeyWrapper {
    */
   static unwrap(wrapped: string, secret: Buffer, context: string, publicKey: string): UnlockedVault {
     const parts = wrapped.split('.');
-    if (parts.length !== 4 || parts[0] !== WRAPPED_VERSION) throw new Error('Unsupported vault wrap');
-    const [, salt, iv, body] = parts as [string, string, string, string];
-    const raw = open(wrapKeyFrom(secret, unb64(salt)), unb64(iv), unb64(body), context);
+    let raw: Buffer;
+    if (parts.length === 4 && parts[0] === WRAPPED_VERSION) {
+      const [, salt, iv, body] = parts as [string, string, string, string];
+      raw = open(wrapKeyFrom(secret, unb64(salt)), unb64(iv), unb64(body), context);
+    } else if (parts.length === 4 && parts[0] === SEALED_VERSION) {
+      raw = UnlockedVault.fromPrivateRaw(secret).unwrapKey(wrapped, context);
+    } else {
+      throw new Error('Unsupported vault wrap');
+    }
     const privateKey = privateFromRaw(raw);
     const derived = b64(rawPublic(createPublicKey(privateKey)));
     if (derived !== publicKey) throw new Error('Vault wrap does not belong to this vault');
     return new UnlockedVault(privateKey, raw, VaultPublicKey.decode(publicKey));
+  }
+
+  /** A key pair from its raw private key (a device secret); `publicKey` is derived from it. */
+  private static fromPrivateRaw(raw: Buffer): UnlockedVault {
+    const privateKey = privateFromRaw(raw);
+    return new UnlockedVault(
+      privateKey,
+      raw,
+      VaultPublicKey.decode(b64(rawPublic(createPublicKey(privateKey)))),
+    );
+  }
+
+  /** The public key of the device whose secret is `secret` (the device keeps the secret). */
+  static devicePublicKey(secret: Buffer): VaultPublicKey {
+    return UnlockedVault.fromPrivateRaw(secret).publicKey;
+  }
+
+  /**
+   * Seals the private key to a device's public key, so a browser approved from another one opens
+   * the vault with its own secret, which the approving request never sees.
+   */
+  sealTo(device: VaultPublicKey, context: string): string {
+    return device.sealKey(this.raw, context);
   }
 
   /**

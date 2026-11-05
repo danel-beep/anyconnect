@@ -10,9 +10,15 @@ import {
 import type { Db } from '../db/client.js';
 import { accountOauth, accounts } from '../db/schema.js';
 import type { Logger } from '../logger.js';
-import { type AccountKeyMaterial, type AccountKeyring, oauthTokensContext } from './account-keys.js';
+import {
+  type AccountKeyMaterial,
+  type AccountKeyring,
+  notSealedAccount,
+  oauthTokensContext,
+} from './account-keys.js';
 import type { OAuthAppService } from './oauth-apps.js';
 import { OAuthProtocolError, refreshTokenSet, revokeTokenSet, type TokenSet } from './oauth-client.js';
+import { VaultLockedError } from './vaults.js';
 
 /** Refresh this long before expiry so a token never expires in the middle of a call. */
 const REFRESH_MARGIN_MS = 2 * 60_000;
@@ -71,6 +77,7 @@ export class TokenManager {
       .limit(1);
     if (!found) return undefined;
     const { row, dataKeyEncrypted } = found;
+    await this.deps.keys.prepare({ id: accountId, dataKeyEncrypted });
     return {
       appRef: row.appRef,
       providerId: row.providerId,
@@ -85,13 +92,16 @@ export class TokenManager {
       .where(eq(accounts.id, accountId))
       .limit(1);
     if (!row) throw new ConnectorError('auth', 'The account was removed');
+    await this.deps.keys.prepare(row);
     return row;
   }
 
   private decrypt(account: AccountKeyMaterial, envelope: string): TokenSet {
     try {
       return this.deps.keys.decryptSecret<TokenSet>(account, envelope, oauthTokensContext(account.id));
-    } catch {
+    } catch (error) {
+      // A locked vault is not a broken connection: never let it mark the account needs_reauth.
+      if (error instanceof VaultLockedError) throw error;
       throw new ConnectorError('auth', 'The stored OAuth tokens cannot be decrypted; reconnect the account');
     }
   }
@@ -294,6 +304,7 @@ export class TokenManager {
           eq(accounts.enabled, true),
           // needs_reauth accounts wait for the user
           ne(accounts.status, 'needs_reauth'),
+          notSealedAccount(),
         ),
       );
   }

@@ -76,6 +76,17 @@ export interface VerifiedAccessToken extends GrantBinding {
 
 type Params = Record<string, string | undefined>;
 
+/** See `VaultGrantLinks` in `src/core/vault-links.ts`. */
+export interface GrantVaultLinks {
+  linkCode(userId: string, code: string): Promise<void>;
+  linkTokens(
+    userId: string,
+    from: { kind: 'code' | 'refresh'; token: string },
+    issued: { accessToken: string; refreshToken: string },
+  ): Promise<void>;
+  unlink(tokenHashes: string[]): Promise<void>;
+}
+
 export class OAuthServer {
   readonly issuer: string;
   readonly resource: string;
@@ -96,6 +107,8 @@ export class OAuthServer {
       accessTokenTtlSeconds: number;
       refreshTokenTtlSeconds: number;
       logger: Logger;
+      /** Carries the user's vault from the consent screen to the app's tokens (`docs/VAULTS.md`). */
+      vaultLinks?: GrantVaultLinks;
     },
   ) {
     this.issuer = deps.issuer;
@@ -258,6 +271,7 @@ export class OAuthServer {
       personaId: binding.personaId ?? null,
       expiresAt: new Date(Date.now() + CODE_TTL_MS),
     });
+    await this.deps.vaultLinks?.linkCode(userId, code);
     return this.redirectWith(request.redirectUri, { code, state: request.state });
   }
 
@@ -352,7 +366,7 @@ export class OAuthServer {
       throw new OAuthProtocolError('invalid_target', 'resource does not match the authorization request');
     }
 
-    return db.transaction(async (tx) => {
+    const issued = await db.transaction(async (tx) => {
       const grantId = newId('grt');
       await tx.insert(oauthGrants).values({
         id: grantId,
@@ -371,6 +385,25 @@ export class OAuthServer {
         .where(eq(oauthAuthorizationCodes.codeHash, codeHash));
       return this.issueTokens(tx, grantId, row.scopes);
     });
+    await this.linkVault(row.userId, { kind: 'code', token: code }, issued);
+    return issued;
+  }
+
+  /** Best-effort: a failure here never fails the token request (the app just stays without a vault). */
+  private async linkVault(
+    userId: string,
+    from: { kind: 'code' | 'refresh'; token: string },
+    issued: TokenResponse,
+  ): Promise<void> {
+    if (!this.deps.vaultLinks || !issued.refresh_token) return;
+    try {
+      await this.deps.vaultLinks.linkTokens(userId, from, {
+        accessToken: issued.access_token,
+        refreshToken: issued.refresh_token,
+      });
+    } catch (error) {
+      this.deps.logger.warn({ err: error }, 'could not link the vault to new OAuth tokens');
+    }
   }
 
   private async refresh(client: OAuthClient, params: Params): Promise<TokenResponse> {
@@ -405,7 +438,7 @@ export class OAuthServer {
     if (params.resource && this.canonicalResource(params.resource) !== row.grant.resource) {
       throw new OAuthProtocolError('invalid_target', 'resource does not match the grant');
     }
-    return db.transaction(async (tx) => {
+    const issued = await db.transaction(async (tx) => {
       if (!row.token.rotatedAt) {
         await tx
           .update(oauthTokens)
@@ -415,6 +448,8 @@ export class OAuthServer {
       await tx.update(oauthGrants).set({ lastUsedAt: new Date() }).where(eq(oauthGrants.id, row.grant.id));
       return this.issueTokens(tx, row.grant.id, scopes);
     });
+    await this.linkVault(row.grant.userId, { kind: 'refresh', token: presented }, issued);
+    return issued;
   }
 
   private async issueTokens(
@@ -480,10 +515,13 @@ export class OAuthServer {
         .update(oauthGrants)
         .set({ revokedAt: now })
         .where(and(eq(oauthGrants.id, grantId), isNull(oauthGrants.revokedAt)));
-      await tx
+      const revoked = await tx
         .update(oauthTokens)
         .set({ revokedAt: now })
-        .where(and(eq(oauthTokens.grantId, grantId), isNull(oauthTokens.revokedAt)));
+        .where(and(eq(oauthTokens.grantId, grantId), isNull(oauthTokens.revokedAt)))
+        .returning({ tokenHash: oauthTokens.tokenHash });
+      // A revoked app loses its way into the vault at once, not at the next maintenance run.
+      await this.deps.vaultLinks?.unlink(revoked.map((t) => t.tokenHash));
     });
   }
 

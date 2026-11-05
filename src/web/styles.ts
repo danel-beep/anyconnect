@@ -213,6 +213,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;margin-
 .qr{display:block;width:200px;height:200px;margin:8px 0 12px;border-radius:8px;${QR_COLORS}}
 ul.codes{list-style:none;padding:0;margin:12px 0 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px}
 ul.codes code{font-size:15px}
+/* Vault: the code two browsers compare, and the one-time recovery key */
+main.content>.vault-banner{margin-bottom:16px}
+code.device-code{font-size:18px;letter-spacing:.08em;padding:2px 8px}
+code.recovery-key{display:block;font-size:15px;line-height:1.7;padding:10px 12px;overflow-wrap:anywhere;user-select:all}
 
 /* Auth pages: centered card */
 /* Sign-in style windows: one screen, the card centred between a slim top bar and footer */

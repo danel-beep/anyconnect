@@ -6,6 +6,7 @@ import { getDefaultWorkspace } from '../core/identity.js';
 import type { toolCalls } from '../db/schema.js';
 import { SETUP_CONNECTOR } from '../hub/setup-tools.js';
 import { AppError } from '../lib/errors.js';
+import { isSealedKey } from '../lib/vault.js';
 import {
   type AppSection,
   AppShell,
@@ -91,19 +92,31 @@ export async function requireApp(c: AppContext, next: string): Promise<AppAuth |
 export async function shellInfo(c: AppContext, workspaceId: string): Promise<ShellInfo> {
   const s = c.get('services');
   const user = await currentUser(c);
-  const [subscription, open, accounts, planRequests] = await Promise.all([
+  const [subscription, open, accounts, planRequests, vault] = await Promise.all([
     s.entitlements.subscription(workspaceId),
     // The user's own held-back actions, in teams too (what `/confirm` lists).
     user ? s.pendingCalls.listOpenFor(user.id) : s.pendingCalls.listOpen(workspaceId),
     s.accounts.list(workspaceId),
     user?.role === 'admin' ? s.entitlements.countOpenRequests() : undefined,
+    user ? vaultShell(c, user.id) : undefined,
   ]);
   return {
     planId: s.entitlements.planFor(subscription).id,
     pendingConfirmations: open.filter((row) => row.status === 'awaiting_confirmation').length,
     brokenAccounts: accounts.filter((a) => a.enabled && a.status !== 'active').length,
     planRequests,
+    vault: vault && {
+      ...vault,
+      locked:
+        vault.locked && accounts.some((a) => a.dataKeyEncrypted !== null && isSealedKey(a.dataKeyEncrypted)),
+    },
   };
+}
+
+async function vaultShell(c: AppContext, userId: string): Promise<{ locked: boolean; requests: number }> {
+  const s = c.get('services');
+  const open = (await s.vaultScopes.prepare()) !== undefined;
+  return { locked: !open, requests: open ? (await s.vaults.deviceRequests(userId)).length : 0 };
 }
 
 /**
