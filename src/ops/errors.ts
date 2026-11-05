@@ -107,7 +107,7 @@ export class ErrorReporter {
 
   private sinkFailed(sink: ErrorSink, err: unknown) {
     // Logged at warn without the event: a broken sink must not cause an error loop.
-    this.options.logger.warn({ sink: sink.name, msg: (err as Error)?.message }, 'error sink failed');
+    this.options.logger.warn({ sink: sink.name, err }, 'error sink failed');
   }
 }
 
