@@ -149,13 +149,20 @@ export interface JsxElement {
 
 const IDENT = /[A-Za-z0-9_$]/;
 
+/** A literal part of a class expression; `afterHole`/`endsAtHole`: glued to a `${…}` hole. */
+interface Piece {
+  text: string;
+  endsAtHole: boolean;
+  afterHole?: boolean;
+}
+
 /**
  * Reads a JS expression (the inside of `{...}`) and returns the string pieces that can end up in
  * the value: string literals and the literal parts of template literals. Arguments of function
  * calls are skipped (`pctClass('w', …)` is not the class `w`).
  */
-function stringPieces(expr: string): { text: string; endsAtHole: boolean }[] {
-  const pieces: { text: string; endsAtHole: boolean }[] = [];
+function stringPieces(expr: string): Piece[] {
+  const pieces: Piece[] = [];
   let i = 0;
   const callDepth: boolean[] = [];
   const inCall = () => callDepth.includes(true);
@@ -163,6 +170,7 @@ function stringPieces(expr: string): { text: string; endsAtHole: boolean }[] {
     // at the opening backtick
     i++;
     let chunk = '';
+    let chunkAfterHole = false;
     while (i < expr.length && expr[i] !== '`') {
       if (expr[i] === '\\') {
         chunk += expr[i + 1] ?? '';
@@ -170,7 +178,7 @@ function stringPieces(expr: string): { text: string; endsAtHole: boolean }[] {
         continue;
       }
       if (expr[i] === '$' && expr[i + 1] === '{') {
-        if (!inCall()) pieces.push({ text: chunk, endsAtHole: true });
+        if (!inCall()) pieces.push({ text: chunk, endsAtHole: true, afterHole: chunkAfterHole });
         chunk = '';
         i += 2;
         let depth = 1;
@@ -192,13 +200,14 @@ function stringPieces(expr: string): { text: string; endsAtHole: boolean }[] {
         }
         const hole = expr.slice(start, i - 1);
         if (!inCall()) pieces.push(...stringPieces(hole));
+        chunkAfterHole = true;
         continue;
       }
       chunk += expr[i];
       i++;
     }
     i++; // closing backtick
-    if (!inCall()) pieces.push({ text: chunk, endsAtHole: false });
+    if (!inCall()) pieces.push({ text: chunk, endsAtHole: false, afterHole: chunkAfterHole });
   };
   while (i < expr.length) {
     const ch = expr[i]!;
@@ -244,12 +253,14 @@ function comparedAt(expr: string, start: number, end: number): boolean {
 
 const CLASS_NAME = /^-?[_a-zA-Z][\w-]*$/;
 
-function tokensOf(pieces: { text: string; endsAtHole: boolean }[]): ClassToken[] {
+function tokensOf(pieces: Piece[]): ClassToken[] {
   const tokens: ClassToken[] = [];
   for (const piece of pieces) {
     const words = piece.text.split(/\s+/);
     words.forEach((word, index) => {
       if (!word) return;
+      // `x-${a}-yy`: `-yy` is the end of a name that starts before the hole, not a class.
+      if (index === 0 && piece.afterHole) return;
       const last = index === words.length - 1;
       // `heat-${x}`: the last word right before a hole is only the beginning of a name.
       const prefix = last && piece.endsAtHole && !/\s$/.test(piece.text);
@@ -290,8 +301,10 @@ function readBraces(src: string, start: number): { inner: string; end: number } 
 }
 
 /** Every JSX element of a `.tsx` source with its tag, attributes and possible classes. */
-export function scanTsx(file: string, src: string): JsxElement[] {
+export function scanTsx(file: string, source: string): JsxElement[] {
   const elements: JsxElement[] = [];
+  // `{/* <p class="old"> */}` is not markup; blanked out with lines kept, so line numbers stay right.
+  const src = source.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, (m) => m.replace(/[^\n]/g, ' '));
   const lineAt = (index: number) => src.slice(0, index).split('\n').length;
   const tagStart = /<([a-zA-Z][\w.]*)(?=[\s/>])/g;
   for (let match = tagStart.exec(src); match; match = tagStart.exec(src)) {

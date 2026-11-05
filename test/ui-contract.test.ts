@@ -13,7 +13,9 @@ import { classIsStyled, cssCompounds, isComponent, type JsxElement, scanTsx } fr
  *    (`pad` alone is not styled when the CSS only knows `.card-head.pad`).
  * 2. No `style` attributes: the Content-Security-Policy (`style-src 'self'`) drops them in
  *    production, so a page that looks right in a test would break live.
- * 3. Classes are for styling only: scripts and tests find elements by `data-*` attributes or ids.
+ *
+ * A convention it does not check: classes are for styling only, scripts and tests find elements
+ * by `data-*` attributes or ids (older scripts and tests still use classes).
  *
  * Fix a failure in the markup or the CSS, never by allowing it here: see docs/UI.md.
  */
@@ -39,6 +41,10 @@ describe('UI contract', () => {
     expect(elements.length).toBeGreaterThan(2000);
     expect(elements.filter((e) => e.classes.length > 0).length).toBeGreaterThan(1200);
     expect(sheet.compounds.length).toBeGreaterThan(1000);
+    // Every `class=` in the sources belongs to an element the scanner read: a tag it cannot parse
+    // would otherwise drop out of the checks below without a word.
+    const written = Object.values(sources).reduce((n, src) => n + (src.match(/\sclass=/g)?.length ?? 0), 0);
+    expect(elements.filter((e) => e.classSource !== undefined).length).toBe(written);
   });
 
   it('styles every class used in the markup', () => {
@@ -88,6 +94,16 @@ describe('UI contract scanner', () => {
       'bad',
     ]);
     expect(scanTsx('x.tsx', 'const m = new Map<string, number>(); if (a<b) x();')).toEqual([]);
+    // Text glued to the end of a hole finishes a dynamic name; it is not a class of its own.
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: TSX source text under test
+    expect(one('<b class={`bar-${kind}-wide edge`} />').classes).toEqual([
+      { name: 'bar-', prefix: true },
+      { name: 'edge', prefix: false },
+    ]);
+    // Commented-out markup is not markup.
+    expect(
+      scanTsx('x.tsx', '{/* <p class="old"> */}\n<p class="new">').map((e) => [e.line, e.classSource]),
+    ).toEqual([[2, 'new']]);
   });
 
   it('knows which classes style which elements', () => {
