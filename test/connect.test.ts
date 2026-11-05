@@ -276,7 +276,11 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     provider.refreshToken = ''; // revoked at the provider
     const failed = await callMe();
     expect(failed.isError).toBe(true);
-    expect(failed.content[0]).toMatchObject({ text: expect.stringMatching(/reconnect this account/) });
+    expect(failed.content[0]).toMatchObject({
+      text: expect.stringMatching(
+        /stopped working: .*the user has to sign in again, here: http.*\/connect\/fake\?account=acc_/,
+      ),
+    });
     const [account] = await hub.services.accounts.list(principal.workspaceId);
     expect(account!.status).toBe('needs_reauth');
 

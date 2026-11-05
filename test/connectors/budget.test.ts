@@ -80,6 +80,7 @@ function account(connectorId: string): AccountRow {
     updatedAt: now,
     lastUsedAt: null,
     checkedAt: null,
+    reauthNotifiedAt: null,
   };
 }
 
