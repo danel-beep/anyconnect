@@ -5,7 +5,7 @@ import { serviceMeta } from './catalog.js';
 import type { Translate } from './i18n.js';
 import { Layout } from './pages.js';
 import { RiskBadge } from './setup-guide.js';
-import { fmtAgo, fmtDate, Icon, ServiceLogo } from './ui.js';
+import { AskAi, fmtAgo, fmtDate, Icon, SectionHead, ServiceLogo } from './ui.js';
 
 /**
  * Actions the hub holds back for the owner's OK (`/confirm`, `/confirm/<id>`): what the AI wants
@@ -79,6 +79,7 @@ const PendingCall: FC<{
       <div class="pending-head">
         <ServiceLogo icon={meta?.icon} glyph={meta?.glyph} name={call.service} />
         <div class="grow">
+          <p class="small muted pending-who">{t('confirm.page.wants', { client: call.client })}</p>
           {heading === 1 ? <h1>{call.action}</h1> : <h2>{call.action}</h2>}
           <p class="small muted">
             {call.service} · {call.account}
@@ -87,10 +88,12 @@ const PendingCall: FC<{
         <RiskBadge t={t} risk={call.risk} />
       </div>
       <p class="pending-meta small">
-        <strong>{t(`confirm.status.${call.status}` as const)}</strong>
+        {/* "Waiting for your confirmation" is said by the count above the list: only other states here. */}
+        {call.status === 'awaiting_confirmation' ? null : (
+          <strong>{t(`confirm.status.${call.status}` as const)} · </strong>
+        )}
         <span class="muted">
-          {' · '}
-          {t('confirm.page.asked', { client: call.client })} <When lang={lang} date={call.createdAt} />
+          {t('confirm.page.askedAt')} <When lang={lang} date={call.createdAt} />
           {call.status === 'awaiting_confirmation' ? (
             <>
               {' · '}
@@ -111,7 +114,7 @@ const PendingCall: FC<{
         </p>
       ) : null}
       {call.fields.length ? (
-        <details class="pending-args" open={open}>
+        <details class="pending-args" id={`args-${call.id}`} open={open}>
           <summary>{t('confirm.page.details')}</summary>
           <dl class="arg-list">
             {call.fields.map((f) => (
@@ -124,6 +127,7 @@ const PendingCall: FC<{
         </details>
       ) : null}
       <Decision t={t} call={call} csrf={csrf} />
+      {call.status === 'awaiting_confirmation' ? <p class="hint">{t('confirm.page.afterAllow')}</p> : null}
     </article>
   );
 };
@@ -172,27 +176,58 @@ export const ConfirmListPage: FC<{
         </a>
       }
     />
-    {calls.length === 0 ? (
-      <div class="card empty-state">
-        <span class="empty-icon" aria-hidden="true">
-          <Icon name="check" />
-        </span>
-        <h2>{t('confirm.page.noneTitle')}</h2>
-        <p class="muted">{t('confirm.page.noneText')}</p>
-        <p class="small">
-          {t('confirm.page.now', { rule })} <a href="/app/rules">{t('confirm.page.change')}</a>
-        </p>
-      </div>
-    ) : (
-      <div class="stack">
-        {calls.map((call) => (
-          <PendingCall t={t} lang={lang} call={call} csrf={csrf} heading={2} />
+    {/* Updates on its own: a new request shows up while the page is open. */}
+    <div id="pending-live" data-poll="5">
+      {calls.length === 0 ? (
+        <div class="card empty-state">
+          <span class="empty-icon" aria-hidden="true">
+            <Icon name="check" />
+          </span>
+          <h2>{t('confirm.page.noneTitle')}</h2>
+          <p class="muted">{t('confirm.page.noneText')}</p>
+          <p class="small">
+            {t('confirm.page.now', { rule })} <a href="/app/rules">{t('confirm.page.change')}</a>
+          </p>
+        </div>
+      ) : (
+        <div class="stack">
+          <p class="pending-count" role="status">
+            {t('confirm.page.waiting', {
+              n: calls.filter((c) => c.status === 'awaiting_confirmation').length,
+            })}
+          </p>
+          {calls.map((call) => (
+            <PendingCall t={t} lang={lang} call={call} csrf={csrf} heading={2} />
+          ))}
+        </div>
+      )}
+    </div>
+    <div class="card">
+      <h2>{t('confirm.how.title')}</h2>
+      <ol class="how-steps">
+        {(['ask', 'see', 'decide'] as const).map((step, i) => (
+          <li>
+            <span class="how-num" aria-hidden="true">
+              {i + 1}
+            </span>
+            <span>
+              <strong>{t(`confirm.how.${step}`)}</strong>
+              <span class="small muted">{t(`confirm.how.${step}Text`)}</span>
+            </span>
+          </li>
         ))}
-      </div>
-    )}
+      </ol>
+      <AskAi
+        t={t}
+        id="confirm-try"
+        title={t('confirm.try.title')}
+        hint={t('confirm.try.text')}
+        prompts={[t('confirm.try.rules'), t('confirm.try.stricter')]}
+      />
+    </div>
     {telegram.enabled ? (
       <div class="card" id="telegram">
-        <h2>{t('home.telegram')}</h2>
+        <SectionHead icon="bell" title={t('home.telegram')} hint={t('confirm.tg.why')} />
         {telegram.linked ? (
           <form method="post" action="/telegram/unlink">
             <input type="hidden" name="csrf" value={csrf} />

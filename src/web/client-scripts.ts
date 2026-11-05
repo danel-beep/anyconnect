@@ -21,8 +21,9 @@ $$('[data-theme-toggle]').forEach(function(b){b.hidden=false;b.addEventListener(
 
 /* Copy */
 function flash(btn){btn.setAttribute('data-copied','');setTimeout(function(){btn.removeAttribute('data-copied')},1600)}
-$$('[data-copy]').forEach(function(btn){btn.addEventListener('click',function(){var el=d.querySelector(btn.getAttribute('data-copy'));if(!el)return;var text=('value' in el&&el.value!==undefined)?el.value:el.textContent;
-if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){fallback(el,btn)})}else fallback(el,btn)})});
+/* Delegated, so copy buttons in blocks that live updates replace keep working. */
+d.addEventListener('click',function(e){var btn=e.target&&e.target.closest?e.target.closest('[data-copy]'):null;if(!btn)return;var el=d.querySelector(btn.getAttribute('data-copy'));if(!el)return;var text=('value' in el&&el.value!==undefined)?el.value:el.textContent.trim();
+if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){fallback(el,btn)})}else fallback(el,btn)});
 function fallback(el,btn){try{if(el.select){el.select()}else{var r=d.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r)}d.execCommand('copy');flash(btn)}catch(e){}}
 $$('[data-select-on-focus]').forEach(function(i){i.addEventListener('focus',function(){i.select()})});
 
@@ -161,7 +162,19 @@ var det=t&&(t.tagName==='DETAILS'?t:t.closest('details'));while(det){det.open=tr
 openTarget();window.addEventListener('hashchange',openTarget);
 
 /* Filter forms apply as soon as a choice changes (the button stays for keyboards and no-JS) */
-$$('form[data-autosubmit]').forEach(function(f){f.addEventListener('change',function(){f.submit()})});
+/* Delegated, so forms in blocks that live updates replace keep submitting on change. */
+d.addEventListener('change',function(e){var f=e.target&&e.target.form;if(f&&f.hasAttribute('data-autosubmit'))f.submit()});
+
+/* Live updates: blocks marked data-poll="<seconds>" (each with an id) refresh from the same address
+   while the tab is visible, so a new confirmation or log row shows up without a reload. A block the
+   user is working in (focus inside) is left alone until they are done; open <details> stay open. */
+(function(){var blocks=$$('[data-poll][id]');if(!blocks.length||!window.fetch||!window.DOMParser)return;
+var every=Math.max(3,Math.min.apply(null,blocks.map(function(b){return Number(b.getAttribute('data-poll'))||10})))*1000,busy=false;
+function swap(html){var next=new DOMParser().parseFromString(html,'text/html');
+$$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===b.innerHTML)return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;
+var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]})})}
+function tick(){if(busy||d.hidden)return;busy=true;fetch(location.pathname+location.search,{credentials:'same-origin',headers:{'x-live-update':'1'}}).then(function(r){return r.ok&&!r.redirected?r.text():null}).then(function(html){busy=false;if(html)swap(html)},function(){busy=false})}
+setInterval(tick,every);d.addEventListener('visibilitychange',function(){if(!d.hidden)tick()})})();
 
 /* Docs: the side menu marks the section being read */
 (function(){var spy=d.querySelector('.doc-nav');

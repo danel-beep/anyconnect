@@ -270,7 +270,16 @@ h3.fold-sub-h{margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--bor
 .chart-axis{display:flex;justify-content:space-between;font:500 11.5px/1 ${SANS};font-variant-numeric:tabular-nums;color:var(--muted);padding-top:8px}
 .top-list{display:flex;flex-direction:column;gap:10px}
 .top-list .bar{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:12px;align-items:center;font-size:13.5px}
-.top-list .bar .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top-list .bar .name{display:flex;align-items:center;gap:8px;min-width:0}
+.top-list .bar .name-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chart-legend{display:flex;gap:12px}
+.chart-legend .key{display:inline-flex;align-items:center;gap:6px}
+.chart-legend .key::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--accent)}
+.chart-legend .key.bad::before{background:var(--danger)}
+.stat .value.bad{color:var(--danger)}
+.stat .value.warn,.stat .value.accent{color:var(--accent-ink)}
+.stat .label>svg{width:15px;height:15px;flex:none;opacity:.6}
+a.stat:hover .label>svg{opacity:1}
 
 /* Plan cards in the dashboard */
 /* As many plans to a row as fit: the grid follows the number of public plans. */
@@ -374,8 +383,17 @@ button.try-chip svg.copy-done{color:var(--ok)}
 .choice:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .choice input{margin-top:3px;width:auto}
 .choice span{display:flex;flex-direction:column;gap:2px}
+.choice strong{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.choice strong .badge{display:inline-flex;flex-direction:row;font-weight:600}
+.rule-empty{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:14px 16px;border:1px dashed var(--border-strong);border-radius:12px}
+.rule-empty p{margin:0}
+.level-list{margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.level-list>div{padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-subtle)}
+.level-list dt{font-weight:620;margin:0 0 2px}
+.level-list dd{margin:0}
+@media (max-width:640px){.level-list{grid-template-columns:minmax(0,1fr)}}
 .rule-list{display:flex;flex-direction:column}
-.rule-row{display:grid;grid-template-columns:minmax(0,1fr) 290px 290px auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
+.rule-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(200px,300px) minmax(220px,320px) auto;gap:12px;align-items:end;padding:12px 0;border-top:1px solid var(--border)}
 .rule-row:first-child{border-top:0}
 .rule-row label{margin:0 0 4px;display:block}
 .rule-who{display:flex;gap:10px;align-items:center}
@@ -394,11 +412,28 @@ button.try-chip svg.copy-done{color:var(--ok)}
 .arg-list dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
 @media (max-width:560px){.arg-list>div{grid-template-columns:1fr;gap:2px}}
 .pending-actions{margin:0}
+.pending-head .pending-who{margin:0 0 2px}
+.pending-call .hint{margin:-4px 0 0}
+.pending-count{margin:0;font-weight:600}
+.how-steps{list-style:none;margin:0 0 18px;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.how-steps li{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg-subtle)}
+.how-steps li>span:last-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.how-num{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-weight:650;font-size:13px}
+@media (max-width:860px){.how-steps{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:560px){.how-steps{gap:14px}.how-steps li{padding:0;border:0;background:none}}
 .pending-actions button svg{width:16px;height:16px}
 .empty-state{text-align:center;padding:40px 24px}
 .empty-state p{max-width:52ch;margin-left:auto;margin-right:auto}
 .empty-icon{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--ok-soft);color:var(--ok);margin-bottom:10px}
 .empty-icon svg{width:22px;height:22px;stroke-width:2.4}
+.empty-icon.accent{background:var(--accent-soft);color:var(--accent-ink);width:52px;height:52px}
+.empty-icon.accent svg{width:24px;height:24px;stroke-width:2.2}
+/* The first-run card: a short story, then requests to copy, left-aligned for reading. */
+.start-state{padding:36px 28px 28px}
+.start-state h2{font-size:22px;margin:0 0 8px}
+.start-state .ask-ai{max-width:640px;margin:22px auto 18px;text-align:left}
+@media (max-width:560px){.start-state{padding:28px 16px 20px}}
+
 .rule-who>span{display:flex;flex-direction:column;min-width:0}
 .rule-who .small{overflow-wrap:anywhere}
 .rule-list .acc-group{padding:18px 0 2px;background:none;border-top:0}
