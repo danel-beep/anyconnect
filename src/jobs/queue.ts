@@ -7,7 +7,14 @@ import type { JobMonitor } from './runs.js';
  * Background jobs on Postgres (pg-boss): no extra infrastructure, jobs survive restarts, and with
  * several instances each job runs once. Used for account health checks today; schedules, triggers
  * and long-running work of later stages are added as more `JobDefinition`s.
+ *
+ * Idle cost matters more than latency here: most of the time no job is due, and every poll is a
+ * query on the shared database. So a new job wakes its workers through Postgres LISTEN/NOTIFY
+ * (pg-boss `useListenNotify` + queues with `notify`), and polling is only a slow backstop. Where
+ * NOTIFY is unavailable (a pooler in transaction mode), workers fall back to the normal poll.
  */
+
+const HOUSEKEEPING_SECONDS = 300;
 
 export interface JobContext {
   logger: Logger;
@@ -32,7 +39,15 @@ export interface JobQueueOptions {
   logger: Logger;
   /** Postgres schema of pg-boss's own tables. */
   schema?: string;
+  /** How often an idle worker checks its queue when NOTIFY is unavailable (default 5 s). */
   pollingIntervalSeconds?: number;
+  /** Backstop poll while NOTIFY wakes the workers (default 300 s); only covers a lost notification. */
+  backstopSeconds?: number;
+  /**
+   * How often due occurrences of recurring jobs are handed to their queues (default 30 s, pg-boss's
+   * own default is 5 s). Adds at most this much delay to a cron job, which runs on minutes anyway.
+   */
+  cronWorkerIntervalSeconds?: number;
   /** Records every run (last success, failures) for health checks and the admin panel. */
   monitor?: JobMonitor;
   /** Reports a failed run to the error tracker. */
@@ -67,21 +82,41 @@ export class JobQueue {
   }
 
   async start(): Promise<void> {
+    const pollingIntervalSeconds = this.options.pollingIntervalSeconds ?? 5;
     const boss = new PgBoss({
       connectionString: this.options.connectionString,
       schema: this.options.schema ?? 'pgboss',
       application_name: 'manyplug-jobs',
+      useListenNotify: true,
+      cronWorkerIntervalSeconds: this.options.cronWorkerIntervalSeconds ?? 30,
+      // pg-boss's own housekeeping, every 5–60 s by default: job dependencies ("flows", unused
+      // here), queue statistics, expiry and retention, its schema upgrades. Every 5 minutes is
+      // plenty for jobs that run on minute schedules, and each run is a query on the database.
+      flowIntervalSeconds: HOUSEKEEPING_SECONDS,
+      monitorIntervalSeconds: HOUSEKEEPING_SECONDS,
+      superviseIntervalSeconds: HOUSEKEEPING_SECONDS,
+      bamIntervalSeconds: HOUSEKEEPING_SECONDS,
     });
     boss.on('error', (err) => this.options.logger.warn({ err }, 'job queue error'));
+    // E.g. LISTEN is not possible: jobs still run, only through polling.
+    boss.on('warning', (warning) => this.options.logger.warn({ warning }, 'job queue warning'));
     await boss.start();
     this.boss = boss;
     for (const definition of this.definitions.values()) {
       // Singleton: at most one active job per queue, so a slow run never overlaps the next tick.
-      await boss.createQueue(definition.name, { policy: definition.cron ? 'singleton' : 'standard' });
+      await boss.createQueue(definition.name, {
+        policy: definition.cron ? 'singleton' : 'standard',
+        notify: true,
+      });
+      // createQueue leaves an existing queue as it is: turn NOTIFY on for queues made by older releases.
+      await boss.updateQueue(definition.name, { notify: true });
       if (definition.cron) await boss.schedule(definition.name, definition.cron, {}, { tz: 'UTC' });
       await boss.work<object>(
         definition.name,
-        { pollingIntervalSeconds: this.options.pollingIntervalSeconds ?? 5 },
+        {
+          pollingIntervalSeconds,
+          notifyPollingIntervalSeconds: Math.max(this.options.backstopSeconds ?? 300, pollingIntervalSeconds),
+        },
         async (jobs) => {
           for (const job of jobs) {
             await runWithContext({ requestId: `job-${newRequestId()}`, job: definition.name }, () =>
