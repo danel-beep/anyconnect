@@ -1,7 +1,15 @@
 import type { FC } from 'hono/jsx';
 import { PLANS } from '../billing/plans.js';
 import type { MemberRole, ShareLevel, TeamBillingMode } from '../db/schema.js';
-import { AppShell, ConnectAiCard, Flash, PageHead, type ShellInfo, type UsageView } from './app.js';
+import {
+  AppShell,
+  ConnectAiCard,
+  Flash,
+  PageHead,
+  SetupSteps,
+  type ShellInfo,
+  type UsageView,
+} from './app.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { Layout } from './pages.js';
@@ -604,19 +612,7 @@ const TeamSetup: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = ({ c
     },
   ];
   if (steps.every((s) => s.done)) return null;
-  return (
-    <div class={`onboard${steps.length === 2 ? ' two' : ''}`}>
-      {steps.map((s, i) => (
-        <a class={`onboard-step${s.done ? ' done' : ''}`} href={s.href}>
-          <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
-          <span>
-            <strong>{s.title}</strong>
-            <span>{s.text}</span>
-          </span>
-        </a>
-      ))}
-    </div>
-  );
+  return <SetupSteps ctx={ctx} steps={steps} />;
 };
 
 /** The message that brings a teammate in: the address and what to do, ready to send with the invitation. */
