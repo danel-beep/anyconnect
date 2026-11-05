@@ -192,6 +192,40 @@ export const CodeBlock: FC<{ t: Translate; id: string; code: string }> = ({ t, i
   </div>
 );
 
+/**
+ * Ready text to paste somewhere else (a message for a teammate), shown as it will be pasted, with
+ * one button that copies all of it. Line breaks in `text` are kept. `prompt`: a request for the AI,
+ * where the whole card is the button (one tap copies it).
+ */
+export const CopyText: FC<{ t: Translate; id: string; text: string; label?: string; prompt?: boolean }> = ({
+  t,
+  id,
+  text,
+  label,
+  prompt,
+}) =>
+  prompt ? (
+    <button type="button" class="copy-text prompt" data-copy={`#${id}`}>
+      <span class="prompt-text" id={id}>
+        {text}
+      </span>
+      <span class="prompt-action">
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </span>
+    </button>
+  ) : (
+    <div class="copy-text">
+      <p id={id}>{text}</p>
+      <button type="button" class="sm" data-copy={`#${id}`}>
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </button>
+    </div>
+  );
+
 /** Width class for a 0–100 % value in 5 % steps (no inline styles under the CSP). */
 export const pctClass = (prefix: 'w' | 'h', used: number, limit: number | null): string => {
   if (limit === null || limit <= 0) return `${prefix}-0`;

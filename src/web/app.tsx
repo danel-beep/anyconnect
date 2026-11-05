@@ -12,6 +12,7 @@ import {
   Brand,
   CodeBlock,
   CopyField,
+  CopyText,
   fmtAgo,
   fmtDate,
   fmtDay,
@@ -407,7 +408,13 @@ export const CallsTable: FC<{
   );
 };
 
-const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx, usage, extra }) => {
+/** `here`: shown on the plan page itself, so without the link to it. */
+const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child; here?: boolean }> = ({
+  ctx,
+  usage,
+  extra,
+  here,
+}) => {
   const { t, lang } = ctx;
   const exhausted = usage.actions.limit !== null && usage.actions.used >= usage.actions.limit;
   return (
@@ -424,9 +431,11 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
           label={t('app.usage.actions')}
           {...usage.actions}
           lines={[
-            <a href="/app/billing">
-              {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
-            </a>,
+            here ? undefined : (
+              <a href="/app/billing">
+                {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
+              </a>
+            ),
             usage.actions.limit === null
               ? t('app.usage.noLimit')
               : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) }),
@@ -437,12 +446,12 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
           label={t('app.usage.accounts')}
           {...usage.accounts}
           lines={[
-            usage.phase?.kind === 'trial'
+            usage.phase?.kind === 'trial' && !here
               ? t('app.usage.trial', {
                   plan: t(`plan.${usage.phase.asPlan ?? 'pro'}.name` as 'plan.free.name'),
                   date: fmtDate(lang, usage.phase.until),
                 })
-              : usage.phase
+              : usage.phase?.kind === 'step'
                 ? t('app.usage.step', { date: fmtDate(lang, usage.phase.until) })
                 : t('app.usage.accountsHint'),
           ]}
@@ -1776,20 +1785,21 @@ const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) =
   const last = schedule[schedule.length - 1];
   return (
     <div class="start-schedule">
-      <h3>{t('app.billing.start')}</h3>
-      <ol class="plain">
+      <h3>{t('plan.hero.next')}</h3>
+      <ol class="timeline">
         {schedule.map((p) => {
           const current = p.from.getTime() <= now && now < p.until.getTime();
           return (
             <li class={current ? 'current' : p.until.getTime() <= now ? 'past' : undefined}>
-              <span>
+              <span class="tl-dot" aria-hidden="true" />
+              <strong>
                 {p.kind === 'trial'
                   ? t('app.billing.startTrial', {
                       plan: t(`plan.${p.asPlan ?? 'pro'}.name` as 'plan.free.name'),
                     })
                   : actions(p.actions)}
                 {current ? <span class="badge accent">{t('app.billing.startNow')}</span> : null}
-              </span>
+              </strong>
               <span class="small muted">
                 {t('app.billing.startDates', {
                   from: fmtDate(lang, p.from),
@@ -1801,7 +1811,8 @@ const StartSchedule: FC<{ ctx: PageCtx; usage: UsageView }> = ({ ctx, usage }) =
         })}
         {last ? (
           <li class={last.until.getTime() <= now ? 'current' : undefined}>
-            <span>{actions(usage.planLimitActions ?? null)}</span>
+            <span class="tl-dot" aria-hidden="true" />
+            <strong>{actions(usage.planLimitActions ?? null)}</strong>
             <span class="small muted">
               {t('app.billing.startAfter', { date: fmtDate(lang, last.until) })}
             </span>
@@ -1821,9 +1832,66 @@ const InviteCard: FC<{ ctx: PageCtx; invite: NonNullable<BillingView['invite']> 
       <h2>{t('app.invite.title')}</h2>
       <p class="muted">{t('app.invite.text', { days: invite.days })}</p>
       <CopyField t={t} id="invite-link" value={invite.link} label={t('app.invite.link')} />
+      <CopyText
+        t={t}
+        id="invite-message"
+        text={t('plan.invite.message', { link: invite.link })}
+        label={t('plan.invite.copy')}
+      />
       <p class="small muted">
         {t('app.invite.stats', { invited: invite.invited, rewarded: invite.rewarded })}
       </p>
+    </div>
+  );
+};
+
+/**
+ * The top of "Plan and limits": the plan in force (with a trial's days left), what it has used and
+ * the way to a bigger one, then whatever the page adds (schedule, bonuses).
+ */
+const PlanSummary: FC<{ ctx: PageCtx; view: BillingView; children?: Child }> = ({ ctx, view, children }) => {
+  const { t, lang } = ctx;
+  const phase = view.usage.phase;
+  const trialPlan = phase?.kind === 'trial' ? planLabel(ctx, phase.asPlan ?? 'pro') : undefined;
+  const daysLeft = phase ? Math.max(1, Math.ceil((phase.until.getTime() - Date.now()) / 86_400_000)) : 0;
+  const top = PLANS.filter((p) => p.public).at(-1);
+  const canGrow = view.plan.public && view.plan.id !== top?.id;
+  return (
+    <div class="card plan-hero">
+      <div class="plan-hero-head">
+        <div class="grow">
+          <span class="eyebrow">{t('plan.hero.label')}</span>
+          <h2>
+            {planLabel(ctx, view.plan.id)}
+            {trialPlan ? (
+              <span class="badge accent">{t('plan.hero.trial', { plan: trialPlan, n: daysLeft })}</span>
+            ) : view.subscription?.periodEnd && !view.paid ? (
+              <span class="badge">
+                {t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}
+              </span>
+            ) : null}
+          </h2>
+          <p class="muted">
+            {view.plan.id === 'unlimited' && ctx.user?.isAdmin
+              ? t('app.billing.ownerPlan')
+              : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
+          </p>
+        </div>
+        {canGrow ? (
+          <a class="btn primary" href="#plans">
+            {t('plan.hero.compare')}
+          </a>
+        ) : null}
+      </div>
+      {trialPlan && phase ? (
+        <div class="notice info with-icon">
+          <Icon name="check" />
+          <span>{t('plan.hero.trialText', { plan: trialPlan, date: fmtDate(lang, phase.until) })}</span>
+        </div>
+      ) : null}
+      <UsageStats ctx={ctx} usage={view.usage} here />
+      {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
+      {children}
     </div>
   );
 };
@@ -1878,22 +1946,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           />
         </div>
       ) : null}
-      <UsageStats ctx={ctx} usage={view.usage} />
-      <div class="card">
-        <div class="card-head">
-          <h2>{t('app.billing.current', { plan: planLabel(ctx, view.plan.id) })}</h2>
-          {view.subscription?.periodEnd && !view.paid ? (
-            <span class="badge">
-              {t('app.billing.until', { date: fmtDate(lang, view.subscription.periodEnd) })}
-            </span>
-          ) : null}
-        </div>
-        <p class="muted">
-          {view.plan.id === 'unlimited' && ctx.user?.isAdmin
-            ? t('app.billing.ownerPlan')
-            : t(`plan.${view.plan.id}.for` as 'plan.free.for')}
-        </p>
-        {view.paid ? <PaidSubscription ctx={ctx} paid={view.paid} /> : null}
+      <PlanSummary ctx={ctx} view={view}>
         {!view.paid && view.usage.schedule?.length ? <StartSchedule ctx={ctx} usage={view.usage} /> : null}
         <p class="hint">{t('app.usage.actionsHint')}</p>
         {view.grants.length ? (
@@ -1923,7 +1976,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
             </ul>
           </>
         ) : null}
-      </div>
+      </PlanSummary>
       {view.teams.length ? <PlanTeamsCard ctx={ctx} view={view} /> : null}
       {view.invite ? <InviteCard ctx={ctx} invite={view.invite} /> : null}
       {!view.plan.public ? null : ctx.billing ? null : view.requested ? (
@@ -1941,7 +1994,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
         </div>
       )}
       {/* A special plan from the admin (e.g. unlimited) has nothing to switch to. */}
-      <div data-interval="month" data-interval-root hidden={!view.plan.public}>
+      <div id="plans" data-interval="month" data-interval-root hidden={!view.plan.public}>
         <div class="row between">
           <h2>{t('app.billing.plans')}</h2>
           <fieldset class="billing-switch">

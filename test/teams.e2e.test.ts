@@ -250,7 +250,7 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     expect(list).toContain(`href="${teamPage}"`);
     const page = await (await people.ann.browser.request(teamPage)).text();
     expect(page).toContain(teamUrl);
-    expect(page).toContain(`claude mcp add --transport http manyplug-${slug} ${teamUrl}`);
+    expect(page).toContain(`claude mcp add --transport http --scope user manyplug-${slug} ${teamUrl}`);
 
     // The address is its own OAuth protected resource, so AI apps sign in to the team, not to /mcp.
     const meta = await fetch(`${hub.baseUrl}/.well-known/oauth-protected-resource/mcp/team/${slug}`);
