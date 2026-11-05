@@ -45,6 +45,7 @@ export type AppSection =
   | 'admin'
   | 'admin-users'
   | 'admin-revenue'
+  | 'admin-analytics'
   | 'admin-audit'
   | 'admin-errors'
   | 'admin-system';
@@ -76,6 +77,13 @@ const NAV: {
   { id: 'security', href: '/security', icon: 'lock', key: 'app.nav.security', group: 'account' },
   { id: 'settings', href: '/app/settings', icon: 'settings', key: 'app.nav.settings', group: 'account' },
   { id: 'admin', href: '/admin', icon: 'chart', key: 'admin.nav.overview', group: 'admin' },
+  {
+    id: 'admin-analytics',
+    href: '/admin/analytics',
+    icon: 'activity',
+    key: 'admin.nav.analytics',
+    group: 'admin',
+  },
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
   { id: 'admin-revenue', href: '/admin/revenue', icon: 'card', key: 'admin.nav.revenue', group: 'admin' },
   { id: 'admin-audit', href: '/admin/audit', icon: 'book', key: 'admin.nav.audit', group: 'admin' },

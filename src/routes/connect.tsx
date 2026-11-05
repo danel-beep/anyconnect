@@ -89,6 +89,9 @@ export function connectRoutes() {
     const connectorId = c.req.param('connectorId');
     const connector = await s.connectors.get(workspace.id, connectorId);
     if (!connector) throw badRequest(`Unknown service "${connectorId}"`);
+    // Someone set out to connect a service; accounts created show how many got there.
+    if (!q('account'))
+      s.analytics.track('connect.start', s.connectors.builtin.includes(connector) ? connectorId : 'custom');
 
     const via = q('via') === 'oauth' ? 'oauth' : await s.admin.connectVia(workspace.id, connector);
     if (via === 'form' || q('via') === 'form') {

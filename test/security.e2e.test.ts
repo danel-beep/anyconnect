@@ -413,6 +413,16 @@ describe('data protection in the running hub', () => {
     await webhook(903, '/start Expired-Code_123');
     expect(String(last(903).body.text)).toContain('invalid or expired');
     expect(last(903).body.reply_markup).toBeUndefined();
+
+    // Starts are counted per campaign for the analytics funnel; a stale code is not a start.
+    await s.analytics.flush();
+    expect(await s.analytics.eventTotals(['bot.start'])).toEqual(
+      expect.arrayContaining([
+        { name: 'bot.start', key: 'tg_ai_1', count: 1 },
+        { name: 'bot.start', key: 'none', count: 1 },
+      ]),
+    );
+    expect((await s.analytics.eventTotals(['bot.start'])).length).toBe(2);
   });
 
   it('runs actions after an undo window unless the user cancels them', async () => {

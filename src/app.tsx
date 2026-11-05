@@ -4,6 +4,7 @@ import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
 import { adminRoutes } from './routes/admin.js';
 import { aiAppRoutes } from './routes/ai-apps.js';
+import { pageAnalytics } from './routes/analytics.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
 import { billingRoutes } from './routes/billing.js';
@@ -67,6 +68,8 @@ export function createApp(services: Services) {
   // Pages, styles, scripts, feeds and llms.txt go out gzipped (a page shrinks to about a fifth).
   // MCP, API and OAuth responses are JSON or event streams and stay as they are.
   app.use('*', compress({ encoding: 'gzip', contentTypeFilter: COMPRESSIBLE }));
+  // Counts served pages into an in-memory buffer after they are rendered (docs/ANALYTICS.md).
+  app.use('*', pageAnalytics());
 
   // Liveness: the process answers. Cheap on purpose (the platform restarts the instance when it
   // fails, which does not help when the database is down).

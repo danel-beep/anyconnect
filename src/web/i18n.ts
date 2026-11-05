@@ -1,4 +1,5 @@
 import { accountEn, accountRu } from './i18n/account.js';
+import { analyticsEn, analyticsRu } from './i18n/analytics.js';
 import { appEn, appRu } from './i18n/app.js';
 import { appsEn, appsRu } from './i18n/apps.js';
 import { authEn, authRu } from './i18n/auth.js';
@@ -224,6 +225,7 @@ const en = {
   ...profilesEn,
   ...appsEn,
   ...botEn,
+  ...analyticsEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -441,6 +443,7 @@ const ru: Record<Key, string> = {
   ...profilesRu,
   ...appsRu,
   ...botRu,
+  ...analyticsRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

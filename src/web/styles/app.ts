@@ -397,4 +397,36 @@ select.narrow{max-width:320px}
 .filter-links a[aria-current]{border-color:var(--accent);color:var(--accent-ink)}
 .jobs-table td{vertical-align:top}
 @media (max-width:640px){.error-head{flex-direction:column}}
+/* Admin analytics */
+.nav-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;margin:0 0 16px}
+.nav-tabs::-webkit-scrollbar{display:none}
+.nav-tabs .tab{display:inline-flex;align-items:center;color:var(--muted);text-decoration:none;white-space:nowrap}
+.nav-tabs .tab:hover{color:var(--text)}
+.nav-tabs .tab[aria-current=page]{color:var(--text);border-bottom-color:var(--accent)}
+.an-controls{align-items:center}
+.seg{display:inline-flex;gap:6px;flex-wrap:wrap}
+.an-filter{text-decoration:none;gap:6px}
+.an-filter svg{width:12px;height:12px}
+.top-list.an-list .bar{grid-template-columns:minmax(0,1fr) 90px 52px 44px}
+.top-list .bar .num{text-align:right}
+.an-strong{font-weight:640;color:var(--accent-ink)}
+.an-bad{color:var(--danger)}
+.an-funnel{display:flex;flex-direction:column;gap:10px;margin:8px 0 12px}
+.an-funnel .bar{display:grid;grid-template-columns:minmax(120px,220px) minmax(0,1fr) 70px 56px;gap:12px;align-items:center;font-size:14px}
+.an-funnel .meter{height:14px}
+.an-funnel .num{text-align:right}
+.an-cohorts td,.an-cohorts th{padding:8px 10px;font-size:13px}
+.an-cohorts td[class*=heat-]{border-left:1px solid var(--card)}
+.heat-1{background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.heat-2{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.heat-3{background:color-mix(in srgb,var(--accent) 26%,transparent)}
+.heat-4{background:color-mix(in srgb,var(--accent) 34%,transparent)}
+.heat-5{background:color-mix(in srgb,var(--accent) 42%,transparent)}
+.heat-6{background:color-mix(in srgb,var(--accent) 50%,transparent)}
+.heat-7{background:color-mix(in srgb,var(--accent) 58%,transparent)}
+.heat-8{background:color-mix(in srgb,var(--accent) 66%,transparent)}
+.heat-9{background:color-mix(in srgb,var(--accent) 74%,transparent)}
+.heat-10{background:color-mix(in srgb,var(--accent) 82%,transparent)}
+.an-note{margin-top:8px}
+@media (max-width:640px){.top-list.an-list .bar{grid-template-columns:minmax(0,1fr) 48px 40px 36px}.an-funnel .bar{grid-template-columns:minmax(0,1fr) 60px 52px 48px}}
 `;
