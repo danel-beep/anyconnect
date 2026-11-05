@@ -23,12 +23,15 @@ import intercom from './builtin/intercom.js';
 import jira from './builtin/jira.js';
 import linear from './builtin/linear.js';
 import mailchimp from './builtin/mailchimp.js';
+import miro from './builtin/miro.js';
 import monday from './builtin/monday.js';
 import notion from './builtin/notion/index.js';
 import outlook from './builtin/outlook.js';
 import pipedrive from './builtin/pipedrive.js';
+import sendgrid from './builtin/sendgrid.js';
 import sentry from './builtin/sentry.js';
 import slack from './builtin/slack.js';
+import smartsheet from './builtin/smartsheet.js';
 import stripe from './builtin/stripe.js';
 import { createTelegramConnector } from './builtin/telegram.js';
 import todoist from './builtin/todoist.js';
@@ -39,6 +42,7 @@ import webflow from './builtin/webflow.js';
 import { createWhatsAppConnector } from './builtin/whatsapp.js';
 import wordpress from './builtin/wordpress.js';
 import zendesk from './builtin/zendesk.js';
+import zoom from './builtin/zoom.js';
 import type { MessagingPort } from './messaging.js';
 import { ConnectorRegistry } from './registry.js';
 import { ConnectorError } from './sdk.js';
@@ -100,6 +104,10 @@ export function createBuiltinRegistry(deps: BuiltinDeps = { messaging: NO_MESSAG
     .register(brevo)
     .register(calcom)
     .register(webflow)
+    .register(zoom)
+    .register(miro)
+    .register(sendgrid)
+    .register(smartsheet)
     .register(createTelegramConnector(deps.messaging))
     .register(createWhatsAppConnector(deps.messaging));
 }

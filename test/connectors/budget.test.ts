@@ -54,6 +54,10 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   brevo: { total: 1280, tool: 280 },
   calcom: { total: 960, tool: 295 },
   webflow: { total: 1660, tool: 270 },
+  zoom: { total: 1690, tool: 410 },
+  miro: { total: 1400, tool: 280 },
+  sendgrid: { total: 1450, tool: 300 },
+  smartsheet: { total: 1380, tool: 335 },
   telegram: { total: 2050, tool: 400 },
   // Two more tools than Telegram: message templates (list_templates, send_template).
   whatsapp: { total: 2500, tool: 400 },
@@ -80,6 +84,7 @@ function account(connectorId: string): AccountRow {
     updatedAt: now,
     lastUsedAt: null,
     checkedAt: null,
+    reauthNotifiedAt: null,
   };
 }
 

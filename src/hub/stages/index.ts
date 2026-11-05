@@ -1,4 +1,5 @@
 import type { Db } from '../../db/client.js';
+import type { CircuitBreaker } from '../../lib/circuit-breaker.js';
 import type { RateLimiter } from '../../lib/rate-limit.js';
 import type { Logger } from '../../logger.js';
 import type { StageMap } from '../executor.js';
@@ -6,6 +7,7 @@ import type { IdempotencyStore } from '../idempotency.js';
 import type { QuotaGate } from '../quota.js';
 import type { UsageMeter } from '../usage.js';
 import { auditStage } from './audit.js';
+import { circuitStage } from './circuit.js';
 import { confirmFloorStage } from './confirm-floor.js';
 import { idempotencyStage } from './idempotency.js';
 import { limitsStage } from './limits.js';
@@ -25,6 +27,7 @@ export function defaultStages(deps: {
   db: Db;
   logger: Logger;
   rateLimiter: RateLimiter;
+  circuitBreaker?: CircuitBreaker;
   idempotency: IdempotencyStore;
   idempotencyWindowMs: number;
   maxResultTokens: number;
@@ -38,6 +41,7 @@ export function defaultStages(deps: {
     risk: riskStage,
     confirm: confirmFloorStage,
     limits: limitsStage({ rateLimiter: deps.rateLimiter }),
+    ...(deps.circuitBreaker ? { circuit: circuitStage(deps.circuitBreaker) } : {}),
     idempotency: idempotencyStage({ store: deps.idempotency, windowMs: deps.idempotencyWindowMs }),
     shape: shapeStage(deps),
   };

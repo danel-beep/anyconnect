@@ -705,6 +705,59 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       });
     });
 
+    it('tracks delivery of sent messages from status webhooks', async () => {
+      const account = await addNumber();
+      await postWhatsApp(account.id, inbound('wamid.Q', 'Is the order ready?'));
+      const [chat] = json(await call('whatsapp_list_chats', {})).chats;
+      const first = json(await call('whatsapp_send', { chat: chat.id, text: 'Yes, ready' }));
+      const second = json(await call('whatsapp_send', { chat: chat.id, text: 'Pick it up today' }));
+      const sends = apis.calls.filter(
+        (c) => c.path === '/v23.0/1111111111/messages' && c.body?.type === 'text',
+      );
+      expect(sends).toHaveLength(2);
+      expect([first.status, second.status]).toEqual(['sent', 'sent']);
+      const status = (id: string, state: string, errors?: unknown[]) => ({
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: '1111111111' },
+                  statuses: [
+                    { id, status: state, recipient_id: '79991234567', ...(errors ? { errors } : {}) },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      });
+      // Status webhooks name messages by WhatsApp's id (wamid), as stored for the sent messages.
+      const external = async (messageId: string) =>
+        (await hub.services.messaging.store.getMessage(account.id, messageId))!.body.externalId;
+      const a = await external(first.id);
+      const b = await external(second.id);
+      // Out of order: read arrives before delivered and must not be undone.
+      await postWhatsApp(account.id, status(a, 'read'));
+      await postWhatsApp(account.id, status(a, 'delivered'));
+      await postWhatsApp(account.id, status(b, 'failed', [{ code: 131026, title: 'Message undeliverable' }]));
+      // Statuses from another number of the business account are ignored.
+      const other = status(b, 'read');
+      other.entry[0]!.changes[0]!.value.metadata.phone_number_id = '999';
+      await postWhatsApp(account.id, other);
+
+      const read = json(await call('whatsapp_read_chat', { chat: chat.id }));
+      const mine = read.messages.filter((m: { direction: string }) => m.direction === 'out');
+      expect(
+        mine.map((m: { delivery?: string; delivery_error?: string }) => [m.delivery, m.delivery_error]),
+      ).toEqual([
+        ['read', undefined],
+        ['failed', 'Message undeliverable'],
+      ]);
+    });
+
     it('refuses audio with text before queueing it', async () => {
       await addNumber();
       const result = await call('whatsapp_send', {

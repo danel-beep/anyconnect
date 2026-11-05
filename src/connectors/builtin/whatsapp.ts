@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   type AttachmentKind,
   DeliveryError,
+  type DeliveryUpdate,
   type DirectTransport,
   type InboundAttachment,
   type InboundMessage,
@@ -152,11 +153,18 @@ interface WaMessage {
   reaction?: { emoji?: string; message_id?: string };
   context?: { id?: string };
 }
+interface WaStatus {
+  id: string;
+  status: string;
+  recipient_id: string;
+  errors?: { code?: number; title?: string; message?: string; error_data?: { details?: string } }[];
+}
 interface WaValue {
   messaging_product?: string;
   metadata?: { phone_number_id?: string; display_phone_number?: string };
   contacts?: { wa_id: string; profile?: { name?: string } }[];
   messages?: WaMessage[];
+  statuses?: WaStatus[];
 }
 interface WaWebhook {
   object?: string;
@@ -199,6 +207,37 @@ function waText(message: WaMessage): string {
     ),
   ];
   return parts.filter(Boolean).join(' ');
+}
+
+/** Delivery reports of the number's own messages (sent, delivered, read, failed with the reason). */
+export function cloudWebhookToStatuses(
+  payload: WaWebhook,
+  ownPhoneNumberId: string | undefined,
+): DeliveryUpdate[] {
+  const out: DeliveryUpdate[] = [];
+  for (const entry of payload.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const value = change.value;
+      if (change.field !== 'messages' || !value?.statuses) continue;
+      const number = value.metadata?.phone_number_id;
+      if (ownPhoneNumberId && number && number !== ownPhoneNumberId) continue;
+      for (const status of value.statuses) {
+        if (!['sent', 'delivered', 'read', 'failed'].includes(status.status)) continue;
+        const error = status.errors?.[0];
+        out.push({
+          chatExternalId: status.recipient_id,
+          messageExternalId: status.id,
+          state: status.status as DeliveryUpdate['state'],
+          ...(error
+            ? {
+                error: [error.title ?? error.message, error.error_data?.details].filter(Boolean).join(': '),
+              }
+            : {}),
+        });
+      }
+    }
+  }
+  return out;
 }
 
 export function cloudWebhookToMessages(
@@ -587,6 +626,8 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
       }
       const messages = cloudWebhookToMessages(payload, ctx.config.phoneNumberId);
       if (messages.length) await hook.ingest(messages);
+      const statuses = cloudWebhookToStatuses(payload, ctx.config.phoneNumberId);
+      if (statuses.length) await hook.delivery(statuses);
       return { status: 200, body: 'ok' };
     },
   },

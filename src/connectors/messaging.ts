@@ -61,6 +61,20 @@ export interface MessageView {
   replyTo?: string;
   attachments: AttachmentView[];
   deleted?: boolean;
+  /** For the user's own messages, where the messenger reports it. */
+  delivery?: DeliveryState;
+  deliveryError?: string;
+}
+
+/** How far one of the user's messages got, as the messenger reports it (sent < delivered < read). */
+export type DeliveryState = 'sent' | 'delivered' | 'read' | 'failed';
+
+export interface DeliveryUpdate {
+  chatExternalId: string;
+  messageExternalId: string;
+  state: DeliveryState;
+  /** Why it failed, in the messenger's words. */
+  error?: string;
 }
 
 export interface Page<T> {
@@ -249,8 +263,10 @@ export interface WebhookHandler<TConfig = unknown, TCredentials = unknown> {
     hook: WebhookEndpoint & {
       /** Stores messages in the hub's message store (deduplicated, encrypted). */
       ingest(messages: InboundMessage[]): Promise<void>;
-      /** Records that the user's own messages were delivered/read, or that a chat was read elsewhere. */
+      /** Records that a chat was read elsewhere (on the phone). */
       markChatRead(chatExternalId: string): Promise<void>;
+      /** Records how far the user's own messages got (delivered, read, failed). */
+      delivery(updates: DeliveryUpdate[]): Promise<void>;
     },
   ): Promise<WebhookResponse>;
 }
