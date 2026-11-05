@@ -865,7 +865,7 @@ describe('website: public pages', () => {
     expect(html).toContain('id="how"');
     // CSP allows no inline styles or scripts: animation delays live in the stylesheet.
     expect(html).not.toMatch(/\sstyle="/);
-    const scripts = html.match(/<script[^>]*>/g) ?? [];
+    const scripts = html.match(/<script\b[^>]*>/gi) ?? [];
     expect(scripts.filter((s) => !s.includes(' src=') && !s.includes('application/ld+json'))).toEqual([]);
     // Content is in the markup itself; site.js only decides when it animates.
     expect(html).toContain('data-reveal');
