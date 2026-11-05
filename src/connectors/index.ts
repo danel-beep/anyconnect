@@ -16,6 +16,7 @@ import gmail from './builtin/gmail.js';
 import gcal from './builtin/google-calendar.js';
 import gdrive from './builtin/google-drive.js';
 import gsheets from './builtin/google-sheets.js';
+import harvest from './builtin/harvest.js';
 import http from './builtin/http.js';
 import hubspot from './builtin/hubspot.js';
 import imap from './builtin/imap/index.js';
@@ -25,9 +26,12 @@ import linear from './builtin/linear.js';
 import mailchimp from './builtin/mailchimp.js';
 import miro from './builtin/miro.js';
 import monday from './builtin/monday.js';
+import netlify from './builtin/netlify.js';
 import notion from './builtin/notion/index.js';
 import outlook from './builtin/outlook.js';
+import pagerduty from './builtin/pagerduty.js';
 import pipedrive from './builtin/pipedrive.js';
+import postmark from './builtin/postmark.js';
 import sendgrid from './builtin/sendgrid.js';
 import sentry from './builtin/sentry.js';
 import slack from './builtin/slack.js';
@@ -35,7 +39,9 @@ import smartsheet from './builtin/smartsheet.js';
 import stripe from './builtin/stripe.js';
 import { createTelegramConnector } from './builtin/telegram.js';
 import todoist from './builtin/todoist.js';
+import toggl from './builtin/toggl.js';
 import trello from './builtin/trello.js';
+import twilio from './builtin/twilio.js';
 import typeform from './builtin/typeform.js';
 import vercel from './builtin/vercel.js';
 import webflow from './builtin/webflow.js';
@@ -108,6 +114,12 @@ export function createBuiltinRegistry(deps: BuiltinDeps = { messaging: NO_MESSAG
     .register(miro)
     .register(sendgrid)
     .register(smartsheet)
+    .register(twilio)
+    .register(postmark)
+    .register(pagerduty)
+    .register(netlify)
+    .register(harvest)
+    .register(toggl)
     .register(createTelegramConnector(deps.messaging))
     .register(createWhatsAppConnector(deps.messaging));
 }
