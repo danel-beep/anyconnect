@@ -1,4 +1,5 @@
 import { accountEn, accountRu } from './i18n/account.js';
+import { accountPagesEn, accountPagesRu } from './i18n/account-pages.js';
 import { analyticsEn, analyticsRu } from './i18n/analytics.js';
 import { appEn, appRu } from './i18n/app.js';
 import { appsEn, appsRu } from './i18n/apps.js';
@@ -77,8 +78,6 @@ const coreEn = {
   'security.telegramOn': 'Linked: risky actions can be approved from your phone.',
   'security.telegramOff': 'Not linked: risky actions wait for your OK on the Confirmations page.',
   'security.telegramLink': 'Link Telegram',
-  'security.chat':
-    'You can also ask your AI: “Is my sign-in safe?” It can show these settings, but only you can change them, here.',
   'security.passkeys': 'Passkeys',
   'security.passkeysHint':
     'Sign in with Face ID, Touch ID, Windows Hello or a security key, without a password.',
@@ -239,6 +238,7 @@ const en = {
   ...botEn,
   ...analyticsEn,
   ...vaultEn,
+  ...accountPagesEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -304,8 +304,6 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'security.telegramOn': 'Привязан: рискованные действия можно подтверждать с телефона.',
   'security.telegramOff': 'Не привязан: рискованные действия ждут вашего «да» на странице подтверждений.',
   'security.telegramLink': 'Привязать Telegram',
-  'security.chat':
-    'Можно спросить и свой ИИ: «Мой вход хорошо защищён?» Он покажет эти настройки, но менять их можете только вы, здесь.',
   'security.passkeys': 'Ключи доступа (passkey)',
   'security.passkeysHint': 'Вход по Face ID, Touch ID, Windows Hello или аппаратному ключу — без пароля.',
   'security.passkeysNone':
@@ -467,6 +465,7 @@ const ru: Record<Key, string> = {
   ...botRu,
   ...analyticsRu,
   ...vaultRu,
+  ...accountPagesRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

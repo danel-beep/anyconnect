@@ -1,4 +1,5 @@
 import { FONT_FACES, MONO, SANS } from './assets.js';
+import { ACCOUNT_CSS } from './styles/account.js';
 import { APP_SHELL_CSS } from './styles/app.js';
 import { BRAND_CSS } from './styles/brands.js';
 import { CONNECT_CSS } from './styles/connect.js';
@@ -277,5 +278,6 @@ export const APP_CSS = [
   APP_SHELL_CSS,
   CONNECT_CSS,
   PROFILES_CSS,
+  ACCOUNT_CSS,
   BRAND_CSS,
 ].join('\n');

@@ -2,7 +2,7 @@ import type { FC } from 'hono/jsx';
 import type { Translate } from './i18n.js';
 import { Layout, PasskeyForm } from './pages.js';
 import { qrMatrix } from './qr.js';
-import { fmtAgo, fmtDate, Icon, ServiceLogo } from './ui.js';
+import { AskAi, fmtAgo, fmtDate, Icon, type IconName, SectionHead, ServiceLogo } from './ui.js';
 
 /** Second step of the sign-in: TOTP / recovery code form and, when the user has one, a passkey. */
 export const VerifyPage: FC<{
@@ -188,13 +188,16 @@ const VaultCard: FC<{ t: Translate; lang: string; vault: VaultView; Hidden: FC }
   Hidden,
 }) => (
   <div class="card" id="vault">
-    <h2>
-      {t('vault.title')}{' '}
-      <span class={vault.open ? 'badge ok' : 'badge'}>
-        {vault.open ? t('vault.open') : t('vault.locked')}
-      </span>
-    </h2>
-    <p class="small muted">{t('vault.hint')}</p>
+    <SectionHead
+      icon="lock"
+      title={t('vault.title')}
+      hint={t('vault.hint')}
+      aside={
+        <span class={vault.open ? 'badge ok' : 'badge'}>
+          {vault.open ? t('vault.open') : t('vault.locked')}
+        </span>
+      }
+    />
     {vault.open ? (
       <>
         {vault.requests.length > 0 ? (
@@ -244,42 +247,144 @@ const VaultCard: FC<{ t: Translate; lang: string; vault: VaultView; Hidden: FC }
       </form>
     )}
 
-    <h3>
-      {t('vault.recovery')}{' '}
-      <span class="badge">{vault.recovery ? t('security.on') : t('vault.optional')}</span>
-    </h3>
-    <p class="small muted">{t('vault.recoveryHint')}</p>
-    {vault.open ? (
-      <form method="post" action="/security/vault/recovery-key">
-        <Hidden />
-        {vault.recovery ? <p class="small muted">{t('vault.recoveryReplaceHint')}</p> : null}
-        <button type="submit">
-          {vault.recovery ? t('vault.recoveryReplace') : t('vault.recoveryCreate')}
-        </button>
-      </form>
-    ) : vault.recovery ? (
-      <form method="post" action="/security/vault/unlock">
-        <Hidden />
-        <p class="small">{t('vault.lockedOr')}</p>
-        <label for="recovery-key">{t('vault.recoveryInput')}</label>
-        <input
-          id="recovery-key"
-          type="text"
-          name="recoveryKey"
-          autocomplete="off"
-          autocapitalize="characters"
-          spellcheck={false}
-          required
-        />
-        <div class="actions start">
-          <button type="submit">{t('vault.recoveryUse')}</button>
-        </div>
-      </form>
-    ) : (
-      <p class="small muted">{t('vault.lockedNoRecovery')}</p>
-    )}
+    <div class="sub-block">
+      <h3>
+        {t('vault.recovery')}{' '}
+        <span class={vault.recovery ? 'badge ok' : 'badge'}>
+          {vault.recovery ? t('security.on') : t('vault.optional')}
+        </span>
+      </h3>
+      <p class="small muted">{t('vault.recoveryHint')}</p>
+      {vault.open ? (
+        <form method="post" action="/security/vault/recovery-key">
+          <Hidden />
+          {vault.recovery ? <p class="small muted">{t('vault.recoveryReplaceHint')}</p> : null}
+          <button type="submit">
+            {vault.recovery ? t('vault.recoveryReplace') : t('vault.recoveryCreate')}
+          </button>
+        </form>
+      ) : vault.recovery ? (
+        <form method="post" action="/security/vault/unlock">
+          <Hidden />
+          <p class="small">{t('vault.lockedOr')}</p>
+          <label for="recovery-key">{t('vault.recoveryInput')}</label>
+          <input
+            id="recovery-key"
+            type="text"
+            name="recoveryKey"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck={false}
+            required
+          />
+          <div class="actions start">
+            <button type="submit">{t('vault.recoveryUse')}</button>
+          </div>
+        </form>
+      ) : (
+        <p class="small muted">{t('vault.lockedNoRecovery')}</p>
+      )}
+    </div>
   </div>
 );
+
+/** One recommended protection step: done or not, and where on the page to set it up. */
+interface ProtectionStep {
+  id: string;
+  icon: IconName;
+  title: string;
+  why: string;
+  done: boolean;
+}
+
+function protectionSteps(t: Translate, view: SecurityView): ProtectionStep[] {
+  const steps: ProtectionStep[] = [
+    {
+      id: 'totp',
+      icon: 'clock',
+      title: t('security.step.totp'),
+      why: t('security.step.totpWhy'),
+      done: view.totp.enabled,
+    },
+    {
+      id: 'passkeys',
+      icon: 'key',
+      title: t('security.step.passkey'),
+      why: t('security.step.passkeyWhy'),
+      done: view.passkeys.length > 0,
+    },
+    {
+      id: 'recovery',
+      icon: 'hash',
+      title: t('security.step.codes'),
+      why: t('security.step.codesWhy'),
+      done: view.hasFactor && view.recoveryCodes > 0,
+    },
+  ];
+  if (view.vault) {
+    steps.push({
+      id: 'vault',
+      icon: 'lock',
+      title: t('security.step.vaultKey'),
+      why: t('security.step.vaultKeyWhy'),
+      done: view.vault.recovery,
+    });
+  }
+  return steps;
+}
+
+/**
+ * The top of the page: how well the account is protected, as a checklist that links to each card,
+ * plus requests to paste into the AI (it can check these settings, not change them).
+ */
+const ProtectionCard: FC<{ t: Translate; view: SecurityView }> = ({ t, view }) => {
+  const steps = protectionSteps(t, view);
+  const done = steps.filter((s) => s.done).length;
+  const level = done === steps.length ? 'strong' : view.hasFactor ? 'good' : 'basic';
+  return (
+    <div class="card" id="protection">
+      <div class="protect-head">
+        <div class="grow">
+          <h2>
+            {t('security.score.title')}: <span class={`level-${level}`}>{t(`security.score.${level}`)}</span>
+          </h2>
+          <p class="muted">{t(`security.score.lead.${level}`)}</p>
+        </div>
+        <span class="small muted">{t('security.score.done', { done, total: steps.length })}</span>
+      </div>
+      <div class="seg-bar" aria-hidden="true">
+        {steps.map((s) => (
+          <span class={s.done ? 'seg on' : 'seg'} />
+        ))}
+      </div>
+      <ol class="step-list">
+        {steps.map((s) => (
+          <li>
+            <a class={s.done ? 'step-item done' : 'step-item'} href={`#${s.id}`}>
+              <span class="step-mark">
+                <Icon name={s.done ? 'check' : s.icon} />
+              </span>
+              <span class="grow">
+                <strong>{s.title}</strong>
+                <span class="small muted">{s.why}</span>
+              </span>
+              <span class={s.done ? 'badge ok' : 'badge accent'}>
+                {s.done ? t('security.step.done') : t('security.step.todo')}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ol>
+      <AskAi
+        t={t}
+        id="ask-security"
+        title={t('security.ask.title')}
+        hint={t('security.ask.hint')}
+        prompts={[t('security.ask.1'), t('security.ask.2')]}
+      />
+    </div>
+  );
+};
 
 export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }> = ({ t, lang, view }) => {
   const hidden = { csrf: view.csrf, ...(view.next ? { next: view.next } : {}) };
@@ -319,18 +424,23 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
         </div>
       ) : null}
 
+      <ProtectionCard t={t} view={view} />
+
       {/* Until the sign-in is confirmed, every control here is visibly off rather than failing on click. */}
       <fieldset class="lock-group" disabled={!view.recent}>
         {view.vault ? <VaultCard t={t} lang={lang} vault={view.vault} Hidden={Hidden} /> : null}
 
         <div class="card" id="totp">
-          <h2>
-            {t('security.totp')}{' '}
-            <span class={view.totp.enabled ? 'badge ok' : 'badge'}>
-              {view.totp.enabled ? t('security.on') : t('security.off')}
-            </span>
-          </h2>
-          <p class="small muted">{t('security.totpHint')}</p>
+          <SectionHead
+            icon="clock"
+            title={t('security.totp')}
+            hint={t('security.totpHint')}
+            aside={
+              <span class={view.totp.enabled ? 'badge ok' : 'badge'}>
+                {view.totp.enabled ? t('security.on') : t('security.off')}
+              </span>
+            }
+          />
           {view.totp.enabled ? (
             <form method="post" action="/security/totp/disable">
               <Hidden />
@@ -377,8 +487,18 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
         </div>
 
         <div class="card" id="passkeys">
-          <h2>{t('security.passkeys')}</h2>
-          <p class="small muted">{t('security.passkeysHint')}</p>
+          <SectionHead
+            icon="key"
+            title={t('security.passkeys')}
+            hint={t('security.passkeysHint')}
+            aside={
+              view.passkeys.length > 0 ? (
+                <span class="badge ok">{t('security.on')}</span>
+              ) : (
+                <span class="badge">{t('security.off')}</span>
+              )
+            }
+          />
           {view.passkeys.length === 0 ? (
             <p class="muted">{t('security.passkeysNone')}</p>
           ) : (
@@ -406,8 +526,7 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
         </div>
 
         <div class="card" id="recovery">
-          <h2>{t('security.recovery')}</h2>
-          <p class="small muted">{t('security.recoveryHint')}</p>
+          <SectionHead icon="hash" title={t('security.recovery')} hint={t('security.recoveryHint')} />
           {view.hasFactor ? (
             <>
               <p>
@@ -427,9 +546,12 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
       </fieldset>
 
       <div class="card" id="more">
-        <h2>{t('security.more')}</h2>
+        <SectionHead icon="eye" title={t('security.more')} />
         <ul class="plain">
           <li>
+            <span class="row-icon">
+              <Icon name="globe" />
+            </span>
             <span class="grow">
               <strong>{t('security.browsers')}</strong>
               <div class="small muted">{t('security.browsersN', { n: view.sessions })}</div>
@@ -440,6 +562,9 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
           </li>
           {view.telegram ? (
             <li>
+              <span class="row-icon">
+                <Icon name="bell" />
+              </span>
               <span class="grow">
                 <strong>{t('security.telegram')}</strong>
                 <div class="small muted">
@@ -452,7 +577,6 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
             </li>
           ) : null}
         </ul>
-        <p class="hint">{t('security.chat')}</p>
       </div>
     </Layout>
   );
