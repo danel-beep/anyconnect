@@ -39,6 +39,7 @@ function account(connectorId: string, name: string): AccountRow {
     updatedAt: now,
     lastUsedAt: null,
     checkedAt: null,
+    reauthNotifiedAt: null,
   };
 }
 
