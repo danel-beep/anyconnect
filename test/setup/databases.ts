@@ -32,12 +32,30 @@ export function quoteIdent(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-const NO_SERVER = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'EHOSTUNREACH']);
+const NO_SERVER = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOENT', // a Unix socket path that does not exist
+]);
 
-/** True when the error means "no Postgres to talk to", as opposed to a refusal by a server. */
-export function isNoServer(error: unknown): boolean {
+/** No Postgres to talk to (as opposed to a server that refused): thrown only while connecting. */
+export class NoServerError extends Error {
+  constructor(cause: unknown) {
+    super(`No Postgres server: ${(cause as Error).message}`, { cause });
+  }
+}
+
+function isNoServer(error: unknown): boolean {
   const { code, message } = error as { code?: string; message?: string };
-  return (code !== undefined && NO_SERVER.has(code)) || /timeout/i.test(message ?? '');
+  // pg reports its own connection timeout without a code.
+  return (
+    (code !== undefined && NO_SERVER.has(code)) || /connection timeout|timeout expired/i.test(message ?? '')
+  );
 }
 
 /**
@@ -56,7 +74,7 @@ export async function createDatabaseIfMissing(url: string | URL, via: (string | 
     try {
       await client.connect();
     } catch (error) {
-      if (isNoServer(error)) throw error;
+      if (isNoServer(error)) throw new NoServerError(error);
       lastError = error; // e.g. no access to this database: try the next one
       continue;
     }

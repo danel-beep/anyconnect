@@ -17,7 +17,7 @@ N−1) работает со своей базой рядом с `TEST_DATABASE_
   фиксированное. Так же с портами: только `port: 0` или `freePort()` из `test/helpers.ts`, никаких
   постоянных портов и других общих для машины ресурсов.
 - Базы исполнителей остаются между прогонами (так быстрее). Удалить их:
-  `psql -Atc "select 'drop database ' || quote_ident(datname) || ';' from pg_database where datname like 'manyplug_test_w%'" | psql`.
+  `psql -Atc "select 'drop database ' || quote_ident(datname) || ';' from pg_database where datname ~ '^manyplug_test_w[0-9]'" | psql`.
 - Отладить файлы по одному: `npx vitest run --no-file-parallelism <файлы>`.
 
 **Быстрая проверка во время работы:** `npm run check:fast` — lint, типы и только те тесты, которые

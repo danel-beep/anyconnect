@@ -11,7 +11,7 @@ export default defineConfig({
     maxWorkers: Math.max(1, Math.min(8, availableParallelism() - 1)),
     // `vitest --changed` (npm run check:fast) follows imports; migrations are read from disk at
     // run time, so a change to them reruns everything.
-    forceRerunTriggers: [...configDefaults.forceRerunTriggers, 'drizzle/**', 'test/setup/**'],
+    forceRerunTriggers: [...configDefaults.forceRerunTriggers, '**/drizzle/**', '**/test/setup/**'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },

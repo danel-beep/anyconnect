@@ -1,8 +1,11 @@
+import { openSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   createDatabaseIfMissing,
   DEFAULT_TEST_DATABASE_URL,
   databaseName,
-  isNoServer,
+  NoServerError,
   siblingDatabaseUrl,
 } from './databases.js';
 
@@ -29,12 +32,25 @@ if (worker && !databaseName(current).endsWith(`_w${worker}`)) {
   try {
     await createDatabaseIfMissing(url, [current]);
   } catch (error) {
-    if (!isNoServer(error)) {
+    if (!(error instanceof NoServerError) && firstTimeThisRun(`db-${databaseName(url)}`)) {
       console.warn(
         `[test setup] Could not create the test database "${databaseName(url)}": ${(error as Error).message}. ` +
           'Check TEST_DATABASE_URL, create the database yourself or let the test role create databases (CREATEDB). ' +
           'Tests that use Postgres will fail.',
       );
     }
+  }
+}
+
+/**
+ * Every test file runs this setup in a new process; a warning repeated for each of them would bury
+ * the test results. Workers are children of the Vitest process, so its pid names the run.
+ */
+function firstTimeThisRun(key: string): boolean {
+  try {
+    openSync(join(tmpdir(), `manyplug-test-setup-${process.ppid}-${key}`), 'wx');
+    return true;
+  } catch {
+    return false;
   }
 }
