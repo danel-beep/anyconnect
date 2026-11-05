@@ -33,10 +33,14 @@ import {
   type Catalog,
   type CatalogAccount,
   type CatalogAllow,
+  type CatalogTeam,
   type CatalogTool,
   type ClientProfile,
   DEFAULT_PROFILE,
   describeAccount,
+  MY_ACCOUNTS,
+  ownAccounts,
+  ownerText,
 } from './catalog.js';
 import { restrictionsFor } from './client-policies.js';
 import { searchTools } from './discovery.js';
@@ -118,6 +122,8 @@ export interface HubDeps {
   clientPolicies?: readonly string[];
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
+  /** Team workspaces: who is calling and whose each account is (labels, `account: "mine"`). */
+  team?: (principal: Principal) => Promise<CatalogTeam | undefined>;
 }
 
 export interface CallOptions {
@@ -183,13 +189,14 @@ export class Hub {
 
   async getCatalog(principal: Principal): Promise<Catalog> {
     const { workspaceId } = principal;
-    const [workspace, connectors, accounts, allow, usage, client] = await Promise.all([
+    const [workspace, connectors, accounts, allow, usage, client, team] = await Promise.all([
       getWorkspace(this.deps.db, workspaceId),
       this.deps.connectors.list(workspaceId),
       this.deps.accounts.list(workspaceId),
       this.deps.catalogFilter?.(principal),
       this.usage(workspaceId),
       this.clientProfile(principal),
+      this.deps.team?.(principal),
     ]);
     if (!workspace) throw notFound('Workspace');
     return buildCatalog({
@@ -201,6 +208,7 @@ export class Hub {
       usage,
       ...(allow ? { allow } : {}),
       ...(this.deps.setup ? { setup: this.deps.setup.connector } : {}),
+      ...(team ? { team } : {}),
     });
   }
 
@@ -459,6 +467,7 @@ export class Hub {
           label: a.label,
           description: a.description ?? undefined,
           identity: typeof a.metadata.identity === 'string' ? a.metadata.identity : undefined,
+          ...(catalog.team?.owners[a.id] ? { owner: ownerText(catalog.team.owners[a.id]) } : {}),
           enabled: a.enabled,
           status: a.enabled ? a.status : 'disabled',
           statusMessage: a.statusMessage ?? undefined,
@@ -560,7 +569,20 @@ export class Hub {
     // 1. Pick the account(s).
     let targets: CatalogAccount[];
     if (!accountArgument) targets = accounts.slice(0, 1);
-    else if (isEmpty(requested) || requested === ALL_ACCOUNTS) {
+    else if (requested === MY_ACCOUNTS && !accounts.some((a) => a.name === MY_ACCOUNTS)) {
+      const own = ownAccounts(accounts);
+      if (own.length === 0) {
+        return reject(
+          `None of these accounts is the user’s own; pass "${ACCOUNT_ARGUMENT}" with one of: ${accounts.map(describeAccount).join('; ')}.`,
+        );
+      }
+      if (own.length > 1 && !fanOut) {
+        return reject(
+          `The user has several accounts here; pass "${ACCOUNT_ARGUMENT}" with one of: ${own.map(describeAccount).join('; ')}.`,
+        );
+      }
+      targets = own;
+    } else if (isEmpty(requested) || requested === ALL_ACCOUNTS) {
       if (accounts.length === 1) targets = accounts;
       else if (fanOut) targets = accounts;
       else {
@@ -653,7 +675,16 @@ export class Hub {
       impl.accounts.map((account) => ({ impl, account })),
     );
     let targets = all;
-    if (!isEmpty(requested) && requested !== ALL_ACCOUNTS) {
+    if (requested === MY_ACCOUNTS) {
+      targets = all.filter(({ account }) => account.owner?.kind === 'self');
+      if (targets.length === 0) {
+        return {
+          rejected: errorResult(
+            `None of these accounts is the user’s own. Use one of: ${all.map(({ impl, account }) => accountKey(impl.connectorId, account.name)).join(', ')}.`,
+          ),
+        };
+      }
+    } else if (!isEmpty(requested) && requested !== ALL_ACCOUNTS) {
       const value = String(requested);
       targets = all.filter(
         ({ impl, account }) =>
@@ -922,28 +953,31 @@ export class Hub {
     if (account && error instanceof ConnectorError && error.kind === 'auth') {
       // Flag the account so the user sees in the panel (and gets told) that it must be reconnected.
       await this.deps.accounts.markStatus(account.id, 'needs_reauth', error.message).catch(() => {});
-      const link = await this.reconnectLink(call.principal.workspaceId, connector.id, account.id);
+      const fix = await this.reconnectHint(call.principal, connector.id, account.id);
       return errorResult(
         `Sign-in to ${connector.name} for account "${account.name}" stopped working: ${error.message.replace(/\.+$/, '')}. ` +
-          'This will not fix itself: the user has to sign in again' +
-          (link ? `, here: ${link}` : ` from the ${BRAND.name} dashboard (Accounts)`) +
-          '. Tell the user, and do not retry this account until they have.',
+          `This will not fix itself: ${fix}. Tell the user, and do not retry this account until it is signed in again.`,
         'auth',
       );
     }
     return this.toErrorResult(error, call.tool.name, connector.id);
   }
 
-  /** The link that reconnects an account, if the hub can make one (setup tools available). */
-  private async reconnectLink(
-    workspaceId: string,
-    service: string,
-    accountId: string,
-  ): Promise<string | undefined> {
+  /**
+   * Who signs the account in again, and where: the caller's own link when they may (setup tools
+   * available). In a team only an account's owner can (a team account: the team's admins).
+   */
+  private async reconnectHint(principal: Principal, service: string, accountId: string): Promise<string> {
+    const dashboard = `the user has to sign in again from the ${BRAND.name} dashboard (Accounts)`;
+    const admin = this.deps.setup?.admin;
+    if (!admin) return dashboard;
     try {
-      return (await this.deps.setup?.admin.connectLink(workspaceId, { service, reconnect: accountId }))?.url;
-    } catch {
-      return undefined; // e.g. the service's sign-in app was removed: the dashboard explains it
+      const link = await admin.connectLink(principal, { service, reconnect: accountId });
+      return `the user has to sign in again, here: ${link.url}`;
+    } catch (error) {
+      if (error instanceof AppError && error.status === 403)
+        return 'whoever manages the account has to sign in again (its owner; a team account, the team’s owner or an admin), so the user asks them';
+      return dashboard; // e.g. the service's sign-in app was removed: the dashboard explains it
     }
   }
 

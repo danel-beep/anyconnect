@@ -21,19 +21,24 @@ import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-
 import { CustomServiceManager } from './core/custom-services.js';
 import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
 import { AccountHealthService } from './core/health.js';
+import { getWorkspace } from './core/identity.js';
+import { isMcpSubPath } from './core/mcp-paths.js';
 import { OAuthAppService } from './core/oauth-apps.js';
 import { TokenManager } from './core/oauth-tokens.js';
 import { PasskeyService } from './core/passkeys.js';
+import type { Principal } from './core/principal.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
+import { TeamService } from './core/teams.js';
 import { TotpService } from './core/totp.js';
-import { activeUserCheck, UserService } from './core/users.js';
+import { activeUserCheck, memberCheck, UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
+import type { CatalogTeam } from './hub/catalog-types.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
 import { type IdempotencyStore, MemoryIdempotencyStore } from './hub/idempotency.js';
-import { SETUP_CONNECTOR } from './hub/setup-tools.js';
+import { SETUP_CONNECTOR, teamCatalogFilter } from './hub/setup-tools.js';
 import { PgUsageMeter, type UsageMeter } from './hub/usage.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
@@ -54,10 +59,11 @@ import { AiAppService } from './security/apps.js';
 import { UserSecurityTools, WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
+import { isTeamAdmin } from './security/members.js';
 import { NotificationChannels } from './security/notifications.js';
 import { TelegramOwnerNotifier } from './security/owner-notifier.js';
 import { PendingCallService, principalOf } from './security/pending-calls.js';
-import { PERSONA_SLUG, PersonaService } from './security/personas.js';
+import { PersonaService } from './security/personas.js';
 import { PolicyService } from './security/policy-service.js';
 import { PendingCallRunner } from './security/runner.js';
 import {
@@ -134,6 +140,8 @@ export interface Services {
   sessions: SessionService;
   /** Sign-up through external providers, roles, suspension, deletion. */
   users: UserService;
+  /** Teams: members, invitations, sharing accounts, leaving. */
+  teams: TeamService;
   /** The hub owner's admin panel: user directory, plans, extra limits, admin log. */
   adminPanel: AdminService;
   /** Counts over the audit log for the dashboard. */
@@ -216,7 +224,12 @@ export function createServices(
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
-  const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/app/billing` });
+  const entitlements = new EntitlementService({
+    db,
+    usage,
+    pricingUrl: `${config.publicUrl}/app/billing`,
+    teamsUrl: `${config.publicUrl}/app/teams`,
+  });
   const billingProvider =
     overrides.billing ??
     createBillingProvider(config.billing, {
@@ -245,6 +258,17 @@ export function createServices(
     redirectUri: `${config.publicUrl}/connect/callback`,
     logger,
   });
+  const apiTokens = new ApiTokenService(db);
+  const teams = new TeamService({
+    db,
+    accounts,
+    mcpUrl: config.mcpUrl,
+    publicUrl: config.publicUrl,
+    limits: entitlements,
+    // The OAuth server is built further down; these run only when someone leaves a team.
+    revokeGrant: (id) => oauth.revokeGrantById(id),
+    revokeToken: (workspaceId, id) => apiTokens.revoke(workspaceId, id),
+  });
   const connect = new ConnectService({
     db,
     secrets,
@@ -255,6 +279,7 @@ export function createServices(
     fetch: network.fetch,
     redirectUri: `${config.publicUrl}/connect/callback`,
     onConnected: (account) => customServices.afterAccountConnected(account),
+    permissions: teams,
     logger,
   });
   const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
@@ -294,7 +319,6 @@ export function createServices(
     db,
     () => new Map(connectors.builtin.all().map((c) => [c.id, connectorText(c, 'en').name] as const)),
   );
-  const apiTokens = new ApiTokenService(db);
   const rateLimiter = new RateLimiter();
   const circuitBreaker = new CircuitBreaker();
   const idempotency = new MemoryIdempotencyStore();
@@ -309,7 +333,7 @@ export function createServices(
     revokeGrant: (workspaceId, grantId) => oauth.revokeGrant(workspaceId, grantId),
     tokens: apiTokens,
   });
-  const policies = new PolicyService(db);
+  const policies = new PolicyService(db, async (principal) => (await teams.view(principal))?.access);
   const pendingCalls = new PendingCallService(db, secrets, { confirmationTtlMs: config.confirmations.ttlMs });
   const notificationChannels = new NotificationChannels(db);
   const telegramBot = config.telegram.botToken
@@ -369,9 +393,19 @@ export function createServices(
     apps: oauthApps,
     policies,
     aiClients,
+    teams,
     publicUrl: config.publicUrl,
     logger,
   });
+  const teamOf = async (principal: Principal): Promise<CatalogTeam | undefined> => {
+    const view = await teams.view(principal);
+    if (!view) return undefined;
+    return {
+      name: view.team.name,
+      ...(view.member ? { member: view.member.name, admin: isTeamAdmin(view.member.role) } : {}),
+      owners: view.access.owners,
+    };
+  };
   const alerts = new AccountAlerts({
     db,
     connectors,
@@ -381,11 +415,7 @@ export function createServices(
       t: translator,
       logger,
     }),
-    reconnectUrl: (workspaceId, service, accountId) =>
-      admin
-        .connectLink(workspaceId, { service, reconnect: accountId })
-        .then((link) => link.url)
-        .catch(() => `${config.publicUrl}/app/accounts/${encodeURIComponent(accountId)}`),
+    reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
     logger,
   });
   for (const job of builtinJobs({ health, alerts, customServices, status: ops.status, backups }))
@@ -400,7 +430,12 @@ export function createServices(
     setup: {
       connector: SETUP_CONNECTOR,
       admin,
-      billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
+      billing: new WorkspaceBillingTools({
+        entitlements,
+        billing,
+        publicUrl: config.publicUrl,
+        teamSlug: (workspaceId) => teams.slugOf(workspaceId),
+      }),
       profiles: new WorkspaceProfileTools(personas),
       apps: new WorkspaceAppTools(aiApps, personas),
       // Users, sessions and second factors are built further down; read only when the tool runs.
@@ -426,7 +461,8 @@ export function createServices(
     toolListTokenBudget: config.tools.listTokenBudget,
     clientPolicies: config.directories.clientPolicies,
     stages: { ...securityStages, ...overrides.stages },
-    catalogFilter: overrides.catalogFilter ?? createCatalogFilter(policies),
+    catalogFilter: overrides.catalogFilter ?? teamCatalogFilter(createCatalogFilter(policies), teamOf),
+    team: teamOf,
   });
   const pendingRunner = new PendingCallRunner({
     pending: pendingCalls,
@@ -447,20 +483,29 @@ export function createServices(
     clients,
     issuer: config.publicUrl,
     resource: config.mcpUrl,
-    subResource: PERSONA_SLUG,
+    subResource: isMcpSubPath,
     accessTokenTtlSeconds: config.oauth.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
   });
+  const userActive = activeUserCheck(db);
+  const isMember = memberCheck(db);
   const verifier = new HubTokenVerifier(
     oauth,
     apiTokens,
     config.mcpUrl,
-    async (workspaceId, personaId) => {
-      const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
-      return persona && personas.urlFor(persona.slug);
+    async ({ workspaceId, personaId }) => {
+      if (personaId) {
+        const persona = await personas.get(workspaceId, personaId).catch(() => undefined);
+        return persona && personas.urlFor(persona.slug);
+      }
+      // A token made in a team works on the team's URL only.
+      const workspace = await getWorkspace(db, workspaceId);
+      if (!workspace) return undefined;
+      return workspace.kind === 'team' && workspace.slug ? teams.teamUrl(workspace.slug) : config.mcpUrl;
     },
-    activeUserCheck(db),
+    async (principal) =>
+      (await userActive(principal.userId)) && (await isMember(principal.userId, principal.workspaceId)),
   );
   const sessions = new SessionService(db, config.sessionTtlSeconds);
   const users = new UserService({
@@ -468,6 +513,7 @@ export function createServices(
     accounts,
     oauth,
     apiTokens,
+    teams,
     adminEmails: config.site.adminEmails,
     signups: config.site.signups,
   });
@@ -535,6 +581,7 @@ export function createServices(
     telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
     users,
+    teams,
     externalLogin,
     adminPanel,
     activity,

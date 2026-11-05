@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../db/client.js';
 import { type UserRole, users, workspaceMembers, workspaces } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
@@ -76,14 +76,17 @@ export async function authenticate(
   return (await verifyPassword(password, user.passwordHash)) ? user : undefined;
 }
 
-/** The workspace a user works in by default (their first one). */
+/**
+ * The workspace a user works in by default: their personal one (the first they own), never a team
+ * they joined. Teams are reached by their own URL (`/mcp/team/<slug>`, `/app/team/<id>`).
+ */
 export async function getDefaultWorkspace(db: DbExecutor, userId: string): Promise<Workspace | undefined> {
   const [row] = await db
     .select({ workspace: workspaces })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(eq(workspaceMembers.userId, userId))
-    .orderBy(asc(workspaceMembers.createdAt))
+    .orderBy(sql`(${workspaces.kind} = 'personal') desc`, asc(workspaceMembers.createdAt))
     .limit(1);
   return row?.workspace;
 }

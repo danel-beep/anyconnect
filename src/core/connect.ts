@@ -9,7 +9,7 @@ import { oauthConnectStates } from '../db/schema.js';
 import { hashToken, type SecretBox } from '../lib/crypto.js';
 import { AppError, badRequest, forbidden } from '../lib/errors.js';
 import type { Logger } from '../logger.js';
-import { ACCOUNT_NAME, type AccountRow, type AccountService } from './accounts.js';
+import { ACCOUNT_NAME, type AccountOwnerInput, type AccountRow, type AccountService } from './accounts.js';
 import type { OAuthAppService } from './oauth-apps.js';
 import { buildAuthorizationUrl, exchangeCode, OAuthProtocolError, pkcePair } from './oauth-client.js';
 import type { TokenManager } from './oauth-tokens.js';
@@ -44,6 +44,18 @@ export const StartConnectInput = z.object({
 });
 export type StartConnectInput = z.infer<typeof StartConnectInput>;
 
+/**
+ * Who may connect accounts where. In a team a member connects their own accounts, admins also the
+ * team's, and only who manages an account reconnects it (`TeamService`); a personal workspace has
+ * one person, so anything goes.
+ */
+export interface ConnectPermissions {
+  /** Throws when `userId` may not add an account with this owner to the workspace. */
+  assertCanConnect(workspaceId: string, userId: string, owner: AccountOwnerInput | undefined): Promise<void>;
+  /** Throws when `userId` may not reconnect or change this account. */
+  assertCanManage(workspaceId: string, userId: string, account: AccountRow): Promise<void>;
+}
+
 export interface ConnectResult {
   account: AccountRow;
   created: boolean;
@@ -65,6 +77,7 @@ export class ConnectService {
       redirectUri: string;
       /** Called after an account was connected (e.g. to list the tools of a remote MCP server). */
       onConnected?: (account: AccountRow) => Promise<void>;
+      permissions?: ConnectPermissions;
       logger: Logger;
     },
   ) {}
@@ -80,8 +93,9 @@ export class ConnectService {
     return connector;
   }
 
+  /** `who.owner`: in a team, whose the new account will be (see `AccountService.create`). */
   async start(
-    who: { workspaceId: string; userId: string },
+    who: { workspaceId: string; userId: string; owner?: AccountOwnerInput },
     raw: StartConnectInput,
   ): Promise<{ authorizationUrl: string; expiresAt: string }> {
     const parsed = StartConnectInput.safeParse(raw);
@@ -98,7 +112,9 @@ export class ConnectService {
     if (input.accountId) {
       const account = await this.deps.accounts.get(who.workspaceId, input.accountId);
       if (account.connectorId !== connector.id) throw badRequest('The account belongs to another service');
+      await this.deps.permissions?.assertCanManage(who.workspaceId, who.userId, account);
     } else {
+      await this.deps.permissions?.assertCanConnect(who.workspaceId, who.userId, who.owner);
       // Fail now rather than after the user went through the provider's consent screen.
       const config = connector.config.safeParse(input.config ?? {});
       if (!config.success)
@@ -133,6 +149,7 @@ export class ConnectService {
         ...(input.label ? { label: input.label } : {}),
         ...(input.description ? { description: input.description } : {}),
         ...(input.config ? { config: input.config } : {}),
+        ...(who.owner && !input.accountId ? { owner: who.owner } : {}),
       },
       appRef: app.ref,
       codeVerifierEncrypted: pkce
@@ -214,17 +231,24 @@ export class ConnectService {
 
     let account: AccountRow;
     let created = false;
+    // Checked again: the user may have left the team or lost a role while at the provider.
     if (row.accountId) {
       account = await this.deps.accounts.get(row.workspaceId, row.accountId);
+      await this.deps.permissions?.assertCanManage(row.workspaceId, userId, account);
       await this.deps.tokens.store(account.id, { providerId: provider.id, appRef: app.ref, tokens });
     } else {
-      account = await this.deps.accounts.create(row.workspaceId, {
-        connectorId: connector.id,
-        label: row.draft.label ?? connector.name,
-        ...(row.draft.name ? { name: row.draft.name } : {}),
-        ...(row.draft.description ? { description: row.draft.description } : {}),
-        ...(row.draft.config ? { config: row.draft.config } : {}),
-      });
+      await this.deps.permissions?.assertCanConnect(row.workspaceId, userId, row.draft.owner);
+      account = await this.deps.accounts.create(
+        row.workspaceId,
+        {
+          connectorId: connector.id,
+          label: row.draft.label ?? connector.name,
+          ...(row.draft.name ? { name: row.draft.name } : {}),
+          ...(row.draft.description ? { description: row.draft.description } : {}),
+          ...(row.draft.config ? { config: row.draft.config } : {}),
+        },
+        row.draft.owner,
+      );
       created = true;
       try {
         await this.deps.tokens.store(account.id, { providerId: provider.id, appRef: app.ref, tokens });

@@ -526,6 +526,7 @@ export const appEn = {
   'app.billing.focusSwitch': 'Switch to the {plan} plan',
   'app.billing.focusMonth': '{price} a month, cancel any time.',
   'app.billing.focusYear': '{price} a year, cancel any time.',
+  'app.billing.forTeams': 'Create a team',
   'app.billing.prorated': 'You pay only the difference for the rest of the current period.',
   'app.billing.freeByCancel': 'Cancel the subscription to move to Free',
   'app.billing.taxHint':
@@ -1092,6 +1093,7 @@ export const appRu: Record<AppKey, string> = {
   'app.billing.focusSwitch': 'Перейти на тариф «{plan}»',
   'app.billing.focusMonth': '{price} в месяц, отменить можно в любой момент.',
   'app.billing.focusYear': '{price} в год, отменить можно в любой момент.',
+  'app.billing.forTeams': 'Создать команду',
   'app.billing.prorated': 'Вы доплачиваете только разницу за остаток текущего периода.',
   'app.billing.freeByCancel': 'Отмените подписку, чтобы перейти на бесплатный',
   'app.billing.taxHint':

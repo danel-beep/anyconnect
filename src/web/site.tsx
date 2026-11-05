@@ -1,5 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
-import { type Limits, type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { type Metric, PLANS, type Plan } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
 import {
@@ -375,8 +375,21 @@ export const PlanCard: FC<{
     ['actions', true],
     ['accounts', true],
     ['historyDays', true],
-    ['seats', (plan.limits.seats ?? 2) > 1],
+    ['seats', plan.perSeat !== undefined || (plan.limits.seats ?? 2) > 1],
   ];
+  const perSeat = plan.perSeat;
+  const featureText = (metric: Metric): string => {
+    if (metric === 'actions' && start)
+      return t('plan.metric.actionsSteps', {
+        n: fmtNumber(lang, plan.limits.actions ?? 0),
+        steps: start.steps,
+      });
+    if (perSeat && metric === 'actions' && plan.limits.actions !== null)
+      return t('plan.metric.actionsPerSeat', { n: fmtNumber(lang, plan.limits.actions) });
+    if (perSeat && metric === 'seats')
+      return t('plan.metric.seatsRange', { min: perSeat.min, max: perSeat.max });
+    return limitText(t, lang, metric, plan.limits[metric]);
+  };
   return (
     <div class={`plan${plan.featured ? ' featured' : ''}${current ? ' current' : ''}`}>
       {plan.featured ? <span class="tag">{t('pricing.popular')}</span> : null}
@@ -388,7 +401,7 @@ export const PlanCard: FC<{
         <div class="price">
           <span class="amount when-month">${plan.priceMonthly}</span>
           <span class="amount when-year">{usd(plan.priceYearly / 12)}</span>
-          <span class="per">{t('pricing.perMonth')}</span>
+          <span class="per">{t(perSeat ? 'pricing.perSeat' : 'pricing.perMonth')}</span>
         </div>
         <div class="price-year">
           {plan.priceMonthly === 0 ? (
@@ -416,14 +429,7 @@ export const PlanCard: FC<{
         {features.map(([metric, on]) => (
           <li class={on ? undefined : 'off'}>
             {on ? <Check /> : <Icon name="minus" />}
-            <span>
-              {metric === 'actions' && start
-                ? t('plan.metric.actionsSteps', {
-                    n: fmtNumber(lang, plan.limits.actions ?? 0),
-                    steps: start.steps,
-                  })
-                : limitText(t, lang, metric, plan.limits[metric])}
-            </span>
+            <span>{featureText(metric)}</span>
           </li>
         ))}
         <li>
@@ -465,15 +471,17 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
 );
 
 const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
-  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan.
+  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan;
+  // a team plan is bought on the team's page, so it starts with creating the team.
+  const target = plan.audience === 'team' ? '/app/teams' : '/app/billing';
   const href =
     plan.priceMonthly === 0
       ? ctx.user
         ? '/app'
         : '/signup'
       : ctx.user
-        ? '/app/billing'
-        : `/signup?next=${encodeURIComponent('/app/billing')}`;
+        ? target
+        : `/signup?next=${encodeURIComponent(target)}`;
   return (
     <a class={`btn block ${plan.featured ? 'primary' : ''}`} href={href}>
       {plan.priceMonthly === 0
@@ -944,11 +952,13 @@ const COMPARE: Metric[] = ['actions', 'accounts', 'historyDays', 'seats'];
 /** Limits for features still being built: shown once, under their own heading. */
 const COMPARE_SOON: Metric[] = ['messengers', 'backgroundJobs'];
 
-const cell = (t: Translate, lang: string, metric: Metric, limits: Limits) => {
-  const v = limits[metric];
+const cell = (t: Translate, lang: string, metric: Metric, plan: Plan) => {
+  const v = plan.limits[metric];
+  if (plan.perSeat && metric === 'seats') return `${plan.perSeat.min}–${plan.perSeat.max}`;
   if (v === null) return t('pricing.unlimited');
   if (v === 0) return '—';
   if (metric === 'historyDays') return t('pricing.days', { n: v });
+  if (plan.perSeat?.scaled.includes(metric)) return t('pricing.perSeatCell', { n: fmtNumber(lang, v) });
   return fmtNumber(lang, v);
 };
 
@@ -1010,7 +1020,13 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 <tr>
                   <td>{t('pricing.price')}</td>
                   {plans.map((p) => (
-                    <td class="num">{p.priceMonthly === 0 ? t('pricing.free') : `$${p.priceMonthly}`}</td>
+                    <td class="num">
+                      {p.priceMonthly === 0
+                        ? t('pricing.free')
+                        : p.perSeat
+                          ? t('pricing.perSeatCell', { n: `$${p.priceMonthly}` })
+                          : `$${p.priceMonthly}`}
+                    </td>
                   ))}
                 </tr>
                 {COMPARE.map((metric) => (
@@ -1018,7 +1034,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                     <td>{t(`pricing.row.${metric}`)}</td>
                     {plans.map((p) => (
                       <td class="num">
-                        {cell(t, lang, metric, p.limits)}
+                        {cell(t, lang, metric, p)}
                         {metric === 'actions' && p.start ? (
                           <div class="tiny muted">
                             {t('pricing.startCell', {
@@ -1051,7 +1067,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                   <tr>
                     <td>{t(`pricing.row.${metric}`)}</td>
                     {plans.map((p) => (
-                      <td class="num">{cell(t, lang, metric, p.limits)}</td>
+                      <td class="num">{cell(t, lang, metric, p)}</td>
                     ))}
                   </tr>
                 ))}

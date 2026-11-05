@@ -25,6 +25,7 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
     createdAt: now,
     updatedAt: now,
     lastUsedAt: null,
+    ownerUserId: null,
     checkedAt: null,
     reauthNotifiedAt: null,
     ...partial,

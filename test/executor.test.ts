@@ -146,6 +146,7 @@ describe('action metadata', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           lastUsedAt: null,
+          ownerUserId: null,
           checkedAt: null,
           reauthNotifiedAt: null,
         },

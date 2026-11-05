@@ -40,6 +40,7 @@ function account(connectorId: string, name: string): AccountRow {
     lastUsedAt: null,
     checkedAt: null,
     reauthNotifiedAt: null,
+    ownerUserId: null,
   };
 }
 

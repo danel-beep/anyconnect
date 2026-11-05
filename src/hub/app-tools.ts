@@ -104,6 +104,8 @@ export function appActions(
       risk: 'write',
       hints: { idempotent: true, openWorld: false },
       async run({ app, name }, ctx) {
+        // In a team the app is everyone's who uses it: the team's admins rename it.
+        await ctx.admin.authorize(ctx.principal, 'admin');
         const found = await find(app, ctx);
         const renamed = await apps(ctx).rename(ctx.principal.workspaceId, found.id, name);
         return { renamed: appView(renamed, ctx) };
@@ -119,6 +121,8 @@ export function appActions(
       requiresConfirmation: true,
       hints: { destructive: true, idempotent: true, openWorld: false },
       async run({ app }, ctx) {
+        // In a team this ends every member's sign-in of the app: the team's admins decide that.
+        await ctx.admin.authorize(ctx.principal, 'admin');
         const found = await find(app, ctx);
         const ended = await apps(ctx).disconnect(ctx.principal.workspaceId, found.id);
         return {

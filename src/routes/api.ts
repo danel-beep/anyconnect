@@ -43,6 +43,16 @@ export function apiRoutes() {
       } catch {
         throw unauthorized('Invalid or insufficient token: use a personal access token with the "api" scope');
       }
+      // This API sees a whole workspace; in a team each member sees only part of it, which the MCP
+      // tools and the team's page enforce. Team keys only carry the `mcp` scope; this is the backstop.
+      const workspace = await getWorkspace(s.db, principal(c).workspaceId);
+      if (workspace?.kind === 'team') {
+        throw new AppError(
+          403,
+          'team_api_unsupported',
+          'The management API works with personal workspaces. Manage a team on its page or from the chat.',
+        );
+      }
     } else {
       const session = await currentSession(c);
       if (!session) throw unauthorized();

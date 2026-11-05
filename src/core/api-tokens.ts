@@ -14,6 +14,8 @@ export interface ApiTokenView {
   scopes: string[];
   aiClientId: string | null;
   personaId: string | null;
+  /** The team's shared connection (see `Principal.shared`). */
+  shared: boolean;
   createdAt: string;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -27,6 +29,7 @@ export function toApiTokenView(row: ApiTokenRow): ApiTokenView {
     scopes: row.scopes,
     aiClientId: row.aiClientId,
     personaId: row.personaId,
+    shared: row.shared,
     createdAt: row.createdAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     expiresAt: row.expiresAt?.toISOString() ?? null,
@@ -63,6 +66,8 @@ export class ApiTokenService {
     aiClientId?: string;
     /** Bind the token to a persona's MCP URL. */
     personaId?: string;
+    /** A team's shared connection: nobody in particular, sees only what the whole team may use. */
+    shared?: boolean;
   }): Promise<{ token: string; row: ApiTokenRow }> {
     const scopes = [...new Set(input.scopes?.length ? input.scopes : DEFAULT_TOKEN_SCOPES)];
     // A profile narrows what the AI sees; the management API would see (and change) everything.
@@ -82,6 +87,7 @@ export class ApiTokenService {
         scopes,
         aiClientId: input.aiClientId ?? null,
         personaId: input.personaId ?? null,
+        shared: input.shared ?? false,
         expiresAt: input.expiresInDays ? new Date(Date.now() + input.expiresInDays * 86_400_000) : null,
       })
       .returning();

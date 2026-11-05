@@ -55,7 +55,7 @@ async function finishSignIn(c: AppContext, userId: string, amr: AuthMethod[]): P
   // Admin emails are promoted in `signInExternal` (where the address is proven), not here.
   if (user.role === 'admin') {
     // Administrators run the hub: their own workspace is not limited by visitor plans.
-    const owned = (await s.users.ownedWorkspaces(user.id))[0];
+    const owned = await s.users.personalWorkspace(user.id);
     if (owned) await s.entitlements.ensurePlan(owned.id, 'unlimited');
   }
   const opts = cookieOpts(c);

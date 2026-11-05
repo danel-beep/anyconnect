@@ -88,10 +88,11 @@ export class OAuthServer {
       /** The protected resource (MCP endpoint URL). */
       resource: string;
       /**
-       * Path segments below the MCP URL that are protected resources of their own
-       * (persona endpoints `<resource>/<segment>`). Each one gets separately bound tokens.
+       * Paths below the MCP URL that are protected resources of their own (persona endpoints
+       * `<resource>/<slug>`, team endpoints `<resource>/team/<slug>`). Each one gets separately
+       * bound tokens.
        */
-      subResource?: RegExp;
+      subResource?: (path: string) => boolean;
       accessTokenTtlSeconds: number;
       refreshTokenTtlSeconds: number;
       logger: Logger;
@@ -144,7 +145,7 @@ export class OAuthServer {
   /**
    * Maps a requested `resource` to a canonical protected resource. Accepts the MCP URL itself and
    * the hub origin (some clients send the server origin), with or without a trailing slash, and
-   * sub-resources such as persona endpoints (`<mcp url>/<slug>`).
+   * sub-resources such as persona and team endpoints (`<mcp url>/<slug>`, `<mcp url>/team/<slug>`).
    */
   canonicalResource(raw: string | undefined): string | undefined {
     if (raw === undefined || raw === '') return this.resource;
@@ -157,10 +158,10 @@ export class OAuthServer {
     url.hash = '';
     const normalized = url.href.replace(/\/+$/, '');
     if (normalized === this.resource || normalized === this.issuer) return this.resource;
-    const pattern = this.deps.subResource;
-    if (pattern && normalized.startsWith(`${this.resource}/`) && !url.search) {
-      const segment = normalized.slice(this.resource.length + 1);
-      if (pattern.test(segment)) return normalized;
+    const isSubResource = this.deps.subResource;
+    if (isSubResource && normalized.startsWith(`${this.resource}/`) && !url.search) {
+      const path = normalized.slice(this.resource.length + 1);
+      if (isSubResource(path)) return normalized;
     }
     return undefined;
   }

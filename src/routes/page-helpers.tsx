@@ -85,7 +85,8 @@ export async function shellInfo(c: AppContext, workspaceId: string): Promise<She
   const user = await currentUser(c);
   const [subscription, open, accounts, planRequests] = await Promise.all([
     s.entitlements.subscription(workspaceId),
-    s.pendingCalls.listOpen(workspaceId),
+    // The user's own held-back actions, in teams too (what `/confirm` lists).
+    user ? s.pendingCalls.listOpenFor(user.id) : s.pendingCalls.listOpen(workspaceId),
     s.accounts.list(workspaceId),
     user?.role === 'admin' ? s.entitlements.countOpenRequests() : undefined,
   ]);
@@ -182,6 +183,16 @@ const ERROR_TEXTS: Partial<Record<string, Key>> = {
   provider_refused: 'error.code.provider_refused',
   provider_unavailable: 'error.code.provider_unavailable',
   paid_subscription: 'error.code.paid_subscription',
+  team_admin_only: 'error.code.team_admin_only',
+  team_owner_only: 'error.code.team_owner_only',
+  not_account_owner: 'error.code.not_account_owner',
+  team_owner_stays: 'error.code.team_owner_stays',
+  invite_wrong_email: 'error.code.invite_wrong_email',
+  already_member: 'error.code.already_member',
+  team_limit: 'error.code.team_limit',
+  bad_seats: 'error.code.bad_seats',
+  too_few_seats: 'error.code.too_few_seats',
+  plan_mismatch: 'error.code.plan_mismatch',
   csrf: 'error.csrf',
 };
 
@@ -196,19 +207,19 @@ export const appPage =
   };
 
 /** Error text for a failed form action: our own messages are user-safe, others are not shown. */
-const errorText = (c: AppContext, error: unknown): string =>
+export const errorText = (c: AppContext, error: unknown): string =>
   error instanceof AppError ? uiError(c, error) : c.get('t')('error.internal');
 
 /** Runs a form post: CSRF, session, then the action; errors come back as a flash note. */
 export const appAction =
   (
-    /** Where to go afterwards: a fixed page, or one picked from the posted form. */
-    to: string | ((form: Record<string, string>) => string),
+    /** Where to go afterwards: a fixed page, or one picked from the posted form or the request. */
+    to: string | ((form: Record<string, string>, c: AppContext) => string),
     run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
   ) =>
   async (c: AppContext) => {
     const form = await bodyParams(c);
-    const back = typeof to === 'string' ? to : to(form);
+    const back = typeof to === 'string' ? to : to(form, c);
     if (!csrfOk(c, form)) return csrfFailedPage(c);
     const auth = await requireApp(c, back);
     if ('redirect' in auth) return c.redirect(auth.redirect, 303);

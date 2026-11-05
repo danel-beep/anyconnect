@@ -221,6 +221,12 @@ export const siteEn = {
   'plan.pro.for': 'For people who delegate a lot of work to AI',
   'plan.business.name': 'Business',
   'plan.business.for': 'For a small team with shared services',
+  'plan.team.name': 'Team',
+  'plan.team.for': 'One connector for a team: everyone signs in as themselves',
+  'plan.metric.actionsPerSeat': '{n} AI actions a month per person, shared by the team',
+  'plan.metric.seatsRange': '{min} to {max} people, each with their own sign-in and accounts',
+  'pricing.perSeat': '/ person / month',
+  'pricing.perSeatCell': '{n} per person',
   'plan.unlimited.name': 'Unlimited',
   'plan.unlimited.for': 'Special plan assigned by the administrator',
   'plan.metric.actions': '{n} AI actions a month',
@@ -243,7 +249,7 @@ export const siteEn = {
 
   'pricing.title': 'Pricing · Manyplug',
   'pricing.description':
-    'Manyplug plans: free, Personal $5, Pro $12, Business $29 a month. All security features in every plan.',
+    'Manyplug plans: free, Personal $5, Pro $12 a month, Team $10 per person. All security features in every plan.',
   'pricing.h1': 'Simple plans that grow with you',
   'pricing.lead': 'All services and security features are in every plan. Pick by how much you use AI.',
   'pricing.paymentsSoon':
@@ -607,6 +613,12 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.pro.for': 'Для тех, кто много поручает ИИ',
   'plan.business.name': 'Бизнес',
   'plan.business.for': 'Для небольшой команды с общими сервисами',
+  'plan.team.name': 'Team',
+  'plan.team.for': 'Один коннектор на команду: каждый входит под собой',
+  'plan.metric.actionsPerSeat': '{n} действий ИИ в месяц на человека, общий запас команды',
+  'plan.metric.seatsRange': 'От {min} до {max} человек, у каждого свой вход и свои аккаунты',
+  'pricing.perSeat': '/ чел. / мес',
+  'pricing.perSeatCell': '{n} на человека',
   'plan.unlimited.name': 'Безлимитный',
   'plan.unlimited.for': 'Особый тариф, назначенный администратором',
   'plan.metric.actions': '{n} действий ИИ в месяц',
@@ -629,7 +641,7 @@ export const siteRu: Record<SiteKey, string> = {
 
   'pricing.title': 'Тарифы · Manyplug',
   'pricing.description':
-    'Тарифы Manyplug: бесплатный, Личный $5, Про $12, Бизнес $29 в месяц. Все функции безопасности в каждом тарифе.',
+    'Тарифы Manyplug: бесплатный, Личный $5, Про $12 в месяц, Team $10 за человека. Все функции безопасности в каждом тарифе.',
   'pricing.h1': 'Понятные тарифы, которые растут вместе с вами',
   'pricing.lead':
     'Все сервисы и функции защиты есть в каждом тарифе. Выбирайте по тому, сколько вы пользуетесь ИИ.',

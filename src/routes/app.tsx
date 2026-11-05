@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { isMetric, type Metric, PLANS } from '../billing/plans.js';
+import { isMetric, type Metric, PLANS, planFits } from '../billing/plans.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
@@ -127,7 +127,7 @@ export function appRoutes() {
         s.apiTokens.list(ws),
         s.activity.recent(ws, { limit: 6 }),
         s.activity.countSince(ws, new Date(Date.now() - 7 * DAY)),
-        s.pendingCalls.listOpen(ws),
+        s.pendingCalls.listOpenFor(auth.user.id),
         shellInfo(c, ws),
       ]);
       const asking = open.filter((row) => row.status === 'awaiting_confirmation');
@@ -299,11 +299,14 @@ export function appRoutes() {
   ) =>
     app.post(
       `/app/accounts/:id/${name}`,
-      action(accountBack, async (c, auth, form) => {
-        const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
-        await run(c, auth, account, form);
-        return undefined;
-      }),
+      action(
+        (form) => accountBack(form),
+        async (c, auth, form) => {
+          const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
+          await run(c, auth, account, form);
+          return undefined;
+        },
+      ),
     );
 
   /** Turns the account's actions on and off: a checked box keeps the action available to the AI. */
@@ -610,7 +613,9 @@ export function appRoutes() {
         .safeParse({ plan: c.req.query('plan'), interval: c.req.query('interval') });
       const focus =
         query.success && query.data.plan && query.data.plan !== entitlements.plan.id
-          ? PLANS.find((p) => p.id === query.data.plan && p.public && p.priceMonthly > 0)
+          ? PLANS.find(
+              (p) => p.id === query.data.plan && p.public && p.priceMonthly > 0 && planFits(p, 'personal'),
+            )
           : undefined;
       const buyable = PLANS.flatMap((p) =>
         (['month', 'year'] as const).filter((i) => s.billing.canBuy(p.id, i)).map((i) => `${p.id}:${i}`),

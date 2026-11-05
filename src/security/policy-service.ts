@@ -25,6 +25,7 @@ import {
   type Loosening,
   loosenings,
   type PolicyDecision,
+  type PolicyMember,
   type PolicyPersona,
   type PolicyRule,
   type PolicyState,
@@ -96,12 +97,19 @@ export class CallerPolicy {
   }
 }
 
+/** Team workspaces: what the caller may use at most on each account (see `members.ts`). */
+export type MemberCaps = (principal: Principal) => Promise<PolicyMember | undefined>;
+
 /** Storage and loading of access rules; the decision logic itself is the pure `policy.ts`. */
 export class PolicyService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    /** In a team, a member sees only their own, the team's and shared accounts. */
+    private readonly members?: MemberCaps,
+  ) {}
 
   async forPrincipal(principal: Principal): Promise<CallerPolicy> {
-    const [rules, [workspace], persona] = await Promise.all([
+    const [rules, [workspace], persona, member] = await Promise.all([
       this.db.select().from(accessRules).where(eq(accessRules.workspaceId, principal.workspaceId)),
       this.db
         .select({ settings: workspaces.settings })
@@ -109,6 +117,7 @@ export class PolicyService {
         .where(eq(workspaces.id, principal.workspaceId))
         .limit(1),
       principal.personaId ? this.loadPersona(principal.workspaceId, principal.personaId) : undefined,
+      this.members?.(principal),
     ]);
     if (principal.personaId && !persona) {
       // The persona was deleted while the token was still alive: see nothing.
@@ -123,7 +132,7 @@ export class PolicyService {
     }
     return new CallerPolicy(
       rules,
-      { aiClientId: principal.aiClientId, persona },
+      { aiClientId: principal.aiClientId, persona, ...(member ? { member } : {}) },
       workspace?.settings.security ?? {},
     );
   }

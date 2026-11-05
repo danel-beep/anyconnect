@@ -22,6 +22,7 @@ import { profileRoutes } from './routes/profiles.js';
 import { securityRoutes } from './routes/security.js';
 import { seoRoutes } from './routes/seo.js';
 import { siteRoutes } from './routes/site.js';
+import { teamRoutes } from './routes/team.js';
 import { webRoutes } from './routes/web.js';
 import type { Services } from './services.js';
 import { pageSecurityHeaders } from './web/http.js';
@@ -92,6 +93,7 @@ export function createApp(services: Services) {
   app.route('/', confirmRoutes());
   app.route('/', connectRoutes());
   app.route('/', appRoutes());
+  app.route('/', teamRoutes());
   app.route('/', profileRoutes());
   app.route('/', aiAppRoutes());
   app.route('/', adminRoutes());

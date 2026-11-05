@@ -16,6 +16,25 @@ export interface CatalogAccount {
   label: string;
   description: string | null;
   identity: string | null;
+  /** Team workspaces: whose the account is, from the caller's point of view. */
+  owner?: AccountOwner;
+}
+
+/** Whose an account is, from the caller's point of view (team workspaces, see `core/teams.ts`). */
+export type AccountOwner =
+  | { kind: 'self' }
+  | { kind: 'team' }
+  | { kind: 'member'; name: string; access: 'read' | 'write' | 'full' };
+
+/** A team workspace as the caller sees it: who they are and whose each account is. */
+export interface CatalogTeam {
+  name: string;
+  /** The caller's name; absent for the team's shared connection. */
+  member?: string;
+  /** The caller runs the team (its owner or an admin). */
+  admin?: boolean;
+  /** By account id. */
+  owners: Readonly<Record<string, AccountOwner>>;
 }
 
 export interface ToolAnnotations {
@@ -114,6 +133,8 @@ export interface CatalogStats {
 export interface Catalog {
   mode: ExposureMode;
   listing: ListingMode;
+  /** Team workspaces: who is calling and whose each account is. */
+  team?: CatalogTeam;
   /** Every callable tool (by name, through MCP or `manyplug_call_tool`). */
   tools: CatalogTool[];
   /** What `tools/list` returns. In direct listing the same as `tools`. */

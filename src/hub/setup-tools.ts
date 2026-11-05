@@ -23,8 +23,10 @@ import {
 import { AppError, badRequest } from '../lib/errors.js';
 import { appActions, type WorkspaceApps } from './app-tools.js';
 import { billingActions, type WorkspaceBilling } from './billing-tools.js';
+import type { CatalogAllow } from './catalog-types.js';
 import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
 import { securityActions, type UserSecurity } from './security-tools.js';
+import { TEAM_ONLY_ACTIONS, teamActions } from './team-tools.js';
 
 /**
  * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
@@ -83,7 +85,7 @@ export interface SetupActionSpec<TInput extends AnyObjectSchema> {
  * The one place where a setup action meets the connector action shape: the hub invokes workspace
  * units with a {@link SetupContext} (see `Hub.invoke`), never with an account context.
  */
-function setupAction<TInput extends AnyObjectSchema>(spec: SetupActionSpec<TInput>): ActionDefinition {
+export function setupAction<TInput extends AnyObjectSchema>(spec: SetupActionSpec<TInput>): ActionDefinition {
   const { run, assessRisk, ...rest } = spec;
   return {
     ...rest,
@@ -98,7 +100,7 @@ function setupAction<TInput extends AnyObjectSchema>(spec: SetupActionSpec<TInpu
   };
 }
 
-const accountRef = z.string().min(1).describe('"service:account", e.g. "gmail:work"');
+export const accountRef = z.string().min(1).describe('"service:account", e.g. "gmail:work"');
 
 const accountView = (a: {
   connectorId: string;
@@ -172,6 +174,7 @@ async function ruleChangeOf(input: z.output<typeof RuleInput>, ctx: SetupContext
   }
   if (!app && !account) {
     if (access === null || confirm === null) throw badRequest('The defaults can be changed, not removed.');
+    await ctx.admin.authorize(ctx.principal, 'admin');
     return { kind: 'defaults', access, confirm, undoWindowSeconds: undo_window_seconds };
   }
   if (undo_window_seconds !== undefined) {
@@ -186,7 +189,10 @@ async function ruleChangeOf(input: z.output<typeof RuleInput>, ctx: SetupContext
   } else if (app) {
     aiClientId = (await ctx.admin.findAiClient(workspaceId, app)).id;
   }
-  const accountId = account ? (await ctx.admin.findAccount(workspaceId, account)).id : null;
+  // In a team a rule on one account is its owner's to set; a rule for every account is the admins'.
+  let accountId: string | null = null;
+  if (account) accountId = (await ctx.admin.accountFor(ctx.principal, account, { manage: true })).id;
+  else await ctx.admin.authorize(ctx.principal, 'admin');
   return { kind: 'rule', aiClientId, accountId, access, confirm };
 }
 
@@ -234,11 +240,18 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       label: z.string().trim().min(1).max(100).optional().describe('e.g. "Work mail"'),
       name: z.string().regex(ACCOUNT_NAME).optional().describe('Short key, e.g. "work"'),
       reconnect: accountRef.optional().describe('Existing account to reconnect'),
+      for_team: z
+        .boolean()
+        .optional()
+        .describe('Teams, admins only: an account of the whole team instead of the user’s own'),
     }),
     risk: 'read',
     hints: { readOnly: true, openWorld: false },
-    async run(input, ctx) {
-      const link = await ctx.admin.connectLink(ctx.principal.workspaceId, input);
+    async run({ for_team, ...input }, ctx) {
+      const link = await ctx.admin.connectLink(ctx.principal, {
+        ...input,
+        ...(for_team ? { forTeam: true } : {}),
+      });
       return {
         url: link.url,
         method: link.method,
@@ -265,7 +278,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     // Turning back on what the user turned off lifts a restriction: the user confirms it.
     async assessRisk({ account, enabled, enable_tools }, ctx) {
       if (enabled !== true && !enable_tools?.length) return undefined;
-      const row = await ctx.admin.findAccount(ctx.principal.workspaceId, account).catch(() => undefined);
+      const row = await ctx.admin.accountFor(ctx.principal, account, { manage: true }).catch(() => undefined);
       if (!row) return undefined; // run() reports the unknown account
       const disabled = new Set(row.settings.disabledActions ?? []);
       const back = (enable_tools ?? []).filter((name) => disabled.has(name));
@@ -279,7 +292,8 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       return undefined;
     },
     async run({ account, disable_tools, enable_tools, ...change }, ctx) {
-      const row = await ctx.admin.updateAccount(ctx.principal.workspaceId, account, {
+      const target = await ctx.admin.accountFor(ctx.principal, account, { manage: true });
+      const row = await ctx.admin.updateAccount(ctx.principal.workspaceId, target.id, {
         ...change,
         ...(disable_tools ? { disableTools: disable_tools } : {}),
         ...(enable_tools ? { enableTools: enable_tools } : {}),
@@ -295,7 +309,8 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     risk: 'read',
     hints: { readOnly: true, idempotent: true },
     async run({ account }, ctx) {
-      const { account: row, test } = await ctx.admin.testAccount(ctx.principal.workspaceId, account);
+      const target = await ctx.admin.accountFor(ctx.principal, account);
+      const { account: row, test } = await ctx.admin.testAccount(ctx.principal.workspaceId, target.id);
       return {
         ...accountView(row),
         ok: test.ok,
@@ -314,7 +329,8 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     requiresConfirmation: true,
     hints: { destructive: true, openWorld: false },
     async run({ account }, ctx) {
-      const row = await ctx.admin.removeAccount(ctx.principal.workspaceId, account);
+      const target = await ctx.admin.accountFor(ctx.principal, account, { manage: true });
+      const row = await ctx.admin.removeAccount(ctx.principal.workspaceId, target.id);
       return { removed: `${row.connectorId}:${row.name}` };
     },
   }),
@@ -332,6 +348,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     requiresConfirmation: true,
     hints: { destructive: false, openWorld: true },
     async run({ mcp_url, name, manifest }, ctx) {
+      await ctx.admin.authorize(ctx.principal, 'admin');
       if (Boolean(mcp_url) === Boolean(manifest)) {
         return { error: 'Pass either mcp_url (with name) or manifest.' };
       }
@@ -356,6 +373,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     requiresConfirmation: true,
     hints: { destructive: true, openWorld: false },
     async run({ service }, ctx) {
+      await ctx.admin.authorize(ctx.principal, 'admin');
       await ctx.admin.removeService(ctx.principal.workspaceId, service);
       return { removed: service };
     },
@@ -418,6 +436,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     risk: 'write',
     hints: { idempotent: true, openWorld: false },
     async run({ tool_listing, tool_exposure }, ctx) {
+      await ctx.admin.authorize(ctx.principal, 'admin');
       const settings = await ctx.admin.updateSettings(ctx.principal.workspaceId, {
         ...(tool_listing ? { toolListing: tool_listing } : {}),
         ...(tool_exposure ? { toolExposure: tool_exposure } : {}),
@@ -433,10 +452,64 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   }),
   ...profileActions(setupAction),
   ...billingActions(setupAction),
-  // Rarely needed: listed after the rest while they fit, always found by search.
+  // Rarely needed: listed after the rest while they fit, always found by search. The team tools
+  // show only inside a team (but the overview), where the access profile tools give them room.
   ...appActions(setupAction),
+  ...teamActions(setupAction),
   ...securityActions(setupAction),
 ];
+
+/** Setup tools a team's shared connection still sees: reading only (it cannot change the setup). */
+const SHARED_CONNECTION_TOOLS: ReadonlySet<string> = new Set(['services', 'rules', 'plan', 'team']);
+/**
+ * Setup tools that, in a team, only its owner and admins may use (their `run` checks it too): they
+ * are not offered to other members, so the AI does not suggest what would be refused.
+ */
+const TEAM_ADMIN_TOOLS: ReadonlySet<string> = new Set([
+  'invite_member',
+  'remove_member',
+  'add_service',
+  'remove_service',
+  'update_settings',
+  'buy_plan',
+  'cancel_plan',
+  // An AI app of a team is everyone's who uses it: renaming or disconnecting it affects them all.
+  'rename_app',
+  'disconnect_app',
+]);
+/**
+ * Setup tools for what teams do not have yet: access profiles (`/mcp/<profile>` addresses belong
+ * to a person's own workspace).
+ */
+const NOT_IN_TEAMS: ReadonlySet<string> = new Set([
+  'access_profiles',
+  'create_access_profile',
+  'update_access_profile',
+  'delete_access_profile',
+]);
+
+/**
+ * Wraps a catalog filter for teams: the team tools appear only to members of a team, admin tools
+ * only to its owner and admins, and a team's shared connection sees no setup tool that changes
+ * anything.
+ */
+export function teamCatalogFilter(
+  base: ((caller: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined) | undefined,
+  team: (caller: Principal) => Promise<{ member?: unknown; admin?: boolean } | undefined>,
+): (caller: Principal) => Promise<CatalogAllow> {
+  return async (caller) => {
+    const [allow, view] = await Promise.all([base?.(caller), team(caller)]);
+    return (connector, action, account) => {
+      if (account === undefined && isSetupConnector(connector.id)) {
+        if (TEAM_ONLY_ACTIONS.has(action.name) && !view?.member) return false;
+        if (view && NOT_IN_TEAMS.has(action.name)) return false;
+        if (view && !view.member && !SHARED_CONNECTION_TOOLS.has(action.name)) return false;
+        if (view?.member && !view.admin && TEAM_ADMIN_TOOLS.has(action.name)) return false;
+      }
+      return allow ? allow(connector, action, account) : true;
+    };
+  };
+}
 
 /** The setup tools as a connector, so the catalog and the executor treat them like any other. */
 export const SETUP_CONNECTOR: ConnectorDefinition = {
