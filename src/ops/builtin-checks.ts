@@ -181,7 +181,7 @@ export function publicProbeCheck(options: {
 
 /**
  * Connected services that keep failing on their side right now, across all users: at least
- * `minCalls` calls in the window and at least `ratio` of them failed upstream or timed out. A
+ * `minCalls` calls in the window and at least `ratio` of them failed upstream, timed out or hit an open circuit. A
  * service being down is not the hub being down, so this only ever degrades.
  */
 export function connectionsCheck(deps: {
@@ -203,7 +203,7 @@ export function connectionsCheck(deps: {
           connectorId: toolCalls.connectorId,
           total: sql<number>`count(*)`.mapWith(Number),
           failed:
-            sql<number>`count(*) filter (where ${toolCalls.status} = 'error' and ${toolCalls.outcome} in ('upstream', 'timeout'))`.mapWith(
+            sql<number>`count(*) filter (where ${toolCalls.status} = 'error' and ${toolCalls.outcome} in ('upstream', 'timeout', 'circuit_open'))`.mapWith(
               Number,
             ),
         })

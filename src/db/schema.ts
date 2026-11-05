@@ -357,6 +357,8 @@ export const accounts = pgTable(
     lastUsedAt: timestamp({ withTimezone: true }),
     /** Last connection test (on creation, on demand, by the periodic health check). */
     checkedAt: timestamp({ withTimezone: true }),
+    /** When the owners were told this account needs a new sign-in; cleared once it works again. */
+    reauthNotifiedAt: timestamp({ withTimezone: true }),
   },
   (t) => [uniqueIndex().on(t.workspaceId, t.connectorId, t.name), index().on(t.workspaceId)],
 );
