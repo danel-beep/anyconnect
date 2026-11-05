@@ -38,12 +38,15 @@ describe('remote MCP servers as services', () => {
     const user = (await hub.services.db.query.users.findFirst())!;
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
     principal = { kind: 'session', userId: user.id, workspaceId: workspace.id, scopes: ['mcp', 'api'] };
-    ({ token: pat } = await hub.services.apiTokens.create({
-      workspaceId: workspace.id,
-      userId: user.id,
-      name: 'test',
-      scopes: ['api'],
-    }));
+    // Made in the signed-in browser, so the token opens the user's vault like one from the Apps page.
+    ({ token: pat } = await browser.inVault(hub.services, () =>
+      hub.services.apiTokens.create({
+        workspaceId: workspace.id,
+        userId: user.id,
+        name: 'test',
+        scopes: ['api'],
+      }),
+    ));
   });
 
   afterAll(async () => {
@@ -51,9 +54,12 @@ describe('remote MCP servers as services', () => {
     await upstream?.close();
   });
 
+  /** A call from the user's own AI app: inside a request that brings their vault. */
   async function call(name: string, args: Record<string, unknown>) {
-    const catalog = await hub.services.hub.getCatalog(principal);
-    return hub.services.hub.callTool(principal, catalog, name, args);
+    return browser.inVault(hub.services, async () => {
+      const catalog = await hub.services.hub.getCatalog(principal);
+      return hub.services.hub.callTool(principal, catalog, name, args);
+    });
   }
 
   it('discovers OAuth, registers itself as a client, connects an account and proxies tools', async () => {

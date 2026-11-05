@@ -2,6 +2,7 @@ import { FONT_FACES, MONO, SANS } from './assets.js';
 import { APP_SHELL_CSS } from './styles/app.js';
 import { BRAND_CSS } from './styles/brands.js';
 import { CONNECT_CSS } from './styles/connect.js';
+import { LANDING_CSS } from './styles/landing.js';
 import { PROFILES_CSS } from './styles/profiles.js';
 import { SITE_CSS } from './styles/site.js';
 import { THEMES, themeCss } from './theme.js';
@@ -54,12 +55,12 @@ hr{border:0;border-top:1px solid var(--border);margin:24px 0}
 .divider{text-align:center;margin:16px 0 0;position:relative}
 
 /* Buttons */
-button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--border-strong);background:var(--card);color:var(--text);font:560 14px/1 ${SANS};letter-spacing:-.005em;text-decoration:none;cursor:pointer;transition:background .15s,border-color .15s,transform .05s;white-space:nowrap}
+button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--border-strong);background:var(--card);color:var(--text);font:560 14px/1 ${SANS};letter-spacing:-.005em;text-decoration:none;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s,transform .05s;white-space:nowrap}
 button:hover,.btn:hover{border-color:var(--muted);text-decoration:none}
 button:active,.btn:active{transform:translateY(1px)}
 button:disabled,.btn[aria-disabled=true]{opacity:.55;cursor:not-allowed;transform:none}
 button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
-button.primary:hover,.btn.primary:hover{filter:brightness(1.05);border-color:var(--accent)}
+button.primary:hover,.btn.primary:hover{background:color-mix(in srgb,var(--accent) 88%,#fff);border-color:var(--accent);box-shadow:0 8px 20px -10px color-mix(in srgb,var(--accent) 85%,transparent)}
 button.danger,.btn.danger{color:var(--danger)}
 button.danger:hover,.btn.danger:hover{border-color:var(--danger);background:var(--danger-soft)}
 button.ghost,.btn.ghost{border-color:transparent;background:transparent}
@@ -213,6 +214,10 @@ header.top{display:flex;justify-content:space-between;align-items:center;margin-
 .qr{display:block;width:200px;height:200px;margin:8px 0 12px;border-radius:8px;${QR_COLORS}}
 ul.codes{list-style:none;padding:0;margin:12px 0 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px 16px}
 ul.codes code{font-size:15px}
+/* Vault: the code two browsers compare, and the one-time recovery key */
+main.content>.vault-banner{margin-bottom:16px}
+code.device-code{font-size:18px;letter-spacing:.08em;padding:2px 8px}
+code.recovery-key{display:block;font-size:15px;line-height:1.7;padding:10px 12px;overflow-wrap:anywhere;user-select:all}
 
 /* Auth pages: centered card */
 /* Sign-in style windows: one screen, the card centred between a slim top bar and footer */
@@ -268,6 +273,7 @@ export const APP_CSS = [
   themeCss(),
   BASE_CSS,
   SITE_CSS,
+  LANDING_CSS,
   APP_SHELL_CSS,
   CONNECT_CSS,
   PROFILES_CSS,

@@ -24,34 +24,34 @@ describe('user vaults (storage)', () => {
     await hub.close();
   });
 
-  /** A vault created the default way: wrapped under the web session that signs the user up. */
+  /** A vault created the default way: wrapped under the first browser's device key. */
   async function newVault() {
     const user = await newUser();
     const session = generateToken('ac_ses');
     const vault = await vaults.create(user.id, {
-      kind: 'session',
+      kind: 'device',
       ref: 'ses_1',
       secret: tokenSecret(session),
     });
     return { userId: user.id, vault, session };
   }
 
-  it('protects by default: the vault is created under the session, with no extra step', async () => {
+  it('protects by default: the vault is created under the first browser, with no extra step', async () => {
     const session = generateToken('ac_ses');
     const vault = await vaults.create(userId, {
-      kind: 'session',
+      kind: 'device',
       ref: 'ses_0',
       secret: tokenSecret(session),
     });
     expect(await vaults.exists(userId)).toBe(true);
     const rows = await hub.services.db.select().from(vaultWraps).where(eq(vaultWraps.userId, userId));
-    expect(rows.map((r) => r.kind)).toEqual(['session']);
-    // Nothing stored is the secret: the session row holds only the token's hash.
+    expect(rows.map((r) => r.kind)).toEqual(['device']);
+    // Nothing stored is the secret: the browser keeps the secret.
     expect(rows[0]!.wrapped).not.toContain(session);
-    const reopened = await vaults.unlock(userId, 'session', 'ses_0', tokenSecret(session));
+    const reopened = await vaults.unlock(userId, 'device', 'ses_0', tokenSecret(session));
     expect(reopened.publicKey.encoded).toBe(vault.publicKey.encoded);
     await expect(
-      vaults.create(userId, { kind: 'session', ref: 'ses_x', secret: randomBytes(32) }),
+      vaults.create(userId, { kind: 'device', ref: 'ses_x', secret: randomBytes(32) }),
     ).rejects.toThrow();
   });
 
@@ -80,13 +80,13 @@ describe('user vaults (storage)', () => {
   it('never opens without the secret, with a wrong one, or with another user’s wrap', async () => {
     const a = await newVault();
     const b = await newVault();
-    await expect(vaults.unlock(a.userId, 'session', 'ses_1', randomBytes(32))).rejects.toBeInstanceOf(
+    await expect(vaults.unlock(a.userId, 'device', 'ses_1', randomBytes(32))).rejects.toBeInstanceOf(
       VaultLockedError,
     );
-    await expect(vaults.unlock(a.userId, 'session', 'other', tokenSecret(a.session))).rejects.toBeInstanceOf(
+    await expect(vaults.unlock(a.userId, 'device', 'other', tokenSecret(a.session))).rejects.toBeInstanceOf(
       VaultLockedError,
     );
-    await expect(vaults.unlock(a.userId, 'session', 'ses_1', tokenSecret(b.session))).rejects.toBeInstanceOf(
+    await expect(vaults.unlock(a.userId, 'device', 'ses_1', tokenSecret(b.session))).rejects.toBeInstanceOf(
       VaultLockedError,
     );
 

@@ -7,12 +7,14 @@ import { botEn, botRu } from './i18n/bot.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { emailEn, emailRu } from './i18n/email.js';
+import { landingEn, landingRu } from './i18n/landing.js';
 import { messengerLoginEn, messengerLoginRu } from './i18n/messenger-login.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { profilesEn, profilesRu } from './i18n/profiles.js';
 import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
 import { teamEn, teamRu } from './i18n/team.js';
+import { vaultEn, vaultRu } from './i18n/vault.js';
 
 export type Locale = 'ru' | 'en';
 
@@ -221,6 +223,7 @@ const coreEn = {
 const en = {
   ...coreEn,
   ...siteEn,
+  ...landingEn,
   ...seoEn,
   ...appEn,
   ...authEn,
@@ -235,6 +238,7 @@ const en = {
   ...appsEn,
   ...botEn,
   ...analyticsEn,
+  ...vaultEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -447,6 +451,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
 const ru: Record<Key, string> = {
   ...coreRu,
   ...siteRu,
+  ...landingRu,
   ...seoRu,
   ...appRu,
   ...authRu,
@@ -461,6 +466,7 @@ const ru: Record<Key, string> = {
   ...appsRu,
   ...botRu,
   ...analyticsRu,
+  ...vaultRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

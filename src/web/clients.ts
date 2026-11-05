@@ -57,6 +57,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
   {
     id: 'chatgpt',
     name: 'ChatGPT',
+    glyph: 'chat',
     note: {
       ru: 'Нужен режим разработчика (Plus, Pro, Business, Enterprise, Edu).',
       en: 'Needs developer mode (Plus, Pro, Business, Enterprise, Edu).',
@@ -140,7 +141,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
   {
     id: 'codex',
     name: 'Codex',
-    glyph: 'terminal',
+    glyph: 'code',
     note: { ru: 'Codex CLI и расширение для IDE.', en: 'Codex CLI and the IDE extension.' },
     steps: {
       ru: [

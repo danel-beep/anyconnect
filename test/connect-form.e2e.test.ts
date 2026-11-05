@@ -209,10 +209,13 @@ describe('connect form for services without OAuth', () => {
     expect(saved.status).toBe(200);
     const updated = await hub.services.accounts.get(workspaceId, account.id);
     expect(updated.config).toEqual({ greeting: 'Hello again' });
-    const ctx = await hub.services.accounts.buildContext(demo, updated, {
-      signal: AbortSignal.timeout(5000),
-      logger: hub.services.logger,
-    });
+    // The account is sealed to the user's vault: it opens inside the browser's own request.
+    const ctx = await browser.inVault(hub.services, () =>
+      hub.services.accounts.buildContext(demo, updated, {
+        signal: AbortSignal.timeout(5000),
+        logger: hub.services.logger,
+      }),
+    );
     expect(ctx.credentials).toEqual({ secret: 'secret-s3-value' });
   });
 

@@ -959,12 +959,12 @@ export const userVaults = pgTable('user_vaults', {
 });
 
 /** What a vault wrap is unlocked with. */
-export type VaultWrapKind = 'passkey' | 'recovery' | 'oauth' | 'api_token' | 'session';
+export type VaultWrapKind = 'device' | 'passkey' | 'recovery' | 'oauth' | 'oauth_code' | 'api_token';
 
 /**
- * The vault's private key wrapped under one secret the hub does not keep: a passkey PRF output,
- * the recovery key, or a bearer token (OAuth refresh token, personal token, web session) of which
- * only the hash is stored elsewhere. One row per secret; deleting the row (or the secret's own row,
+ * The vault's private key wrapped under one secret the hub does not keep: a browser's device key
+ * (in a cookie only that browser has), a passkey PRF output, the recovery key, or a bearer token
+ * (OAuth access or refresh token, personal token) of which only the hash is stored elsewhere. One row per secret; deleting the row (or the secret's own row,
  * through `ref`) revokes that way in.
  */
 export const vaultWraps = pgTable(
@@ -974,13 +974,32 @@ export const vaultWraps = pgTable(
       .notNull()
       .references(() => userVaults.userId, { onDelete: 'cascade' }),
     kind: text().$type<VaultWrapKind>().notNull(),
-    /** The secret's own id: passkey credential id, OAuth grant id, token id, session id; `-` for recovery. */
+    /** The secret's own id: device id, passkey credential id, token hash or id; `-` for recovery. */
     ref: text().notNull(),
     wrapped: text().notNull(),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.userId, t.kind, t.ref] }), index().on(t.kind, t.ref)],
+);
+
+/**
+ * A browser signed in after the vault was created asks to open it. Another browser where the vault
+ * is open approves it by sealing the vault key to `publicKey` (the device secret stays in the new
+ * browser's cookie), which becomes a `device` wrap; the request row is then deleted.
+ */
+export const vaultDeviceRequests = pgTable(
+  'vault_device_requests',
+  {
+    userId: text()
+      .notNull()
+      .references(() => userVaults.userId, { onDelete: 'cascade' }),
+    deviceId: text().notNull(),
+    /** The device key pair's public half, base64url. */
+    publicKey: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.deviceId] })],
 );
 
 export type MessengerSessionState =

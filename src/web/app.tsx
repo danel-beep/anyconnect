@@ -1,5 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
-import { type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { type Metric, PLANS, type Plan, yearlyFreeMonths } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, SAMPLE_SERVICES, searchText, serviceMeta } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
@@ -57,7 +57,38 @@ export interface ShellInfo {
   brokenAccounts: number;
   /** Admins only: plan requests waiting for an answer. */
   planRequests?: number | undefined;
+  /**
+   * The personal vault in this browser (`docs/VAULTS.md`): `locked` when protected accounts exist
+   * but this browser cannot open them yet; `requests` from other browsers waiting for an approval.
+   */
+  vault?: { locked: boolean; requests: number } | undefined;
 }
+
+/** Above every dashboard page except Security itself, which shows the same in full. */
+const VaultBanner: FC<{ t: PageCtx['t']; vault: ShellInfo['vault'] }> = ({ t, vault }) => {
+  if (!vault) return null;
+  if (vault.locked) {
+    return (
+      <div class="notice info reauth-row vault-banner" role="status">
+        <span class="grow">{t('vault.banner.locked')}</span>
+        <a class="btn sm" href="/security#vault">
+          {t('vault.banner.review')}
+        </a>
+      </div>
+    );
+  }
+  if (vault.requests > 0) {
+    return (
+      <div class="notice info reauth-row vault-banner" role="status">
+        <span class="grow">{t('vault.banner.request')}</span>
+        <a class="btn sm primary" href="/security#vault">
+          {t('vault.banner.review')}
+        </a>
+      </div>
+    );
+  }
+  return null;
+};
 
 const NAV: {
   id: AppSection;
@@ -198,6 +229,7 @@ export const AppShell: FC<{
           </div>
         </aside>
         <main class="content" id="main">
+          {section === 'security' ? null : <VaultBanner t={t} vault={shell.vault} />}
           {children}
         </main>
       </div>
@@ -1918,7 +1950,10 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
               {t('pricing.monthly')}
             </button>
             <button type="button" aria-pressed="false" data-interval-set="year">
-              {t('pricing.yearly')} <span class="save">{t('pricing.save')}</span>
+              {t('pricing.yearly')}{' '}
+              {yearlyFreeMonths() ? (
+                <span class="save">{t('pricing.save', { n: yearlyFreeMonths() })}</span>
+              ) : null}
             </button>
           </fieldset>
         </div>

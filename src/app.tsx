@@ -27,6 +27,7 @@ import { seoRoutes } from './routes/seo.js';
 import { siteRoutes } from './routes/site.js';
 import { teamRoutes } from './routes/team.js';
 import { webRoutes } from './routes/web.js';
+import { webVault } from './routes/web-vault.js';
 import type { Services } from './services.js';
 import { pageSecurityHeaders } from './web/http.js';
 import { DEFAULT_LOCALE, translator } from './web/i18n.js';
@@ -71,6 +72,8 @@ export function createApp(services: Services) {
   app.use('*', compress({ encoding: 'gzip', contentTypeFilter: COMPRESSIBLE }));
   // Counts served pages into an in-memory buffer after they are rendered (docs/ANALYTICS.md).
   app.use('*', pageAnalytics());
+  // Opens (or, the first time, creates) the signed-in user's vault from this browser's device key.
+  app.use('*', webVault());
 
   // Liveness: the process answers. Cheap on purpose (the platform restarts the instance when it
   // fails, which does not help when the database is down).
