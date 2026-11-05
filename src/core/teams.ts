@@ -98,11 +98,19 @@ export const teamError = {
   adminOnly: () => new AppError(403, 'team_admin_only', 'Only the team’s owner and admins can do this.'),
   ownerOnly: (what: string) => new AppError(403, 'team_owner_only', `Only the team’s owner can ${what}.`),
   notAccountOwner: () =>
-    new AppError(403, 'not_account_owner', 'Only the account’s owner (or an admin, for a team account) can do this.'),
+    new AppError(
+      403,
+      'not_account_owner',
+      'Only the account’s owner (or an admin, for a team account) can do this.',
+    ),
   ownerStays: () =>
     new AppError(400, 'team_owner_stays', 'The owner stays in the team; to close it, delete the team.'),
   wrongEmail: (email: string) =>
-    new AppError(403, 'invite_wrong_email', `This invitation is for ${email}. Sign in with that address to accept it.`),
+    new AppError(
+      403,
+      'invite_wrong_email',
+      `This invitation is for ${email}. Sign in with that address to accept it.`,
+    ),
   alreadyMember: (email: string) => new AppError(409, 'already_member', `${email} is already in the team.`),
   limit: () => new AppError(409, 'team_limit', `One person can own up to ${MAX_OWNED_TEAMS} teams.`),
 };
@@ -146,7 +154,10 @@ export class TeamService implements ConnectPermissions {
 
   // --- Teams -----------------------------------------------------------------
 
-  async create(owner: { id: string; name: string | null; email: string }, rawName: string): Promise<Workspace> {
+  async create(
+    owner: { id: string; name: string | null; email: string },
+    rawName: string,
+  ): Promise<Workspace> {
     const name = TeamName.parse(rawName);
     const [owned] = await this.deps.db
       .select({ n: count() })
@@ -177,7 +188,9 @@ export class TeamService implements ConnectPermissions {
   }
 
   private async freeSlug(name: string): Promise<string> {
-    let base = slugify(name, 30).replace(/_/g, '-').replace(/^-+|-+$/g, '');
+    let base = slugify(name, 30)
+      .replace(/_/g, '-')
+      .replace(/^-+|-+$/g, '');
     if (base.length < 3 || RESERVED_SLUGS.has(base)) base = `team-${base}`.replace(/-+$/, '');
     for (let attempt = 0; attempt < 8; attempt++) {
       const slug = attempt === 0 ? base : `${base}-${randomBytes(3).toString('hex')}`;
@@ -190,6 +203,12 @@ export class TeamService implements ConnectPermissions {
       if (!taken) return slug;
     }
     return `team-${randomBytes(4).toString('hex')}`;
+  }
+
+  /** The slug of a team workspace; undefined for a personal one. */
+  async slugOf(workspaceId: string): Promise<string | undefined> {
+    const workspace = await getWorkspace(this.deps.db, workspaceId);
+    return workspace?.kind === 'team' ? (workspace.slug ?? undefined) : undefined;
   }
 
   async bySlug(slug: string): Promise<Workspace | undefined> {
@@ -294,7 +313,7 @@ export class TeamService implements ConnectPermissions {
       .from(workspaces)
       .where(eq(workspaces.id, principal.workspaceId))
       .limit(1);
-    if (!team || team.kind !== 'team' || !team.slug) return undefined;
+    if (team?.kind !== 'team' || !team.slug) return undefined;
     const [members, accounts, shares] = await Promise.all([
       this.members(team.id),
       this.deps.accounts.owners(team.id),
@@ -485,7 +504,12 @@ export class TeamService implements ConnectPermissions {
   // --- Roles, leaving --------------------------------------------------------
 
   /** Makes a member an admin or back. Only the owner decides who runs the team with them. */
-  async setRole(actorId: string, workspaceId: string, userId: string, role: 'admin' | 'member'): Promise<void> {
+  async setRole(
+    actorId: string,
+    workspaceId: string,
+    userId: string,
+    role: 'admin' | 'member',
+  ): Promise<void> {
     const actorRole = await this.requireRole(workspaceId, actorId, true);
     if (actorRole !== 'owner') throw teamError.ownerOnly('change roles');
     const target = await this.forMember(workspaceId, userId).catch(() => undefined);
@@ -553,7 +577,11 @@ export class TeamService implements ConnectPermissions {
         .select({ id: apiTokens.id })
         .from(apiTokens)
         .where(
-          and(eq(apiTokens.workspaceId, workspaceId), eq(apiTokens.userId, userId), isNull(apiTokens.revokedAt)),
+          and(
+            eq(apiTokens.workspaceId, workspaceId),
+            eq(apiTokens.userId, userId),
+            isNull(apiTokens.revokedAt),
+          ),
         ),
     ]);
     for (const grant of grants) await this.deps.revokeGrant(grant.id);
@@ -681,7 +709,11 @@ export class TeamService implements ConnectPermissions {
   // --- Connecting accounts (ConnectPermissions) --------------------------------
 
   /** In a team: members connect their own accounts; admins also the team's. */
-  async assertCanConnect(workspaceId: string, userId: string, owner: AccountOwnerInput | undefined): Promise<void> {
+  async assertCanConnect(
+    workspaceId: string,
+    userId: string,
+    owner: AccountOwnerInput | undefined,
+  ): Promise<void> {
     const workspace = await getWorkspace(this.deps.db, workspaceId);
     if (workspace?.kind !== 'team') return;
     const { role } = await this.forMember(workspaceId, userId);

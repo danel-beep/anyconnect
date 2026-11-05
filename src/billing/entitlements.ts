@@ -363,7 +363,8 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       .onConflictDoUpdate({ target: subscriptions.workspaceId, set: { ...values, updatedAt: new Date() } })
       .returning();
     this.usageCache.delete(workspaceId);
-    for (const key of this.seatCache.keys()) if (key.startsWith(`${workspaceId}:`)) this.seatCache.delete(key);
+    for (const key of this.seatCache.keys())
+      if (key.startsWith(`${workspaceId}:`)) this.seatCache.delete(key);
     await this.closeRequests(workspaceId);
     return row!;
   }

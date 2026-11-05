@@ -77,8 +77,7 @@ export const teamEn = {
   'team.plan.seatsUnlimited': '{used} people, no seat limit',
   'team.plan.actions': 'Actions this month',
   'team.plan.trial': 'Free trial with up to {seats} people until {date}.',
-  'team.plan.free':
-    'After the trial a team needs the Team plan: without it only the owner can use the team.',
+  'team.plan.free': 'After the trial a team needs the Team plan: without it only the owner can use the team.',
   'team.plan.team': 'Team plan: {month} per person a month, or {year} a year (2 months free).',
   'team.plan.teamLimits':
     'Each seat adds {actions} actions a month and {messengers} cloud messengers to the team’s pool; accounts are unlimited.',
@@ -113,7 +112,8 @@ export const teamEn = {
   'team.danger.deleteHint':
     'Members keep their own accounts; team accounts are disconnected and the connector address stops working.',
   'team.flash.created': 'Team “{name}” created. Invite people and share the connector address.',
-  'team.flash.joined': 'You joined “{name}”. Add the team’s connector to your AI app and sign in as yourself.',
+  'team.flash.joined':
+    'You joined “{name}”. Add the team’s connector to your AI app and sign in as yourself.',
   'team.flash.left': 'You left the team.',
   'team.flash.deleted': 'The team was deleted.',
   'team.flash.removed': '{name} is no longer in the team.',
@@ -122,7 +122,8 @@ export const teamEn = {
   'team.flash.shared': 'Sharing updated.',
   'team.flash.accountRemoved': 'Account disconnected.',
   'team.flash.keyRevoked': 'Key revoked.',
-  'team.flash.planChanged': 'The plan was changed to {plan}. It shows here as soon as the payment provider confirms it.',
+  'team.flash.planChanged':
+    'The plan was changed to {plan}. It shows here as soon as the payment provider confirms it.',
   'team.flash.paid': 'Thank you! The plan shows here as soon as the payment provider confirms it.',
   'invite.title': 'Join “{team}”',
   'invite.sub': '{inviter} invites you to the team “{team}” on Manyplug as {role}.',
@@ -264,7 +265,8 @@ export const teamRu: Record<keyof typeof teamEn, string> = {
   'team.danger.deleteHint':
     'Участники сохранят свои аккаунты; аккаунты команды будут отключены, адрес коннектора перестанет работать.',
   'team.flash.created': 'Команда «{name}» создана. Пригласите людей и поделитесь адресом коннектора.',
-  'team.flash.joined': 'Вы в команде «{name}». Добавьте её коннектор в своё ИИ-приложение и войдите под собой.',
+  'team.flash.joined':
+    'Вы в команде «{name}». Добавьте её коннектор в своё ИИ-приложение и войдите под собой.',
   'team.flash.left': 'Вы вышли из команды.',
   'team.flash.deleted': 'Команда удалена.',
   'team.flash.removed': '{name} больше не в команде.',
@@ -273,7 +275,8 @@ export const teamRu: Record<keyof typeof teamEn, string> = {
   'team.flash.shared': 'Доступ обновлён.',
   'team.flash.accountRemoved': 'Аккаунт отключён.',
   'team.flash.keyRevoked': 'Ключ отозван.',
-  'team.flash.planChanged': 'Тариф изменён на «{plan}». Он появится здесь, как только платёжный сервис подтвердит изменение.',
+  'team.flash.planChanged':
+    'Тариф изменён на «{plan}». Он появится здесь, как только платёжный сервис подтвердит изменение.',
   'team.flash.paid': 'Спасибо! Тариф появится здесь, как только платёжный сервис подтвердит оплату.',
   'invite.title': 'Вступить в «{team}»',
   'invite.sub': '{inviter} приглашает вас в команду «{team}» в Manyplug. Роль: {role}.',

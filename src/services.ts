@@ -28,13 +28,13 @@ import { PasskeyService } from './core/passkeys.js';
 import type { Principal } from './core/principal.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
-import { TotpService } from './core/totp.js';
 import { TeamService } from './core/teams.js';
+import { TotpService } from './core/totp.js';
 import { activeUserCheck, memberCheck, UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
-import type { StageMap } from './hub/executor.js';
 import type { CatalogTeam } from './hub/catalog-types.js';
+import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
 import { type IdempotencyStore, MemoryIdempotencyStore } from './hub/idempotency.js';
 import { SETUP_CONNECTOR, teamCatalogFilter } from './hub/setup-tools.js';
@@ -193,7 +193,12 @@ export function createServices(
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
-  const entitlements = new EntitlementService({ db, usage, pricingUrl: `${config.publicUrl}/app/billing` });
+  const entitlements = new EntitlementService({
+    db,
+    usage,
+    pricingUrl: `${config.publicUrl}/app/billing`,
+    teamsUrl: `${config.publicUrl}/app/teams`,
+  });
   const billingProvider =
     overrides.billing ??
     createBillingProvider(config.billing, {
@@ -348,7 +353,12 @@ export function createServices(
     setup: {
       connector: SETUP_CONNECTOR,
       admin,
-      billing: new WorkspaceBillingTools({ entitlements, billing, publicUrl: config.publicUrl }),
+      billing: new WorkspaceBillingTools({
+        entitlements,
+        billing,
+        publicUrl: config.publicUrl,
+        teamSlug: (workspaceId) => teams.slugOf(workspaceId),
+      }),
     },
     rateLimiter,
     idempotency,

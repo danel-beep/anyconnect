@@ -286,7 +286,10 @@ export class WorkspaceAdmin {
     }
     if (input.forTeam) url.searchParams.set('owner', 'team');
     if (input.reconnect) {
-      const account = await this.accountFor(principal, input.reconnect, { manage: true, service: connector.id });
+      const account = await this.accountFor(principal, input.reconnect, {
+        manage: true,
+        service: connector.id,
+      });
       url.searchParams.set('account', account.id);
     } else {
       if (input.name && (await this.deps.accounts.findByName(workspaceId, connector.id, input.name))) {
@@ -361,7 +364,9 @@ export class WorkspaceAdmin {
     );
     if (matches.length === 1) return matches[0]!;
     if (matches.length === 0) throw notFound(`Team member "${ref}"`);
-    throw badRequest(`"${ref}" matches several members: use one of ${matches.map((m) => m.handle).join(', ')}.`);
+    throw badRequest(
+      `"${ref}" matches several members: use one of ${matches.map((m) => m.handle).join(', ')}.`,
+    );
   }
 
   /** The team as the caller sees it: members, whose each account is, what is shared, invitations. */
@@ -395,7 +400,10 @@ export class WorkspaceAdmin {
         sharedWith: view.access.manages.has(a.id)
           ? shares
               .filter((sh) => sh.accountId === a.id)
-              .map((sh) => ({ with: sh.userId ? (handleOf.get(sh.userId) ?? sh.userId) : 'team', access: sh.access }))
+              .map((sh) => ({
+                with: sh.userId ? (handleOf.get(sh.userId) ?? sh.userId) : 'team',
+                access: sh.access,
+              }))
           : [],
       })),
       invitations,
@@ -418,14 +426,17 @@ export class WorkspaceAdmin {
       (sh) => sh.accountId === account.id && sh.userId === userId,
     );
     const order = { read: 1, write: 2, full: 3 } as const;
-    if (account.ownerUserId === null && userId === null) return order[level] > order[current?.access ?? 'full'];
+    if (account.ownerUserId === null && userId === null)
+      return order[level] > order[current?.access ?? 'full'];
     return !current || order[level] > order[current.access];
   }
 
   private async shareTarget(principal: Principal, ref: AccountRef, withRef: string) {
     const account = await this.accountFor(principal, ref, { manage: true });
     const userId =
-      withRef.trim().toLowerCase() === 'team' ? null : (await this.findMember(principal.workspaceId, withRef)).userId;
+      withRef.trim().toLowerCase() === 'team'
+        ? null
+        : (await this.findMember(principal.workspaceId, withRef)).userId;
     return { account, userId };
   }
 

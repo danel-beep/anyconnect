@@ -223,7 +223,8 @@ export const appAction =
         setFlash(c, 'bad', 'app.flash.invalid');
         return c.redirect(back, 303);
       }
-      if (!(error instanceof AppError)) c.get('services').logger.error({ err: error }, 'dashboard action failed');
+      if (!(error instanceof AppError))
+        c.get('services').logger.error({ err: error }, 'dashboard action failed');
       setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
     }
     return c.redirect(back, 303);

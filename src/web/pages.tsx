@@ -273,7 +273,9 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
         ) : null}
         <p class="consent-can">{t('consent.access')}</p>
         <ul class="bullets consent-list">
-          <li>{t(view.team ? 'consent.access.team' : 'consent.access.mcp', { count: view.activeAccounts })}</li>
+          <li>
+            {t(view.team ? 'consent.access.team' : 'consent.access.mcp', { count: view.activeAccounts })}
+          </li>
           <li>{t('consent.access.offline')}</li>
         </ul>
         {view.persona ? (

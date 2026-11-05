@@ -1,14 +1,21 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getPlan } from '../billing/plans.js';
-import { MAX_OWNED_TEAMS } from '../core/teams.js';
 import type { Principal } from '../core/principal.js';
+import { MAX_OWNED_TEAMS } from '../core/teams.js';
 import type { MemberRole, ShareLevel } from '../db/schema.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { isTeamAdmin, SHARE_LEVELS } from '../security/members.js';
 import { csrfToken } from '../web/http.js';
 import { InvitePage, TeamPage, type TeamPageView, TeamsPage } from '../web/team.js';
-import { type AppContext, type AppEnv, currentSession, loginUrl, secondFactorRedirect } from './context.js';
+import {
+  type AppContext,
+  type AppEnv,
+  bodyParams,
+  currentSession,
+  loginUrl,
+  secondFactorRedirect,
+} from './context.js';
 import {
   type AppAuth,
   appAction,
@@ -20,7 +27,6 @@ import {
   shellInfo,
   takeFlash,
 } from './page-helpers.js';
-import { bodyParams } from './context.js';
 
 /**
  * The team pages of the dashboard (`/app/teams`, `/app/team/:slug/...`) and the invitation link
@@ -49,13 +55,21 @@ export function teamRoutes() {
     '/app/teams',
     page('/app/teams', async (c, auth) => {
       const s = c.get('services');
-      const [teams, shell] = await Promise.all([s.teams.teamsOf(auth.user.id), shellInfo(c, auth.workspace.id)]);
+      const [teams, shell] = await Promise.all([
+        s.teams.teamsOf(auth.user.id),
+        shellInfo(c, auth.workspace.id),
+      ]);
       return c.html(
         <TeamsPage
           ctx={pageCtx(c, auth.user)}
           shell={shell}
           view={{
-            teams: teams.map((x) => ({ name: x.team.name, slug: x.team.slug ?? '', role: x.role, members: x.members })),
+            teams: teams.map((x) => ({
+              name: x.team.name,
+              slug: x.team.slug ?? '',
+              role: x.role,
+              members: x.members,
+            })),
             owned: teams.filter((x) => x.role === 'owner').length,
             maxOwned: MAX_OWNED_TEAMS,
             flash: takeFlash(c),
@@ -79,7 +93,11 @@ export function teamRoutes() {
     '/app/team/connect',
     page('/app/teams', async (c) => {
       const q = z
-        .object({ team: z.string().max(60), service: z.string().min(1).max(100), owner: z.literal('team').optional() })
+        .object({
+          team: z.string().max(60),
+          service: z.string().min(1).max(100),
+          owner: z.literal('team').optional(),
+        })
         .safeParse(c.req.query());
       if (!q.success) return c.redirect('/app/teams', 302);
       const url = new URL(`/connect/${encodeURIComponent(q.data.service)}`, 'http://hub');
@@ -102,17 +120,18 @@ export function teamRoutes() {
     const { team, role } = await teamOf(c, auth);
     const admin = isTeamAdmin(role);
     const principal: Principal = { kind: 'session', userId: auth.user.id, workspaceId: team.id, scopes: [] };
-    const [view, members, invitations, accounts, shares, summary, tokens, services, shell] = await Promise.all([
-      s.teams.view(principal),
-      s.teams.members(team.id),
-      s.teams.invitations(team.id),
-      s.accounts.list(team.id),
-      s.teams.shares(team.id),
-      s.entitlements.summary(team.id),
-      admin ? s.apiTokens.list(team.id) : Promise.resolve([]),
-      s.admin.services(team.id),
-      shellInfo(c, auth.workspace.id),
-    ]);
+    const [view, members, invitations, accounts, shares, summary, tokens, services, shell] =
+      await Promise.all([
+        s.teams.view(principal),
+        s.teams.members(team.id),
+        s.teams.invitations(team.id),
+        s.accounts.list(team.id),
+        s.teams.shares(team.id),
+        s.entitlements.summary(team.id),
+        admin ? s.apiTokens.list(team.id) : Promise.resolve([]),
+        s.admin.services(team.id),
+        shellInfo(c, auth.workspace.id),
+      ]);
     if (!view) throw notFound('Team');
     const names = new Map(members.map((m) => [m.userId, m.name]));
     const serviceName = new Map(services.map((x) => [x.service, x.name]));
@@ -132,6 +151,17 @@ export function teamRoutes() {
     );
     const teamPlan = getPlan('team');
     const live = s.billing.liveSubscription(summary.subscription);
+    const focus = z
+      .object({
+        seats: z.coerce.number().int().min(1).max(10_000).optional(),
+        interval: z.enum(['month', 'year']).optional(),
+      })
+      .safeParse({
+        seats: c.req.query('seats') || undefined,
+        interval: c.req.query('interval') || undefined,
+      });
+    const paidFlash =
+      c.req.query('paid') === '1' ? { kind: 'ok' as const, text: t('team.flash.paid') } : undefined;
     return c.html(
       <TeamPage
         ctx={pageCtx(c, auth.user)}
@@ -170,7 +200,8 @@ export function teamRoutes() {
             .filter((a) => a.ownerUserId === null)
             .map((a) => ({
               ...base(a),
-              access: (shares.find((x) => x.accountId === a.id && x.userId === null)?.access ?? 'full') as ShareLevel,
+              access: (shares.find((x) => x.accountId === a.id && x.userId === null)?.access ??
+                'full') as ShareLevel,
               managed: view.access.manages.has(a.id),
             })),
           services: services.filter((x) => x.ready).map((x) => ({ id: x.service, name: x.name })),
@@ -201,11 +232,12 @@ export function teamRoutes() {
               max: teamPlan.perSeat?.max ?? 1,
             },
             payments: s.billing.canBuy('team', 'month') || s.billing.canBuy('team', 'year'),
+            ...(focus.success ? { focus: focus.data } : {}),
           },
           keys: tokens
             .filter((k) => k.shared)
             .map((k) => ({ id: k.id, name: k.name, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })),
-          flash: takeFlash(c),
+          flash: takeFlash(c) ?? paidFlash,
           ...extra,
         }}
       />,
@@ -223,7 +255,10 @@ export function teamRoutes() {
       const s = c.get('services');
       const { team } = await teamOf(c, auth);
       const role = form.role === 'admin' ? 'admin' : 'member';
-      const { invitation, url } = await s.teams.invite(auth.user.id, team.id, { email: form.email ?? '', role });
+      const { invitation, url } = await s.teams.invite(auth.user.id, team.id, {
+        email: form.email ?? '',
+        role,
+      });
       // The link is shown once, in this response: it is never stored, only its hash.
       return renderTeam(c, auth, { newInvite: { email: invitation.email, url } });
     }),
@@ -305,7 +340,8 @@ export function teamRoutes() {
     action(backToTeam, async (c, auth, form) => {
       const s = c.get('services');
       const { team, role } = await teamOf(c, auth);
-      if (!isTeamAdmin(role)) throw new AppError(403, 'team_admin_only', 'Only team admins create shared keys');
+      if (!isTeamAdmin(role))
+        throw new AppError(403, 'team_admin_only', 'Only team admins create shared keys');
       const name = z.string().trim().min(1).max(80).parse(form.name);
       const client = await s.aiClients.createUnique(team.id, name, 'api_token');
       // MCP only: the management API sees a whole workspace, which nobody in a team does.
@@ -326,7 +362,8 @@ export function teamRoutes() {
     action(backToTeam, async (c, auth) => {
       const s = c.get('services');
       const { team, role } = await teamOf(c, auth);
-      if (!isTeamAdmin(role)) throw new AppError(403, 'team_admin_only', 'Only team admins revoke shared keys');
+      if (!isTeamAdmin(role))
+        throw new AppError(403, 'team_admin_only', 'Only team admins revoke shared keys');
       const key = (await s.apiTokens.list(team.id)).find((k) => k.id === c.req.param('id') && k.shared);
       if (!key) throw notFound('Key');
       await s.apiTokens.revoke(team.id, key.id);

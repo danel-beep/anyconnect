@@ -391,7 +391,9 @@ export class AccountService {
       await tx
         .update(personas)
         .set({ accountIds: sql`array_remove(${personas.accountIds}, ${accountId})` })
-        .where(and(eq(personas.workspaceId, fromWorkspaceId), sql`${accountId} = any(${personas.accountIds})`));
+        .where(
+          and(eq(personas.workspaceId, fromWorkspaceId), sql`${accountId} = any(${personas.accountIds})`),
+        );
       await tx
         .update(toolCalls)
         .set({ accountId: null })

@@ -1,5 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
-import { type Limits, type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { type Metric, PLANS, type Plan } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
 import {
@@ -321,10 +321,14 @@ export const PlanCard: FC<{
   const perSeat = plan.perSeat;
   const featureText = (metric: Metric): string => {
     if (metric === 'actions' && start)
-      return t('plan.metric.actionsSteps', { n: fmtNumber(lang, plan.limits.actions ?? 0), steps: start.steps });
+      return t('plan.metric.actionsSteps', {
+        n: fmtNumber(lang, plan.limits.actions ?? 0),
+        steps: start.steps,
+      });
     if (perSeat && metric === 'actions' && plan.limits.actions !== null)
       return t('plan.metric.actionsPerSeat', { n: fmtNumber(lang, plan.limits.actions) });
-    if (perSeat && metric === 'seats') return t('plan.metric.seatsRange', { min: perSeat.min, max: perSeat.max });
+    if (perSeat && metric === 'seats')
+      return t('plan.metric.seatsRange', { min: perSeat.min, max: perSeat.max });
     return limitText(t, lang, metric, plan.limits[metric]);
   };
   return (

@@ -440,9 +440,7 @@ export const accountShares = pgTable(
   (t) => [
     index().on(t.workspaceId),
     uniqueIndex().on(t.accountId, t.userId),
-    uniqueIndex('account_shares_team_unique')
-      .on(t.accountId)
-      .where(sql`${t.userId} is null`),
+    uniqueIndex('account_shares_team_unique').on(t.accountId).where(sql`${t.userId} is null`),
   ],
 );
 

@@ -127,7 +127,10 @@ async function renderConsent(c: AppContext, request: AuthorizationRequest, param
   const user = (await currentUser(c))!;
   const target = await consentTarget(c, user.id, request.resource);
   if (target.kind === 'error')
-    return c.html(<ErrorPage t={c.get('t')} lang={c.get('locale')} message={target.message} />, target.status);
+    return c.html(
+      <ErrorPage t={c.get('t')} lang={c.get('locale')} message={target.message} />,
+      target.status,
+    );
   const { workspace } = target;
   const persona = target.kind === 'personal' ? target.persona : null;
   const choice = await clientChoice(c, workspace.id, request);

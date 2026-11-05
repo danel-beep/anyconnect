@@ -144,7 +144,9 @@ export function accountPolicy(
   }
   // In a team, another member's account that was not shared with the caller does not exist for them.
   const memberCap =
-    subject.member && target.accountId !== null ? (subject.member.access[target.accountId] ?? 'none') : undefined;
+    subject.member && target.accountId !== null
+      ? (subject.member.access[target.accountId] ?? 'none')
+      : undefined;
   if (memberCap === 'none') {
     return {
       access: 'none',

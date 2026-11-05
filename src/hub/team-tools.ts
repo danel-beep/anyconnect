@@ -12,13 +12,25 @@ import type { SetupActionSpec } from './setup-tools.js';
  */
 
 /** Team tools that only make sense inside a team (hidden elsewhere, see `teamCatalogFilter`). */
-export const TEAM_ONLY_ACTIONS: ReadonlySet<string> = new Set(['share_account', 'invite_member', 'remove_member']);
+export const TEAM_ONLY_ACTIONS: ReadonlySet<string> = new Set([
+  'share_account',
+  'invite_member',
+  'remove_member',
+]);
 
-const LEVEL_TEXT = { read: 'read only', write: 'read and change', full: 'everything, including sending and deleting' };
+const LEVEL_TEXT = {
+  read: 'read only',
+  write: 'read and change',
+  full: 'everything, including sending and deleting',
+};
 
 const ShareInput = z.object({
   account: z.string().min(1).describe('One of the user’s own accounts, "service:account", e.g. "gmail:ann"'),
-  with: z.string().trim().min(1).describe('A member (handle, email or name), or "team" for everyone in the team'),
+  with: z
+    .string()
+    .trim()
+    .min(1)
+    .describe('A member (handle, email or name), or "team" for everyone in the team'),
   access: z
     .enum(['read', 'write', 'full'])
     .nullable()

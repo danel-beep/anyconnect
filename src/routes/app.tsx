@@ -28,21 +28,17 @@ import { serviceAlternative } from '../web/catalog.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
 import { fmtAgo, fmtDate } from '../web/ui.js';
-import { type AppContext, type AppEnv, bodyParams, SESSION_COOKIE } from './context.js';
+import { type AppContext, type AppEnv, SESSION_COOKIE } from './context.js';
 import {
   type AppAuth,
   appAction,
   appPage,
   cookieOpts,
-  csrfFailedPage,
-  csrfOk,
   pageCtx,
-  requireApp,
   saveLocale,
   setFlash,
   shellInfo,
   takeFlash,
-  uiError,
 } from './page-helpers.js';
 
 const DAY = 86_400_000;
@@ -349,11 +345,14 @@ export function appRoutes() {
   ) =>
     app.post(
       `/app/accounts/:id/${name}`,
-      action((form) => accountBack(form), async (c, auth, form) => {
-        const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
-        await run(c, auth, account, form);
-        return undefined;
-      }),
+      action(
+        (form) => accountBack(form),
+        async (c, auth, form) => {
+          const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
+          await run(c, auth, account, form);
+          return undefined;
+        },
+      ),
     );
 
   /** Turns the account's actions on and off: a checked box keeps the action available to the AI. */

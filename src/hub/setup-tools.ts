@@ -179,9 +179,9 @@ async function ruleChangeOf(input: z.output<typeof RuleInput>, ctx: SetupContext
     aiClientId = (await ctx.admin.findAiClient(workspaceId, app)).id;
   }
   // In a team a rule on one account is its owner's to set; a rule for every account is the admins'.
-  const accountId = account
-    ? (await ctx.admin.accountFor(ctx.principal, account, { manage: true })).id
-    : ((await ctx.admin.authorize(ctx.principal, 'admin')), null);
+  let accountId: string | null = null;
+  if (account) accountId = (await ctx.admin.accountFor(ctx.principal, account, { manage: true })).id;
+  else await ctx.admin.authorize(ctx.principal, 'admin');
   return { kind: 'rule', aiClientId, accountId, access, confirm };
 }
 
@@ -237,7 +237,10 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     risk: 'read',
     hints: { readOnly: true, openWorld: false },
     async run({ for_team, ...input }, ctx) {
-      const link = await ctx.admin.connectLink(ctx.principal, { ...input, ...(for_team ? { forTeam: true } : {}) });
+      const link = await ctx.admin.connectLink(ctx.principal, {
+        ...input,
+        ...(for_team ? { forTeam: true } : {}),
+      });
       return {
         url: link.url,
         method: link.method,

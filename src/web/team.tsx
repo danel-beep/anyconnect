@@ -116,9 +116,20 @@ export interface TeamPageView {
     taken: number;
     actions: { used: number; limit: number | null };
     trial?: { until: Date; seats: number | null } | undefined;
-    live?: { interval: 'month' | 'year' | null; quantity: number; until: Date | null; ending: boolean } | undefined;
-    team: { month: number; year: number; actions: number | null; messengers: number | null; min: number; max: number };
+    live?:
+      | { interval: 'month' | 'year' | null; quantity: number; until: Date | null; ending: boolean }
+      | undefined;
+    team: {
+      month: number;
+      year: number;
+      actions: number | null;
+      messengers: number | null;
+      min: number;
+      max: number;
+    };
     payments: boolean;
+    /** Seats and period picked in a link (from the AI's `buy_plan`). */
+    focus?: { seats?: number | undefined; interval?: 'month' | 'year' | undefined } | undefined;
   };
   keys: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null }[];
   /** A shared key just created: shown once. */
@@ -128,7 +139,11 @@ export interface TeamPageView {
 
 const usd = (n: number) => `$${n}`;
 
-export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }> = ({ ctx, shell, view }) => {
+export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
   const { t, lang } = ctx;
   const base = `/app/team/${view.team.slug}`;
   const admin = view.me.role === 'owner' || view.me.role === 'admin';
@@ -353,7 +368,10 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
                   </button>
                 </form>
               ) : null}
-              {admin && m.role !== 'owner' && m.userId !== view.me.userId && (owner || m.role === 'member') ? (
+              {admin &&
+              m.role !== 'owner' &&
+              m.userId !== view.me.userId &&
+              (owner || m.role === 'member') ? (
                 <form
                   method="post"
                   action={`${base}/members/${m.userId}/remove`}
@@ -448,7 +466,9 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
                     <strong>{k.name}</strong>
                     <div class="small muted">
                       {t('app.apps.since', { date: fmtDate(lang, k.createdAt) })} ·{' '}
-                      {k.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, k.lastUsedAt) }) : t('home.never')}
+                      {k.lastUsedAt
+                        ? t('app.apps.used', { ago: fmtAgo(lang, k.lastUsedAt) })
+                        : t('home.never')}
                     </div>
                   </span>
                   <form
@@ -508,7 +528,11 @@ const TeamPlanCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = (
   const { t, lang } = ctx;
   const { plan } = view;
   const base = `/app/team/${view.team.slug}`;
-  const suggested = Math.min(plan.team.max, Math.max(plan.team.min, view.members.length, plan.live?.quantity ?? 0));
+  const suggested = Math.min(
+    plan.team.max,
+    Math.max(plan.team.min, view.members.length, plan.focus?.seats ?? plan.live?.quantity ?? 0),
+  );
+  const yearly = (plan.focus?.interval ?? plan.live?.interval) === 'year';
   return (
     <div class="card" id="plan">
       <h2>{t('team.plan.title')}</h2>
@@ -564,10 +588,10 @@ const TeamPlanCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = (
           <div>
             <label for="plan-interval">{t('team.plan.interval')}</label>
             <select id="plan-interval" name="interval">
-              <option value="month" selected={plan.live?.interval !== 'year'}>
+              <option value="month" selected={!yearly}>
                 {t('team.plan.month')}
               </option>
-              <option value="year" selected={plan.live?.interval === 'year'}>
+              <option value="year" selected={yearly}>
                 {t('team.plan.year')}
               </option>
             </select>

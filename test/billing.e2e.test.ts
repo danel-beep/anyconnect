@@ -132,7 +132,8 @@ describe('payments with the test provider', () => {
       workspaceId,
       externalId: row.externalId!,
       customerId: row.customerId,
-      priceId: 'test_business_month',
+      priceId: 'test_pro_month',
+      quantity: 1,
       interval: 'month' as const,
       status: 'active' as const,
       periodEnd: new Date(Date.now() + 86_400_000),
@@ -148,13 +149,13 @@ describe('payments with the test provider', () => {
     expect(await billing.apply('test', newer)).toBe('duplicate');
     const older = {
       ...base,
-      priceId: 'test_pro_month',
+      priceId: 'test_personal_month',
       eventId: 'evt_old',
       type: 'subscription.updated',
       occurredAt: new Date(Date.now() - 60_000),
     };
     expect(await billing.apply('test', older)).toBe('ignored');
-    expect(await plan()).toBe('business');
+    expect(await plan()).toBe('pro');
     const unknown = {
       ...base,
       workspaceId: undefined,
@@ -197,7 +198,8 @@ describe('payments with the test provider', () => {
   it('lets the AI assistant see the plan, get a buy link and cancel with confirmation', async () => {
     const status = json(await tool('manyplug_plan'));
     expect(status).toMatchObject({ plan: 'free', online_payment: true, test_mode: true });
-    expect(status.plans.map((p: { id: string }) => p.id)).toEqual(['free', 'personal', 'pro', 'business']);
+    // A personal workspace is offered the personal plans; the team plan is bought by a team.
+    expect(status.plans.map((p: { id: string }) => p.id)).toEqual(['free', 'personal', 'pro']);
 
     const link = json(await tool('manyplug_buy_plan', { plan: 'pro', interval: 'year' }));
     expect(link.url).toBe(`${hub.baseUrl}/app/billing?plan=pro&interval=year`);

@@ -133,6 +133,8 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       'manyplug_rules',
       'manyplug_services',
       'manyplug_set_rule',
+      // Lists the user's teams and explains how a team connects (the team tools show inside a team).
+      'manyplug_team',
       'manyplug_test_account',
       'manyplug_update_account',
       'manyplug_update_settings',
