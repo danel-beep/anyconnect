@@ -205,7 +205,7 @@ const terms: Record<Locale, Builder> = {
   ru: ({ contact, site }) => ({
     title: 'Условия использования',
     updated: UPDATED.ru,
-    intro: `Эти условия действуют, когда вы пользуетесь сервисом Manyplug (${site}). Регистрируясь, вы с ними соглашаетесь.`,
+    intro: `Эти условия действуют, когда вы пользуетесь сервисом Manyplug (${site}). Регистрируясь, вы с ними соглашаетесь. Сервисом управляет частное лицо в Объединённых Арабских Эмиратах.`,
     sections: [
       {
         title: 'Что делает сервис',
@@ -262,7 +262,7 @@ const terms: Record<Locale, Builder> = {
   en: ({ contact, site }) => ({
     title: 'Terms of service',
     updated: UPDATED.en,
-    intro: `These terms apply when you use Manyplug (${site}). By signing up you accept them.`,
+    intro: `These terms apply when you use Manyplug (${site}). By signing up you accept them. Manyplug is operated by an individual based in the United Arab Emirates.`,
     sections: [
       {
         title: 'What the service does',
