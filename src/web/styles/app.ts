@@ -206,6 +206,38 @@ details.fold>summary::after{right:24px}
 details.fold .fold-title{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:620}
 details.fold .fold-sub{display:block;font-weight:400;margin-top:4px}
 details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
+details.fold .fold-icon{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);flex:none}
+details.fold .fold-icon svg{width:18px;height:18px}
+
+/* AI apps page: signed-in apps as tiles, an inviting empty state, the rest folded below */
+.app-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.app-tile{display:flex;gap:12px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--card);min-width:0}
+.app-tile>.grow{min-width:0}
+.app-tile-name{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;font-size:15px}
+.app-tile-name .badge{margin-left:0;position:relative;z-index:1}
+.app-tile-link{font-weight:620;color:var(--text);text-decoration:none}
+.app-tile.linked{position:relative;transition:border-color .15s,box-shadow .15s,transform .15s}
+.app-tile.linked:hover{border-color:var(--accent);box-shadow:0 6px 18px -12px rgba(0,0,0,.35);transform:translateY(-1px)}
+.app-tile.linked:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.app-tile-link:focus-visible{outline:none}
+.app-tile-meta{display:flex;align-items:baseline;gap:6px;margin:4px 0 0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.app-tile-meta .dot{transform:translateY(-1px)}
+.app-tile-actions{display:flex;align-items:center;gap:4px;flex:none;position:relative;z-index:1}
+.app-tile-revoke{color:var(--muted)}
+.app-tile-revoke:hover{color:var(--danger)}
+.apps-empty{text-align:center;padding:28px 24px}
+.apps-empty h2{margin:12px 0 4px}
+.apps-empty p{max-width:52ch;margin:0 auto}
+.apps-empty-logos{display:flex;justify-content:center;flex-wrap:wrap;gap:14px 18px}
+.apps-empty-logo{display:flex;flex-direction:column;align-items:center;gap:6px;width:72px}
+.apps-empty-name{font-size:12px;color:var(--muted);text-align:center;line-height:1.25}
+.apps-head{display:flex;align-items:center;gap:8px}
+.apps-head .tiny-badge{margin-left:0}
+h3.fold-sub-h{margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--border);font-size:15px}
+@media (min-width:721px){details.fold:has(.fold-icon)>.fold-body{padding-left:72px}}
+.section-label{margin:28px 0 10px;font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:900px){.app-grid{grid-template-columns:1fr}}
+
 
 /* Activity chart */
 .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:8px 0 0;border-bottom:1px solid var(--border)}
