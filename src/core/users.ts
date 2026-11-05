@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   apiTokens,
@@ -82,13 +82,23 @@ export class UserService {
   }
 
   /** Workspaces the user owns. */
+  /** Workspaces the user owns: their personal one first, then teams they own. */
   async ownedWorkspaces(userId: string): Promise<Workspace[]> {
     const rows = await this.deps.db
       .select({ workspace: workspaces })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-      .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.role, 'owner')));
+      .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.role, 'owner')))
+      .orderBy(sql`(${workspaces.kind} = 'personal') desc`, asc(workspaceMembers.createdAt));
     return rows.map((r) => r.workspace);
+  }
+
+  /**
+   * The user's own workspace (never a team): the one the admin panel shows and puts on a plan, and
+   * the one an administrator's unlimited plan applies to.
+   */
+  async personalWorkspace(userId: string): Promise<Workspace | undefined> {
+    return (await this.ownedWorkspaces(userId)).find((w) => w.kind === 'personal');
   }
 
   identities(userId: string) {

@@ -245,7 +245,7 @@ export function buildInstructions(
     );
     if (team?.member) {
       lines.push(
-        'In this team: manyplug_team shows the members and who may use which account; manyplug_share_account shares one of the user’s own accounts with a member or the whole team (or stops sharing); team admins invite people with manyplug_invite_member and remove them with manyplug_remove_member. Each person connects their own accounts with manyplug_connect_account.',
+        `In this team: manyplug_team shows the members and who may use which account; manyplug_share_account shares one of the user’s own accounts with a member or the whole team (or stops sharing); ${team.admin ? 'as a team admin the user invites people with manyplug_invite_member and removes them with manyplug_remove_member' : 'inviting and removing people, services and the plan are for the team’s admins: the user asks one of them'}. Each person connects their own accounts with manyplug_connect_account.`,
       );
     }
   }

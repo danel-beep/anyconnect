@@ -134,7 +134,7 @@ export const teamEn = {
   'invite.point2':
     'Accounts you connect in the team are yours: nobody else, admins included, uses them unless you share one.',
   'invite.point3':
-    'You can use the team’s accounts and what teammates share with you. Admins see your name, email and which services you connected, not their contents.',
+    'You can use the team’s accounts and what teammates share with you. Admins see your name and email in the member list, not your accounts.',
   'invite.point4': 'You can leave any time; your accounts then go back to your personal space.',
   'invite.accept': 'Join the team',
   'invite.signIn': 'Sign in to accept',
@@ -287,7 +287,7 @@ export const teamRu: Record<keyof typeof teamEn, string> = {
   'invite.point2':
     'Аккаунты, которые вы подключаете в команде, — ваши: никто, включая администраторов, ими не пользуется, пока вы не поделитесь.',
   'invite.point3':
-    'Вам доступны аккаунты команды и то, чем с вами поделились коллеги. Администраторы видят ваше имя, почту и какие сервисы вы подключили, но не их содержимое.',
+    'Вам доступны аккаунты команды и то, чем с вами поделились коллеги. Администраторы видят ваше имя и почту в списке участников, но не ваши аккаунты.',
   'invite.point4': 'Выйти можно в любой момент; ваши аккаунты тогда вернутся в ваше личное пространство.',
   'invite.accept': 'Вступить в команду',
   'invite.signIn': 'Войти, чтобы принять',

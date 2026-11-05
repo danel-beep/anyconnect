@@ -445,14 +445,28 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
 
 /** Setup tools a team's shared connection still sees: reading only (it cannot change the setup). */
 const SHARED_CONNECTION_TOOLS: ReadonlySet<string> = new Set(['services', 'rules', 'plan', 'team']);
+/**
+ * Setup tools that, in a team, only its owner and admins may use (their `run` checks it too): they
+ * are not offered to other members, so the AI does not suggest what would be refused.
+ */
+const TEAM_ADMIN_TOOLS: ReadonlySet<string> = new Set([
+  'invite_member',
+  'remove_member',
+  'add_service',
+  'remove_service',
+  'update_settings',
+  'buy_plan',
+  'cancel_plan',
+]);
 
 /**
- * Wraps a catalog filter for teams: the team tools appear only to members of a team, and a team's
- * shared connection sees no setup tool that changes anything.
+ * Wraps a catalog filter for teams: the team tools appear only to members of a team, admin tools
+ * only to its owner and admins, and a team's shared connection sees no setup tool that changes
+ * anything.
  */
 export function teamCatalogFilter(
   base: ((caller: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined) | undefined,
-  team: (caller: Principal) => Promise<{ member?: unknown } | undefined>,
+  team: (caller: Principal) => Promise<{ member?: unknown; admin?: boolean } | undefined>,
 ): (caller: Principal) => Promise<CatalogAllow> {
   return async (caller) => {
     const [allow, view] = await Promise.all([base?.(caller), team(caller)]);
@@ -460,6 +474,7 @@ export function teamCatalogFilter(
       if (account === undefined && isSetupConnector(connector.id)) {
         if (TEAM_ONLY_ACTIONS.has(action.name) && !view?.member) return false;
         if (view && !view.member && !SHARED_CONNECTION_TOOLS.has(action.name)) return false;
+        if (view?.member && !view.admin && TEAM_ADMIN_TOOLS.has(action.name)) return false;
       }
       return allow ? allow(connector, action, account) : true;
     };

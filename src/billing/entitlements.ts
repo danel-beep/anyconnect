@@ -235,7 +235,10 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
   private async seatCheck(principal: Principal, ent: Entitlements): Promise<QuotaDecision> {
     const seats = ent.limits.seats;
     if (ent.workspaceKind !== 'team' || seats === null || principal.shared) return { allowed: true };
-    const holders = await this.seatHolders(principal.workspaceId, seats);
+    let holders = await this.seatHolders(principal.workspaceId, seats);
+    // A free seat means the cached list may predate someone who just joined: look again.
+    if (!holders.has(principal.userId) && holders.size < seats)
+      holders = await this.seatHolders(principal.workspaceId, seats, true);
     if (holders.has(principal.userId)) return { allowed: true };
     return {
       allowed: false,
@@ -246,10 +249,10 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
     };
   }
 
-  private async seatHolders(workspaceId: string, seats: number): Promise<Set<string>> {
+  private async seatHolders(workspaceId: string, seats: number, fresh = false): Promise<Set<string>> {
     const key = `${workspaceId}:${seats}`;
     const hit = this.seatCache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_MS) return hit.holders;
+    if (!fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.holders;
     const rows = await this.deps.db
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)

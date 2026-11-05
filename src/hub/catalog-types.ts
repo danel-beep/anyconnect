@@ -30,6 +30,8 @@ export interface CatalogTeam {
   name: string;
   /** The caller's name; absent for the team's shared connection. */
   member?: string;
+  /** The caller runs the team (its owner or an admin). */
+  admin?: boolean;
   /** By account id. */
   owners: Readonly<Record<string, AccountOwner>>;
 }

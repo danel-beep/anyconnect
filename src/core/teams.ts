@@ -115,9 +115,12 @@ export const teamError = {
   limit: () => new AppError(409, 'team_limit', `One person can own up to ${MAX_OWNED_TEAMS} teams.`),
 };
 
+/** How long one caller's view is reused: a request builds its catalog and checks its calls with one. */
+const VIEW_TTL_MS = 5_000;
+
 export class TeamService implements ConnectPermissions {
-  /** One view per principal object: a request builds the catalog and checks calls with the same. */
-  private readonly views = new WeakMap<Principal, Promise<TeamView | undefined>>();
+  /** Per principal object, briefly (see {@link VIEW_TTL_MS}). */
+  private readonly views = new WeakMap<Principal, { at: number; view: Promise<TeamView | undefined> }>();
 
   constructor(
     private readonly deps: {
@@ -296,14 +299,16 @@ export class TeamService implements ConnectPermissions {
 
   /**
    * The caller's view of their team, or undefined in a personal workspace. Cached per principal
-   * object, so one request computes it once (catalog, policy and setup tools share it).
+   * object for a few seconds, so one request computes it once (catalog, policy and setup tools
+   * share it) and a long-lived caller still sees a share or a removal soon after it happens.
    */
   view(principal: Principal): Promise<TeamView | undefined> {
-    let view = this.views.get(principal);
-    if (!view) {
-      view = this.load(principal);
-      this.views.set(principal, view);
-    }
+    const now = Date.now();
+    const hit = this.views.get(principal);
+    if (hit && now - hit.at < VIEW_TTL_MS) return hit.view;
+    const view = this.load(principal);
+    this.views.set(principal, { at: now, view });
+    view.catch(() => this.views.delete(principal));
     return view;
   }
 

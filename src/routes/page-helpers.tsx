@@ -179,6 +179,16 @@ const ERROR_TEXTS: Partial<Record<string, Key>> = {
   provider_refused: 'error.code.provider_refused',
   provider_unavailable: 'error.code.provider_unavailable',
   paid_subscription: 'error.code.paid_subscription',
+  team_admin_only: 'error.code.team_admin_only',
+  team_owner_only: 'error.code.team_owner_only',
+  not_account_owner: 'error.code.not_account_owner',
+  team_owner_stays: 'error.code.team_owner_stays',
+  invite_wrong_email: 'error.code.invite_wrong_email',
+  already_member: 'error.code.already_member',
+  team_limit: 'error.code.team_limit',
+  bad_seats: 'error.code.bad_seats',
+  too_few_seats: 'error.code.too_few_seats',
+  plan_mismatch: 'error.code.plan_mismatch',
   csrf: 'error.csrf',
 };
 

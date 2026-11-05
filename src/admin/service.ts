@@ -16,6 +16,7 @@ import {
   webauthnCredentials,
   webSessions,
   workspaceMembers,
+  workspaces,
 } from '../db/schema.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
@@ -181,13 +182,14 @@ export class AdminService {
     return { items, total, page, pages: Math.max(1, Math.ceil(total / perPage)) };
   }
 
-  /** Adds each user's owned workspace, plan, account count and this month's actions. */
+  /** Adds each user's own (personal) workspace, plan, account count and this month's actions. */
   private async decorate(rows: UserRow[]): Promise<AdminUserListItem[]> {
     if (!rows.length) return [];
     const db = this.deps.db;
     const members = await db
       .select({ userId: workspaceMembers.userId, workspaceId: workspaceMembers.workspaceId })
       .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(
         and(
           inArray(
@@ -195,6 +197,7 @@ export class AdminService {
             rows.map((r) => r.id),
           ),
           eq(workspaceMembers.role, 'owner'),
+          eq(workspaces.kind, 'personal'),
         ),
       );
     const wsIds = [...new Set(members.map((m) => m.workspaceId))];
@@ -231,7 +234,7 @@ export class AdminService {
     const db = this.deps.db;
     const user = await this.deps.users.get(userId);
     if (!user) throw notFound('User');
-    const workspace = (await this.deps.users.ownedWorkspaces(userId))[0];
+    const workspace = await this.deps.users.personalWorkspace(userId);
     const [identities, [sessions], [totp], [passkeys], audit] = await Promise.all([
       this.deps.users.identities(userId),
       db.select({ n: count() }).from(webSessions).where(eq(webSessions.userId, userId)),
@@ -327,7 +330,7 @@ export class AdminService {
   }
 
   private async workspaceOf(userId: string): Promise<string> {
-    const workspace = (await this.deps.users.ownedWorkspaces(userId))[0];
+    const workspace = await this.deps.users.personalWorkspace(userId);
     if (!workspace) throw new AppError(400, 'no_workspace', 'The user has no workspace');
     return workspace.id;
   }

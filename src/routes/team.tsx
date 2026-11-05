@@ -420,7 +420,7 @@ export function teamRoutes() {
 
   // --- Invitations -----------------------------------------------------------------
 
-  const invitePage = async (c: AppContext, status: 200 | 404 = 200) => {
+  const invitePage = async (c: AppContext, status: 200 | 403 | 404 = 200) => {
     const s = c.get('services');
     const token = c.req.param('token') ?? '';
     const found = await s.teams.invitation(token);
@@ -465,7 +465,9 @@ export function teamRoutes() {
       setFlash(c, 'ok', 'team.flash.joined', { name: team.name });
       return c.redirect(`/app/team/${team.slug}`, 303);
     } catch (error) {
-      if (error instanceof AppError && error.status < 500) return invitePage(c, 404);
+      // The page says why (another address signed in, a used or expired link).
+      if (error instanceof AppError && error.status < 500)
+        return invitePage(c, error.status === 403 ? 403 : 404);
       throw error;
     }
   });

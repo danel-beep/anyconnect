@@ -52,6 +52,7 @@ import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { AiClientService } from './security/clients.js';
 import { ConfirmationCenter, type DescribeCall } from './security/confirmations.js';
+import { isTeamAdmin } from './security/members.js';
 import { NotificationChannels } from './security/notifications.js';
 import { PendingCallService, principalOf } from './security/pending-calls.js';
 import { PersonaService } from './security/personas.js';
@@ -339,7 +340,7 @@ export function createServices(
     if (!view) return undefined;
     return {
       name: view.team.name,
-      ...(view.member ? { member: view.member.name } : {}),
+      ...(view.member ? { member: view.member.name, admin: isTeamAdmin(view.member.role) } : {}),
       owners: view.access.owners,
     };
   };
