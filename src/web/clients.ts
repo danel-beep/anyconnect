@@ -23,10 +23,11 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 /**
  * The server name in the client's config: `manyplug`, or `manyplug-work` for the address of the
- * access profile `work`, so adding a profile never replaces the main connection.
+ * access profile `work` (or of the team `work`, `/mcp/team/work`), so adding a profile or a team never
+ * replaces the main connection.
  */
 export function serverName(url: string): string {
-  const profile = /\/mcp\/([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
+  const profile = /\/mcp\/(?:team\/)?([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
   return profile ? `manyplug-${profile}` : 'manyplug';
 }
 

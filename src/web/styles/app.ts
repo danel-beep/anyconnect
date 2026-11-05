@@ -269,11 +269,7 @@ h3.fold-sub-h{margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--bor
 .paid-sub .actions{margin-top:8px;flex-wrap:wrap}
 .billing-events{margin:12px 0}
 .billing-events li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.start-schedule{margin:12px 0}
-.start-schedule li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.start-schedule li.past{opacity:.55}
-.start-schedule li.current{font-weight:600}
-.start-schedule .badge{margin-left:8px}
+.start-schedule{margin:20px 0 12px}
 .plan-mini .plan{padding:18px;gap:10px}
 .plan-mini .price .amount{font-size:28px}
 .plan.current{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
