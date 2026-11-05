@@ -1,6 +1,7 @@
 import type { AccountAlerts } from '../core/account-alerts.js';
 import type { CustomServiceManager } from '../core/custom-services.js';
 import type { AccountHealthService } from '../core/health.js';
+import type { BackupService } from '../ops/backups.js';
 import type { StatusService } from '../ops/status.js';
 import type { JobDefinition } from './queue.js';
 
@@ -10,8 +11,24 @@ export function builtinJobs(deps: {
   alerts: AccountAlerts;
   customServices: CustomServiceManager;
   status: StatusService;
+  /** Present when a backup bucket is configured. */
+  backups?: BackupService | undefined;
 }): JobDefinition[] {
+  const backups = deps.backups;
   return [
+    ...(backups
+      ? [
+          {
+            name: 'backup.database',
+            description: 'Back up the database to the configured bucket',
+            cron: '17 3 * * *',
+            expectEveryMs: 26 * 3_600_000,
+            run: async () => {
+              await backups.run();
+            },
+          },
+        ]
+      : []),
     {
       name: 'status.sample',
       description: 'Record the status page sample of this minute',

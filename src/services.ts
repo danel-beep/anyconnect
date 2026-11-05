@@ -38,15 +38,17 @@ import { PgUsageMeter, type UsageMeter } from './hub/usage.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
 import { CircuitBreaker } from './lib/circuit-breaker.js';
-import { SecretBox } from './lib/crypto.js';
+import { parseKey, SecretBox } from './lib/crypto.js';
 import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
+import { S3Client } from './lib/s3.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
 import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
+import { BackupService, type DumpTools } from './ops/backups.js';
 import { createOps, type Ops, watchConnections, watchJobs } from './ops/index.js';
 import { AiAppService } from './security/apps.js';
 import { UserSecurityTools, WorkspaceAppTools, WorkspaceProfileTools } from './security/assistant.js';
@@ -105,6 +107,8 @@ export interface Services {
   health: AccountHealthService;
   /** Tells owners about accounts that need a new sign-in. */
   alerts: AccountAlerts;
+  /** Database backups; absent when no bucket is configured. */
+  backups: BackupService | undefined;
   /** Background jobs; started by `startJobs()` in processes that run them. */
   jobs: JobQueue;
   apiTokens: ApiTokenService;
@@ -171,6 +175,8 @@ export function createServices(
     loginProviders?: OidcLoginProvider[];
     /** Tests: a fake Sentry. */
     sentryFetch?: typeof fetch;
+    /** Replaces pg_dump / pg_restore (backup tests). */
+    backupTools?: DumpTools;
   } = {},
 ): Services {
   const logger =
@@ -252,6 +258,19 @@ export function createServices(
     logger,
   });
   const health = new AccountHealthService({ db, connectors, accounts, tokens, logger });
+  const backups = config.backups
+    ? new BackupService({
+        databaseUrl: config.database.url,
+        store: new S3Client(config.backups.storage),
+        key: config.backups.encryptionKey
+          ? parseKey(config.backups.encryptionKey)
+          : secrets.deriveKey('backup'),
+        prefix: config.backups.prefix,
+        retentionDays: config.backups.retentionDays,
+        logger,
+        ...(overrides.backupTools ? { tools: overrides.backupTools } : {}),
+      })
+    : undefined;
   const jobs = new JobQueue({
     connectionString: config.database.url,
     logger,
@@ -369,7 +388,8 @@ export function createServices(
         .catch(() => `${config.publicUrl}/app/accounts/${encodeURIComponent(accountId)}`),
     logger,
   });
-  for (const job of builtinJobs({ health, alerts, customServices, status: ops.status })) jobs.register(job);
+  for (const job of builtinJobs({ health, alerts, customServices, status: ops.status, backups }))
+    jobs.register(job);
   const hub = new Hub({
     db,
     meter: usage,
@@ -496,6 +516,7 @@ export function createServices(
     connect,
     health,
     alerts,
+    backups,
     jobs,
     apiTokens,
     hub,

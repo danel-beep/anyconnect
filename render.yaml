@@ -57,6 +57,15 @@ services:
         sync: false
       - key: WELL_KNOWN_MCP_REGISTRY_AUTH
         sync: false
+      # Optional: daily encrypted database backups to an S3-compatible bucket (docs/OPERATIONS.md)
+      - key: BACKUP_S3_ENDPOINT
+        sync: false
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
 
 databases:
   - name: anyconnect-db

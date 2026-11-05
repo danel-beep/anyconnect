@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { type BillingConfig, BillingConfigError, readBillingConfig } from './billing/config.js';
 import { BRAND } from './brand.js';
 import { CLIENT_POLICY_IDS } from './hub/client-policies.js';
+import { parseKey } from './lib/crypto.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
+import type { S3Config } from './lib/s3.js';
 import { parseSentryDsn } from './ops/sentry.js';
 
 /**
@@ -128,6 +130,24 @@ const EnvSchema = z.object({
   SENTRY_ENVIRONMENT: optionalString,
   /** Days an error group is kept after it was last seen. */
   ERROR_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /**
+   * Database backups to S3-compatible storage (Cloudflare R2, Backblaze B2, AWS S3, MinIO): set
+   * the endpoint, bucket and keys together. See docs/OPERATIONS.md.
+   */
+  BACKUP_S3_ENDPOINT: optionalString,
+  BACKUP_S3_BUCKET: optionalString,
+  /** `auto` for Cloudflare R2. */
+  BACKUP_S3_REGION: z.string().default('auto'),
+  BACKUP_S3_ACCESS_KEY_ID: optionalString,
+  BACKUP_S3_SECRET_ACCESS_KEY: optionalString,
+  /** Folder (key prefix) in the bucket. */
+  BACKUP_PREFIX: optionalString,
+  BACKUP_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /**
+   * Key backups are encrypted with (like ENCRYPTION_KEY: 32 bytes, base64 or hex). Default: derived
+   * from ENCRYPTION_KEY. A separate key lets backups be restored after ENCRYPTION_KEY rotation.
+   */
+  BACKUP_ENCRYPTION_KEY: optionalString,
   /** Commit of the running build; set by Render. Shown in the admin panel and sent with errors. */
   RENDER_GIT_COMMIT: optionalString,
   RENDER_INSTANCE_ID: optionalString,
@@ -223,6 +243,8 @@ export interface AppConfig {
   gateway: { url: string; token: string } | undefined;
   /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
   billing: BillingConfig;
+  /** Database backups (see `src/ops/backups.ts`); undefined when no bucket is configured. */
+  backups: BackupConfig | undefined;
   /** Error tracking and build identity (see `src/ops/`). */
   ops: {
     sentryDsn: string | undefined;
@@ -352,6 +374,53 @@ function normalizePublicUrl(raw: string): string {
     throw new ConfigError('PUBLIC_URL must be an origin without a path, e.g. https://hub.example.com');
   }
   return url.origin;
+}
+
+export interface BackupConfig {
+  storage: S3Config;
+  prefix: string;
+  retentionDays: number;
+  encryptionKey: string | undefined;
+}
+
+function backupConfig(env: z.infer<typeof EnvSchema>): BackupConfig | undefined {
+  const parts = {
+    BACKUP_S3_ENDPOINT: env.BACKUP_S3_ENDPOINT,
+    BACKUP_S3_BUCKET: env.BACKUP_S3_BUCKET,
+    BACKUP_S3_ACCESS_KEY_ID: env.BACKUP_S3_ACCESS_KEY_ID,
+    BACKUP_S3_SECRET_ACCESS_KEY: env.BACKUP_S3_SECRET_ACCESS_KEY,
+  };
+  const missing = Object.entries(parts).filter(([, value]) => !value);
+  if (missing.length === Object.keys(parts).length) return undefined;
+  if (missing.length) {
+    throw new ConfigError(`Database backups need ${missing.map(([name]) => name).join(', ')} as well`);
+  }
+  let endpoint: URL;
+  try {
+    endpoint = new URL(env.BACKUP_S3_ENDPOINT!);
+  } catch {
+    throw new ConfigError(`BACKUP_S3_ENDPOINT is not a valid URL: ${env.BACKUP_S3_ENDPOINT}`);
+  }
+  if (env.BACKUP_ENCRYPTION_KEY) {
+    try {
+      parseKey(env.BACKUP_ENCRYPTION_KEY);
+    } catch {
+      throw new ConfigError('BACKUP_ENCRYPTION_KEY must be 32 bytes in base64 or hex');
+    }
+  }
+  const prefix = env.BACKUP_PREFIX ?? `${BRAND.slug}/`;
+  return {
+    storage: {
+      endpoint: endpoint.toString().replace(/\/+$/, ''),
+      bucket: env.BACKUP_S3_BUCKET!,
+      region: env.BACKUP_S3_REGION,
+      accessKeyId: env.BACKUP_S3_ACCESS_KEY_ID!,
+      secretAccessKey: env.BACKUP_S3_SECRET_ACCESS_KEY!,
+    },
+    prefix: prefix.endsWith('/') ? prefix : `${prefix}/`,
+    retentionDays: env.BACKUP_RETENTION_DAYS,
+    encryptionKey: env.BACKUP_ENCRYPTION_KEY,
+  };
 }
 
 function gatewayConfig(url: string | undefined, token: string | undefined): AppConfig['gateway'] {
@@ -486,6 +555,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     jobs: { enabled: env.JOBS_ENABLED },
     gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
     billing: billingConfig(source, isProduction),
+    backups: backupConfig(env),
     ops: {
       sentryDsn: sentryDsn(env.SENTRY_DSN),
       environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
