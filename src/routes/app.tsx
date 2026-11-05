@@ -690,6 +690,7 @@ export function appRoutes() {
         successUrl: `${s.config.publicUrl}/app/billing?paid=1`,
         cancelUrl: `${s.config.publicUrl}/app/billing`,
       });
+      s.analytics.track('checkout.start', `${input.plan}_${input.interval}`);
       if (outcome.kind === 'redirect') return c.redirect(outcome.url, 303);
       setFlash(c, 'ok', 'app.flash.planChanging', {
         plan: c.get('t')(`plan.${outcome.planId}.name` as 'plan.free.name'),

@@ -93,6 +93,13 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'Статистика посещений',
+        paragraphs: [
+          'Мы сами считаем посещения сайта, без сторонних счётчиков и без cookie. Из IP-адреса и названия браузера вычисляется анонимный идентификатор с секретом, который меняется каждый день и удаляется через два дня, поэтому визит нельзя связать с человеком. IP-адрес не сохраняется.',
+          'Сохраняются страница, сайт или рекламная метка, с которых пришёл посетитель, страна, язык браузера и тип устройства. При регистрации мы запоминаем, откуда пришёл новый пользователь, по визиту из того же браузера в тот же или предыдущий день, чтобы понимать, какая реклама работает.',
+        ],
+      },
+      {
         title: 'Ваши права',
         paragraphs: [
           'Подключения и журнал действий видны в личном кабинете. Вы можете запросить копию своих данных, их исправление или удаление, написав по адресу ниже. Мы отвечаем в течение 30 дней.',
@@ -169,6 +176,13 @@ const privacy: Record<Locale, Builder> = {
         title: 'Cookies',
         paragraphs: [
           'We only use necessary cookies: the sign-in session, form protection and your language. No advertising or analytics cookies. Your theme choice is kept in your browser.',
+        ],
+      },
+      {
+        title: 'Visit statistics',
+        paragraphs: [
+          'We count visits to the website ourselves, without third-party trackers and without cookies. An anonymous id is computed from the IP address and the browser name with a secret that changes every day and is deleted after two days, so a visit cannot be linked to a person. The IP address is not stored.',
+          'We store the page, the referring site or ad tag a visitor came from, the country, the browser language and the device type. When you sign up, we note where you came from, using the visit from the same browser on that day or the day before, to understand which ads work.',
         ],
       },
       {

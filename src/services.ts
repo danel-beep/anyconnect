@@ -1,5 +1,6 @@
 import type { McpHttpHandler } from '@modelcontextprotocol/server';
 import { AdminService } from './admin/service.js';
+import { Analytics } from './analytics/index.js';
 import { WorkspaceBillingTools } from './billing/assistant.js';
 import { EntitlementService } from './billing/entitlements.js';
 import type { BillingProvider } from './billing/provider.js';
@@ -158,6 +159,8 @@ export interface Services {
   adminPanel: AdminService;
   /** Counts over the audit log for the dashboard. */
   activity: ActivityService;
+  /** First-party analytics: traffic, funnel, product usage (admin panel → Analytics). */
+  analytics: Analytics;
   /** "Sign in with Google" and other OpenID Connect providers. */
   externalLogin: ExternalLoginService;
   /** Sign-ins waiting for a second factor. */
@@ -341,6 +344,12 @@ export function createServices(
     db,
     () => new Map(connectors.builtin.all().map((c) => [c.id, connectorText(c, 'en').name] as const)),
   );
+  const analytics = new Analytics({
+    db,
+    config: config.analytics,
+    publicHost: new URL(config.publicUrl).hostname,
+    onError: (error) => ops.errors.capture(error, { source: 'analytics' }),
+  });
   const rateLimiter = new RateLimiter();
   const circuitBreaker = new CircuitBreaker();
   const idempotency = new MemoryIdempotencyStore();
@@ -387,7 +396,14 @@ export function createServices(
   };
   // People who open the bot from an ad or a plain link get a short pitch and a tagged site link.
   const telegramLanding = telegramBot
-    ? new TelegramLanding({ bot: telegramBot, publicUrl: config.publicUrl, t: translator, logger })
+    ? new TelegramLanding({
+        bot: telegramBot,
+        publicUrl: config.publicUrl,
+        t: translator,
+        logger,
+        // Bot starts per ad campaign, next to the visits and sign-ups the same tag brings.
+        onStart: (campaign) => analytics.track('bot.start', campaign ?? 'none'),
+      })
     : undefined;
   const confirmations = new ConfirmationCenter({
     pending: pendingCalls,
@@ -452,6 +468,7 @@ export function createServices(
     status: ops.status,
     backups,
     billingNotices,
+    analytics,
   }))
     jobs.register(job);
   const hub = new Hub({
@@ -624,6 +641,7 @@ export function createServices(
     externalLogin,
     adminPanel,
     activity,
+    analytics,
     pendingLogins,
     secondFactors,
     rateLimiter,
@@ -633,6 +651,7 @@ export function createServices(
     messaging,
     ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
+      await analytics.close();
       await messaging?.stop();
       await pendingRunner.stop();
       rateLimiter.close();
