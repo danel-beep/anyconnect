@@ -2,7 +2,7 @@ import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan, yearlyFreeMonths } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, SAMPLE_SERVICES, searchText, serviceMeta } from './catalog.js';
-import { CLIENT_GUIDES, clientName, guideForApp } from './clients.js';
+import { CLIENT_GUIDES, type ClientGuide, clientName, guideForApp, setupPrompt } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
@@ -21,6 +21,7 @@ import {
   Icon,
   type IconName,
   initials,
+  Meter,
   Prefs,
   pctClass,
   ServiceLogo,
@@ -573,17 +574,33 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
 }) => {
   const { t } = ctx;
   const allDone = view.steps.ai && view.steps.service && view.steps.call;
-  // Same order as on the website: services first, then the address for the AI, then a first request.
-  const steps: { done: boolean; title: string; text: string; href: string }[] = [
+  // The AI first: once it is connected, services can be connected right from the chat ("Connect my email").
+  const steps: { done: boolean; title: string; text: string; cta: string; href: string }[] = [
+    {
+      done: view.steps.ai,
+      title: t('app.onb.ai'),
+      text: t('app.onb.aiText'),
+      cta: t('app.onb.aiCta'),
+      href: '#connect-ai',
+    },
     {
       done: view.steps.service,
       title: t('app.onb.service'),
       text: t('app.onb.serviceText'),
+      cta: t('app.onb.serviceCta'),
       href: '/app/services',
     },
-    { done: view.steps.ai, title: t('app.onb.ai'), text: t('app.onb.aiText'), href: '#connect-ai' },
-    { done: view.steps.call, title: t('app.onb.call'), text: t('app.onb.callText'), href: '/docs#services' },
+    {
+      done: view.steps.call,
+      title: t('app.onb.call'),
+      text: t('app.onb.callText'),
+      cta: t('app.onb.callCta'),
+      href: '/docs#services',
+    },
   ];
+  const doneCount = steps.filter((s) => s.done).length;
+  /** The first step left to do is highlighted. */
+  const current = steps.findIndex((s) => !s.done);
   return (
     <AppShell ctx={ctx} shell={shell} section="overview" title={t('app.nav.overview')}>
       <PageHead
@@ -606,17 +623,33 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
       ) : null}
       <BrokenAccounts ctx={ctx} accounts={view.accounts} />
       {allDone ? null : (
-        <div class="onboard">
-          {steps.map((s, i) => (
-            <a class={`onboard-step${s.done ? ' done' : ''}`} href={s.href}>
-              <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
-              <span>
-                <strong>{s.title}</strong>
-                <span>{s.text}</span>
-              </span>
-            </a>
-          ))}
-        </div>
+        <section class="onboard" aria-labelledby="onboard-title">
+          <div class="onboard-head">
+            <h2 id="onboard-title">{t('app.onb.title')}</h2>
+            <span class="onboard-count">{t('app.onb.progress', { done: doneCount })}</span>
+            <Meter used={doneCount} limit={steps.length} label={t('app.onb.title')} />
+          </div>
+          <div class="onboard-steps">
+            {steps.map((s, i) => (
+              <a
+                class={`onboard-step${s.done ? ' done' : i === current ? ' current' : ''}`}
+                href={s.href}
+                aria-current={i === current ? 'step' : undefined}
+              >
+                <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
+                <span class="onboard-body">
+                  <strong>{s.title}</strong>
+                  <span>{s.text}</span>
+                  {s.done ? null : (
+                    <span class="onboard-cta">
+                      {s.cta} <Icon name={s.href.startsWith('#') ? 'chevron' : 'arrow'} />
+                    </span>
+                  )}
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
       )}
       {/* Until an AI app is connected, its address is the main thing on this page. */}
       {view.steps.ai ? null : <ConnectAiCard ctx={ctx} />}
@@ -700,9 +733,109 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
   );
 };
 
-/** The MCP URL with per-client instructions; compact once an app is connected. */
+/** First requests to paste into the AI once it is connected: setup from the chat comes first. */
+const TRY_PROMPTS = ['app.ai.try1', 'app.ai.try2', 'app.ai.try3'] as const;
+
 /**
- * The MCP address with steps for each AI app. `profile` shows a profile's own address instead of
+ * One AI app's setup: the fastest way first (one-click install, a setup prompt for agents, or
+ * "copy the address and open the app's settings" for chat apps), then the steps with the config
+ * under the first one. Where the fastest way does it all, the manual steps are folded.
+ */
+const ClientSetup: FC<{ ctx: PageCtx; guide: ClientGuide; url: string }> = ({ ctx, guide: g, url }) => {
+  const { t, lang } = ctx;
+  const ru = lang === 'ru';
+  const client = clientName(g, lang);
+  const install = g.install?.(url);
+  const prompt = setupPrompt(g, url, lang);
+  const promptId = `client-prompt-${g.id}`;
+  const text = install
+    ? t('app.ai.installText', { client })
+    : prompt
+      ? t('app.ai.promptText', { client })
+      : g.open
+        ? t('app.ai.openText', { client })
+        : null;
+  // Steps the "open settings" button already does are left out; the rest read as "then in the app".
+  const skip = g.open?.skipsFirstStep && !install && !prompt ? 1 : 0;
+  const steps = (
+    <ol class="ai-steps">
+      {(ru ? g.steps.ru : g.steps.en).slice(skip).map((s, i) => (
+        <li>
+          {s}
+          {i === 0 && g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
+        </li>
+      ))}
+    </ol>
+  );
+  return (
+    <div class="ai-setup">
+      {text ? (
+        <div class="ai-quick">
+          <div class="ai-quick-text">
+            <span class="ai-quick-label">
+              <Icon name="zap" /> {t('app.ai.fastest')}
+            </span>
+            <span>{text}</span>
+            <span class="ai-quick-note">
+              <strong>{t('app.ai.note')}</strong> {ru ? g.note.ru : g.note.en}
+            </span>
+          </div>
+          <div class="ai-quick-do">
+            {install ? (
+              <a class="btn primary" href={install.href}>
+                {ru ? install.label.ru : install.label.en}
+              </a>
+            ) : null}
+            {prompt ? (
+              <button type="button" class={install ? undefined : 'primary'} data-copy={`#${promptId}`}>
+                <Icon name="copy" />
+                <span class="copy-label">{t('app.ai.promptCopy')}</span>
+                <span class="copy-done">{t('ui.copied')}</span>
+              </button>
+            ) : null}
+            {g.open && !install && !prompt ? (
+              // Copies the address and opens the app's settings in a new tab: one click, then paste.
+              <a class="btn primary" href={g.open.href} target="_blank" rel="noopener" data-copy="#mcp-url">
+                <Icon name="copy" />
+                <span class="copy-label">{t('app.ai.openCopy', { client })}</span>
+                <span class="copy-done">{t('app.ai.openDone', { client })}</span>
+                <Icon name="external" />
+              </a>
+            ) : null}
+          </div>
+          {prompt ? (
+            <details class="ai-prompt">
+              <summary>{t('app.ai.promptShow')}</summary>
+              <pre class="block" id={promptId}>
+                <code>{prompt}</code>
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+      {install || prompt ? (
+        <details class="ai-manual">
+          <summary>{t('app.ai.manual')}</summary>
+          {steps}
+        </details>
+      ) : (
+        <>
+          <h3 class="ai-steps-title">{skip ? t('app.ai.then', { client }) : t('app.ai.steps')}</h3>
+          {steps}
+        </>
+      )}
+      {text ? null : (
+        <p class="hint">
+          <strong>{t('app.ai.note')}</strong> {ru ? g.note.ru : g.note.en}
+        </p>
+      )}
+    </div>
+  );
+};
+
+/**
+ * The MCP address with setup for each AI app, then first requests to try. `compact` (an app is
+ * already connected) keeps only the address. `profile` shows a profile's own address instead of
  * the main one (the steps are the same).
  */
 export const ConnectAiCard: FC<{
@@ -712,44 +845,74 @@ export const ConnectAiCard: FC<{
 }> = ({ ctx, compact, profile }) => {
   const { t, lang } = ctx;
   const url = profile?.url ?? ctx.mcpUrl;
-  return (
-    <div class="card" id="connect-ai">
-      <div class="card-head">
-        <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
-        <a class="btn sm" href="/docs">
-          <Icon name="book" /> {t('app.ai.docs')}
-        </a>
-      </div>
-      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} />
+  const address = (
+    <>
+      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} quiet={!compact} />
       <p class="hint">{profile ? profile.hint : t('app.ai.hint')}</p>
-      {compact ? null : (
-        <div class="stack">
-          <Tabs
-            id="clients"
-            remember="client"
-            tabs={CLIENT_GUIDES.filter((g) => g.id !== 'other').map((g) => ({
-              id: g.id,
-              label: clientName(g, lang),
-              panel: (
-                <div class="guide-compact">
-                  <ol class="bullets">
-                    {(lang === 'ru' ? g.steps.ru : g.steps.en).map((s) => (
-                      <li>{s}</li>
-                    ))}
-                  </ol>
-                  {g.install ? (
-                    <p>
-                      <a class="btn sm primary" href={g.install(url).href}>
-                        {lang === 'ru' ? g.install(url).label.ru : g.install(url).label.en}
-                      </a>
-                    </p>
-                  ) : null}
-                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
-                </div>
-              ),
-            }))}
-          />
+    </>
+  );
+  // A profile's own address and the compact card lead with the address; the full card leads with
+  // the app picker (each app has its own one-click action) and keeps the address for manual setup.
+  const addressFirst = compact || profile;
+  return (
+    <div class={compact ? 'card' : 'card connect-ai'} id="connect-ai">
+      <div class="card-head">
+        <div>
+          <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
+          {compact || profile ? null : <p class="hint">{t('app.ai.sub')}</p>}
         </div>
+        {compact ? (
+          <a class="btn sm" href="/app/apps#connect-ai">
+            <Icon name="plus" /> {t('app.ai.another')}
+          </a>
+        ) : (
+          <a class="btn sm" href="/docs">
+            <Icon name="book" /> {t('app.ai.docs')}
+          </a>
+        )}
+      </div>
+      {addressFirst ? address : null}
+      {compact ? null : (
+        <>
+          <div class="ai-clients">
+            <Tabs
+              id="clients"
+              remember="client"
+              variant="tiles"
+              tabs={CLIENT_GUIDES.filter((g) => g.id !== 'other').map((g) => ({
+                id: g.id,
+                label: (
+                  <>
+                    <ServiceLogo icon={g.icon} glyph={g.glyph} name={g.name} size="sm" />
+                    <span class="tab-name">{clientName(g, lang)}</span>
+                  </>
+                ),
+                panel: <ClientSetup ctx={ctx} guide={g} url={url} />,
+              }))}
+            />
+          </div>
+          {addressFirst ? null : (
+            <div class="ai-address">
+              <h3>{t('app.ai.address')}</h3>
+              {address}
+            </div>
+          )}
+          <div class="ai-try">
+            <div>
+              <h3>{t('app.ai.tryTitle')}</h3>
+              <p class="hint">{t('app.ai.tryHint')}</p>
+            </div>
+            <div class="ai-try-list">
+              {TRY_PROMPTS.map((key, i) => (
+                <button type="button" class="try-chip" data-copy={`#ai-try-${i}`}>
+                  <span id={`ai-try-${i}`}>{t(key)}</span>
+                  <Icon name="copy" class="copy-label" />
+                  <Icon name="check" class="copy-done" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

@@ -159,16 +159,20 @@ export const ServiceLogo: FC<{
   );
 };
 
-/** A read-only value with a copy button (the button needs JS; the text stays selectable without it). */
-export const CopyField: FC<{ t: Translate; id: string; value: string; label: string }> = ({
+/**
+ * A read-only value with a copy button (the button needs JS; the text stays selectable without it).
+ * `quiet` makes the button secondary when another action on the screen is the main one.
+ */
+export const CopyField: FC<{ t: Translate; id: string; value: string; label: string; quiet?: boolean }> = ({
   t,
   id,
   value,
   label,
+  quiet,
 }) => (
   <div class="copy">
     <input id={id} type="text" readonly value={value} aria-label={label} data-select-on-focus />
-    <button type="button" class="primary" data-copy={`#${id}`}>
+    <button type="button" class={quiet ? undefined : 'primary'} data-copy={`#${id}`}>
       <Icon name="copy" />
       <span class="copy-label">{t('ui.copy')}</span>
       <span class="copy-done">{t('ui.copied')}</span>
@@ -311,15 +315,17 @@ export const Prefs: FC<{ t: Translate; lang: string; path?: string }> = ({ t, la
 
 /**
  * Tabs: buttons switch panels with JS; without JS every panel is shown under its own heading.
- * `remember` keeps the chosen tab across pages (e.g. the AI client).
+ * `remember` keeps the chosen tab across pages (e.g. the AI client). `tiles` shows the tabs as a grid
+ * of cards (labels with a logo, e.g. the AI app picker) instead of an underlined row.
  */
 export const Tabs: FC<{
   id: string;
   remember?: string;
+  variant?: 'tiles';
   tabs: { id: string; label: Child; panel: Child }[];
-}> = ({ id, remember, tabs }) => (
+}> = ({ id, remember, variant, tabs }) => (
   <div data-tabs={id} data-remember={remember}>
-    <div class="tabs" role="tablist">
+    <div class={variant ? `tabs ${variant}` : 'tabs'} role="tablist">
       {tabs.map((tab, i) => (
         <button
           type="button"
