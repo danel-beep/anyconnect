@@ -1,46 +1,40 @@
-import pg from 'pg';
+import {
+  createDatabaseIfMissing,
+  DEFAULT_TEST_DATABASE_URL,
+  databaseName,
+  isNoServer,
+  siblingDatabaseUrl,
+} from './databases.js';
 
 /**
  * Test files run in parallel: every Vitest worker gets its own database next to the one in
  * `TEST_DATABASE_URL` (`manyplug_test` → `manyplug_test_w1`, `manyplug_test_w2`…), so a file's
  * `resetDatabase()` never pulls the schema out from under a file running in another worker.
+ * The base database itself is never used and need not exist.
  *
  * Runs before each test file (Vitest `setupFiles`), before `test/helpers.ts` reads the variable.
- * Creating the database is best effort: unit tests that never touch Postgres still run without it.
+ * A failure here never stops unit tests that do not touch Postgres: without a server it stays
+ * silent (tests that need one fail with "connection refused"), and when the server refuses
+ * (no CREATEDB, wrong password) it says why before those tests fail.
  */
 
-const DEFAULT_URL = 'postgres://postgres@localhost:5432/manyplug_test';
-
-// A worker runs many files one after another and keeps its environment: remember the base address.
-process.env.TEST_DATABASE_BASE_URL ??= process.env.TEST_DATABASE_URL ?? DEFAULT_URL;
-const base = process.env.TEST_DATABASE_BASE_URL;
 const worker = process.env.VITEST_POOL_ID;
+const current = process.env.TEST_DATABASE_URL ?? DEFAULT_TEST_DATABASE_URL;
 
-if (worker) {
-  const url = new URL(base);
-  url.pathname = `${url.pathname}_w${worker}`;
-  process.env.TEST_DATABASE_URL = url.toString();
-  await createDatabaseIfMissing(url);
-}
-
-async function createDatabaseIfMissing(url: URL): Promise<void> {
-  const name = decodeURIComponent(url.pathname.slice(1));
-  // The maintenance database exists on every server; the test database itself may not exist yet.
-  const admin = new URL(url);
-  admin.pathname = '/postgres';
-  const client = new pg.Client({ connectionString: admin.toString(), connectionTimeoutMillis: 2000 });
+// Each file normally runs in a fresh process; with --no-isolate a worker runs several files in one
+// process and this file runs again for each, with the variable already pointing at its database.
+if (worker && !databaseName(current).endsWith(`_w${worker}`)) {
+  const url = siblingDatabaseUrl(current, `w${worker}`);
+  process.env.TEST_DATABASE_URL = url;
   try {
-    await client.connect();
-  } catch {
-    return; // No Postgres here: only tests that need it will fail, with their own clear error.
-  }
-  try {
-    const exists = await client.query('select 1 from pg_database where datname = $1', [name]);
-    if (exists.rowCount === 0) await client.query(`CREATE DATABASE "${name.replaceAll('"', '""')}"`);
+    await createDatabaseIfMissing(url, [current]);
   } catch (error) {
-    // Another process created it first (42P04): fine.
-    if ((error as { code?: string }).code !== '42P04') throw error;
-  } finally {
-    await client.end();
+    if (!isNoServer(error)) {
+      console.warn(
+        `[test setup] Could not create the test database "${databaseName(url)}": ${(error as Error).message}. ` +
+          'Check TEST_DATABASE_URL, create the database yourself or let the test role create databases (CREATEDB). ' +
+          'Tests that use Postgres will fail.',
+      );
+    }
   }
 }
