@@ -118,6 +118,11 @@ describe('UI contract scanner', () => {
       { name: 'sm', prefix: true },
       { name: 'wide', prefix: false },
     ]);
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: TSX source text under test
+    expect(one("<a class={`btn btn-${big ? 'lg' : 'sm'}`} />").classes).toEqual([
+      { name: 'btn', prefix: false },
+      { name: 'btn-', prefix: true },
+    ]);
     // Commented-out markup is not markup.
     expect(
       scanTsx('x.tsx', '{/* <p class="old"> */}\n<p class="new">').map((e) => [e.line, e.classSource]),

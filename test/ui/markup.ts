@@ -178,6 +178,8 @@ function stringPieces(expr: string): Piece[] {
         continue;
       }
       if (expr[i] === '$' && expr[i + 1] === '{') {
+        // `btn-${big ? 'lg' : 'sm'}`: text glued before the hole makes the hole's words endings.
+        const gluedBefore = chunk !== '' && !/\s$/.test(chunk);
         if (!inCall()) pieces.push({ text: chunk, endsAtHole: true, afterHole: chunkAfterHole });
         chunk = '';
         i += 2;
@@ -202,7 +204,13 @@ function stringPieces(expr: string): Piece[] {
         // `${big ? 'lg' : 'sm'}-btn`: text glued after the hole makes the hole's words beginnings.
         const glued = i < expr.length && !/[\s`]/.test(expr[i]!) && !(expr[i] === '$' && expr[i + 1] === '{');
         if (!inCall()) {
-          pieces.push(...stringPieces(hole).map((piece) => (glued ? { ...piece, endsAtHole: true } : piece)));
+          pieces.push(
+            ...stringPieces(hole).map((piece) => ({
+              ...piece,
+              ...(glued ? { endsAtHole: true } : {}),
+              ...(gluedBefore ? { afterHole: true } : {}),
+            })),
+          );
         }
         chunkAfterHole = true;
         continue;
@@ -309,7 +317,8 @@ function readBraces(src: string, start: number): { inner: string; end: number } 
  * line numbers stay right.
  */
 export function blankJsxComments(source: string): string {
-  return source.replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, (m) => m.replace(/[^\n]/g, ' '));
+  // No braces inside, so a stray `{/*` in a string cannot swallow the markup up to the next comment.
+  return source.replace(/\{\s*\/\*[^{}]*?\*\/\s*\}/g, (m) => m.replace(/[^\n]/g, ' '));
 }
 
 /** Every JSX element of a `.tsx` source with its tag, attributes and possible classes. */
