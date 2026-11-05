@@ -134,6 +134,13 @@
       "when": 1793879254973,
       "tag": "0018_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793885374218,
+      "tag": "0019_user_vaults",
+      "breakpoints": true
     }
   ]
 }
