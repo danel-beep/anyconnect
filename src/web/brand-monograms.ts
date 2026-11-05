@@ -11,6 +11,8 @@ export interface BrandMonogram {
 }
 
 export const BRAND_MONOGRAMS: Record<string, BrandMonogram> = {
+  // Slack's own mark is not in simple-icons: its hash in Slack's aubergine.
+  slack: { text: '#', hex: '#4A154B' },
   outlook: { text: 'O', hex: '#0078D4' },
   monday: { text: 'M', hex: '#FF3D57' },
   smartsheet: { text: 'S', hex: '#0073EC' },

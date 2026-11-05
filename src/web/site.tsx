@@ -55,9 +55,12 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
           <div class="nav-extra">
             <Prefs t={t} lang={ctx.lang} path={ctx.path} />
             {ctx.user ? null : (
-              <a class="btn" href="/login">
-                {t('site.cta.signIn')}
-              </a>
+              <>
+                <StartButton ctx={ctx} size="lg" />
+                <a class="btn lg" href="/login">
+                  {t('site.cta.signIn')}
+                </a>
+              </>
             )}
           </div>
         </nav>
@@ -339,7 +342,8 @@ const limitText = (t: Translate, lang: string, metric: Metric, value: number | n
  * A plan's start in short: trial length and plan, the steps down ("500 → 300") and how many months
  * from sign-up they last.
  */
-function startText(lang: string, plan: Plan): { days: number; plan: string; steps: string; months: number } {
+/** The Free plan's start: the trial, then a monthly allowance that steps down to the plan's own. */
+function startText(t: Translate, lang: string, plan: Plan): { days: number; plan: string; steps: string } {
   const start = plan.start!;
   const steps = start.steps.flatMap((s) =>
     typeof s.limits.actions === 'number' ? [{ n: s.limits.actions, untilDay: s.untilDay }] : [],
@@ -347,8 +351,9 @@ function startText(lang: string, plan: Plan): { days: number; plan: string; step
   return {
     days: start.trial.days,
     plan: start.trial.plan,
-    steps: steps.map((s) => fmtNumber(lang, s.n)).join(' → '),
-    months: Math.ceil(Math.max(0, ...steps.map((s) => s.untilDay)) / 30),
+    steps: steps
+      .map((s) => t('plan.metric.stepMonth', { n: fmtNumber(lang, s.n), m: Math.ceil(s.untilDay / 30) }))
+      .join(', '),
   };
 }
 
@@ -359,20 +364,21 @@ export const PlanCard: FC<{
   action?: Child;
 }> = ({ ctx, plan, current, action }) => {
   const { t, lang } = ctx;
-  const start = plan.start ? startText(lang, plan) : undefined;
+  const start = plan.start ? startText(t, lang, plan) : undefined;
   // What every plan gives today; features still being built are listed apart in the compare table.
-  const features: [Metric, boolean][] = [
-    ['actions', true],
-    ['accounts', true],
-    ['historyDays', true],
-    ['seats', plan.perSeat !== undefined || (plan.limits.seats ?? 2) > 1],
+  // Every plan has every service and safety feature, which the pricing intro says once for all.
+  const features: Metric[] = [
+    'actions',
+    'accounts',
+    'historyDays',
+    ...(plan.perSeat !== undefined || (plan.limits.seats ?? 1) > 1 ? (['seats'] as const) : []),
   ];
   const perSeat = plan.perSeat;
   const featureText = (metric: Metric): string => {
     if (metric === 'actions' && start)
       return t('plan.metric.actionsSteps', {
         n: fmtNumber(lang, plan.limits.actions ?? 0),
-        months: start.months,
+        steps: start.steps,
       });
     if (perSeat && metric === 'actions' && plan.limits.actions !== null)
       return t('plan.metric.actionsPerSeat', { n: fmtNumber(lang, plan.limits.actions) });
@@ -405,8 +411,14 @@ export const PlanCard: FC<{
             )
           ) : (
             <>
-              <span class="when-month">{t('pricing.orYear', { price: `$${plan.priceYearly}` })}</span>
-              <span class="when-year">{t('pricing.billedYear', { price: `$${plan.priceYearly}` })}</span>
+              <span class="when-month">
+                {t(perSeat ? 'pricing.orYearPerSeat' : 'pricing.orYear', { price: `$${plan.priceYearly}` })}
+              </span>
+              <span class="when-year">
+                {t(perSeat ? 'pricing.billedYearPerSeat' : 'pricing.billedYear', {
+                  price: `$${plan.priceYearly}`,
+                })}
+              </span>
             </>
           )}
         </div>
@@ -423,16 +435,12 @@ export const PlanCard: FC<{
         ) : null}
       </div>
       <ul>
-        {features.map(([metric, on]) => (
-          <li class={on ? undefined : 'off'}>
-            {on ? <Check /> : <Icon name="minus" />}
+        {features.map((metric) => (
+          <li>
+            <Check />
             <span>{featureText(metric)}</span>
           </li>
         ))}
-        <li>
-          <Check />
-          <span>{t('plan.feature.everything')}</span>
-        </li>
       </ul>
       {action}
     </div>
@@ -643,7 +651,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                             {t('pricing.startCell', {
                               days: p.start.trial.days,
                               plan: t(`plan.${p.start.trial.plan}.name` as 'plan.free.name'),
-                              steps: startText(lang, p).steps,
+                              steps: startText(t, lang, p).steps,
                             })}
                           </div>
                         ) : null}

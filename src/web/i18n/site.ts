@@ -98,7 +98,7 @@ export const siteEn = {
     'In Manyplug’s database, encrypted with a separate key per account. The AI only sees tool results, never keys. You can disconnect any account at any moment, and its credentials are deleted.',
   'faq.action.q': 'What counts as an action?',
   'faq.action.a':
-    'One call of a service tool by the AI: a search, reading an email, creating a task. “Find the ACME invoice and send it to Alex” takes about three. Managing Manyplug itself (listing accounts, connecting a new one) is free. The Free plan starts with 14 days of Pro, then gives 500 actions until day 30, 300 until day 60 and 150 a month after that.',
+    'One call of a service tool by the AI: a search, reading an email, creating a task. “Find the Lumina invoice and send it to Alex” takes about three. Managing Manyplug itself (listing accounts, connecting a new one) is free. The Free plan starts with 14 days of Pro, then gives 500 actions in month 1, 300 in month 2 and 150 a month after that.',
   'faq.limit.q': 'What happens when I run out of actions?',
   'faq.limit.a':
     'The AI gets a polite message that the monthly limit is reached and nothing breaks. Your accounts and settings stay. The counter resets on the 1st of the month, or you can switch to a bigger plan.',
@@ -131,7 +131,7 @@ export const siteEn = {
   'plan.business.for': 'For a small team with shared services',
   'plan.team.name': 'Team',
   'plan.team.for': 'One link for the whole team; everyone signs in as themselves',
-  'plan.metric.actionsPerSeat': '{n} AI actions a month per person, shared by the team',
+  'plan.metric.actionsPerSeat': '{n} AI actions per person a month, pooled across the team',
   'plan.metric.seatsRange': '{min} to {max} people, each with their own sign-in and accounts',
   'pricing.perSeat': '/ person / month',
   'pricing.perSeatCell': '{n} per person',
@@ -139,8 +139,9 @@ export const siteEn = {
   'plan.unlimited.for': 'Special plan assigned by the administrator',
   'plan.metric.actions': '{n} AI actions a month',
   'plan.metric.actions.unlimited': 'Unlimited AI actions',
-  'plan.metric.trial': 'Free forever, with {days} days of {plan} to start',
-  'plan.metric.actionsSteps': '{n} AI actions a month, more in your first {months} months',
+  'plan.metric.trial': 'Free forever. Your first {days} days are on {plan}.',
+  'plan.metric.actionsSteps': '{n} AI actions a month ({steps})',
+  'plan.metric.stepMonth': '{n} in month {m}',
   'plan.metric.accounts': 'Up to {n} connected accounts',
   'plan.metric.accounts.unlimited': 'Unlimited accounts',
   'plan.metric.messengers': 'Messenger accounts: up to {n} (soon)',
@@ -153,7 +154,6 @@ export const siteEn = {
   'plan.metric.seats': 'Team members: up to {n}',
   'plan.metric.seats.solo': 'One member',
   'plan.metric.seats.unlimited': 'Unlimited team members',
-  'plan.feature.everything': 'All services, safety features and AI apps',
 
   'pricing.title': 'Pricing · Manyplug',
   'pricing.description':
@@ -165,7 +165,7 @@ export const siteEn = {
   'pricing.paymentsAsk': 'Questions: {email}',
   'pricing.soon': 'Coming soon',
   'pricing.actionHint':
-    'An action is one thing the AI does in a service: a search, reading an email, adding a task. “Find the ACME invoice and send it to Alex” takes about three.',
+    'An action is one thing the AI does in a service: a search, reading an email, adding a task. “Find the Lumina invoice and send it to Alex” takes about three.',
   'pricing.interval': 'Billing period',
   'pricing.monthly': 'Monthly',
   'pricing.yearly': 'Yearly',
@@ -174,8 +174,10 @@ export const siteEn = {
   'pricing.perMonth': '/ month',
   'pricing.forever': 'Free forever',
   'pricing.orYear': 'or {price} a year',
+  'pricing.orYearPerSeat': 'or {price} per person a year',
   'pricing.billedYear': '{price} billed yearly',
-  'pricing.minTeam': 'From {price} a month for {n} people',
+  'pricing.billedYearPerSeat': '{price} per person, billed yearly',
+  'pricing.minTeam': 'Minimum {n} people ({price} a month)',
   'pricing.startFree': 'Start free',
   'pricing.choose': 'Choose {plan}',
   'pricing.compare': 'Compare plans',
@@ -396,7 +398,7 @@ export const siteRu: Record<SiteKey, string> = {
     'В базе Manyplug, зашифрованные отдельным ключом для каждого аккаунта. ИИ видит только результаты инструментов, но не ключи. Любой аккаунт можно отключить в любой момент, и его данные для входа удаляются.',
   'faq.action.q': 'Что считается действием?',
   'faq.action.a':
-    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. «Найди счёт ACME и отправь его Алексу» — это около трёх действий. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются. Бесплатный тариф начинается с 14 дней Pro, потом 500 действий до 30-го дня, 300 до 60-го и 150 в месяц дальше.',
+    'Один вызов инструмента сервиса: поиск, чтение письма, создание задачи. «Найди счёт Lumina и отправь его Алексу» — это около трёх действий. Служебные операции Manyplug (список аккаунтов, подключение нового) не считаются. Бесплатный тариф начинается с 14 дней Pro, потом 500 действий в 1-й месяц, 300 во 2-й и 150 в месяц дальше.',
   'faq.limit.q': 'Что будет, если действия закончатся?',
   'faq.limit.a':
     'ИИ получит вежливое сообщение, что месячный лимит исчерпан, и ничего не сломается. Аккаунты и настройки сохранятся. Счётчик обнулится 1-го числа, или можно перейти на тариф побольше.',
@@ -437,9 +439,9 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.unlimited.for': 'Особый тариф, назначенный администратором',
   'plan.metric.actions': '{n} действий ИИ в месяц',
   'plan.metric.actions.unlimited': 'Действия ИИ без ограничений',
-  'plan.metric.trial': 'Бесплатно навсегда, а первые {days} дней — «{plan}»',
-  'plan.metric.actionsSteps':
-    '{n} действий ИИ в месяц, в первые {months} {months|месяц|месяца|месяцев} — больше',
+  'plan.metric.trial': 'Бесплатно навсегда. Первые {days} дней — на тарифе «{plan}».',
+  'plan.metric.actionsSteps': '{n} действий ИИ в месяц ({steps})',
+  'plan.metric.stepMonth': '{m}-й месяц — {n}',
   'plan.metric.accounts': 'Аккаунтов сервисов: до {n}',
   'plan.metric.accounts.unlimited': 'Аккаунты без ограничений',
   'plan.metric.messengers': 'Аккаунтов мессенджеров: до {n} (скоро)',
@@ -452,7 +454,6 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.metric.seats': 'Участников: до {n}',
   'plan.metric.seats.solo': 'Один участник',
   'plan.metric.seats.unlimited': 'Участники без ограничений',
-  'plan.feature.everything': 'Все сервисы, функции защиты и ИИ-приложения',
 
   'pricing.title': 'Тарифы · Manyplug',
   'pricing.description':
@@ -465,7 +466,7 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.paymentsAsk': 'Вопросы: {email}',
   'pricing.soon': 'Скоро',
   'pricing.actionHint':
-    'Действие — это один шаг ИИ в сервисе: поиск, чтение письма, новая задача. «Найди счёт ACME и отправь его Алексу» — около трёх действий.',
+    'Действие — это один шаг ИИ в сервисе: поиск, чтение письма, новая задача. «Найди счёт Lumina и отправь его Алексу» — около трёх действий.',
   'pricing.interval': 'Период оплаты',
   'pricing.monthly': 'Помесячно',
   'pricing.yearly': 'За год',
@@ -474,8 +475,10 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.perMonth': '/ мес',
   'pricing.forever': 'Бесплатно навсегда',
   'pricing.orYear': 'или {price} за год',
+  'pricing.orYearPerSeat': 'или {price} за человека в год',
   'pricing.billedYear': '{price} при оплате за год',
-  'pricing.minTeam': 'От {price} в месяц за {n} {n|человека|человека|человек}',
+  'pricing.billedYearPerSeat': '{price} за человека при оплате за год',
+  'pricing.minTeam': 'Минимум {n} {n|человек|человека|человек} ({price} в месяц)',
   'pricing.startFree': 'Начать бесплатно',
   'pricing.choose': 'Выбрать «{plan}»',
   'pricing.compare': 'Сравнение тарифов',

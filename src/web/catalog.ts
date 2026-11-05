@@ -74,6 +74,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     },
   },
   slack: {
+    icon: 'slack',
     glyph: 'hash',
     category: 'messengers',
     blurb: { ru: 'Каналы, поиск по сообщениям, отправка.', en: 'Channels, message search, posting.' },
@@ -372,6 +373,8 @@ export const POPULAR_SERVICES: readonly string[] = [
   'gsheets',
   'linear',
   'jira',
+  'zoom',
+  'stripe',
 ];
 
 /**

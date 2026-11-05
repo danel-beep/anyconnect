@@ -10,26 +10,27 @@ export const landingEn = {
   'landing.h1a': 'All your inboxes, chats and docs,',
   'landing.h1b': 'in any AI assistant.',
   'landing.lead':
-    'Connect Gmail, Slack, Notion and {n} more services, with work and personal accounts side by side. Paste one link into Claude, ChatGPT or Cursor. Anything that sends or deletes waits for your OK.',
+    'Connect work and personal Gmail, two Slack workspaces, a client’s Notion and {n} more services. Paste one link into Claude, ChatGPT or Cursor. Anything that sends or deletes waits for your OK.',
   'landing.how': 'See how it works',
-  'landing.note.free': 'Free plan, no card needed',
-  'landing.note.fast': 'Set up in about five minutes',
+  'landing.note.free': 'Free plan, no card',
+  'landing.note.fast': '5-minute setup',
   'landing.note.encrypted': 'Your logins never reach the AI',
 
   'landing.demo.label':
     'Example chat: Claude searches two inboxes, reads an invoice, asks before sending it to Alex on Slack, and sends it once you allow it',
   'landing.demo.title': 'Claude',
   'landing.demo.connected': 'Manyplug connected',
-  'landing.demo.ask': 'Find the ACME invoice in my mail and send it to Alex on Slack',
+  'landing.demo.ask': 'Find the Lumina invoice and send it to Alex on Slack',
   'landing.demo.found': '3 emails',
   'landing.demo.read': '$1,240 · due Nov 15',
   'landing.demo.approveWho': 'Manyplug · asks before sending',
-  'landing.demo.approveText': 'Send “ACME invoice INV-2041” to @alex on Slack?',
+  'landing.demo.approveText': 'Send “Lumina invoice INV-2041” to @alex on Slack?',
   'landing.demo.deny': 'Deny',
   'landing.demo.allow': 'Allow',
   'landing.demo.approved': 'Approved by you',
   'landing.demo.sent': 'sent',
-  'landing.demo.answer': 'Done. I sent Alex the ACME invoice INV-2041 for $1,240. It’s due November\u00a015.',
+  'landing.demo.answer':
+    'Done. I sent Alex the Lumina invoice INV-2041 for $1,240. It’s due November\u00a015.',
   'landing.demo.input': 'Reply to Claude…',
 
   'landing.works': 'Works with any AI app that supports MCP, the open standard for AI tools',
@@ -40,14 +41,15 @@ export const landingEn = {
     'The connectors built into Claude or ChatGPT work only in that app, usually with one account per service. Manyplug gives every AI app all your accounts, with the same rules everywhere.',
   'landing.map.core': 'your MCP link',
   'landing.map.api': 'Your MCP or API',
+  'landing.map.anyApp': 'Any MCP app',
   'landing.map.before': 'Without Manyplug',
-  'landing.map.beforeStat': '25 connections to set up (5 apps × 5 services)',
+  'landing.map.beforeStat': 'Every app set up separately, one account per service',
   'landing.map.beforeText':
-    'Each AI app connects to each service on its own, often with one account per service.',
+    'Built-in connectors work only in their own app and usually see one account. Five apps and five services means 25 setups.',
   'landing.map.after': 'With Manyplug',
-  'landing.map.afterStat': '5 sign-ins, and the same link in every app',
+  'landing.map.afterStat': 'Every account, one link in every app',
   'landing.map.afterText':
-    'Connect each service once. Every AI app you add the link to gets every account, with your rules.',
+    'Connect each service once, with all its accounts. Paste the link into any AI app and it gets every account, under the same rules.',
   'landing.map.compare': 'Compare with Zapier MCP, Composio and others',
 
   'landing.how.eyebrow': 'How it works',
@@ -66,14 +68,14 @@ export const landingEn = {
   'landing.features.eyebrow': 'Features',
   'landing.features.title': 'Made for people with more than one of everything',
   'landing.features.lead':
-    'Several accounts per service, separate rules per app, and your OK before anything risky.',
+    'Built for real setups: two inboxes, a client’s workspace, and AI apps you trust to different degrees.',
   'landing.f.accounts.title': 'Every account, side by side',
   'landing.f.accounts.text':
     'Work and personal Gmail, two Slack workspaces, a client’s Notion. Ask about one account or all of them at once.',
   'landing.f.accounts.found': '{n} {n|email|emails}',
   'landing.f.confirm.title': 'You approve the risky stuff',
   'landing.f.confirm.text':
-    'Sending an email, deleting a file, issuing a refund: these wait for your OK. You choose what asks first, per app and account.',
+    'Sending an email, deleting a file, issuing a refund: these wait until you tap Allow. You choose what asks first, per app and account.',
   'landing.f.confirm.read': 'Search and read',
   'landing.f.confirm.send': 'Send email',
   'landing.f.confirm.personal': 'Send from gmail:personal',
@@ -82,7 +84,7 @@ export const landingEn = {
   'landing.f.confirm.block': 'Blocked',
   'landing.f.chat.title': 'Set it up by asking',
   'landing.f.chat.text':
-    'Ask your AI to add an account, rename one or disconnect an old one. Anything that loosens your safety settings still needs your OK.',
+    'Ask your AI to add an account, rename one or disconnect an old one. Anything that loosens your safety settings still needs your approval.',
   'landing.f.chat.prompt': 'Connect my second Gmail and call it Clients',
   'landing.f.chat.reply': 'Here’s your Google sign-in link. Once you finish, “Clients” is ready.',
   'landing.f.personas.title': 'Different access for each AI',
@@ -95,9 +97,9 @@ export const landingEn = {
   'landing.f.api.text':
     'Add a private MCP server or any REST API by its address and key. It follows the same rules as built-in services.',
   'landing.f.api.status': 'connected',
-  'landing.f.context.title': 'Light on your AI’s memory',
+  'landing.f.context.title': 'Leaves room for your conversation',
   'landing.f.context.text':
-    'Loading every tool up front fills your AI’s memory before you ask anything. Manyplug gives it a short menu and loads details only when needed.',
+    'Loading every tool up front can take 60k+ tokens before you type. Manyplug shows a short menu and loads details only when needed, so long chats stay fast and on track.',
   'landing.f.context.label': 'Loaded before your first message',
   'landing.f.context.all': 'Every tool',
   'landing.f.context.allTokens': '60k+ tokens',
@@ -118,9 +120,9 @@ export const landingEn = {
   'landing.sec.secrets.title': 'The AI never sees your logins',
   'landing.sec.secrets.text':
     'You enter keys on our page, not in the chat. They’re stored encrypted and sent only to the service they belong to.',
-  'landing.sec.injection.title': 'Prompt-injection guard',
+  'landing.sec.injection.title': 'Guard against hidden instructions',
   'landing.sec.injection.text':
-    'Text from emails and web pages reaches your AI marked as untrusted, and anything risky still waits for your OK.',
+    'Text from emails and web pages reaches your AI marked as untrusted, and anything risky still asks you first.',
   'landing.sec.audit.title': 'Activity log',
   'landing.sec.audit.text': 'See which AI did what and when, without storing the contents of your mail.',
   'landing.sec.delete.title': 'Disconnect means deleted',
@@ -140,7 +142,7 @@ export const landingEn = {
   'landing.pricing.eyebrow': 'Pricing',
   'landing.pricing.title': 'Start free, pay when it saves you time',
   'landing.pricing.lead':
-    'Every plan has every service and every security feature; plans differ only in volume. An action is one step the AI takes in a service, like a search or a sent message: the invoice request above took three.',
+    'Every plan includes every service and every safety feature; you pay only for volume. An action is one step the AI takes, like a search or a sent message. The invoice request at the top took three.',
 
   'landing.faq.eyebrow': 'FAQ',
   'landing.faq.title': 'Questions people ask',
@@ -163,26 +165,27 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.h1a': 'Вся ваша почта, чаты и документы —',
   'landing.h1b': 'в любом ИИ‑ассистенте.',
   'landing.lead':
-    'Подключите Gmail, Slack, Notion и ещё {n} {n|сервис|сервиса|сервисов} — рабочие и личные аккаунты рядом. Вставьте одну ссылку в Claude, ChatGPT или Cursor. Всё, что отправляет или удаляет, ждёт вашего «да».',
+    'Подключите рабочий и личный Gmail, два пространства Slack, Notion клиента и ещё {n} {n|сервис|сервиса|сервисов}. Вставьте одну ссылку в Claude, ChatGPT или Cursor. Всё, что отправляет или удаляет, ждёт вашего «да».',
   'landing.how': 'Как это работает',
-  'landing.note.free': 'Бесплатный тариф, без карты',
-  'landing.note.fast': 'Настройка — минут пять',
+  'landing.note.free': 'Бесплатно, без карты',
+  'landing.note.fast': 'Настройка за 5 минут',
   'landing.note.encrypted': 'Пароли и ключи не видны ИИ',
 
   'landing.demo.label':
     'Пример чата: Claude ищет в двух ящиках, читает счёт, спрашивает перед отправкой Алексу в Slack и отправляет, когда вы разрешили',
   'landing.demo.title': 'Claude',
   'landing.demo.connected': 'Manyplug подключён',
-  'landing.demo.ask': 'Найди счёт от ACME в почте и отправь Алексу в Slack',
+  'landing.demo.ask': 'Найди счёт от Lumina и отправь Алексу в Slack',
   'landing.demo.found': '3 письма',
   'landing.demo.read': '$1 240 · до 15 ноября',
   'landing.demo.approveWho': 'Manyplug · спрашивает перед отправкой',
-  'landing.demo.approveText': 'Отправить «Счёт ACME INV-2041» пользователю @alex в Slack?',
+  'landing.demo.approveText': 'Отправить «Счёт Lumina INV-2041» пользователю @alex в Slack?',
   'landing.demo.deny': 'Отклонить',
   'landing.demo.allow': 'Разрешить',
   'landing.demo.approved': 'Вы разрешили',
   'landing.demo.sent': 'отправлено',
-  'landing.demo.answer': 'Готово. Отправил Алексу счёт ACME INV-2041 на $1 240. Оплатить нужно до 15 ноября.',
+  'landing.demo.answer':
+    'Готово. Отправил Алексу счёт Lumina INV-2041 на $1 240. Оплатить нужно до 15 ноября.',
   'landing.demo.input': 'Ответить Claude…',
 
   'landing.works':
@@ -194,14 +197,15 @@ export const landingRu: Record<LandingKey, string> = {
     'Коннекторы, встроенные в Claude или ChatGPT, работают только в этом приложении и обычно с одним аккаунтом на сервис. Manyplug даёт любому ИИ-приложению все ваши аккаунты и везде одни и те же правила.',
   'landing.map.core': 'ваша MCP-ссылка',
   'landing.map.api': 'Ваш MCP или API',
+  'landing.map.anyApp': 'Любое MCP-приложение',
   'landing.map.before': 'Без Manyplug',
-  'landing.map.beforeStat': '25 подключений (5 приложений × 5 сервисов)',
+  'landing.map.beforeStat': 'Каждое приложение настраивается отдельно, по одному аккаунту на сервис',
   'landing.map.beforeText':
-    'Каждое ИИ-приложение подключается к каждому сервису отдельно, часто только с одним аккаунтом.',
+    'Встроенные коннекторы работают только в своём приложении и обычно видят один аккаунт. Пять приложений и пять сервисов — это 25 настроек.',
   'landing.map.after': 'С Manyplug',
-  'landing.map.afterStat': '5 входов в сервисы и одна ссылка во всех приложениях',
+  'landing.map.afterStat': 'Все аккаунты по одной ссылке в любом приложении',
   'landing.map.afterText':
-    'Каждый сервис подключается один раз. Любое ИИ-приложение с этой ссылкой видит все аккаунты и ваши правила.',
+    'Каждый сервис подключается один раз, со всеми аккаунтами. Вставьте ссылку в любое ИИ-приложение, и оно получит все аккаунты и те же правила.',
   'landing.map.compare': 'Сравнение с Zapier MCP, Composio и другими',
 
   'landing.how.eyebrow': 'Как это работает',
@@ -219,14 +223,14 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.features.eyebrow': 'Возможности',
   'landing.features.title': 'Для тех, у кого всего больше одного',
   'landing.features.lead':
-    'Несколько аккаунтов в каждом сервисе, свои правила для каждого приложения и ваше «да» перед рискованным.',
+    'Для настоящей жизни: два ящика, пространство клиента и ИИ-приложения, которым вы доверяете по-разному.',
   'landing.f.accounts.title': 'Все аккаунты рядом',
   'landing.f.accounts.text':
     'Рабочий и личный Gmail, два пространства Slack, Notion клиента. Спрашивайте про один аккаунт или про все сразу.',
   'landing.f.accounts.found': '{n} {n|письмо|письма|писем}',
   'landing.f.confirm.title': 'Рискованное — с вашего согласия',
   'landing.f.confirm.text':
-    'Отправка письма, удаление файла, возврат денег ждут вашего «да». Что спрашивать, решаете вы, для каждого приложения и аккаунта.',
+    'Отправка письма, удаление файла, возврат денег ждут, пока вы не нажмёте «Разрешить». Что спрашивать, решаете вы, для каждого приложения и аккаунта.',
   'landing.f.confirm.read': 'Поиск и чтение',
   'landing.f.confirm.send': 'Отправка писем',
   'landing.f.confirm.personal': 'Отправка из gmail:personal',
@@ -235,7 +239,7 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.f.confirm.block': 'Нельзя',
   'landing.f.chat.title': 'Настройка — просто просьбой',
   'landing.f.chat.text':
-    'Попросите ИИ добавить аккаунт, переименовать его или отключить старый. Всё, что ослабляет защиту, всё равно ждёт вашего «да».',
+    'Попросите ИИ добавить аккаунт, переименовать его или отключить старый. Всё, что ослабляет защиту, всё равно требует вашего подтверждения.',
   'landing.f.chat.prompt': 'Подключи мой второй Gmail и назови его «Клиенты»',
   'landing.f.chat.reply': 'Вот ссылка для входа в Google. Как только войдёте, «Клиенты» готов.',
   'landing.f.personas.title': 'Разный доступ для разных ИИ',
@@ -248,9 +252,9 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.f.api.text':
     'Добавьте свой MCP-сервер или любой REST API по адресу и ключу. Для них действуют те же правила, что и для встроенных сервисов.',
   'landing.f.api.status': 'подключён',
-  'landing.f.context.title': 'Не забивает память ИИ',
+  'landing.f.context.title': 'Оставляет место для разговора',
   'landing.f.context.text':
-    'Все инструменты сразу заняли бы память ИИ ещё до вашего вопроса. Manyplug даёт ему короткое меню и загружает подробности, только когда они нужны.',
+    'Все инструменты сразу могут занять 60 тыс.+ токенов ещё до вашего вопроса. Manyplug показывает короткое меню и загружает подробности, только когда они нужны, поэтому длинные чаты остаются быстрыми и точными.',
   'landing.f.context.label': 'Загружается до первого сообщения',
   'landing.f.context.all': 'Все сразу',
   'landing.f.context.allTokens': '60 тыс.+ токенов',
@@ -271,9 +275,9 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.sec.secrets.title': 'ИИ не видит пароли и ключи',
   'landing.sec.secrets.text':
     'Ключи вводятся на нашей странице, а не в чате. Они хранятся зашифрованными и уходят только в тот сервис, к которому относятся.',
-  'landing.sec.injection.title': 'Защита от prompt injection',
+  'landing.sec.injection.title': 'Защита от скрытых инструкций',
   'landing.sec.injection.text':
-    'Текст из писем и веб-страниц приходит к ИИ с пометкой «недоверенный», а всё рискованное всё равно ждёт вашего «да».',
+    'Текст из писем и веб-страниц приходит к ИИ с пометкой «недоверенный», а всё рискованное всё равно сначала спрашивает вас.',
   'landing.sec.audit.title': 'Журнал действий',
   'landing.sec.audit.text': 'Видно, какой ИИ что и когда сделал, при этом содержимое писем не хранится.',
   'landing.sec.delete.title': 'Отключили — значит, удалили',
@@ -292,7 +296,7 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.pricing.eyebrow': 'Тарифы',
   'landing.pricing.title': 'Начните бесплатно, платите, когда это экономит время',
   'landing.pricing.lead':
-    'В каждом тарифе все сервисы и все функции защиты, тарифы отличаются только объёмом. Действие — это один шаг ИИ в сервисе, например поиск или отправленное сообщение: запрос про счёт выше занял три.',
+    'В каждом тарифе все сервисы и все функции защиты, а платите вы только за объём. Действие — один шаг ИИ, например поиск или отправленное сообщение. Запрос про счёт в начале страницы занял три.',
 
   'landing.faq.eyebrow': 'Вопросы',
   'landing.faq.title': 'Частые вопросы',

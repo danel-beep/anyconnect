@@ -184,7 +184,7 @@ const DemoChat: FC<{ t: Translate }> = ({ t }) => (
       <div class="call step s2">
         <Icon name="check" />
         <span class="args">
-          <b>mail_search</b> "ACME invoice"
+          <b>mail_search</b> "Lumina invoice"
         </span>
         <span class="res">
           <span class="tags">
@@ -228,9 +228,8 @@ const DemoChat: FC<{ t: Translate }> = ({ t }) => (
         <span class="text">{t('landing.demo.answer')}</span>
       </div>
     </div>
-    <div class="demo-input">
+    <div class="demo-input" aria-hidden="true">
       <span class="grow">{t('landing.demo.input')}</span>
-      <Icon name="arrow" />
     </div>
   </div>
 );
@@ -259,8 +258,11 @@ const WorksWith: FC<{ ctx: PageCtx }> = ({ ctx }) => {
 
 // --- Hub diagram ---------------------------------------------------------------
 
-/** As many AI apps as services, so both columns of the diagram share the same rows. */
-const MAP_CLIENTS = ['claude', 'chatgpt', 'cursor', 'claude-code', 'vscode'].map(client);
+/**
+ * Four named AI apps plus "any MCP app", mirroring "your MCP or API" on the services side: as many
+ * rows as services, so both columns of the diagram share the same rows.
+ */
+const MAP_CLIENTS = ['claude', 'chatgpt', 'cursor', 'claude-code'].map(client);
 
 const MAP_SERVICES: { name: string; icon?: string; glyph?: IconName; accounts?: string[] }[] = [
   { name: 'Gmail', icon: 'gmail', accounts: ['work', 'personal'] },
@@ -302,6 +304,10 @@ const Wires: FC<{ count: number; side: 'in' | 'out' }> = ({ count, side }) => (
 
 const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
   const { t } = ctx;
+  const clients: { name: string; icon?: string | undefined; glyph?: IconName | undefined }[] = [
+    ...MAP_CLIENTS,
+    { name: t('landing.map.anyApp'), glyph: 'grid' },
+  ];
   const services = [...MAP_SERVICES, { name: t('landing.map.api'), glyph: 'plug' as IconName }];
   return (
     <section class="section ink" aria-labelledby="map-title">
@@ -311,7 +317,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
         </SectionHead>
         <div class="hubmap" data-reveal data-live>
           <ul class="hubmap-col clients">
-            {MAP_CLIENTS.map((c) => (
+            {clients.map((c) => (
               <li>
                 <span class="node">
                   <Mark icon={c.icon} glyph={c.glyph} />
@@ -320,7 +326,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
               </li>
             ))}
           </ul>
-          <Wires count={MAP_CLIENTS.length} side="in" />
+          <Wires count={clients.length} side="in" />
           <div class="hub-core">
             <span class="core-glow" aria-hidden="true" />
             <BrandMark />
@@ -537,8 +543,8 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
           <ul class="visual own-servers">
             {(
               [
-                ['MCP', 'https://crm.example/mcp'],
-                ['REST', 'https://api.example.com/v2'],
+                ['MCP', 'crm.example.com/mcp'],
+                ['REST', 'api.example.com/v2'],
               ] as const
             ).map(([kind, url]) => (
               <li class="own-server">

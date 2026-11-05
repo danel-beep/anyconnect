@@ -17,7 +17,7 @@ export const SITE_CSS = `
 .nav-extra{display:none}
 @media (max-width:860px){
   .site-nav{display:none;position:absolute;left:0;right:0;top:64px;background:var(--bg);border-bottom:1px solid var(--border);flex-direction:column;padding:8px 16px 16px;margin:0}
-  .site-nav a{padding:12px 10px;font-size:16px}
+  .site-nav a{padding:14px 10px;font-size:20px;font-weight:600;color:var(--text)}
   /* The open menu is a full-height sheet; the page behind it stays put */
   .nav-open .site-nav{display:flex;height:calc(100dvh - 64px);overflow-y:auto}
   html.nav-open:has(.site-nav) body{overflow:hidden}
@@ -32,13 +32,14 @@ export const SITE_CSS = `
   .site-cta .cta-main{min-height:38px;padding:0 14px;font-size:14px;margin-left:4px}
   .nav-extra{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:12px;margin-top:8px;border-top:1px solid var(--border)}
   .nav-extra .btn{flex:1}
+  .nav-extra .btn.primary{flex:1 0 100%}
   .nav-extra .prefs{display:none}
   .nav-extra:not(:has(.btn)){display:none}
   /* Without JavaScript there is no menu button: the links stay in reach as a scrollable row */
   html:not(.js) .site-header .wrap{flex-wrap:wrap;height:auto;min-height:64px;padding-block:10px;row-gap:6px}
   html:not(.js) .site-nav{display:flex;position:static;order:3;flex-direction:row;width:100%;overflow-x:auto;padding:0;border:0;background:none}
   html:not(.js) .site-nav a{padding:8px 10px;font-size:14px;white-space:nowrap}
-  html:not(.js) .nav-extra{display:none}
+  html:not(.js) .nav-extra,html:not(.js) .menu-btn{display:none}
 }
 /* The narrowest phones: shorter header button, and long labels (Russian) wrap instead of pushing the page sideways */
 .cta-main .short{display:none}
@@ -98,6 +99,7 @@ a.road:hover{color:var(--text);border-style:solid;text-decoration:none}
 html:not(.js) .billing-switch{display:none}
 .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:16px;position:relative}
+@supports (grid-template-rows:subgrid){.plans{grid-auto-rows:auto auto 1fr auto}.plan{display:grid;grid-row:span 4;grid-template-rows:subgrid;row-gap:16px}}
 .plan.featured{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .plan .tag{position:absolute;top:-11px;left:20px;background:var(--accent);color:var(--accent-text);font:600 11px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:6px 8px}
 .plan h3{font-size:18px;margin:0}

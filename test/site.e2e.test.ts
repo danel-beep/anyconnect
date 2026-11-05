@@ -862,7 +862,7 @@ describe('website: public pages', () => {
     expect(scripts.filter((s) => !s.includes(' src=') && !s.includes('application/ld+json'))).toEqual([]);
     // Content is in the markup itself; site.js only decides when it animates.
     expect(html).toContain('data-reveal');
-    expect(html).toContain('needs your OK');
+    expect(html).toContain('Anything that sends or deletes waits for your OK');
     // One count everywhere, straight from the services that connect on this server.
     const total = Number(/See all (\d+)/.exec(html)?.[1]);
     expect(total).toBeGreaterThan(3);
