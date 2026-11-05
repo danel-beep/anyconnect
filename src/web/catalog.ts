@@ -270,6 +270,26 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'docs',
     blurb: { ru: 'CMS: черновики, правка, публикация.', en: 'CMS: drafts, edits, publishing.' },
   },
+  zoom: {
+    icon: 'zoom',
+    category: 'calendar',
+    blurb: { ru: 'Встречи, ссылки, переносы, записи.', en: 'Meetings, links, reschedules, recordings.' },
+  },
+  miro: {
+    icon: 'miro',
+    category: 'docs',
+    blurb: { ru: 'Доски, стикеры и карточки.', en: 'Boards, stickies and cards.' },
+  },
+  sendgrid: {
+    glyph: 'mail',
+    category: 'crm',
+    blurb: { ru: 'Письма, шаблоны, контакты, статистика.', en: 'Emails, templates, contacts, stats.' },
+  },
+  smartsheet: {
+    glyph: 'grid',
+    category: 'tasks',
+    blurb: { ru: 'Таблицы, строки и комментарии.', en: 'Sheets, rows and comments.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',

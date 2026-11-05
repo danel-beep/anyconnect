@@ -161,10 +161,17 @@ export class WorkspaceAdmin {
   ): Promise<{ via: 'oauth' | 'form'; problem?: string }> {
     const provider = resolveProvider(connector.oauth!);
     const app = workspaceId
-      ? await this.deps.apps.pick(workspaceId, provider.id).catch(() => undefined)
-      : this.deps.apps.hasHubApp(provider.id);
+      ? await this.deps.apps.pick(workspaceId, connector).catch(() => undefined)
+      : this.deps.apps.hasHubApp(connector);
     if (app) return { via: 'oauth' };
     if (connector.oauth!.optional) return { via: 'form' };
+    if (this.deps.apps.envProviders().includes(provider.id)) {
+      // The hub has an app for the provider, but only its own services use it.
+      return {
+        via: 'oauth',
+        problem: `Services you add yourself connect with your own ${provider.name} OAuth app: register one with the redirect URI ${this.deps.publicUrl}/connect/callback and add it with POST /api/v1/oauth/apps.`,
+      };
+    }
     return {
       via: 'oauth',
       problem: `No ${provider.name} OAuth app is configured on this hub yet (the hub owner sets OAUTH_APP_${provider.id.toUpperCase()}_CLIENT_ID).`,

@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gt, lt } from 'drizzle-orm';
+import { BRAND } from '../brand.js';
 import { type CapabilityDefinition, getCapability } from '../connectors/capabilities.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import { ACCOUNT_ARGUMENT, FIELDS_ARGUMENT } from '../connectors/registry.js';
@@ -16,6 +17,7 @@ import type { Principal } from '../core/principal.js';
 import type { WorkspaceAdmin } from '../core/workspace-admin.js';
 import type { Db } from '../db/client.js';
 import { oauthClients, toolCalls } from '../db/schema.js';
+import type { CircuitBreaker } from '../lib/circuit-breaker.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
@@ -77,6 +79,8 @@ export interface HubDeps {
   accounts: AccountService;
   logger: Logger;
   rateLimiter: RateLimiter;
+  /** Fails fast while a service keeps failing for an account (`circuit` stage); off without it. */
+  circuitBreaker?: CircuitBreaker;
   idempotency: IdempotencyStore;
   /** Where unexpected failures go (error tracker); without it they are only logged. */
   errors?: Pick<ErrorReporter, 'capture'>;
@@ -877,16 +881,12 @@ export class Hub {
       }
       return normalizeResult(value);
     } catch (error) {
-      return this.handleError(error, call.tool.name, call.connector, account);
+      return this.handleError(error, call);
     }
   }
 
-  private async handleError(
-    error: unknown,
-    toolName: string,
-    connector: ConnectorDefinition,
-    account: CatalogAccount | undefined,
-  ): Promise<ExecResult> {
+  private async handleError(error: unknown, call: CallContext): Promise<ExecResult> {
+    const { connector, account } = call;
     if (error instanceof ToolTimeoutError) {
       return errorResult(
         `The call timed out after ${Math.round(this.deps.toolTimeoutMs / 1000)} seconds.`,
@@ -894,14 +894,31 @@ export class Hub {
       );
     }
     if (account && error instanceof ConnectorError && error.kind === 'auth') {
-      // Flag the account so the user sees in the panel that it must be reconnected.
+      // Flag the account so the user sees in the panel (and gets told) that it must be reconnected.
       await this.deps.accounts.markStatus(account.id, 'needs_reauth', error.message).catch(() => {});
+      const link = await this.reconnectLink(call.principal.workspaceId, connector.id, account.id);
       return errorResult(
-        `Authorization with ${connector.name} failed for account "${account.name}": ${error.message}. The user needs to reconnect this account.`,
+        `Sign-in to ${connector.name} for account "${account.name}" stopped working: ${error.message.replace(/\.+$/, '')}. ` +
+          'This will not fix itself: the user has to sign in again' +
+          (link ? `, here: ${link}` : ` from the ${BRAND.name} dashboard (Accounts)`) +
+          '. Tell the user, and do not retry this account until they have.',
         'auth',
       );
     }
-    return this.toErrorResult(error, toolName, connector.id);
+    return this.toErrorResult(error, call.tool.name, connector.id);
+  }
+
+  /** The link that reconnects an account, if the hub can make one (setup tools available). */
+  private async reconnectLink(
+    workspaceId: string,
+    service: string,
+    accountId: string,
+  ): Promise<string | undefined> {
+    try {
+      return (await this.deps.setup?.admin.connectLink(workspaceId, { service, reconnect: accountId }))?.url;
+    } catch {
+      return undefined; // e.g. the service's sign-in app was removed: the dashboard explains it
+    }
   }
 
   private toErrorResult(error: unknown, toolName: string, connectorId?: string): ExecResult {

@@ -99,6 +99,13 @@
       "when": 1793828487750,
       "tag": "0013_status_page",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793829169709,
+      "tag": "0014_account_reauth_alerts",
+      "breakpoints": true
     }
   ]
 }

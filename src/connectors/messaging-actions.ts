@@ -64,6 +64,8 @@ export function messageItem(message: MessageView) {
         }
       : {}),
     ...(message.deleted ? { deleted: true } : {}),
+    ...(message.delivery ? { delivery: message.delivery } : {}),
+    ...(message.deliveryError ? { delivery_error: message.deliveryError } : {}),
   };
 }
 
