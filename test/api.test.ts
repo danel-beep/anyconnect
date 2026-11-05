@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -253,6 +254,35 @@ describe('REST API, personal tokens and account management', () => {
       profile.row.id,
     ]);
     expect((await api('/me', { auth: profile.token })).status).toBe(401);
+  });
+
+  it('takes the API from tokens issued before tokens were MCP-only (migration 0016)', async () => {
+    const workspace = (await hub.services.db.query.workspaces.findFirst())!;
+    const user = (await hub.services.db.query.users.findFirst())!;
+    const make = (name: string) =>
+      hub.services.apiTokens.create({
+        workspaceId: workspace.id,
+        userId: user.id,
+        name,
+        scopes: ['mcp', 'api'],
+      });
+    const before = await make('old script');
+    const after = await make('new script');
+    const pool = hub.services.database.pool;
+    await pool.query(`update api_tokens set created_at = '2026-11-01T10:00:00Z' where id = $1`, [
+      before.row.id,
+    ]);
+    await pool.query(readFileSync(new URL('../drizzle/0016_tokens_mcp_only.sql', import.meta.url), 'utf8'));
+
+    const { rows } = await pool.query<{ id: string; scopes: string[] }>(
+      'select id, scopes from api_tokens where id = any($1)',
+      [[before.row.id, after.row.id]],
+    );
+    const scopes = Object.fromEntries(rows.map((r) => [r.id, r.scopes]));
+    expect(scopes[before.row.id]).toEqual(['mcp']);
+    expect(scopes[after.row.id]).toEqual(['mcp', 'api']);
+    expect((await api('/me', { auth: before.token })).status).toBe(401);
+    expect((await api('/me', { auth: after.token })).status).toBe(200);
   });
 
   it('creates dashboard tokens for MCP, with the API only when ticked', async () => {
