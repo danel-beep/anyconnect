@@ -28,7 +28,7 @@ import { BrandIcon, BrandMark, Icon, type IconName, ServiceLogo } from './ui.js'
  * JavaScript, or with reduced motion, everything is simply shown in its final state.
  */
 
-const LANDING_FAQ: FaqKey[] = ['mcp', 'why', 'compare', 'secrets', 'action', 'limit', 'delete'];
+const LANDING_FAQ: FaqKey[] = ['mcp', 'why', 'compare', 'clients', 'secrets', 'action', 'limit'];
 
 /** Service tiles on the landing page (the last one links to the full list). */
 const SERVICE_TILES = 17;
@@ -151,10 +151,11 @@ const Hero: FC<{ ctx: PageCtx; more: number }> = ({ ctx, more }) => {
               <Icon name="check" /> {t('landing.note.free')}
             </li>
             <li>
-              <Icon name="check" /> {t('landing.note.card')}
+              <Icon name="check" /> {t('landing.note.encrypted')}
             </li>
             <li>
-              <Icon name="check" /> {t('landing.note.encrypted')}
+              <Icon name="check" />{' '}
+              <a href={localizedPath('/status', ctx.lang)}>{t('landing.note.status')}</a>
             </li>
           </ul>
         </div>
@@ -268,23 +269,26 @@ const MAP_SERVICES: { name: string; icon?: string; glyph?: IconName; accounts?: 
  * cell (`--map-h` × `--wire-w` in the CSS), so each curve starts exactly at a node's middle and
  * ends at the middle of the hub's side.
  */
-const WIRE_W = 120;
+const WIRE_W = 150;
 const MAP_H = 320;
+/** Distance between the wires' ports on the hub's side. */
+const PORT_GAP = 16;
 
 const Wires: FC<{ count: number; side: 'in' | 'out' }> = ({ count, side }) => (
   <svg class={`wires w-${side}`} viewBox={`0 0 ${WIRE_W} ${MAP_H}`} aria-hidden="true">
     {Array.from({ length: count }, (_, i) => {
       const y = ((i + 0.5) * MAP_H) / count;
-      const mid = MAP_H / 2;
+      const port = MAP_H / 2 + (i - (count - 1) / 2) * PORT_GAP;
       const half = WIRE_W / 2;
       const d =
         side === 'in'
-          ? `M0 ${y} C${half} ${y} ${half} ${mid} ${WIRE_W} ${mid}`
-          : `M0 ${mid} C${half} ${mid} ${half} ${y} ${WIRE_W} ${y}`;
+          ? `M0 ${y} C${half} ${y} ${half} ${port} ${WIRE_W} ${port}`
+          : `M0 ${port} C${half} ${port} ${half} ${y} ${WIRE_W} ${y}`;
       return (
         <>
           <path class="wire" d={d} />
           <path class={`pulse p${i + 1}`} d={d} pathLength="100" />
+          <circle class="port" cx={side === 'in' ? WIRE_W : 0} cy={port} r="3" />
         </>
       );
     })}

@@ -35,13 +35,15 @@ export const LANDING_CSS = `
 .hero .wrap{display:grid;grid-template-columns:minmax(0,1.04fr) minmax(0,1fr);gap:56px;align-items:center}
 .hero .eyebrow{margin-bottom:18px}
 .hero h1{font-size:clamp(40px,5.3vw,64px);line-height:1.03;letter-spacing:-.045em;font-weight:660;margin:0 0 22px}
-.hero h1 .mark{display:block;color:var(--accent-ink);text-decoration:underline var(--accent) .06em;text-underline-offset:.13em;text-decoration-skip-ink:auto}
+.hero h1 .mark{display:block;color:var(--accent-ink)}
 .hero .lead{max-width:560px;margin:0 0 28px}
 .hero-actions .btn .i{transition:transform .2s}
 .hero-actions .btn:hover .i:last-child{transform:translateX(3px)}
 .hero-note{list-style:none;padding:0;margin:20px 0 0;color:var(--muted);font-size:13px;display:flex;gap:6px 18px;flex-wrap:wrap}
 .hero-note li{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .hero-note svg{width:14px;height:14px;color:var(--ok);stroke-width:2.4}
+.hero-note a{color:inherit;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent)}
+.hero-note a:hover{color:var(--text)}
 @media (max-width:960px){.hero .wrap{grid-template-columns:1fr;gap:44px}.hero{padding:36px 0 32px}}
 @media (max-width:520px){.hero-actions{flex-direction:column;align-items:stretch}.hero-actions .btn{width:100%}}
 
@@ -87,17 +89,18 @@ export const LANDING_CSS = `
 .works a svg:not([fill=none]){fill:currentColor}
 @media (max-width:640px){
   .works{padding-bottom:48px}
-  .works ul{flex-wrap:nowrap;justify-content:flex-start;align-self:stretch;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px;scroll-padding:0 16px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,transparent,#000 16px,#000 calc(100% - 16px),transparent)}
-  .works ul::-webkit-scrollbar{display:none}
+  .works ul{gap:8px}
+  .works a{height:36px;padding:0 13px 0 11px;font-size:13.5px}
 }
 
 /* Graphite band: the hub diagram */
 .section.ink{background:var(--ink-surface);color:${INK_TEXT};position:relative;overflow:hidden;isolation:isolate;border-block:1px solid ${INK_LINE}}
-.section.ink::before{content:"";position:absolute;z-index:-1;inset:auto -10% -40% -10%;height:70%;pointer-events:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 16%,transparent),transparent)}
+.section.ink :focus-visible{outline-color:#ff9a5c}
 .section.ink .section-head{margin-bottom:56px}
 .section.ink .section-head p:not(.eyebrow),.section.ink .eyebrow{color:${INK_MUTED}}
 /* Symmetric: equal side columns around a fixed-width hub, the same number of rows on each side */
-.hubmap{--map-h:320px;--wire-w:120px;display:grid;grid-template-columns:minmax(0,1fr) var(--wire-w) 216px var(--wire-w) minmax(0,1fr);height:var(--map-h)}
+.hubmap{--map-h:320px;--wire-w:150px;position:relative;display:grid;grid-template-columns:minmax(0,1fr) var(--wire-w) 216px var(--wire-w) minmax(0,1fr);height:var(--map-h)}
+.hubmap::before{content:"";position:absolute;z-index:-1;left:50%;top:50%;width:720px;height:520px;margin:-260px 0 0 -360px;pointer-events:none;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 15%,transparent),transparent)}
 .hubmap-col{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .hubmap-col li{flex:1;display:flex;align-items:center;min-width:0}
 .hubmap .node{width:100%;display:flex;align-items:center;gap:10px;height:46px;padding:0 14px;border:1px solid ${INK_LINE};border-radius:12px;background:rgba(255,255,255,.045);font-weight:540;color:${INK_TEXT};white-space:nowrap;min-width:0}
@@ -107,6 +110,7 @@ export const LANDING_CSS = `
 .map-acc{display:inline-flex;font:500 11px/1 ${MONO};color:${INK_MUTED};border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 7px}
 .wires{display:block;width:var(--wire-w);height:var(--map-h);overflow:visible}
 .wire{fill:none;stroke:rgba(255,255,255,.24);stroke-width:1.5}
+.port{fill:var(--accent)}
 .pulse{fill:none;stroke:var(--accent);stroke-width:2.6;stroke-linecap:round;stroke-dasharray:12 300;stroke-dashoffset:12;opacity:0}
 .hub-core{position:relative;align-self:center;display:flex;flex-direction:column;align-items:center;gap:8px;padding:24px 20px;border-radius:18px;text-align:center;background:color-mix(in srgb,var(--accent) 9%,#262629);border:1px solid color-mix(in srgb,var(--accent) 60%,transparent);box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 9%,transparent),0 24px 60px -18px color-mix(in srgb,var(--accent) 50%,transparent)}
 .core-glow{position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;box-shadow:0 0 0 12px color-mix(in srgb,var(--accent) 6%,transparent),0 24px 70px -10px color-mix(in srgb,var(--accent) 60%,transparent);opacity:0}
@@ -131,8 +135,11 @@ export const LANDING_CSS = `
   .hubmap{display:flex;flex-direction:column;height:auto}
   .wires{display:none}
   .hubmap-col{gap:8px}
-  .hubmap-col.clients{display:grid;grid-template-columns:1fr 1fr}
-  .hubmap-col.clients li:last-child:nth-child(odd){grid-column:1/-1}
+  .hubmap::before{display:none}
+  .hubmap-col.clients{flex-direction:row;flex-wrap:wrap;justify-content:center}
+  .hubmap-col.clients li{flex:none}
+  .hubmap-col.clients .node{width:auto;height:40px;border-radius:999px}
+  .hubmap-col.services .node{height:42px}
   .hub-core{position:relative;margin:36px auto}
   .hub-core::before,.hub-core::after{content:"";position:absolute;left:50%;width:2px;height:36px;margin-left:-1px;background:repeating-linear-gradient(var(--accent) 0 4px,transparent 4px 8px)}
   .hub-core::before{bottom:100%}
@@ -142,8 +149,7 @@ export const LANDING_CSS = `
 
 /* Steps */
 .steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.step-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:12px;transition:border-color .2s,transform .2s}
-.step-card:hover{border-color:var(--border-strong);transform:translateY(-2px)}
+.step-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:12px}
 .step-card .n{font:600 12px/1 ${MONO};color:var(--accent-ink);background:var(--accent-soft);border-radius:6px;padding:6px 8px;align-self:flex-start}
 .step-card h3{font-size:18px;margin:4px 0 0}
 .step-card p{color:var(--muted);margin:0}
@@ -157,13 +163,13 @@ export const LANDING_CSS = `
 
 /* Features */
 .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
-.tile{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px;display:flex;flex-direction:column;gap:10px;overflow:hidden;transition:border-color .2s,transform .2s,box-shadow .2s}
-.tile:hover{border-color:var(--border-strong);transform:translateY(-2px);box-shadow:0 18px 40px -30px rgba(0,0,0,.4)}
+.tile{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
 .tile h3{font-size:19px;margin:0;letter-spacing:-.02em}
 .tile p{color:var(--muted);margin:0}
 .tile .visual{margin-top:auto;padding-top:14px}
 .tile.c2{grid-column:span 2}.tile.c3{grid-column:span 3}.tile.c4{grid-column:span 4}
-@media (max-width:960px){.bento{grid-template-columns:1fr 1fr}.tile.c2,.tile.c3,.tile.c4{grid-column:span 2}}
+@media (min-width:641px) and (max-width:960px){.bento{grid-template-columns:1fr 1fr}.tile.c2,.tile.c3{grid-column:span 1}.tile.c4,.tile:last-child:nth-child(even){grid-column:span 2}}
+@media (max-width:640px){.bento{grid-template-columns:minmax(0,1fr)}.tile.c2,.tile.c3,.tile.c4{grid-column:auto}}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 ${MONO};padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--bg-subtle);color:var(--text);transition:background .4s,border-color .4s,color .4s}
 .chip svg{width:13px;height:13px}
@@ -217,7 +223,7 @@ export const LANDING_CSS = `
 }
 
 /* Security */
-.sec-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:48px;align-items:center}
+.sec-layout{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:48px;align-items:start}
 .sec-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:28px 28px}
 .sec-list li{display:flex;gap:14px;align-items:flex-start}
 .sec-icon{flex:none;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent-ink)}
@@ -250,6 +256,7 @@ export const LANDING_CSS = `
 /* Questions */
 .faq-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr);gap:56px;align-items:start}
 .faq-layout .section-head{margin-bottom:16px}
+@media (min-width:861px){.faq-layout>:first-child{position:sticky;top:96px}}
 .faq-more{margin:0}
 .faq-list summary:focus-visible{outline-offset:6px}
 @media (max-width:860px){.faq-layout{grid-template-columns:1fr;gap:8px}}
@@ -277,12 +284,12 @@ export const LANDING_CSS = `
   /* The chat plays its request once: the question is there from the first paint, the AI works,
      asks, the Allow button is pressed and the card settles into "Approved by you". */
   .demo .step:not(.s1){animation:lp-step .45s cubic-bezier(.2,.7,.2,1) backwards}
-  .demo .step.s2{animation-delay:.5s}.demo .step.s3{animation-delay:1s}.demo .step.s4{animation-delay:1.6s}.demo .step.s5{animation-delay:3.7s}.demo .step.s6{animation-delay:4.1s}
-  .demo .approve .btns{animation:lp-hold 3.4s linear}
-  .demo .approve .yes{animation:lp-press .9s ease 2.3s backwards}
-  .demo .approve .approved{animation:lp-fade .35s ease 3.2s backwards}
-  .demo .typing{animation:lp-typing .8s linear 4.1s backwards,lp-dots .5s ease-in-out 4.1s 2}
-  .demo .s6 .text{animation:lp-fade .4s ease 4.8s backwards}
+  .demo .step.s2{animation-delay:.4s}.demo .step.s3{animation-delay:.8s}.demo .step.s4{animation-delay:1.2s}.demo .step.s5{animation-delay:3.7s}.demo .step.s6{animation-delay:4s}
+  .demo .approve .btns{animation:lp-hold 3.5s linear}
+  .demo .approve .yes{animation:lp-press .9s ease 2.4s backwards}
+  .demo .approve .approved{animation:lp-fade .35s ease 3.25s backwards}
+  .demo .typing{animation:lp-typing .8s linear 4s backwards,lp-dots .5s ease-in-out 4s 2}
+  .demo .s6 .text{animation:lp-fade .4s ease 4.7s backwards}
   .reveal .demo:not(.in) *{animation-play-state:paused}
   /* Sections rise in once as they come into view */
   .reveal [data-reveal=""]:not(.in),.reveal [data-reveal=kids]:not(.in)>*{opacity:0}

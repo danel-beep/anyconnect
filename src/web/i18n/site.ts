@@ -81,13 +81,16 @@ export const siteEn = {
 
   'faq.mcp.q': 'What is MCP and why does my AI need it?',
   'faq.mcp.a':
-    'MCP (Model Context Protocol) is an open standard that lets AI assistants use tools: read mail, create tasks, look into a calendar. Claude, ChatGPT, Cursor and many others support it. Manyplug is one MCP server that gives the AI all your services at once.',
+    'MCP (Model Context Protocol) is an open standard that lets AI assistants use tools: read mail, create tasks, check a calendar. Claude, ChatGPT, Cursor and many others support it. Manyplug is one MCP server that gives the AI all your services at once.',
   'faq.why.q': 'Why not connect each service to the AI directly?',
   'faq.why.a':
     'Each AI app would need its own setup, many services have no MCP server at all, and most of them allow one account only. With Manyplug you connect a service once, keep several accounts, and every AI client gets the same tools and the same rules.',
   'faq.compare.q': 'How is it different from Zapier MCP or Composio?',
   'faq.compare.a':
     'Zapier MCP covers far more apps (over 9,000 by Zapier’s count) and bills each tool call against your Zapier tasks. Composio is a platform for developers who build their own agents. Manyplug is a ready hub for people who work in AI chat every day: several named accounts per service, your OK before risky actions, and separate rules for each AI app. Our comparison pages go into detail.',
+  'faq.clients.q': 'Will it work with my Claude or ChatGPT plan?',
+  'faq.clients.a':
+    'Claude works on every plan, including Free, which allows one custom connector: Manyplug is one connector for all your services. ChatGPT needs developer mode, available on Plus, Pro, Business, Enterprise and Edu. Claude Code, Cursor, VS Code with Copilot, Codex, Gemini CLI and Windsurf work too, and the docs have a step-by-step guide for each.',
   'faq.secrets.q': 'Where are my passwords and tokens stored?',
   'faq.secrets.a':
     'In the hub’s database, encrypted with a separate key per account. The AI only sees tool results, never keys. You can disconnect any account at any moment, and its credentials are deleted.',
@@ -134,8 +137,8 @@ export const siteEn = {
   'plan.unlimited.for': 'Special plan assigned by the administrator',
   'plan.metric.actions': '{n} AI actions a month',
   'plan.metric.actions.unlimited': 'Unlimited AI actions',
-  'plan.metric.trial': '{days} days of {plan} free, no card needed',
-  'plan.metric.actionsSteps': 'AI actions: {months}, then {n} a month',
+  'plan.metric.trial': 'Free forever, starts with {days} days of {plan}',
+  'plan.metric.actionsSteps': '{n} AI actions a month ({months})',
   'plan.metric.stepMonth': '{n} in month {m}',
   'plan.metric.accounts': 'Up to {n} connected accounts',
   'plan.metric.accounts.unlimited': 'Unlimited accounts',
@@ -171,6 +174,7 @@ export const siteEn = {
   'pricing.forever': 'Free forever',
   'pricing.orYear': 'or {price} a year',
   'pricing.billedYear': '{price} billed yearly',
+  'pricing.minTeam': 'From {price} a month for {n} people',
   'pricing.startFree': 'Start free',
   'pricing.choose': 'Choose {plan}',
   'pricing.compare': 'Compare plans',
@@ -381,6 +385,9 @@ export const siteRu: Record<SiteKey, string> = {
   'faq.compare.q': 'Чем это отличается от Zapier MCP или Composio?',
   'faq.compare.a':
     'У Zapier MCP намного больше приложений (по данным Zapier, больше 9000), а каждый вызов инструмента списывается из задач вашего тарифа Zapier. Composio — платформа для разработчиков, которые строят своих агентов. Manyplug — готовый хаб для тех, кто каждый день работает в чате с ИИ: несколько именованных аккаунтов одного сервиса, ваше согласие перед рискованными действиями и отдельные правила для каждого ИИ-приложения. Подробности — на страницах сравнения.',
+  'faq.clients.q': 'Заработает ли это с моим тарифом Claude или ChatGPT?',
+  'faq.clients.a':
+    'Claude работает на любом тарифе, включая бесплатный: в нём можно добавить один свой коннектор, а Manyplug — один коннектор для всех сервисов. В ChatGPT нужен режим разработчика, он есть в Plus, Pro, Business, Enterprise и Edu. Claude Code, Cursor, VS Code с Copilot, Codex, Gemini CLI и Windsurf тоже подходят, и для каждого в документации есть пошаговая инструкция.',
   'faq.secrets.q': 'Где хранятся мои пароли и токены?',
   'faq.secrets.a':
     'В базе Manyplug, зашифрованные отдельным ключом для каждого аккаунта. ИИ видит только результаты инструментов, но не ключи. Любой аккаунт можно отключить в любой момент, и его данные для входа удаляются.',
@@ -427,8 +434,8 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.unlimited.for': 'Особый тариф, назначенный администратором',
   'plan.metric.actions': '{n} действий ИИ в месяц',
   'plan.metric.actions.unlimited': 'Действия ИИ без ограничений',
-  'plan.metric.trial': '{days} дней тарифа «{plan}» бесплатно, без карты',
-  'plan.metric.actionsSteps': 'Действия ИИ: {months}, дальше {n} в месяц',
+  'plan.metric.trial': 'Бесплатно навсегда, первые {days} дней — «{plan}»',
+  'plan.metric.actionsSteps': '{n} действий ИИ в месяц ({months})',
   'plan.metric.stepMonth': '{m}-й месяц — {n}',
   'plan.metric.accounts': 'Аккаунтов сервисов: до {n}',
   'plan.metric.accounts.unlimited': 'Аккаунты без ограничений',
@@ -465,6 +472,7 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.forever': 'Бесплатно навсегда',
   'pricing.orYear': 'или {price} за год',
   'pricing.billedYear': '{price} при оплате за год',
+  'pricing.minTeam': 'От {price} в месяц за {n} {n|человека|человека|человек}',
   'pricing.startFree': 'Начать бесплатно',
   'pricing.choose': 'Выбрать «{plan}»',
   'pricing.compare': 'Сравнение тарифов',

@@ -18,7 +18,10 @@ export const SITE_CSS = `
 @media (max-width:860px){
   .site-nav{display:none;position:absolute;left:0;right:0;top:64px;background:var(--bg);border-bottom:1px solid var(--border);flex-direction:column;padding:8px 16px 16px;margin:0}
   .site-nav a{padding:12px 10px;font-size:16px}
-  .nav-open .site-nav{display:flex}
+  .nav-open .site-nav{display:flex;box-shadow:0 24px 40px -24px rgba(0,0,0,.35)}
+  .nav-open .site-header::after{content:"";position:fixed;inset:64px 0 0;z-index:-1;background:rgba(20,20,22,.4)}
+  .menu-btn .i+.i,.nav-open .menu-btn .i:first-child{display:none}
+  .nav-open .menu-btn .i+.i{display:block}
   .js .menu-btn{display:inline-grid;width:44px;height:44px}
   .site-header .wrap{gap:12px}
   .site-cta{margin-left:auto;gap:4px}

@@ -31,16 +31,14 @@ function account(connectorId: string): AccountRow {
 }
 
 describe('landing claims', () => {
-  it('keeps the tool list short with 40 services, against 45k+ tokens for every tool up front', () => {
-    // The "40 services, still a short menu" tile (landing.f.context.*) quotes these numbers.
+  it('keeps the tool list within 3k tokens with every service connected, against 60k+ for every tool', () => {
+    // The "A short menu, however many services" tile (landing.f.context.*) quotes these numbers.
     const connectors = createBuiltinRegistry()
       .all()
-      .filter((c) => c.id !== 'demo' && c.id !== 'http' && c.actions.length > 0)
-      .slice(0, 40);
-    expect(connectors).toHaveLength(40);
+      .filter((c) => c.id !== 'demo' && c.id !== 'http' && c.actions.length > 0);
     const { stats } = buildCatalog({ connectors, accounts: connectors.map((c) => account(c.id)) });
-    expect(stats.directTokens).toBeGreaterThan(45_000);
-    expect(stats.listedTokens).toBeLessThan(3_000);
+    expect(stats.directTokens).toBeGreaterThan(60_000);
+    expect(stats.listedTokens).toBeLessThanOrEqual(3_000);
   });
 
   it('promises only the free months every public paid plan really gives on yearly billing', () => {

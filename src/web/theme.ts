@@ -75,7 +75,7 @@ export const THEMES = {
     'warn-bg': '#3a3122',
     'warn-border': '#8a6a2a',
     /** Darker than the page here, so the band and the call-to-action stand apart from it. */
-    'ink-surface': '#1a1a1d',
+    'ink-surface': '#18181b',
   },
 } satisfies Record<'light' | 'dark', Palette>;
 

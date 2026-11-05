@@ -86,6 +86,7 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
             aria-label={t('ui.menu')}
           >
             <Icon name="menu" />
+            <Icon name="x" />
           </button>
         </div>
       </div>
@@ -399,7 +400,14 @@ export const PlanCard: FC<{
         </div>
         <div class="price-year">
           {plan.priceMonthly === 0 ? (
-            t('pricing.forever')
+            start ? (
+              t('plan.metric.trial', {
+                days: start.days,
+                plan: t(`plan.${start.plan}.name` as 'plan.free.name'),
+              })
+            ) : (
+              t('pricing.forever')
+            )
           ) : (
             <>
               <span class="when-month">{t('pricing.orYear', { price: `$${plan.priceYearly}` })}</span>
@@ -407,19 +415,19 @@ export const PlanCard: FC<{
             </>
           )}
         </div>
+        {perSeat ? (
+          // A per-person price next to personal plans: say what the smallest team pays.
+          <div class="price-year">
+            <span class="when-month">
+              {t('pricing.minTeam', { n: perSeat.min, price: usd(perSeat.min * plan.priceMonthly) })}
+            </span>
+            <span class="when-year">
+              {t('pricing.minTeam', { n: perSeat.min, price: usd((perSeat.min * plan.priceYearly) / 12) })}
+            </span>
+          </div>
+        ) : null}
       </div>
       <ul>
-        {start ? (
-          <li>
-            <Check />
-            <span>
-              {t('plan.metric.trial', {
-                days: start.days,
-                plan: t(`plan.${start.plan}.name` as 'plan.free.name'),
-              })}
-            </span>
-          </li>
-        ) : null}
         {features.map(([metric, on]) => (
           <li class={on ? undefined : 'off'}>
             {on ? <Check /> : <Icon name="minus" />}
@@ -492,6 +500,7 @@ export type FaqKey =
   | 'mcp'
   | 'why'
   | 'compare'
+  | 'clients'
   | 'secrets'
   | 'action'
   | 'limit'

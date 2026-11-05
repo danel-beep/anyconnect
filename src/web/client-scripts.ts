@@ -34,7 +34,9 @@ var saved=key&&store('ac-tab-'+key);if(saved&&tabs.some(function(t){return t.get
 
 /* Mobile navigation */
 function setNav(open){root.classList.toggle('nav-open',open);$$('[data-nav-toggle]').forEach(function(b){b.setAttribute('aria-expanded',open?'true':'false')})}
-$$('[data-nav-toggle]').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();setNav(!root.classList.contains('nav-open'))})});
+/* Opening moves focus into the menu; tabbing out of it or Escape closes it (Escape returns to the button) */
+$$('[data-nav-toggle]').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();var open=!root.classList.contains('nav-open');setNav(open);var first=open&&d.querySelector('.site-nav a,.sidebar a');if(first&&first.offsetParent)first.focus()})});
+d.addEventListener('focusin',function(e){if(root.classList.contains('nav-open')&&!(e.target.closest&&e.target.closest('.sidebar,.site-nav,[data-nav-toggle]')))setNav(false)});
 d.addEventListener('click',function(e){if(!root.classList.contains('nav-open'))return;var nav=e.target.closest&&e.target.closest('.sidebar,.site-nav');if(!nav||e.target.closest('a'))setNav(false)});
 
 /* Header shadow on scroll */
@@ -45,12 +47,14 @@ var header=d.querySelector('[data-site-header]');if(header){var onScroll=functio
    rise, so nothing blinks. Nothing happens with reduced motion; without this script every block simply shows. */
 (function(){var els=$$('[data-reveal],[data-live]');if(!els.length||!('IntersectionObserver' in window))return;
 if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-var vh=window.innerHeight,now=els.filter(function(el){var r=el.getBoundingClientRect();return r.top<vh&&r.bottom>0});
+/* A block that plays (the hero chat) counts as on screen only when at least half of it shows */
+var vh=window.innerHeight,now=els.filter(function(el){var r=el.getBoundingClientRect();return el.getAttribute('data-reveal')==='play'?Math.min(r.bottom,vh)-Math.max(r.top,0)>=Math.min(r.height,vh)*0.5:r.top<vh&&r.bottom>0});
 root.classList.add('reveal');
 now.forEach(function(el){if(el.hasAttribute('data-reveal'))el.classList.add('in','now');if(el.hasAttribute('data-live'))el.classList.add('live')});
-var seen=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');seen.unobserve(e.target)}})},{rootMargin:'0px 0px -8% 0px'});
+var onSeen=function(es,obs){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target)}})};
+var seen=new IntersectionObserver(onSeen,{rootMargin:'0px 0px -8% 0px'}),play=new IntersectionObserver(onSeen,{threshold:0.5});
 var live=new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('live',e.isIntersecting)})});
-els.forEach(function(el){if(el.hasAttribute('data-reveal')&&!el.classList.contains('in'))seen.observe(el);if(el.hasAttribute('data-live'))live.observe(el)})})();
+els.forEach(function(el){if(el.hasAttribute('data-reveal')&&!el.classList.contains('in'))(el.getAttribute('data-reveal')==='play'?play:seen).observe(el);if(el.hasAttribute('data-live'))live.observe(el)})})();
 
 /* Monthly / yearly prices */
 $$('[data-interval-root]').forEach(function(box){$$('[data-interval-set]',box).forEach(function(b){b.addEventListener('click',function(){var v=b.getAttribute('data-interval-set');box.setAttribute('data-interval',v);$$('[data-interval-set]',box).forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});$$('[data-interval-input]',box).forEach(function(i){i.value=v})})})});
@@ -70,7 +74,7 @@ function placeOpen(){menus.forEach(function(m){if(m.open)placeMenu(m)})}
 menus.forEach(function(m){m.addEventListener('toggle',function(){if(m.open){menus.forEach(function(o){if(o!==m)o.open=false});placeMenu(m)}})});
 window.addEventListener('resize',placeOpen);window.addEventListener('scroll',placeOpen,{passive:true,capture:true});
 d.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false})});
-d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});setNav(false)});
+d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});if(root.classList.contains('nav-open')){setNav(false);var t=$$('[data-nav-toggle]').filter(function(b){return b.offsetParent})[0];if(t)t.focus()}});
 
 /* Live filter: every word typed must appear in an item's data-search. Optional attributes:
    data-filter-expand opens a <details> while searching (and restores it after), data-filter-hide hides a
