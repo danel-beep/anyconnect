@@ -76,39 +76,41 @@ export async function encryptFile(source: string, target: string, key: Buffer): 
 }
 
 export async function decryptFile(source: string, target: string, key: Buffer): Promise<void> {
-  const { size } = await stat(source);
-  if (size < HEADER_BYTES + TAG_BYTES) throw new Error('Not a backup file (too short)');
+  // One open file for the size, the header, the tag and the ciphertext: nothing can swap it between.
   const handle = await open(source, 'r');
-  const header = Buffer.alloc(HEADER_BYTES);
-  const tag = Buffer.alloc(TAG_BYTES);
   try {
+    const { size } = await handle.stat();
+    if (size < HEADER_BYTES + TAG_BYTES) throw new Error('Not a backup file (too short)');
+    const header = Buffer.alloc(HEADER_BYTES);
+    const tag = Buffer.alloc(TAG_BYTES);
     await handle.read(header, 0, HEADER_BYTES, 0);
     await handle.read(tag, 0, TAG_BYTES, size - TAG_BYTES);
+    if (!header.subarray(0, MAGIC.length).equals(MAGIC)) throw new Error(`Not a ${BRAND.name} backup file`);
+    if (header[MAGIC.length] !== VERSION)
+      throw new Error(`Unsupported backup format ${header[MAGIC.length]}`);
+    const keyId = header.subarray(MAGIC.length + 1, MAGIC.length + 1 + KEY_ID_BYTES).toString('hex');
+    if (keyId !== backupKeyId(key)) {
+      throw new Error(
+        `This backup was encrypted with another key (id ${keyId}, current ${backupKeyId(key)}): set BACKUP_ENCRYPTION_KEY, or the ENCRYPTION_KEY the backup was made with`,
+      );
+    }
+    const decipher = createDecipheriv('aes-256-gcm', key, header.subarray(HEADER_BYTES - IV_BYTES));
+    decipher.setAAD(header);
+    decipher.setAuthTag(tag);
+    try {
+      await pipeline(
+        size === HEADER_BYTES + TAG_BYTES
+          ? Readable.from([]) // an empty dump
+          : handle.createReadStream({ start: HEADER_BYTES, end: size - TAG_BYTES - 1, autoClose: false }),
+        decipher,
+        createWriteStream(target, { mode: 0o600 }),
+      );
+    } catch (error) {
+      await rm(target, { force: true });
+      throw new Error(`The backup could not be decrypted (damaged or modified): ${(error as Error).message}`);
+    }
   } finally {
     await handle.close();
-  }
-  if (!header.subarray(0, MAGIC.length).equals(MAGIC)) throw new Error(`Not a ${BRAND.name} backup file`);
-  if (header[MAGIC.length] !== VERSION) throw new Error(`Unsupported backup format ${header[MAGIC.length]}`);
-  const keyId = header.subarray(MAGIC.length + 1, MAGIC.length + 1 + KEY_ID_BYTES).toString('hex');
-  if (keyId !== backupKeyId(key)) {
-    throw new Error(
-      `This backup was encrypted with another key (id ${keyId}, current ${backupKeyId(key)}): set BACKUP_ENCRYPTION_KEY, or the ENCRYPTION_KEY the backup was made with`,
-    );
-  }
-  const decipher = createDecipheriv('aes-256-gcm', key, header.subarray(HEADER_BYTES - IV_BYTES));
-  decipher.setAAD(header);
-  decipher.setAuthTag(tag);
-  try {
-    await pipeline(
-      size === HEADER_BYTES + TAG_BYTES
-        ? Readable.from([]) // an empty dump
-        : createReadStream(source, { start: HEADER_BYTES, end: size - TAG_BYTES - 1 }),
-      decipher,
-      createWriteStream(target, { mode: 0o600 }),
-    );
-  } catch (error) {
-    await rm(target, { force: true });
-    throw new Error(`The backup could not be decrypted (damaged or modified): ${(error as Error).message}`);
   }
 }
 

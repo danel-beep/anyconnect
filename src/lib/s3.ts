@@ -1,6 +1,6 @@
 import { createHash, createHmac } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { open } from 'node:fs/promises';
 import http from 'node:http';
 import https from 'node:https';
 import { pipeline } from 'node:stream/promises';
@@ -50,12 +50,18 @@ export class S3Client {
 
   /** Uploads a file (single PUT: up to 5 GB). */
   async putFile(key: string, path: string, contentType = 'application/octet-stream'): Promise<void> {
-    const { size } = await stat(path);
-    await this.send('PUT', key, {
-      headers: { 'content-type': contentType, 'content-length': String(size) },
-      payloadHash: 'UNSIGNED-PAYLOAD',
-      body: () => createReadStream(path),
-    });
+    // The size sent and the bytes streamed come from the same open file.
+    const handle = await open(path, 'r');
+    try {
+      const { size } = await handle.stat();
+      await this.send('PUT', key, {
+        headers: { 'content-type': contentType, 'content-length': String(size) },
+        payloadHash: 'UNSIGNED-PAYLOAD',
+        body: () => handle.createReadStream({ autoClose: false }),
+      });
+    } finally {
+      await handle.close();
+    }
   }
 
   /** Downloads an object into a file. */
