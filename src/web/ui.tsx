@@ -218,6 +218,32 @@ export const Meter: FC<{ used: number; limit: number | null; label: string }> = 
   );
 };
 
+/**
+ * One usage box: how much of a limit is used (null: no limit, shown as ∞), its meter and short lines
+ * under it, each on its own row (lines joined by "·" break badly in a narrow box). Empty lines are skipped.
+ */
+export const UsageStat: FC<{
+  lang: string;
+  label: string;
+  used: number;
+  limit: number | null;
+  lines?: Child[];
+}> = ({ lang, label, used, limit, lines = [] }) => (
+  <div class="stat">
+    <span class="label">{label}</span>
+    <div class="value">
+      {fmtNumber(lang, used)}{' '}
+      <span class="muted small">/ {limit === null ? '∞' : fmtNumber(lang, limit)}</span>
+    </div>
+    <Meter used={used} limit={limit} label={label} />
+    {lines
+      .filter((line) => line !== undefined && line !== null && line !== false && line !== '')
+      .map((line) => (
+        <div class="sub">{line}</div>
+      ))}
+  </div>
+);
+
 /** Light/dark switch (JS) and RU/EN links; both remember the choice. */
 export const Prefs: FC<{ t: Translate; lang: string; path?: string }> = ({ t, lang, path }) => {
   const other = lang === 'ru' ? 'en' : 'ru';

@@ -1,4 +1,4 @@
-import { and, gt, lte } from 'drizzle-orm';
+import { and, eq, gt, lte } from 'drizzle-orm';
 import type { EntitlementListener, EntitlementService, Entitlements } from '../billing/entitlements.js';
 import { type BillingListener, BillingService } from '../billing/service.js';
 import type { Db } from '../db/client.js';
@@ -33,12 +33,14 @@ export class BillingNotices implements EntitlementListener, BillingListener {
   async remindTrialEnding(): Promise<number> {
     if (!this.deps.notices.enabled) return 0;
     const now = this.deps.now?.() ?? new Date();
-    // Only workspaces whose 14-day trial ends in the next three days (the free plan's start).
+    // Only workspaces whose 14-day trial ends in the next three days (the free plan's start). A trial
+    // is a person's: a team runs on its payer's plan and gets no reminder of its own.
     const candidates = await this.deps.db
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(
         and(
+          eq(workspaces.kind, 'personal'),
           gt(workspaces.createdAt, new Date(now.getTime() - 14 * DAY)),
           lte(workspaces.createdAt, new Date(now.getTime() - (14 - TRIAL_REMINDER_DAYS) * DAY)),
         ),

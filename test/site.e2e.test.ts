@@ -263,9 +263,14 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
 
     // Free plan in its first step down: 500 actions a month. Use them all up.
     const today = new Date().toISOString().slice(0, 10);
+    // As the meter does: counted for the workspace and charged to the plan that pays (its own).
     await hub.services.database.pool.query(
       `INSERT INTO usage_counters (workspace_id, day, caller, connector_id, action, calls)
        VALUES ($1, $2, 'test', 'demo', 'echo', 500)`,
+      [ws.id, today],
+    );
+    await hub.services.database.pool.query(
+      `INSERT INTO billing_usage (payer_id, day, workspace_id, calls) VALUES ($1, $2, $1, 500)`,
       [ws.id, today],
     );
     const blocked = await api('/tools/demo_a1_echo/call', 'POST', { arguments: { message: 'hi' } });

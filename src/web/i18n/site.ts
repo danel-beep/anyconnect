@@ -213,6 +213,9 @@ export const siteEn = {
   'faq.jobs.q': 'What are scheduled tasks?',
   'faq.jobs.a':
     'Work the AI sets up to run on its own, for example a morning summary of new mail or a weekly report. They are coming soon; the plan shows how many you will be able to keep.',
+  'faq.teams.q': 'How do teams pay?',
+  'faq.teams.a':
+    'There is no separate team plan. A team runs on the plan of whoever pays for it, by default the person who created it, and that plan’s limits cover their own use and the team’s together. Anyone in the team can pay for it with a plan of their own, or the team can have everyone use their own plan. The free trial is once per person; a new team does not start another.',
 
   'plan.free.name': 'Free',
   'plan.free.for': 'Try it out with a couple of services',
@@ -221,13 +224,7 @@ export const siteEn = {
   'plan.pro.name': 'Pro',
   'plan.pro.for': 'For people who delegate a lot of work to AI',
   'plan.business.name': 'Business',
-  'plan.business.for': 'For a small team with shared services',
-  'plan.team.name': 'Team',
-  'plan.team.for': 'One connector for a team: everyone signs in as themselves',
-  'plan.metric.actionsPerSeat': '{n} AI actions a month per person, shared by the team',
-  'plan.metric.seatsRange': '{min} to {max} people, each with their own sign-in and accounts',
-  'pricing.perSeat': '/ person / month',
-  'pricing.perSeatCell': '{n} per person',
+  'plan.business.for': 'For whoever pays for a big team',
   'plan.unlimited.name': 'Unlimited',
   'plan.unlimited.for': 'Special plan assigned by the administrator',
   'plan.metric.actions': '{n} AI actions a month',
@@ -243,14 +240,12 @@ export const siteEn = {
   'plan.metric.backgroundJobs.unlimited': 'Unlimited scheduled tasks (soon)',
   'plan.metric.historyDays': 'Activity history: {n} {n|day|days}',
   'plan.metric.historyDays.unlimited': 'Activity history kept forever',
-  'plan.metric.seats': 'Team members: up to {n}',
-  'plan.metric.seats.solo': 'One member',
-  'plan.metric.seats.unlimited': 'Unlimited team members',
+  'plan.feature.teams': 'Teams: share the plan with people you invite',
   'plan.feature.everything': 'All services, safety features and AI apps',
 
   'pricing.title': 'Pricing · Manyplug',
   'pricing.description':
-    'Manyplug plans: free, Personal $5, Pro $12 a month, Team $10 per person. All security features in every plan.',
+    'Manyplug plans: free, Personal $5 and Pro $12 a month. Teams and all security features in every plan.',
   'pricing.h1': 'Simple plans that grow with you',
   'pricing.lead': 'All services and security features are in every plan. Pick by how much you use AI.',
   'pricing.paymentsSoon':
@@ -283,7 +278,7 @@ export const siteEn = {
   'pricing.row.messengers': 'Telegram and WhatsApp accounts',
   'pricing.row.backgroundJobs': 'Scheduled tasks',
   'pricing.row.historyDays': 'Activity history',
-  'pricing.row.seats': 'Team members',
+  'pricing.row.teams': 'Teams: one connector, everyone signs in as themselves',
   'pricing.row.security': 'Encryption, confirmations, access rules',
   'pricing.row.unified': 'Unified tools across accounts',
   'pricing.row.custom': 'Your own MCP servers and APIs',
@@ -607,6 +602,9 @@ export const siteRu: Record<SiteKey, string> = {
   'faq.jobs.q': 'Что такое задачи по расписанию?',
   'faq.jobs.a':
     'Дела, которые ИИ настраивает выполнять самостоятельно: например, утреннюю сводку новых писем или отчёт раз в неделю. Они скоро появятся; в тарифе указано, сколько их можно будет держать.',
+  'faq.teams.q': 'Как платят команды?',
+  'faq.teams.a':
+    'Отдельного командного тарифа нет. Команда работает на тарифе того, кто за неё платит, по умолчанию её создателя, и лимиты этого тарифа общие на его собственную работу и работу команды. Любой участник может оплачивать команду своим тарифом, а можно сделать так, чтобы каждый пользовался своим. Пробный период один на человека: новая команда его не даёт.',
 
   'plan.free.name': 'Бесплатный',
   'plan.free.for': 'Попробовать с парой сервисов',
@@ -615,13 +613,7 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.pro.name': 'Про',
   'plan.pro.for': 'Для тех, кто много поручает ИИ',
   'plan.business.name': 'Бизнес',
-  'plan.business.for': 'Для небольшой команды с общими сервисами',
-  'plan.team.name': 'Team',
-  'plan.team.for': 'Один коннектор на команду: каждый входит под собой',
-  'plan.metric.actionsPerSeat': '{n} действий ИИ в месяц на человека, общий запас команды',
-  'plan.metric.seatsRange': 'От {min} до {max} человек, у каждого свой вход и свои аккаунты',
-  'pricing.perSeat': '/ чел. / мес',
-  'pricing.perSeatCell': '{n} на человека',
+  'plan.business.for': 'Для того, кто оплачивает большую команду',
   'plan.unlimited.name': 'Безлимитный',
   'plan.unlimited.for': 'Особый тариф, назначенный администратором',
   'plan.metric.actions': '{n} действий ИИ в месяц',
@@ -637,14 +629,12 @@ export const siteRu: Record<SiteKey, string> = {
   'plan.metric.backgroundJobs.unlimited': 'Задачи по расписанию без ограничений (скоро)',
   'plan.metric.historyDays': 'История действий: {n} {n|день|дня|дней}',
   'plan.metric.historyDays.unlimited': 'История хранится бессрочно',
-  'plan.metric.seats': 'Участников: до {n}',
-  'plan.metric.seats.solo': 'Один участник',
-  'plan.metric.seats.unlimited': 'Участники без ограничений',
+  'plan.feature.teams': 'Команды: делитесь тарифом с теми, кого пригласите',
   'plan.feature.everything': 'Все сервисы, функции защиты и ИИ-приложения',
 
   'pricing.title': 'Тарифы · Manyplug',
   'pricing.description':
-    'Тарифы Manyplug: бесплатный, Личный $5, Про $12 в месяц, Team $10 за человека. Все функции безопасности в каждом тарифе.',
+    'Тарифы Manyplug: бесплатный, Личный $5 и Про $12 в месяц. Команды и все функции безопасности в каждом тарифе.',
   'pricing.h1': 'Понятные тарифы, которые растут вместе с вами',
   'pricing.lead':
     'Все сервисы и функции защиты есть в каждом тарифе. Выбирайте по тому, сколько вы пользуетесь ИИ.',
@@ -678,7 +668,7 @@ export const siteRu: Record<SiteKey, string> = {
   'pricing.row.messengers': 'Аккаунты Telegram и WhatsApp',
   'pricing.row.backgroundJobs': 'Задачи по расписанию',
   'pricing.row.historyDays': 'История действий',
-  'pricing.row.seats': 'Участники',
+  'pricing.row.teams': 'Команды: один коннектор, каждый входит под собой',
   'pricing.row.security': 'Шифрование, подтверждения, правила доступа',
   'pricing.row.unified': 'Общие инструменты для всех аккаунтов',
   'pricing.row.custom': 'Свои MCP-серверы и API',

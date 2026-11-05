@@ -44,8 +44,13 @@ import type { Principal } from './principal.js';
 
 /** The address part of a team's MCP URL: 3–40 lowercase letters, digits and inner dashes. */
 export const TEAM_SLUG = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
-/** Teams one person may own: enough for real use, too few to farm free trials. */
+/** Teams one person may own: enough for real use (a team adds no limits: it runs on its payer's plan). */
 export const MAX_OWNED_TEAMS = 3;
+/**
+ * People in one team, counting open invitations. Plans do not count people (a team shares its
+ * payer's limits), so this only keeps a team to a size one page and one catalog handle well.
+ */
+export const MAX_TEAM_MEMBERS = 100;
 const INVITATION_DAYS = 14;
 /** Slugs that would read as pages rather than teams. */
 const RESERVED_SLUGS = new Set(['new', 'join', 'invite', 'admin', 'api', 'app', 'mcp', 'team', 'teams']);
@@ -74,12 +79,6 @@ export interface TeamView {
   /** Absent for the team's shared connection. */
   member?: { userId: string; name: string; handle: string; role: MemberRole };
   access: MemberAccess;
-}
-
-/** Seats of a team's plan (the billing layer). */
-export interface TeamLimits {
-  /** Throws `PlanLimitError` when `taken` (members and open invitations) already fill every seat. */
-  assertCanAddMember(workspaceId: string, taken: number): Promise<void>;
 }
 
 /** What a member who leaves takes along, for the page and the AI to say. */
@@ -113,6 +112,12 @@ export const teamError = {
     ),
   alreadyMember: (email: string) => new AppError(409, 'already_member', `${email} is already in the team.`),
   limit: () => new AppError(409, 'team_limit', `One person can own up to ${MAX_OWNED_TEAMS} teams.`),
+  full: () =>
+    new AppError(
+      409,
+      'team_full',
+      `A team has room for ${MAX_TEAM_MEMBERS} people, open invitations included. Take back an invitation or remove someone first.`,
+    ),
 };
 
 /** How long one caller's view is reused: a request builds its catalog and checks its calls with one. */
@@ -129,7 +134,8 @@ export class TeamService implements ConnectPermissions {
       /** The MCP endpoint URL; a team's is `<mcpUrl>/team/<slug>`. */
       mcpUrl: string;
       publicUrl: string;
-      limits?: TeamLimits;
+      /** Told when members join or leave, so whoever caches a team's people (billing) looks again. */
+      membersChanged?: (teamId: string) => void;
       /** Disconnects a member's AI apps and keys from a team they no longer belong to. */
       revokeGrant: (grantId: string) => Promise<void>;
       revokeToken: (workspaceId: string, tokenId: string) => Promise<void>;
@@ -345,8 +351,13 @@ export class TeamService implements ConnectPermissions {
 
   // --- Invitations -----------------------------------------------------------
 
-  /** Members plus open invitations: what takes a seat. */
-  private async seatsTaken(workspaceId: string, exceptInvitation?: string): Promise<number> {
+  /** Throws when the team has no room for one more person (members plus open invitations). */
+  private async assertRoom(workspaceId: string, exceptInvitation?: string): Promise<void> {
+    if ((await this.peopleCount(workspaceId, exceptInvitation)) >= MAX_TEAM_MEMBERS) throw teamError.full();
+  }
+
+  /** Members plus open invitations. */
+  private async peopleCount(workspaceId: string, exceptInvitation?: string): Promise<number> {
     const [[members], [open]] = await Promise.all([
       this.deps.db
         .select({ n: count() })
@@ -400,7 +411,7 @@ export class TeamService implements ConnectPermissions {
         ),
       )
       .limit(1);
-    await this.deps.limits?.assertCanAddMember(workspaceId, await this.seatsTaken(workspaceId, earlier?.id));
+    await this.assertRoom(workspaceId, earlier?.id);
     const token = `ac_inv_${randomBytes(24).toString('base64url')}`;
     const invitation = await this.deps.db.transaction(async (tx) => {
       if (earlier) {
@@ -485,10 +496,8 @@ export class TeamService implements ConnectPermissions {
     const { invitation, team } = found;
     if (normalizeEmail(user.email) !== invitation.email) throw teamError.wrongEmail(invitation.email);
     const members = await this.members(team.id);
-    if (!members.some((m) => m.userId === user.id)) {
-      // The invitation itself already holds a seat.
-      await this.deps.limits?.assertCanAddMember(team.id, await this.seatsTaken(team.id, invitation.id));
-    }
+    // The invitation itself already holds a place.
+    if (!members.some((m) => m.userId === user.id)) await this.assertRoom(team.id, invitation.id);
     await this.deps.db.transaction(async (tx) => {
       if (!members.some((m) => m.userId === user.id)) {
         await tx.insert(workspaceMembers).values({
@@ -503,6 +512,7 @@ export class TeamService implements ConnectPermissions {
         .set({ acceptedAt: this.now(), acceptedBy: user.id })
         .where(eq(workspaceInvitations.id, invitation.id));
     });
+    this.deps.membersChanged?.(team.id);
     return team;
   }
 
@@ -524,6 +534,7 @@ export class TeamService implements ConnectPermissions {
       .update(workspaceMembers)
       .set({ role })
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+    this.deps.membersChanged?.(workspaceId);
   }
 
   /** Removes a member. Admins remove members; only the owner removes admins; nobody removes the owner. */
@@ -608,7 +619,13 @@ export class TeamService implements ConnectPermissions {
       await tx
         .delete(workspaceMembers)
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));
+      // Whoever leaves stops paying for the team: its owner pays again.
+      await tx
+        .update(workspaces)
+        .set({ billingUserId: null })
+        .where(and(eq(workspaces.id, workspaceId), eq(workspaces.billingUserId, userId)));
     });
+    this.deps.membersChanged?.(workspaceId);
     return outcome;
   }
 
@@ -645,6 +662,7 @@ export class TeamService implements ConnectPermissions {
           .set({ role: 'owner' })
           .where(and(eq(workspaceMembers.workspaceId, team.id), eq(workspaceMembers.userId, heir.userId)));
       }
+      this.deps.membersChanged?.(team.id);
     }
   }
 

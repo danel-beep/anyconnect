@@ -182,7 +182,8 @@ a.road:hover{color:var(--text);border-style:solid;text-decoration:none}
 .billing-switch button[aria-pressed=true]{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .billing-switch .save{font-size:11px;color:var(--accent-ink);margin-left:4px}
 html:not(.js) .billing-switch{display:none}
-.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
+/* As many plans to a row as fit: the grid follows the number of public plans. */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:16px;position:relative}
 .plan.featured{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .plan .tag{position:absolute;top:-11px;left:20px;background:var(--accent);color:var(--accent-text);font:600 11px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:6px 8px}
@@ -200,7 +201,6 @@ html:not(.js) .when-year{display:none}
 .plan li.off{color:var(--muted)}
 .plan li.off svg{color:var(--muted)}
 .plan .btn{margin-top:auto}
-@media (max-width:1060px){.plans{grid-template-columns:1fr 1fr}}
 @media (max-width:600px){.plans{grid-template-columns:1fr}}
 .compare{table-layout:fixed}
 .compare th,.compare td{text-align:center}

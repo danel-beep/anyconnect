@@ -292,7 +292,7 @@ export class WorkspaceAdmin {
       if (input.name && (await this.deps.accounts.findByName(workspaceId, connector.id, input.name))) {
         throw badRequest(`${connector.name} already has an account named "${input.name}".`);
       }
-      await this.deps.accounts.assertCanCreate(workspaceId);
+      await this.deps.accounts.assertCanCreate(workspaceId, input.forTeam ? null : principal.userId);
       if (input.label) url.searchParams.set('label', input.label);
       if (input.name) url.searchParams.set('name', input.name);
     }

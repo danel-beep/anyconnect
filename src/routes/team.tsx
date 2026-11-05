@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { getPlan } from '../billing/plans.js';
 import type { Principal } from '../core/principal.js';
 import { MAX_OWNED_TEAMS } from '../core/teams.js';
 import type { MemberRole, ShareLevel } from '../db/schema.js';
@@ -23,6 +22,7 @@ import {
   csrfFailedPage,
   csrfOk,
   pageCtx,
+  phaseView,
   setFlash,
   shellInfo,
   takeFlash,
@@ -48,6 +48,7 @@ export function teamRoutes() {
   };
   const backToTeam = (_form: Record<string, string>, c: AppContext) =>
     `/app/team/${encodeURIComponent(c.req.param('slug') ?? '')}`;
+  const backToPlan = (form: Record<string, string>, c: AppContext) => `${backToTeam(form, c)}#plan`;
 
   // --- The list ------------------------------------------------------------------
 
@@ -119,15 +120,16 @@ export function teamRoutes() {
     const t = c.get('t');
     const { team, role } = await teamOf(c, auth);
     const admin = isTeamAdmin(role);
-    const principal: Principal = { kind: 'session', userId: auth.user.id, workspaceId: team.id, scopes: [] };
-    const [view, members, invitations, accounts, shares, summary, tokens, services, shell] =
+    const me = auth.user.id;
+    const principal: Principal = { kind: 'session', userId: me, workspaceId: team.id, scopes: [] };
+    const [view, members, invitations, accounts, shares, billing, tokens, services, shell] =
       await Promise.all([
         s.teams.view(principal),
         s.teams.members(team.id),
         s.teams.invitations(team.id),
         s.accounts.list(team.id),
         s.teams.shares(team.id),
-        s.entitlements.summary(team.id),
+        s.entitlements.teamBilling(team.id, me),
         admin ? s.apiTokens.list(team.id) : Promise.resolve([]),
         s.admin.services(team.id),
         shellInfo(c, auth.workspace.id),
@@ -142,26 +144,8 @@ export function teamRoutes() {
       service: serviceName.get(a.connectorId) ?? a.connectorId,
       status: a.status,
     });
-    const seats = summary.limits.seats;
-    const holders = new Set(
-      [...members]
-        .sort((x, y) => Number(y.role === 'owner') - Number(x.role === 'owner') || +x.joinedAt - +y.joinedAt)
-        .slice(0, seats ?? members.length)
-        .map((m) => m.userId),
-    );
-    const teamPlan = getPlan('team');
-    const live = s.billing.liveSubscription(summary.subscription);
-    const focus = z
-      .object({
-        seats: z.coerce.number().int().min(1).max(10_000).optional(),
-        interval: z.enum(['month', 'year']).optional(),
-      })
-      .safeParse({
-        seats: c.req.query('seats') || undefined,
-        interval: c.req.query('interval') || undefined,
-      });
-    const paidFlash =
-      c.req.query('paid') === '1' ? { kind: 'ok' as const, text: t('team.flash.paid') } : undefined;
+    const { pool, mine } = billing;
+    const payer = billing.team.payerUserId;
     return c.html(
       <TeamPage
         ctx={pageCtx(c, auth.user)}
@@ -175,7 +159,7 @@ export function teamRoutes() {
             email: m.email,
             role: m.role,
             joinedAt: m.joinedAt,
-            holdsSeat: holders.has(m.userId),
+            pays: m.userId === payer,
           })),
           invitations: admin
             ? invitations.map((i) => ({ id: i.id, email: i.email, role: i.role, expiresAt: i.expiresAt }))
@@ -206,38 +190,30 @@ export function teamRoutes() {
             })),
           services: services.filter((x) => x.ready).map((x) => ({ id: x.service, name: x.name })),
           plan: {
-            id: summary.plan.id,
-            name: t(`plan.${summary.plan.id}.name` as 'plan.free.name'),
-            seats,
-            taken: members.length + invitations.length,
-            actions: { used: summary.used.actions, limit: summary.limits.actions },
-            trial:
-              summary.phase?.kind === 'trial'
-                ? { until: summary.phase.until, seats: summary.phase.limits.seats }
+            mode: billing.team.mode,
+            payer: { name: billing.team.payerName, you: payer === me },
+            plan: pool.plan.id,
+            actions: { used: pool.used.actions, limit: pool.limits.actions },
+            accounts: { used: pool.used.accounts, limit: pool.limits.accounts },
+            teamActions: billing.teamActions,
+            phase: phaseView(pool.phase),
+            resetsAt: pool.period.resetsAt,
+            myPlan: mine?.plan.id,
+            mine:
+              billing.team.mode === 'each' && mine && payer !== me
+                ? {
+                    plan: mine.plan.id,
+                    actions: { used: mine.used.actions, limit: mine.limits.actions },
+                    phase: phaseView(mine.phase),
+                  }
                 : undefined,
-            live: live
-              ? {
-                  interval: live.interval,
-                  quantity: live.quantity,
-                  until: live.currentPeriodEnd,
-                  ending: live.cancelAtPeriodEnd,
-                }
-              : undefined,
-            team: {
-              month: teamPlan.priceMonthly,
-              year: teamPlan.priceYearly,
-              actions: teamPlan.limits.actions,
-              messengers: teamPlan.limits.messengers,
-              min: teamPlan.perSeat?.min ?? 1,
-              max: teamPlan.perSeat?.max ?? 1,
-            },
-            payments: s.billing.canBuy('team', 'month') || s.billing.canBuy('team', 'year'),
-            ...(focus.success ? { focus: focus.data } : {}),
+            canPay: billing.canPay,
+            canStop: payer === me && billing.team.ownerUserId !== me,
           },
           keys: tokens
             .filter((k) => k.shared)
             .map((k) => ({ id: k.id, name: k.name, createdAt: k.createdAt, lastUsedAt: k.lastUsedAt })),
-          flash: takeFlash(c) ?? paidFlash,
+          flash: takeFlash(c),
           ...extra,
         }}
       />,
@@ -372,28 +348,32 @@ export function teamRoutes() {
     }),
   );
 
+  /**
+   * Who pays for the team: pay for it with my own plan (`pay=1`), stop paying (`pay=0`), or how it
+   * pays (`mode`, owners and admins). The rules are `EntitlementService.changeTeamBilling`'s.
+   */
   app.post(
-    '/app/team/:slug/plan',
-    action(backToTeam, async (c, auth, form) => {
+    '/app/team/:slug/billing',
+    action(backToPlan, async (c, auth, form) => {
       const s = c.get('services');
-      const { team, role } = await teamOf(c, auth);
-      if (!isTeamAdmin(role)) throw new AppError(403, 'team_admin_only', 'Only team admins manage the plan');
+      const { team } = await teamOf(c, auth);
       const input = z
-        .object({ seats: z.coerce.number().int().min(1).max(10_000), interval: z.enum(['month', 'year']) })
-        .parse({ seats: form.seats, interval: form.interval || 'month' });
-      const back = new URL(`/app/team/${team.slug}`, s.config.publicUrl).toString();
-      const outcome = await s.billing.checkout({
-        workspaceId: team.id,
-        userId: auth.user.id,
-        email: auth.user.email,
-        planId: 'team',
-        interval: input.interval,
-        seats: input.seats,
-        successUrl: `${back}?paid=1#plan`,
-        cancelUrl: `${back}#plan`,
+        .object({ pay: z.enum(['1', '0']).optional(), mode: z.enum(['payer', 'each']).optional() })
+        .refine((x) => x.pay !== undefined || x.mode !== undefined)
+        .parse({ pay: form.pay || undefined, mode: form.mode || undefined });
+      await s.entitlements.changeTeamBilling(auth.user.id, team.id, {
+        ...(input.pay ? { pay: input.pay === '1' } : {}),
+        ...(input.mode ? { mode: input.mode } : {}),
       });
-      if (outcome.kind === 'redirect') return c.redirect(outcome.url, 303);
-      setFlash(c, 'ok', 'team.flash.planChanged', { plan: c.get('t')('plan.team.name') });
+      setFlash(
+        c,
+        'ok',
+        input.mode
+          ? `team.flash.mode.${input.mode}`
+          : input.pay === '1'
+            ? 'team.flash.paying'
+            : 'team.flash.stoppedPaying',
+      );
       return undefined;
     }),
   );

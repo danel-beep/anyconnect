@@ -1,11 +1,19 @@
 import type { Child } from 'hono/jsx';
 import { z } from 'zod';
+import type { StartPhase } from '../billing/start.js';
 import { actionText } from '../connectors/sdk.js';
 import { getDefaultWorkspace } from '../core/identity.js';
 import type { toolCalls } from '../db/schema.js';
 import { SETUP_CONNECTOR } from '../hub/setup-tools.js';
 import { AppError } from '../lib/errors.js';
-import { type AppSection, AppShell, type CallView, CONNECTION_BACK, type ShellInfo } from '../web/app.js';
+import {
+  type AppSection,
+  AppShell,
+  type CallView,
+  CONNECTION_BACK,
+  type ShellInfo,
+  type UsageView,
+} from '../web/app.js';
 import { type Frame, PageFrame } from '../web/frame.js';
 import { clearCookie, csrfToken, readCookie, setSecureCookie, verifyCsrf } from '../web/http.js';
 import type { Key, Locale } from '../web/i18n.js';
@@ -157,6 +165,10 @@ export function takeFlash(c: AppContext): { kind: FlashKind; text: string } | un
   }
 }
 
+/** The start in force on a plan (a free trial or a step down), as the pages show it. */
+export const phaseView = (phase: StartPhase | undefined): UsageView['phase'] =>
+  phase ? { kind: phase.kind, asPlan: phase.asPlan, until: phase.until } : undefined;
+
 // --- Forms ---------------------------------------------------------------------
 
 export function csrfOk(c: AppContext, form: Record<string, string>): boolean {
@@ -197,9 +209,11 @@ const ERROR_TEXTS: Partial<Record<string, Key>> = {
   invite_wrong_email: 'error.code.invite_wrong_email',
   already_member: 'error.code.already_member',
   team_limit: 'error.code.team_limit',
-  bad_seats: 'error.code.bad_seats',
-  too_few_seats: 'error.code.too_few_seats',
-  plan_mismatch: 'error.code.plan_mismatch',
+  team_full: 'error.code.team_full',
+  team_no_plan: 'error.code.team_no_plan',
+  plan_too_small: 'error.code.plan_too_small',
+  not_team_payer: 'error.code.not_team_payer',
+  team_owner_pays: 'error.code.team_owner_pays',
   csrf: 'error.csrf',
 };
 

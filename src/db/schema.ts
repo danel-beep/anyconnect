@@ -130,6 +130,11 @@ export interface SecuritySettings {
 
 export type WorkspaceKind = 'personal' | 'team';
 export type MemberRole = 'owner' | 'admin' | 'member';
+/**
+ * How a team pays (`docs/TEAMS.md`): `payer`, one person's plan covers everyone; `each`, every member
+ * uses their own plan, and the payer's covers only what is the team's (its accounts, its shared key).
+ */
+export type TeamBillingMode = 'payer' | 'each';
 
 export const workspaces = pgTable('workspaces', {
   id: text().primaryKey(),
@@ -139,6 +144,10 @@ export const workspaces = pgTable('workspaces', {
   /** Teams: the address part of the team's MCP URL (`/mcp/team/<slug>`); never changes. */
   slug: text().unique(),
   settings: jsonb().$type<WorkspaceSettings>().notNull().default({}),
+  /** Teams: the member whose plan pays for the team; null = its owner. */
+  billingUserId: text().references(() => users.id, { onDelete: 'set null' }),
+  /** Teams: see {@link TeamBillingMode}. */
+  billingMode: text().$type<TeamBillingMode>().notNull().default('payer'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -512,6 +521,27 @@ export const usageCounters = pgTable(
     // Hub-wide totals per day (admin panel).
     index().on(t.day),
   ],
+);
+
+/**
+ * What each person's plan was charged: executed calls per paying workspace (a person's own; see
+ * `billing/payers.ts`), day and the workspace they happened in. Written with `usage_counters`, at
+ * the time of the call, so a team that changes who pays never moves earlier use. The workspace
+ * column is no foreign key on purpose: deleting a team must not give its payer the use back.
+ */
+export const billingUsage = pgTable(
+  'billing_usage',
+  {
+    payerId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** UTC day. */
+    day: date({ mode: 'string' }).notNull(),
+    workspaceId: text().notNull(),
+    calls: integer().notNull().default(0),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.payerId, t.day, t.workspaceId] })],
 );
 
 // ---------------------------------------------------------------------------
@@ -1127,8 +1157,9 @@ export const messengerOutbox = pgTable(
 // ---------------------------------------------------------------------------
 
 /**
- * The plan a workspace is on. No row = the free plan. Payment providers write here through
- * `BillingService` (`src/billing/service.ts`); admins can set a plan by hand (`provider = 'manual'`).
+ * The plan a person is on, kept on their own workspace (a team has none: it runs on its payer's).
+ * No row = the free plan. Payment providers write here through `BillingService`
+ * (`src/billing/service.ts`); admins can set a plan by hand (`provider = 'manual'`).
  */
 export const subscriptions = pgTable(
   'subscriptions',
@@ -1150,7 +1181,7 @@ export const subscriptions = pgTable(
     customerId: text(),
     /** Billing interval of a paid subscription. */
     interval: text().$type<'month' | 'year'>(),
-    /** Units bought: seats on plans priced per person (`Plan.perSeat`), otherwise 1. */
+    /** How many of the provider's price were bought (always 1: no plan is sold per unit). */
     quantity: integer().notNull().default(1),
     /**
      * When the provider last changed the subscription (its event time). Webhooks can arrive out of
