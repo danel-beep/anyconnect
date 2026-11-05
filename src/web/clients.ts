@@ -23,10 +23,11 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 /**
  * The server name in the client's config: `manyplug`, or `manyplug-work` for the address of the
- * access profile `work`, so adding a profile never replaces the main connection.
+ * access profile `work` (or of the team `work`, `/mcp/team/work`), so adding a profile or a team never
+ * replaces the main connection.
  */
 export function serverName(url: string): string {
-  const profile = /\/mcp\/([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
+  const profile = /\/mcp\/(?:team\/)?([a-z0-9][a-z0-9-]*)\/?$/.exec(url)?.[1];
   return profile ? `manyplug-${profile}` : 'manyplug';
 }
 
@@ -203,3 +204,21 @@ export const CLIENT_GUIDES: ClientGuide[] = [
 
 export const clientName = (guide: ClientGuide, lang: string) =>
   guide.id === 'other' && lang !== 'ru' ? 'Other clients' : guide.name;
+
+/** Guides longest name first, so "Claude Code" wins over "Claude" and "VS Code" over "Code". */
+const BY_NAME = CLIENT_GUIDES.filter((g) => g.id !== 'other').sort((a, b) => b.name.length - a.name.length);
+
+/**
+ * The guide of a known AI client, found by the name an app gave itself on sign-in (e.g.
+ * "Claude Code", "claude-ai", "Cursor (work)"), for its logo. Undefined for unknown clients.
+ */
+export function guideForApp(...names: (string | null | undefined)[]): ClientGuide | undefined {
+  const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  for (const name of names) {
+    if (!name) continue;
+    const n = flat(name);
+    const hit = BY_NAME.find((g) => n.includes(flat(g.name)) || n.includes(g.id));
+    if (hit) return hit;
+  }
+  return undefined;
+}

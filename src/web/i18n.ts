@@ -10,6 +10,7 @@ import { connectEn, connectRu } from './i18n/connect.js';
 import { emailEn, emailRu } from './i18n/email.js';
 import { landingEn, landingRu } from './i18n/landing.js';
 import { messengerLoginEn, messengerLoginRu } from './i18n/messenger-login.js';
+import { planPageEn, planPageRu } from './i18n/plan.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { profilesEn, profilesRu } from './i18n/profiles.js';
 import { seoEn, seoRu } from './i18n/seo.js';
@@ -233,6 +234,7 @@ const en = {
   ...problemsEn,
   ...emailEn,
   ...teamEn,
+  ...planPageEn,
   ...profilesEn,
   ...appsEn,
   ...botEn,
@@ -460,6 +462,7 @@ const ru: Record<Key, string> = {
   ...problemsRu,
   ...emailRu,
   ...teamRu,
+  ...planPageRu,
   ...profilesRu,
   ...appsRu,
   ...botRu,

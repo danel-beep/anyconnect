@@ -122,7 +122,7 @@ export function teamRoutes() {
     const admin = isTeamAdmin(role);
     const me = auth.user.id;
     const principal: Principal = { kind: 'session', userId: me, workspaceId: team.id, scopes: [] };
-    const [view, members, invitations, accounts, shares, billing, tokens, services, shell] =
+    const [view, members, invitations, accounts, shares, billing, tokens, services, shell, grants] =
       await Promise.all([
         s.teams.view(principal),
         s.teams.members(team.id),
@@ -133,8 +133,11 @@ export function teamRoutes() {
         admin ? s.apiTokens.list(team.id) : Promise.resolve([]),
         s.admin.services(team.id),
         shellInfo(c, auth.workspace.id),
+        s.oauth.listGrants(team.id),
       ]);
     if (!view) throw notFound('Team');
+    /** Members with an AI app signed in to the team's address (whether, not which). */
+    const withAi = new Set(grants.map((g) => g.userId));
     const names = new Map(members.map((m) => [m.userId, m.name]));
     const serviceName = new Map(services.map((x) => [x.service, x.name]));
     const base = (a: (typeof accounts)[number]) => ({
@@ -160,6 +163,7 @@ export function teamRoutes() {
             role: m.role,
             joinedAt: m.joinedAt,
             pays: m.userId === payer,
+            ai: withAi.has(m.userId),
           })),
           invitations: admin
             ? invitations.map((i) => ({ id: i.id, email: i.email, role: i.role, expiresAt: i.expiresAt }))

@@ -193,6 +193,40 @@ export const CodeBlock: FC<{ t: Translate; id: string; code: string }> = ({ t, i
 );
 
 /**
+ * Ready text to paste somewhere else (a message for a teammate), shown as it will be pasted, with
+ * one button that copies all of it. Line breaks in `text` are kept. `prompt`: a request for the AI,
+ * where the whole card is the button (one tap copies it).
+ */
+export const CopyText: FC<{ t: Translate; id: string; text: string; label?: string; prompt?: boolean }> = ({
+  t,
+  id,
+  text,
+  label,
+  prompt,
+}) =>
+  prompt ? (
+    <button type="button" class="copy-text prompt" data-copy={`#${id}`}>
+      <span class="prompt-text" id={id}>
+        {text}
+      </span>
+      <span class="prompt-action">
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </span>
+    </button>
+  ) : (
+    <div class="copy-text">
+      <p id={id}>{text}</p>
+      <button type="button" class="sm" data-copy={`#${id}`}>
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </button>
+    </div>
+  );
+
+/**
  * Ready-made requests to paste into the user's AI app: tapping one copies it. Everything the
  * dashboard sets up can also be asked in the chat, and this is the shortest way to show it.
  */
@@ -213,18 +247,9 @@ export const AskAi: FC<{ t: Translate; id: string; title: string; hint: string; 
         <span class="small muted">{hint}</span>
       </span>
     </div>
-    <div class="prompts">
+    <div class="prompt-list">
       {prompts.map((prompt, i) => (
-        <button type="button" class="prompt" data-copy={`#${id}-${i}`}>
-          <span class="prompt-text" id={`${id}-${i}`}>
-            {prompt}
-          </span>
-          <span class="prompt-act">
-            <Icon name="copy" />
-            <span class="copy-label">{t('ui.copy')}</span>
-            <span class="copy-done">{t('ui.copied')}</span>
-          </span>
-        </button>
+        <CopyText t={t} id={`${id}-${i}`} text={prompt} prompt />
       ))}
     </div>
   </div>

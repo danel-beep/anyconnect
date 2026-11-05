@@ -44,15 +44,8 @@ ul.plain>li:has(>.row-icon){justify-content:flex-start}
 /* Requests to copy into the AI app */
 .ask-ai{margin-top:20px;padding:16px;border-radius:12px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
 .ask-ai .sec-icon{background:var(--accent);color:var(--accent-text)}
-.ask-ai-head{display:flex;gap:12px;align-items:flex-start;margin:0 0 12px}
+.ask-ai-head{display:flex;gap:12px;align-items:flex-start;margin:0}
 .ask-ai-head .grow{display:flex;flex-direction:column;gap:2px}
-.prompts{display:grid;gap:8px}
-button.prompt{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:48px;padding:10px 14px;text-align:left;white-space:normal;font-weight:500;line-height:1.4;background:var(--card)}
-button.prompt:hover{border-color:var(--accent)}
-.prompt-text::before{content:'\\201C'}
-.prompt-text::after{content:'\\201D'}
-.prompt-act{display:inline-flex;align-items:center;gap:6px;flex:none;color:var(--accent-ink);font-weight:600;font-size:13px}
-.prompt-act svg{width:15px;height:15px}
 
 /* Option cards in Settings */
 .grid-2.top{align-items:start}
@@ -76,7 +69,6 @@ details.danger-zone>summary{display:flex;align-items:center;gap:12px;padding:0 3
   .step-item{flex-wrap:wrap;column-gap:12px;row-gap:8px}
   .step-item .grow{flex-basis:calc(100% - 46px)}
   .step-item>.badge,.step-item>.step-next{margin-left:46px}
-  .prompt-act .copy-label{display:none}
   .protect-head>.grow{flex-basis:100%}
 }
 `;
