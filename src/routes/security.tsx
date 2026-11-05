@@ -26,6 +26,8 @@ const PasskeyRegistration = z.object({
   response: z.unknown().optional(),
 });
 
+const RequestKind = z.enum(['device', 'oauth', 'api_token']);
+
 const PasskeyName = z.string().trim().min(1).max(PASSKEY_NAME_MAX);
 
 async function renderSecurity(
@@ -93,20 +95,30 @@ async function vaultView(c: AppContext, userId: string): Promise<VaultView | und
   const open = (await s.vaultScopes.prepare()) !== undefined;
   const device = c.get('vaultDevice');
   const [requests, devices, recovery] = await Promise.all([
-    s.vaults.deviceRequests(userId),
+    s.vaultLinks.requests(userId),
     s.vaults.devices(userId),
     s.vaults.hasRecoveryKey(userId),
   ]);
-  const own = device ? requests.find((r) => r.deviceId === device.ref) : undefined;
+  const isMine = (r: { kind: string; subject: string }) => r.kind === 'device' && r.subject === device?.ref;
+  const others = requests.filter((r) => !isMine(r));
   return {
     open,
     ...(!open && device
       ? {
           thisCode: deviceCode(UnlockedVault.devicePublicKey(device.secret).encoded),
-          waiting: own !== undefined,
+          waiting: requests.some(isMine),
         }
       : {}),
-    requests: open ? requests.filter((r) => r.deviceId !== device?.ref) : [],
+    requests: open
+      ? others.map((r) => ({
+          kind: r.kind,
+          subject: r.subject,
+          ...(r.kind === 'device' ? { code: r.code } : { name: r.label ?? r.subject }),
+          createdAt: r.createdAt,
+        }))
+      : [],
+    // A locked browser cannot approve anything, but it says which apps are waiting.
+    waitingApps: open ? [] : others.filter((r) => r.kind !== 'device').map((r) => r.label ?? r.subject),
     devices: devices.length,
     recovery,
   };
@@ -241,28 +253,34 @@ export function securityRoutes() {
   // --- Vault (docs/VAULTS.md) ------------------------------------------------------
   // Approving a browser seals the vault key to that browser's device key: the approving request
   // never learns the new browser's secret, and the hub never holds the vault key outside a request.
-  app.post('/security/vault/devices/:id/allow', async (c) => {
+  // An AI app or personal token is let in the same way: the vault key is sealed to public keys its
+  // tokens derive, so the approving browser never sees the tokens either.
+  app.post('/security/vault/requests/:kind/:subject/allow', async (c) => {
     const s = c.get('services');
     const guard = await guardForm(c);
     if (guard instanceof Response) return guard;
+    const kind = RequestKind.safeParse(c.req.param('kind'));
     const userId = guard.session.user.id;
     const vault = await s.vaultScopes.prepare();
-    if (!vault || s.vaultScopes.currentUserId() !== userId) {
+    if (!kind.success) {
+      setFlash(c, 'bad', 'vault.flash.gone');
+    } else if (!vault || s.vaultScopes.currentUserId() !== userId) {
       setFlash(c, 'bad', 'vault.flash.locked');
-    } else if (await s.vaults.approveDevice(userId, vault, c.req.param('id'))) {
-      s.logger.info({ userId }, 'vault: browser allowed');
-      setFlash(c, 'ok', 'vault.flash.allowed');
+    } else if (await s.vaults.approve(userId, vault, kind.data, c.req.param('subject'))) {
+      s.logger.info({ userId, kind: kind.data }, 'vault: request allowed');
+      setFlash(c, 'ok', kind.data === 'device' ? 'vault.flash.allowed' : 'vault.flash.appAllowed');
     } else {
       setFlash(c, 'bad', 'vault.flash.gone');
     }
     return c.redirect(vaultUrl(guard.next), 303);
   });
 
-  app.post('/security/vault/devices/:id/deny', async (c) => {
+  app.post('/security/vault/requests/:kind/:subject/deny', async (c) => {
     const s = c.get('services');
     const guard = await guardForm(c);
     if (guard instanceof Response) return guard;
-    await s.vaults.denyDevice(guard.session.user.id, c.req.param('id'));
+    const kind = RequestKind.safeParse(c.req.param('kind'));
+    if (kind.success) await s.vaults.deny(guard.session.user.id, kind.data, c.req.param('subject'));
     setFlash(c, 'ok', 'vault.flash.denied');
     return c.redirect(vaultUrl(guard.next), 303);
   });
@@ -299,7 +317,7 @@ export function securityRoutes() {
       return c.redirect(vaultUrl(guard.next), 303);
     }
     await s.vaults.addWrap(userId, vault, 'device', device.ref, device.secret);
-    await s.vaults.denyDevice(userId, device.ref);
+    await s.vaults.deny(userId, 'device', device.ref);
     s.logger.info({ userId }, 'vault: opened with the recovery key');
     setFlash(c, 'ok', 'vault.flash.unlocked');
     return c.redirect(vaultUrl(guard.next), 303);

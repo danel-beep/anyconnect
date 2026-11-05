@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../db/client.js';
-import { userVaults, type VaultWrapKind, vaultDeviceRequests, vaultWraps } from '../db/schema.js';
+import {
+  userVaults,
+  type VaultRequestKind,
+  type VaultWrapKind,
+  vaultRequests,
+  vaultWraps,
+} from '../db/schema.js';
 import { generateRecoveryKey, recoveryKeySecret, UnlockedVault, VaultPublicKey } from '../lib/vault.js';
 
 /** The wrap context: names the user, the kind and the secret's row, so a wrap cannot be moved. */
@@ -11,8 +17,10 @@ export const vaultWrapContext = (userId: string, kind: VaultWrapKind, ref: strin
 /** `ref` of the single recovery wrap. */
 export const RECOVERY_REF = '-';
 
-/** How long a browser's request to open the vault waits for an approval. */
-export const DEVICE_REQUEST_TTL_MS = 7 * 86_400_000;
+/** How long a request to open the vault waits for an approval. */
+export const VAULT_REQUEST_TTL_MS = 7 * 86_400_000;
+/** Keys one request keeps (an AI app's latest access and refresh tokens, and one spare). */
+const MAX_REQUEST_KEYS = 4;
 
 /**
  * The code both browsers show for one request, so the user approves the browser in front of them
@@ -24,10 +32,24 @@ export function deviceCode(publicKey: string): string {
   return `${digits.slice(0, 3)} ${digits.slice(3)}`;
 }
 
-export interface DeviceRequest {
-  deviceId: string;
+/** A waiting request; `code` is what a browser shows on its own Security page (devices only). */
+export interface VaultRequest {
+  kind: VaultRequestKind;
+  subject: string;
   code: string;
   createdAt: Date;
+}
+
+const requestKey = (userId: string, kind: VaultRequestKind, subject: string) =>
+  and(eq(vaultRequests.userId, userId), eq(vaultRequests.kind, kind), eq(vaultRequests.subject, subject));
+
+function toRequest(row: typeof vaultRequests.$inferSelect): VaultRequest {
+  return {
+    kind: row.kind,
+    subject: row.subject,
+    code: deviceCode(row.keys[0]?.publicKey ?? row.subject),
+    createdAt: row.createdAt,
+  };
 }
 
 export interface VaultDevice {
@@ -139,67 +161,123 @@ export class VaultService {
   }
 
   /**
-   * A browser without a way into the vault asks for one. Only the public half of its device key is
-   * stored; approving it ({@link approveDevice}) needs a browser where the vault is open.
+   * Something of the user's without a way into the vault asks for one (see `vault_requests`): only
+   * the public half of each secret is stored, and approving it ({@link approve}) needs a request
+   * where the vault is open. `merge` adds keys to a waiting request (the same AI app presenting a
+   * newer token) instead of replacing them; the newest {@link MAX_REQUEST_KEYS} are kept.
    */
-  async requestDevice(userId: string, deviceId: string, secret: Buffer): Promise<DeviceRequest> {
-    const publicKey = UnlockedVault.devicePublicKey(secret).encoded;
-    const [row] = await this.db
-      .insert(vaultDeviceRequests)
-      .values({ userId, deviceId, publicKey })
-      .onConflictDoUpdate({
-        target: [vaultDeviceRequests.userId, vaultDeviceRequests.deviceId],
-        set: { publicKey, createdAt: new Date() },
-      })
-      .returning();
-    return { deviceId, code: deviceCode(publicKey), createdAt: row!.createdAt };
+  async request(
+    userId: string,
+    kind: VaultRequestKind,
+    subject: string,
+    secrets: { ref: string; secret: Buffer }[],
+    options: { merge?: boolean } = {},
+  ): Promise<VaultRequest> {
+    const fresh = secrets.map((s) => ({
+      ref: s.ref,
+      publicKey: UnlockedVault.devicePublicKey(s.secret).encoded,
+    }));
+    return this.db.transaction(async (tx) => {
+      let keys = fresh;
+      if (options.merge) {
+        const [existing] = await tx
+          .select({ keys: vaultRequests.keys })
+          .from(vaultRequests)
+          .where(requestKey(userId, kind, subject))
+          .for('update');
+        const kept = (existing?.keys ?? []).filter((k) => !fresh.some((f) => f.ref === k.ref));
+        keys = [...kept, ...fresh].slice(-MAX_REQUEST_KEYS);
+      }
+      const [row] = await tx
+        .insert(vaultRequests)
+        .values({ userId, kind, subject, keys })
+        .onConflictDoUpdate({
+          target: [vaultRequests.userId, vaultRequests.kind, vaultRequests.subject],
+          set: { keys, createdAt: new Date() },
+        })
+        .returning();
+      return toRequest(row!);
+    });
+  }
+
+  /** A browser without a way in asks for one with its device key (`web-vault.ts`). */
+  requestDevice(userId: string, deviceId: string, secret: Buffer): Promise<VaultRequest> {
+    return this.request(userId, 'device', deviceId, [{ ref: deviceId, secret }]);
   }
 
   /** Requests still waiting, newest first. */
-  async deviceRequests(userId: string): Promise<DeviceRequest[]> {
+  async requests(userId: string): Promise<VaultRequest[]> {
     const rows = await this.db
       .select()
-      .from(vaultDeviceRequests)
+      .from(vaultRequests)
       .where(
         and(
-          eq(vaultDeviceRequests.userId, userId),
-          gt(vaultDeviceRequests.createdAt, new Date(Date.now() - DEVICE_REQUEST_TTL_MS)),
+          eq(vaultRequests.userId, userId),
+          gt(vaultRequests.createdAt, new Date(Date.now() - VAULT_REQUEST_TTL_MS)),
         ),
       )
-      .orderBy(desc(vaultDeviceRequests.createdAt));
-    return rows.map((r) => ({ deviceId: r.deviceId, code: deviceCode(r.publicKey), createdAt: r.createdAt }));
+      .orderBy(desc(vaultRequests.createdAt));
+    return rows.map(toRequest);
+  }
+
+  /** One waiting request, if any. */
+  async findRequest(
+    userId: string,
+    kind: VaultRequestKind,
+    subject: string,
+  ): Promise<VaultRequest | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(vaultRequests)
+      .where(requestKey(userId, kind, subject))
+      .limit(1);
+    return row && row.createdAt.getTime() >= Date.now() - VAULT_REQUEST_TTL_MS ? toRequest(row) : undefined;
   }
 
   /**
-   * Lets the requesting browser in: seals the private key to its device public key. The vault must
-   * be open in this request (another browser of the same user). False if the request is gone.
+   * Lets the requester in: seals the private key to each of its public keys, which become wraps of
+   * its kind. The vault must be open in this request (another browser of the same user). False if
+   * the request is gone or expired.
    */
-  async approveDevice(userId: string, vault: UnlockedVault, deviceId: string): Promise<boolean> {
+  async approve(
+    userId: string,
+    vault: UnlockedVault,
+    kind: VaultRequestKind,
+    subject: string,
+  ): Promise<boolean> {
     return this.db.transaction(async (tx) => {
       const [request] = await tx
-        .delete(vaultDeviceRequests)
-        .where(and(eq(vaultDeviceRequests.userId, userId), eq(vaultDeviceRequests.deviceId, deviceId)))
+        .delete(vaultRequests)
+        .where(requestKey(userId, kind, subject))
         .returning();
-      if (!request || request.createdAt.getTime() < Date.now() - DEVICE_REQUEST_TTL_MS) return false;
-      const wrapped = vault.sealTo(
-        VaultPublicKey.decode(request.publicKey),
-        vaultWrapContext(userId, 'device', deviceId),
-      );
-      await tx
-        .insert(vaultWraps)
-        .values({ userId, kind: 'device', ref: deviceId, wrapped })
-        .onConflictDoUpdate({
-          target: [vaultWraps.userId, vaultWraps.kind, vaultWraps.ref],
-          set: { wrapped, createdAt: new Date(), lastUsedAt: null },
-        });
+      if (!request || request.createdAt.getTime() < Date.now() - VAULT_REQUEST_TTL_MS) return false;
+      for (const key of request.keys) {
+        const wrapped = vault.sealTo(
+          VaultPublicKey.decode(key.publicKey),
+          vaultWrapContext(userId, kind, key.ref),
+        );
+        await tx
+          .insert(vaultWraps)
+          .values({ userId, kind, ref: key.ref, wrapped })
+          .onConflictDoUpdate({
+            target: [vaultWraps.userId, vaultWraps.kind, vaultWraps.ref],
+            set: { wrapped, createdAt: new Date(), lastUsedAt: null },
+          });
+      }
       return true;
     });
   }
 
-  async denyDevice(userId: string, deviceId: string): Promise<void> {
-    await this.db
-      .delete(vaultDeviceRequests)
-      .where(and(eq(vaultDeviceRequests.userId, userId), eq(vaultDeviceRequests.deviceId, deviceId)));
+  async deny(userId: string, kind: VaultRequestKind, subject: string): Promise<void> {
+    await this.db.delete(vaultRequests).where(requestKey(userId, kind, subject));
+  }
+
+  /** A revoked AI app or token: its request goes with it (any user, by subject). */
+  async removeRequests(kind: VaultRequestKind, subjects: string[], db: DbExecutor = this.db): Promise<void> {
+    if (subjects.length === 0) return;
+    await db
+      .delete(vaultRequests)
+      .where(and(eq(vaultRequests.kind, kind), inArray(vaultRequests.subject, subjects)));
   }
 
   /** Browsers that can open the vault. */

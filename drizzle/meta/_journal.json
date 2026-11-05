@@ -155,6 +155,20 @@
       "when": 1793902220393,
       "tag": "0021_vault_device_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793909568622,
+      "tag": "0022_vault_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793909574465,
+      "tag": "0023_drop_vault_device_requests",
+      "breakpoints": true
     }
   ]
 }

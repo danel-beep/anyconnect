@@ -10,7 +10,7 @@ import {
   oauthTokens,
   pendingLogins,
   toolCalls,
-  vaultDeviceRequests,
+  vaultRequests,
   vaultWraps,
   webauthnChallenges,
   webSessions,
@@ -58,8 +58,8 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
       ),
     ),
   );
-  // Browsers that asked to open a vault and were never approved (DEVICE_REQUEST_TTL_MS).
-  await db.delete(vaultDeviceRequests).where(lt(vaultDeviceRequests.createdAt, new Date(now - 7 * DAY)));
+  // Browsers and AI apps that asked to open a vault and were never approved (VAULT_REQUEST_TTL_MS).
+  await db.delete(vaultRequests).where(lt(vaultRequests.createdAt, new Date(now - 7 * DAY)));
   await db.delete(webSessions).where(lt(webSessions.expiresAt, new Date(now)));
   await db.delete(pendingLogins).where(lt(pendingLogins.expiresAt, new Date(now)));
   await db.delete(webauthnChallenges).where(lt(webauthnChallenges.expiresAt, new Date(now)));

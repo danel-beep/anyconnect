@@ -983,23 +983,35 @@ export const vaultWraps = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.kind, t.ref] }), index().on(t.kind, t.ref)],
 );
 
+/** What asks to be let into a vault: a new browser, an AI app (OAuth grant) or a personal token. */
+export type VaultRequestKind = 'device' | 'oauth' | 'api_token';
+
+/** One secret a request asks a wrap for: the wrap's `ref` and the public key the secret derives. */
+export interface VaultRequestKey {
+  ref: string;
+  /** X25519 public key whose private half is the secret (a device key or `tokenSecret(token)`). */
+  publicKey: string;
+}
+
 /**
- * A browser signed in after the vault was created asks to open it. Another browser where the vault
- * is open approves it by sealing the vault key to `publicKey` (the device secret stays in the new
- * browser's cookie), which becomes a `device` wrap; the request row is then deleted.
+ * Something of the user's that cannot open their vault yet asks to: a browser signed in after the
+ * vault was created, or an AI app / personal token connected before it (or from a browser where
+ * the vault was locked). A browser where the vault is open approves it by sealing the vault key to
+ * each `keys[].publicKey`, which become wraps of `kind`; the secrets never reach the database and
+ * the row is then deleted. One row per thing (`subject`: device id, OAuth grant id, token id).
  */
-export const vaultDeviceRequests = pgTable(
-  'vault_device_requests',
+export const vaultRequests = pgTable(
+  'vault_requests',
   {
     userId: text()
       .notNull()
       .references(() => userVaults.userId, { onDelete: 'cascade' }),
-    deviceId: text().notNull(),
-    /** The device key pair's public half, base64url. */
-    publicKey: text().notNull(),
+    kind: text().$type<VaultRequestKind>().notNull(),
+    subject: text().notNull(),
+    keys: jsonb().$type<VaultRequestKey[]>().notNull(),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.deviceId] })],
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.subject] })],
 );
 
 export type MessengerSessionState =

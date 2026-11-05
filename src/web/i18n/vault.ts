@@ -16,10 +16,14 @@ export const vaultEn = {
   'vault.lockedOr': 'Lost every other browser? Use your recovery key instead.',
   'vault.lockedNoRecovery':
     'If you no longer have any other browser, your AI apps still work. To manage protected accounts here, reconnect them; your data at each service is not affected.',
-  'vault.requests': 'Browsers asking for access',
+  'vault.requests': 'Asking to open your vault',
   'vault.requestsHint':
-    'Allow only a browser you just signed in to yourself, and only if it shows the same code.',
+    'Allow a browser only if you just signed in to it yourself and it shows the same code. Allow an AI app if you connected it.',
   'vault.requested': 'asked {when}',
+  'vault.requestBrowser': 'a browser you signed in to',
+  'vault.requestApp': 'an AI app connected before your vault, or from a locked browser',
+  'vault.lockedApps':
+    '{apps} also waits to open your protected accounts: press Allow next to it in a browser where the vault is open.',
   'vault.allow': 'Allow',
   'vault.deny': 'Deny',
   'vault.devices': 'Browsers that can open it: {n}',
@@ -38,6 +42,7 @@ export const vaultEn = {
     'It is shown only once. Together with your sign-in it opens your protected accounts, so keep it private.',
   'vault.keyDone': 'I have saved it',
   'vault.flash.allowed': 'Browser allowed: it can now open your protected accounts.',
+  'vault.flash.appAllowed': 'Allowed: the app can now open your protected accounts. Ask it again.',
   'vault.flash.denied': 'Request declined.',
   'vault.flash.gone': 'That request is no longer waiting.',
   'vault.flash.unlocked': 'The vault is open in this browser now.',
@@ -47,6 +52,7 @@ export const vaultEn = {
   'vault.banner.locked':
     'Protected accounts are locked in this browser. Allow it from a browser where you already use Manyplug.',
   'vault.banner.request': 'A browser asks to open your protected accounts.',
+  'vault.banner.app': '{app} asks to open your protected accounts.',
   'vault.banner.review': 'Review',
 } as const;
 
@@ -66,10 +72,14 @@ export const vaultRu: Record<VaultKey, string> = {
   'vault.lockedOr': 'Других браузеров не осталось? Откройте сейф ключом восстановления.',
   'vault.lockedNoRecovery':
     'Если других браузеров не осталось, ИИ-приложения всё равно работают. Чтобы управлять защищёнными аккаунтами здесь, подключите их заново; данные в самих сервисах не пострадают.',
-  'vault.requests': 'Браузеры просят доступ',
+  'vault.requests': 'Просят доступ к сейфу',
   'vault.requestsHint':
-    'Разрешайте только браузер, в который вы сами только что вошли, и только если код совпадает.',
+    'Браузер разрешайте, только если вы сами только что в него вошли и код совпадает. ИИ-приложение — если вы его подключали.',
   'vault.requested': 'запрос {when}',
+  'vault.requestBrowser': 'браузер, в который вы вошли',
+  'vault.requestApp': 'ИИ-приложение, подключённое до сейфа или из закрытого браузера',
+  'vault.lockedApps':
+    '{apps} тоже ждёт доступа к защищённым аккаунтам: нажмите «Разрешить» рядом с ним в браузере, где сейф открыт.',
   'vault.allow': 'Разрешить',
   'vault.deny': 'Отклонить',
   'vault.devices': 'Браузеров с доступом: {n}',
@@ -88,6 +98,8 @@ export const vaultRu: Record<VaultKey, string> = {
     'Он показывается только один раз. Вместе с вашим входом он открывает защищённые аккаунты, поэтому никому его не показывайте.',
   'vault.keyDone': 'Я сохранил ключ',
   'vault.flash.allowed': 'Браузер разрешён: теперь он открывает защищённые аккаунты.',
+  'vault.flash.appAllowed':
+    'Разрешено: приложение теперь открывает защищённые аккаунты. Повторите запрос в нём.',
   'vault.flash.denied': 'Запрос отклонён.',
   'vault.flash.gone': 'Этот запрос больше не ждёт ответа.',
   'vault.flash.unlocked': 'Сейф открыт в этом браузере.',
@@ -97,5 +109,6 @@ export const vaultRu: Record<VaultKey, string> = {
   'vault.banner.locked':
     'Защищённые аккаунты закрыты в этом браузере. Разрешите его из браузера, где вы уже работаете с Manyplug.',
   'vault.banner.request': 'Браузер просит открыть ваши защищённые аккаунты.',
+  'vault.banner.app': '{app} просит открыть ваши защищённые аккаунты.',
   'vault.banner.review': 'Посмотреть',
 };

@@ -334,7 +334,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     // Reconnecting needs the account's key: refused before the provider's consent screen.
     const again = await phone.request(`/connect/fake?account=${account!.id}`);
     expect(again.status).toBe(423);
-    expect(await again.text()).toContain('personal vault');
+    expect(await again.text()).toContain('private vault');
   });
 
   it('background jobs leave sealed accounts alone: the hub cannot open them outside a call', async () => {

@@ -113,10 +113,14 @@ export async function shellInfo(c: AppContext, workspaceId: string): Promise<She
   };
 }
 
-async function vaultShell(c: AppContext, userId: string): Promise<{ locked: boolean; requests: number }> {
+async function vaultShell(c: AppContext, userId: string): Promise<NonNullable<ShellInfo['vault']>> {
   const s = c.get('services');
   const open = (await s.vaultScopes.prepare()) !== undefined;
-  return { locked: !open, requests: open ? (await s.vaults.deviceRequests(userId)).length : 0 };
+  if (!open) return { locked: true, requests: 0 };
+  const requests = await s.vaultLinks.requests(userId);
+  // Name the AI app when one asks: "Claude asks…" is clearer than a count.
+  const app = requests.find((r) => r.kind !== 'device');
+  return { locked: false, requests: requests.length, ...(app?.label ? { app: app.label } : {}) };
 }
 
 /**

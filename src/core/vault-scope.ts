@@ -51,6 +51,11 @@ class Scope {
     return this.opened;
   }
 
+  /** The secret this scope was opened from, when it came from the request (not an opened vault). */
+  get secret(): VaultSecret | undefined {
+    return this.source instanceof VaultSecret ? this.source : undefined;
+  }
+
   open(): Promise<UnlockedVault | undefined> {
     if (this.opened) return Promise.resolve(this.opened);
     const source = this.source;
@@ -80,7 +85,24 @@ export class VaultScopes {
   /** Vaults kept for a later step of one action (see {@link hold}): memory only, never stored. */
   private readonly held = new Map<string, { userId: string; vault: UnlockedVault; until: number }>();
 
+  private help: ((source: VaultSecret | undefined) => Promise<string | undefined>) | undefined;
+
   constructor(private readonly vaults: VaultService) {}
+
+  /** Explains a locked vault for the request's own secret (`VaultGrantLinks.explainLocked`). */
+  setLockedHelp(help: (source: VaultSecret | undefined) => Promise<string | undefined>): void {
+    this.help = help;
+  }
+
+  /**
+   * The error for a sealed account this request cannot open, saying exactly what the user does
+   * next (and, for an AI app, filing its request to be let in). Never throws.
+   */
+  async lockedError(): Promise<VaultLockedError> {
+    const source = this.storage.getStore()?.secret;
+    const message = await this.help?.(source).catch(() => undefined);
+    return message ? new VaultLockedError(message) : lockedError();
+  }
 
   /** Runs `fn` with the vault that `source` opens (lazily, at most once). */
   run<T>(source: VaultSecret | undefined, fn: () => T): T {

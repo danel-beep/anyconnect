@@ -461,7 +461,7 @@ export class AccountService {
     try {
       return this.tokens ? await this.tokens.access(connector, row, signal) : undefined;
     } catch (error) {
-      if (error instanceof VaultLockedError) throw lockedAccount(error);
+      if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
       throw error;
     }
   }
@@ -491,7 +491,7 @@ export class AccountService {
       try {
         this.keys.openKey(row);
       } catch (error) {
-        if (error instanceof VaultLockedError) throw lockedAccount(error);
+        if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
         throw error;
       }
     }
@@ -589,7 +589,7 @@ export class AccountService {
       try {
         credentials = this.keys.decryptCredentials(row, row.credentialsEncrypted);
       } catch (error) {
-        if (error instanceof VaultLockedError) throw lockedAccount(error);
+        if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
         throw new AppError(
           500,
           'credentials_unreadable',
