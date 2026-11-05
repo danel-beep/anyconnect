@@ -78,6 +78,7 @@ describe('REST API, personal tokens and account management', () => {
       workspaceId: workspace.id,
       userId: user.id,
       name: 'tests',
+      scopes: ['mcp', 'api'],
     }));
   });
 
@@ -208,6 +209,72 @@ describe('REST API, personal tokens and account management', () => {
     expect(tokens.body[0].tokenPrefix).toMatch(/^ac_pat_/);
     expect((await api(`/tokens/${id}`, { method: 'DELETE' })).status).toBe(204);
     expect((await api('/me')).status).toBe(401);
+  });
+
+  it('makes tokens MCP-only unless the management API is asked for', async () => {
+    const workspace = (await hub.services.db.query.workspaces.findFirst())!;
+    const user = (await hub.services.db.query.users.findFirst())!;
+    // The default, from the service, the CLI and the REST API alike: MCP only.
+    const plain = await hub.services.apiTokens.create({
+      workspaceId: workspace.id,
+      userId: user.id,
+      name: 'cursor',
+    });
+    expect(plain.row.scopes).toEqual(['mcp']);
+    expect((await api('/me', { auth: plain.token })).status).toBe(401);
+    const mcp = await fetch(hub.mcpUrl, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${plain.token}` },
+    });
+    expect(mcp.status).not.toBe(401);
+
+    const created = await api('/tokens', { method: 'POST', body: { name: 'script' } });
+    expect(created.status).toBe(201);
+    expect(created.body.scopes).toEqual(['mcp']);
+    const withApi = await api('/tokens', { method: 'POST', body: { name: 'cli', scopes: ['mcp', 'api'] } });
+    expect(withApi.body.scopes).toEqual(['mcp', 'api']);
+    expect((await api('/me', { auth: withApi.body.token })).status).toBe(200);
+
+    // A token of an access profile stays on the profile's MCP address.
+    const persona = await hub.services.personas.create(workspace.id, { slug: 'kids', name: 'Kids' });
+    const refused = await api('/tokens', {
+      method: 'POST',
+      body: { name: 'kids', personaId: persona.id, scopes: ['mcp', 'api'] },
+    });
+    expect(refused.status).toBe(400);
+    const profile = await hub.services.apiTokens.create({
+      workspaceId: workspace.id,
+      userId: user.id,
+      name: 'kids',
+      personaId: persona.id,
+    });
+    // Even one stored with "api" (made before this rule) never reaches the REST API.
+    await hub.services.database.pool.query(`update api_tokens set scopes = '{mcp,api}' where id = $1`, [
+      profile.row.id,
+    ]);
+    expect((await api('/me', { auth: profile.token })).status).toBe(401);
+  });
+
+  it('creates dashboard tokens for MCP, with the API only when ticked', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    expect((await browser.login()).status).toBe(303);
+    const page = await browser.request('/app/apps');
+    const csrf = TestBrowser.hiddenInputs(await page.text()).csrf!;
+    const create = async (form: Record<string, string>) => {
+      const response = await browser.request('/app/tokens', { form: { csrf, days: '30', ...form } });
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      return html.match(/ac_pat_[A-Za-z0-9_-]+/)![0];
+    };
+    const mcpOnly = await create({ name: 'Cursor' });
+    expect((await api('/me', { auth: mcpOnly })).status).toBe(401);
+    const full = await create({ name: 'Backup script', api: '1' });
+    expect((await api('/me', { auth: full })).status).toBe(200);
+    const tokens = (await api('/tokens')).body as { name: string; scopes: string[] }[];
+    expect(tokens.find((x) => x.name === 'Cursor')!.scopes).toEqual(['mcp']);
+    expect(tokens.find((x) => x.name === 'Backup script')!.scopes).toEqual(['mcp', 'api']);
+    const listing = await (await browser.request('/app/apps')).text();
+    expect(listing).toContain('MCP + API');
   });
 
   it('does not let AI apps manage the hub with their OAuth tokens', async () => {

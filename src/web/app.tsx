@@ -1019,6 +1019,8 @@ export interface AppsView {
     name: string;
     appId: string | null;
     profile: string | null;
+    /** Also allowed to use the management API (not just MCP). */
+    api: boolean;
     createdAt: Date;
     lastUsedAt: Date | null;
     expiresAt: Date | null;
@@ -1130,6 +1132,9 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
                   {tok.profile ? (
                     <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
                   ) : null}
+                  <span class={tok.api ? 'badge warn' : 'badge'}>
+                    {t(tok.api ? 'app.tokens.scopeApi' : 'app.tokens.scopeMcp')}
+                  </span>
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
                     {tok.lastUsedAt
@@ -1188,6 +1193,12 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <option value="365">{t('app.tokens.days', { n: 365 })}</option>
               <option value="0">{t('app.tokens.never')}</option>
             </select>
+          </div>
+          <div class="wide-2">
+            <label class="check">
+              <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
+            </label>
+            <p class="hint">{t('app.tokens.apiHint')}</p>
           </div>
           <div>
             <button type="submit" class="block">

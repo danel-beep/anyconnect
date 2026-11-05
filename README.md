@@ -190,6 +190,11 @@ llms.txt описаны в [docs/SEO.md](docs/SEO.md).
 приложений определяет, нужен ли вход, по первому ответу сервера: если он 200, такое приложение
 подключится без входа и не покажет кнопку входа.
 
+Каталоги ИИ-приложений (официальный MCP Registry, каталоги Claude и ChatGPT, Cursor, VS Code,
+Smithery, Glama): что уже подано, что подготовлено и что нужно сделать владельцу —
+[docs/DIRECTORIES.md](docs/DIRECTORIES.md). Файлы для них (`server.json`, плагины в `integrations/`)
+собираются из `src/distribution/listing.ts` командой `npm run distribution`.
+
 Персоны: если создать персону `work` (`POST /api/v1/personas`), у неё будет свой адрес
 `https://<хаб>/mcp/work` — подключённый к нему клиент видит только её аккаунты.
 
@@ -207,11 +212,15 @@ npm run cli -- accounts:add --connector demo --label "Третий аккаун�
 npm run cli -- accounts:list
 npm run cli -- tools:list                      # что именно видит ИИ
 npm run cli -- exposure:set --mode per_account # отдельный инструмент на каждый аккаунт
-npm run cli -- tokens:create --name "laptop"   # личный токен для REST API / MCP
+npm run cli -- tokens:create --name "laptop" --api  # личный токен: MCP, с --api ещё и REST API
 npm run cli -- users:2fa:reset --email you@example.com  # потерян телефон: сбросить второй фактор
 ```
 
-REST API (`Authorization: Bearer ac_pat_...`):
+REST API (`Authorization: Bearer ac_pat_...`). Нужен токен со scope `api`: по умолчанию токены
+(в кабинете, CLI и `POST /api/v1/tokens`) работают только с MCP, а API управления включается
+явно (`--api`, галочка в кабинете, `"scopes": ["mcp", "api"]`). Токен с `api` может менять
+аккаунты, правила и настройки безопасности, поэтому его не отдают AI-приложению: иначе оно
+смогло бы ослабить свои же правила. Токен профиля доступа (`personaId`) работает только с MCP.
 
 | Метод | Путь | Что делает |
 | --- | --- | --- |

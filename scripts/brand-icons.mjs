@@ -58,6 +58,9 @@ const SLUGS = [
   'brevo',
   'caldotcom',
   'webflow',
+  'pagerduty',
+  'netlify',
+  'toggl',
 ];
 
 const out = {};

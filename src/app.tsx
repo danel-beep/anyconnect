@@ -7,10 +7,12 @@ import { aiAppRoutes } from './routes/ai-apps.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
 import { billingRoutes } from './routes/billing.js';
+import { requestBodyLimit } from './routes/body-limit.js';
 import { canonicalHost } from './routes/canonical-host.js';
 import { confirmRoutes } from './routes/confirm.js';
 import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
+import { directoryRoutes } from './routes/directories.js';
 import { hookRoutes } from './routes/hooks.js';
 import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
@@ -58,6 +60,7 @@ export function createApp(services: Services) {
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
   app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
+  app.use('*', requestBodyLimit(services.config.maxRequestBodyBytes));
   // Pages, styles, scripts, feeds and llms.txt go out gzipped (a page shrinks to about a fifth).
   // MCP, API and OAuth responses are JSON or event streams and stay as they are.
   app.use('*', compress({ encoding: 'gzip', contentTypeFilter: COMPRESSIBLE }));
@@ -80,6 +83,7 @@ export function createApp(services: Services) {
   app.route('/', siteRoutes());
   app.route('/', seoRoutes());
   app.route('/', oauthRoutes());
+  app.route('/', directoryRoutes());
   app.route('/', loginRoutes());
   app.route('/', securityRoutes());
   app.route('/', mcpRoutes());

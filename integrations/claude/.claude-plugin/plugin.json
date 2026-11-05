@@ -1,0 +1,23 @@
+{
+  "name": "manyplug",
+  "version": "0.1.0",
+  "description": "Connect Gmail, Calendar, Drive, Slack, Notion, GitHub and more, several accounts per service, and use them all from Claude, ChatGPT, Cursor or any MCP app.",
+  "author": {
+    "name": "Manyplug",
+    "url": "https://manyplug.com"
+  },
+  "homepage": "https://manyplug.com/docs",
+  "repository": "https://github.com/danel-beep/anyconnect",
+  "keywords": [
+    "mcp",
+    "hub",
+    "gmail",
+    "calendar",
+    "drive",
+    "slack",
+    "notion",
+    "github",
+    "multi-account",
+    "productivity"
+  ]
+}

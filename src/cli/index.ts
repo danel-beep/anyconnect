@@ -42,8 +42,9 @@ Usage: npm run cli -- <command> [options]
   accounts:add --connector C --label L [--name N] [--description D]
                [--config JSON] [--credentials JSON] [--email E]
   accounts:remove --id ID [--email E]
-  tokens:create --name NAME [--days N] [--email E]
-                                         Create a personal access token (shown once)
+  tokens:create --name NAME [--days N] [--api] [--email E]
+                                         Create a personal access token (shown once); MCP only,
+                                         --api also allows the management REST API
   tools:list [--email E]                 Show the MCP tools the AI sees
   exposure:set --mode grouped|per_account [--email E]
   listing:set --mode auto|direct|discovery [--email E]
@@ -100,6 +101,7 @@ async function main() {
       metric: { type: 'string' },
       amount: { type: 'string' },
       unlimited: { type: 'boolean' },
+      api: { type: 'boolean' },
       q: { type: 'string' },
     },
   });
@@ -328,6 +330,7 @@ async function main() {
           userId: user.id,
           name: values.name,
           ...(values.days ? { expiresInDays: Number(values.days) } : {}),
+          scopes: values.api ? ['mcp', 'api'] : ['mcp'],
         });
         console.log(token);
         console.error('Store it now: it cannot be shown again.');

@@ -151,6 +151,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </div>
           <div>
             <h4>{t('site.footer.company')}</h4>
+            <a href="/support">{t('site.footer.support')}</a>
             {ctx.supportEmail ? <a href={`mailto:${ctx.supportEmail}`}>{t('site.footer.contact')}</a> : null}
             <a href="/status">{t('site.footer.status')}</a>
             <a href="/privacy">{t('site.footer.privacy')}</a>

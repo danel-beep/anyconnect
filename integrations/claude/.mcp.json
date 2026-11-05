@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "manyplug": {
+      "type": "http",
+      "url": "https://manyplug.com/mcp"
+    }
+  }
+}

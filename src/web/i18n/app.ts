@@ -175,7 +175,12 @@ export const appEn = {
   'app.apps.personasText': 'Each profile has its own MCP address with its own set of accounts and rules.',
   'app.tokens.title': 'Personal tokens',
   'app.tokens.text':
-    'For scripts and clients without OAuth. A token works like your sign-in, keep it secret.',
+    'For AI clients without OAuth (a static header) and for scripts. Keep a token secret: whoever has it uses your accounts.',
+  'app.tokens.api': 'Also allow the management API',
+  'app.tokens.apiHint':
+    'Only for your own scripts and the CLI: with it, the token can change accounts, rules and security settings. Never give such a token to an AI app. Profile tokens always stay MCP-only.',
+  'app.tokens.scopeMcp': 'MCP',
+  'app.tokens.scopeApi': 'MCP + API',
   'app.tokens.created': 'Token created.',
   'app.tokens.once': 'Copy it now: it will not be shown again.',
   'app.tokens.expires': 'expires {date}',
@@ -732,7 +737,13 @@ export const appRu: Record<AppKey, string> = {
   'app.apps.personas': 'Профили доступа',
   'app.apps.personasText': 'У каждого профиля свой MCP-адрес со своим набором аккаунтов и правил.',
   'app.tokens.title': 'Личные токены',
-  'app.tokens.text': 'Для скриптов и клиентов без OAuth. Токен работает как ваш вход, храните его в секрете.',
+  'app.tokens.text':
+    'Для AI-клиентов без OAuth (статический заголовок) и скриптов. Храните токен в секрете: с ним можно пользоваться вашими аккаунтами.',
+  'app.tokens.api': 'Разрешить и API управления',
+  'app.tokens.apiHint':
+    'Только для своих скриптов и CLI: такой токен может менять аккаунты, правила и настройки безопасности. Не давайте его AI-приложению. Токены профилей всегда только для MCP.',
+  'app.tokens.scopeMcp': 'MCP',
+  'app.tokens.scopeApi': 'MCP + API',
   'app.tokens.created': 'Токен создан.',
   'app.tokens.once': 'Скопируйте его сейчас: второй раз он не покажется.',
   'app.tokens.expires': 'действует до {date}',

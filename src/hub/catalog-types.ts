@@ -2,6 +2,7 @@ import type { ActionDefinition, ConnectorDefinition, JsonSchema, RiskLevel } fro
 import type { AccountRow } from '../core/accounts.js';
 import type { WorkspaceSettings } from '../db/schema.js';
 import type { BuiltinToolId } from './builtin-tools.js';
+import type { ClientRestrictions } from './client-policies.js';
 
 /** How accounts become tools: one tool per action with an `account` argument, or one per account. */
 export type ExposureMode = NonNullable<WorkspaceSettings['toolExposure']>;
@@ -96,6 +97,8 @@ export interface ClientProfile {
   tokenBudget: number;
   /** Some clients refuse or truncate long tool lists (e.g. Cursor). */
   maxTools?: number;
+  /** What the directory rules of the client's AI app exclude (see `client-policies.ts`). */
+  restrictions?: ClientRestrictions;
 }
 
 export interface CatalogStats {

@@ -16,6 +16,7 @@ import {
   ServicesPage,
 } from '../web/site.js';
 import { StatusPage } from '../web/status-page.js';
+import { supportDoc } from '../web/support.js';
 import type { AppContext, AppEnv } from './context.js';
 import { currentUser } from './context.js';
 import { pageCtx, saveLocale } from './page-helpers.js';
@@ -153,6 +154,12 @@ export function siteRoutes() {
       />,
     ),
   );
+
+  app.get('/support', async (c) => {
+    const ctx = pageCtx(c, await currentUser(c));
+    const doc = supportDoc(ctx.lang, { publicUrl: ctx.publicUrl, supportEmail: ctx.supportEmail });
+    return c.html(<LegalPage ctx={ctx} doc={doc} path="/support" />);
+  });
 
   for (const kind of ['privacy', 'terms'] as const) {
     app.get(`/${kind}`, async (c) => {

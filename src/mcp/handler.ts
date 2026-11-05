@@ -82,19 +82,35 @@ type ToolCaller = (
   mcpReq: ServerContext['mcpReq'],
 ) => Promise<ToolCallResult>;
 
-const SERVER_INFO = {
-  name: BRAND.slug,
-  title: BRAND.name,
-  description: 'One hub for all your services and accounts.',
-};
+/** How the hub introduces itself to AI apps (shown in their connector lists). */
+function serverInfo(version: string, publicUrl: string) {
+  return {
+    name: BRAND.slug,
+    title: BRAND.name,
+    version,
+    description: 'One hub for all your services and accounts.',
+    websiteUrl: publicUrl,
+    icons: [
+      { src: `${publicUrl}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
+      { src: `${publicUrl}/icon-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
+    ],
+  };
+}
+
+interface ServerIdentity {
+  version: string;
+  publicUrl: string;
+}
 
 /** One MCP server for one request: the given tools, each answered by `call`. */
 function buildServer(
-  version: string,
+  identity: ServerIdentity,
   view: { instructions: string; tools: CatalogTool[] },
   call: ToolCaller,
 ): McpServer {
-  const server = new McpServer({ ...SERVER_INFO, version }, { instructions: view.instructions });
+  const server = new McpServer(serverInfo(identity.version, identity.publicUrl), {
+    instructions: view.instructions,
+  });
   for (const tool of view.tools) {
     server.registerTool(
       tool.name,
@@ -123,12 +139,17 @@ const handlerOptions = (logger: Logger) => ({
  * Serves the current protocol revision (2026-07-28) and falls back to stateless serving for
  * 2025-era clients (today's Claude and ChatGPT).
  */
-export function createHubMcpHandler(deps: { hub: Hub; logger: Logger; version: string }): McpHttpHandler {
+export function createHubMcpHandler(deps: {
+  hub: Hub;
+  logger: Logger;
+  version: string;
+  publicUrl: string;
+}): McpHttpHandler {
   return createMcpHandler(async ({ authInfo }) => {
     const principal = principalFromAuthInfo(authInfo);
     const catalog = await deps.hub.getCatalog(principal);
     const view = { instructions: catalog.instructions, tools: catalog.listed };
-    return buildServer(deps.version, view, (tool, args, mcpReq) => {
+    return buildServer(deps, view, (tool, args, mcpReq) => {
       const aiSubject = aiSubjectFromMeta(mcpReq._meta as Record<string, unknown> | undefined);
       const caller = aiSubject ? { ...principal, aiSubject } : principal;
       return deps.hub.callTool(caller, catalog, tool.name, args, {
@@ -148,10 +169,11 @@ export function createVisitorMcpHandler(deps: {
   setup: ConnectorDefinition;
   logger: Logger;
   version: string;
+  publicUrl: string;
 }): McpHttpHandler {
   const view = buildVisitorCatalog(deps.setup);
   return createMcpHandler(
-    async () => buildServer(deps.version, view, (tool, args) => callVisitorTool(deps.admin, tool.name, args)),
+    async () => buildServer(deps, view, (tool, args) => callVisitorTool(deps.admin, tool.name, args)),
     handlerOptions(deps.logger),
   );
 }
