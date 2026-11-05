@@ -113,6 +113,13 @@
       "when": 1793846765270,
       "tag": "0015_teams",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793864196410,
+      "tag": "0016_tokens_mcp_only",
+      "breakpoints": true
     }
   ]
 }
