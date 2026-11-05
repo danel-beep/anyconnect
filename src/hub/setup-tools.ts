@@ -22,7 +22,7 @@ import {
 } from '../core/workspace-admin.js';
 import { AppError, badRequest } from '../lib/errors.js';
 import { appActions, type WorkspaceApps } from './app-tools.js';
-import { billingActions, type WorkspaceBilling } from './billing-tools.js';
+import { billingActions, referralActions, type WorkspaceBilling } from './billing-tools.js';
 import type { CatalogAllow } from './catalog-types.js';
 import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
 import { securityActions, type UserSecurity } from './security-tools.js';
@@ -457,6 +457,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   ...appActions(setupAction),
   ...teamActions(setupAction),
   ...securityActions(setupAction),
+  ...referralActions(setupAction),
 ];
 
 /** Setup tools a team's shared connection still sees: reading only (it cannot change the setup). */

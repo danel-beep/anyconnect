@@ -33,7 +33,8 @@ export const Layout: FC<{
         {children}
       </main>
       <footer class="auth-foot">
-        <a href="/privacy">{t('site.footer.privacy')}</a> · <a href="/terms">{t('site.footer.terms')}</a>
+        <a href="/privacy">{t('site.footer.privacy')}</a> · <a href="/terms">{t('site.footer.terms')}</a> ·{' '}
+        <a href="/refunds">{t('site.footer.refunds')}</a>
       </footer>
     </Doc>
   );

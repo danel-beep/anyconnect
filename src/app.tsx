@@ -19,6 +19,7 @@ import { mcpRoutes } from './routes/mcp.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { savedLocale } from './routes/page-helpers.js';
 import { profileRoutes } from './routes/profiles.js';
+import { referralCapture } from './routes/referral.js';
 import { securityRoutes } from './routes/security.js';
 import { seoRoutes } from './routes/seo.js';
 import { siteRoutes } from './routes/site.js';
@@ -61,6 +62,7 @@ export function createApp(services: Services) {
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
   app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
+  app.use('*', referralCapture());
   app.use('*', requestBodyLimit(services.config.maxRequestBodyBytes));
   // Pages, styles, scripts, feeds and llms.txt go out gzipped (a page shrinks to about a fifth).
   // MCP, API and OAuth responses are JSON or event streams and stay as they are.

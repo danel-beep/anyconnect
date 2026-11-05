@@ -1,6 +1,7 @@
 import type { AccountAlerts } from '../core/account-alerts.js';
 import type { CustomServiceManager } from '../core/custom-services.js';
 import type { AccountHealthService } from '../core/health.js';
+import type { BillingNotices } from '../notices/billing-notices.js';
 import type { BackupService } from '../ops/backups.js';
 import type { StatusService } from '../ops/status.js';
 import type { JobDefinition } from './queue.js';
@@ -10,6 +11,7 @@ export function builtinJobs(deps: {
   health: AccountHealthService;
   alerts: AccountAlerts;
   customServices: CustomServiceManager;
+  billingNotices: BillingNotices;
   status: StatusService;
   /** Present when a backup bucket is configured. */
   backups?: BackupService | undefined;
@@ -72,6 +74,15 @@ export function builtinJobs(deps: {
       expectEveryMs: 50 * 3_600_000,
       run: async () => {
         await deps.customServices.refreshAll();
+      },
+    },
+    {
+      name: 'billing.trial_reminders',
+      description: 'Email workspaces whose free Pro trial ends within three days',
+      cron: '7 10 * * *',
+      run: async (_data, ctx) => {
+        const sent = await deps.billingNotices.remindTrialEnding();
+        if (sent) ctx.logger.info({ sent }, 'trial reminders sent');
       },
     },
   ];

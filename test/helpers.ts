@@ -12,6 +12,7 @@ import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
 import { base32Decode, totp } from '../src/lib/totp.js';
 import { createLogger } from '../src/logger.js';
+import type { Mailer } from '../src/mail/mailer.js';
 import { createServices, type Services } from '../src/services.js';
 
 export const TEST_DATABASE_URL =
@@ -79,6 +80,8 @@ export async function startTestHub(
     databaseUrl?: string;
     /** External sign-in providers with fake endpoints ("Sign in with Google" tests). */
     loginProviders?: OidcLoginProvider[];
+    /** Captures the hub's emails (`MemoryMailer`). */
+    mailer?: Mailer;
     /** A fake Sentry (set SENTRY_DSN in `env` too). */
     sentryFetch?: typeof fetch;
   } = {},
@@ -115,6 +118,7 @@ export async function startTestHub(
     ...(options.stages ? { stages: options.stages } : {}),
     ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
     ...(options.loginProviders ? { loginProviders: options.loginProviders } : {}),
+    ...(options.mailer ? { mailer: options.mailer } : {}),
     ...(options.sentryFetch ? { sentryFetch: options.sentryFetch } : {}),
   });
   await truncateAll(services);

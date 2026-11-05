@@ -15,7 +15,7 @@ The owner's standing rule for the whole project: build every change so the proje
 develop further. In practice:
 
 - Extend through the existing seams (connectors via the SDK, `ConnectorResolver`, `HubTokenVerifier`,
-  `BillingProvider` for payment providers (see `docs/BILLING.md`),
+  `BillingProvider` for payment providers and `Mailer` for the hub's own email (see `docs/BILLING.md`),
   `RateLimiter`, `buildCatalog` modes, `ErrorSink` / `HealthCheck` in `src/ops/`) instead of special
   cases in the hub or routes.
 - Keep layers separate (`routes → mcp/oauth → hub → core → connectors`, see `docs/ARCHITECTURE.md`).

@@ -4,6 +4,7 @@ import { appsEn, appsRu } from './i18n/apps.js';
 import { authEn, authRu } from './i18n/auth.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
+import { emailEn, emailRu } from './i18n/email.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { profilesEn, profilesRu } from './i18n/profiles.js';
 import { seoEn, seoRu } from './i18n/seo.js';
@@ -217,6 +218,7 @@ const en = {
   ...accountEn,
   ...confirmEn,
   ...problemsEn,
+  ...emailEn,
   ...teamEn,
   ...profilesEn,
   ...appsEn,
@@ -432,6 +434,7 @@ const ru: Record<Key, string> = {
   ...accountRu,
   ...confirmRu,
   ...problemsRu,
+  ...emailRu,
   ...teamRu,
   ...profilesRu,
   ...appsRu,

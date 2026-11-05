@@ -29,6 +29,15 @@ export class BillingError extends AppError {
   }
 }
 
+/** A webhook changed a workspace's subscription (notices and referrals subscribe). */
+export interface BillingListener {
+  subscriptionChanged(change: {
+    workspaceId: string;
+    before: SubscriptionRow | undefined;
+    after: SubscriptionRow;
+  }): Promise<void>;
+}
+
 /** Statuses in which the provider still charges the customer (and the plan is in force). */
 const LIVE: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
 
@@ -39,6 +48,8 @@ const LIVE: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
  * so retries and duplicates change nothing, and an older event never overwrites a newer state.
  */
 export class BillingService {
+  private readonly listeners: BillingListener[] = [];
+
   constructor(
     private readonly deps: {
       db: Db;
@@ -49,6 +60,10 @@ export class BillingService {
       logger: Logger;
     },
   ) {}
+
+  listen(listener: BillingListener): void {
+    this.listeners.push(listener);
+  }
 
   get provider(): BillingProvider | undefined {
     return this.deps.provider;
@@ -263,7 +278,8 @@ export class BillingService {
         outcome = 'ignored';
         detail = decision.ignore;
       } else {
-        await this.deps.entitlements.setPlan(decision.workspaceId!, decision.planId!, {
+        const before = await this.deps.entitlements.subscription(decision.workspaceId!);
+        const after = await this.deps.entitlements.setPlan(decision.workspaceId!, decision.planId!, {
           provider: providerId,
           externalId: change.externalId,
           customerId: change.customerId,
@@ -275,6 +291,7 @@ export class BillingService {
           quantity: decision.quantity ?? 1,
         });
         outcome = 'applied';
+        await this.notify({ workspaceId: decision.workspaceId!, before, after });
       }
     } catch (error) {
       outcome = 'failed';
@@ -303,6 +320,22 @@ export class BillingService {
       );
     }
     return outcome;
+  }
+
+  /** Listeners never fail the event: the plan change is already applied. */
+  private async notify(change: Parameters<BillingListener['subscriptionChanged']>[0]): Promise<void> {
+    for (const listener of this.listeners) {
+      try {
+        await listener.subscriptionChanged(change);
+      } catch (err) {
+        this.deps.logger.warn({ workspaceId: change.workspaceId, err }, 'billing: listener failed');
+      }
+    }
+  }
+
+  /** True when the provider charges this subscription (active, trialing or past due). */
+  static isLive(sub: SubscriptionRow | undefined): boolean {
+    return Boolean(sub && LIVE.has(sub.status));
   }
 
   private async decide(

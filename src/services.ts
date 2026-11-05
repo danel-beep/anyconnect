@@ -4,6 +4,7 @@ import { WorkspaceBillingTools } from './billing/assistant.js';
 import { EntitlementService } from './billing/entitlements.js';
 import type { BillingProvider } from './billing/provider.js';
 import { createBillingProvider, TestBillingProvider } from './billing/providers/index.js';
+import { ReferralService } from './billing/referrals.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
 import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
@@ -49,8 +50,11 @@ import { RateLimiter } from './lib/rate-limit.js';
 import { S3Client } from './lib/s3.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
+import { createMailer, type Mailer } from './mail/mailer.js';
 import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
+import { BillingNotices } from './notices/billing-notices.js';
+import { NoticeService } from './notices/notices.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { BackupService, type DumpTools } from './ops/backups.js';
@@ -103,6 +107,13 @@ export interface Services {
   entitlements: EntitlementService;
   /** Payments: checkout, portal, webhooks (provider-agnostic; `billing.provider` may be undefined). */
   billing: BillingService;
+  /** The hub's own email (undefined = `MAIL_PROVIDER=none`). */
+  mailer: Mailer | undefined;
+  /** One-off emails to workspace owners (billing notices, invite rewards). */
+  notices: NoticeService;
+  billingNotices: BillingNotices;
+  /** Invite links and the month of Pro for a paying invitee. */
+  referrals: ReferralService;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -179,6 +190,8 @@ export function createServices(
     billing?: BillingProvider;
     /** Tests: talk to fake payment provider APIs. */
     billingFetch?: typeof fetch;
+    /** A mailer instead of the configured one (tests: `MemoryMailer`). */
+    mailer?: Mailer;
     /** Tests: external sign-in providers with fake endpoints. */
     loginProviders?: OidcLoginProvider[];
     /** Tests: a fake Sentry. */
@@ -246,6 +259,14 @@ export function createServices(
   if (billingProvider instanceof TestBillingProvider) {
     billingProvider.connect((body, headers) => billing.handleWebhook(billingProvider.id, body, headers));
   }
+  const mailer =
+    overrides.mailer ?? createMailer(config.mail, { log: (fields, msg) => logger.info(fields, msg) });
+  const notices = new NoticeService({ db, mailer, publicUrl: config.publicUrl, logger });
+  const billingNotices = new BillingNotices({ db, notices, entitlements, publicUrl: config.publicUrl });
+  const referrals = new ReferralService({ db, entitlements, notices, publicUrl: config.publicUrl });
+  entitlements.listen(billingNotices);
+  billing.listen(billingNotices);
+  billing.listen(referrals);
   const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
   const customServices = new CustomServiceManager({
     db,
@@ -418,7 +439,14 @@ export function createServices(
     reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
     logger,
   });
-  for (const job of builtinJobs({ health, alerts, customServices, status: ops.status, backups }))
+  for (const job of builtinJobs({
+    health,
+    alerts,
+    customServices,
+    status: ops.status,
+    backups,
+    billingNotices,
+  }))
     jobs.register(job);
   const hub = new Hub({
     db,
@@ -433,6 +461,7 @@ export function createServices(
       billing: new WorkspaceBillingTools({
         entitlements,
         billing,
+        referrals,
         publicUrl: config.publicUrl,
         teamSlug: (workspaceId) => teams.slugOf(workspaceId),
       }),
@@ -556,6 +585,10 @@ export function createServices(
     usage,
     entitlements,
     billing,
+    mailer,
+    notices,
+    billingNotices,
+    referrals,
     accounts,
     oauthApps,
     tokens,

@@ -5,7 +5,8 @@ import { errorResult } from '../result.js';
 /**
  * Refuses units over the workspace's plan limits (actions per month) before they reach the service,
  * so refused calls are not counted as usage. The hub's own setup tools (workspace scope) always run:
- * a user over the limit can still manage the hub from the assistant.
+ * a user over the limit can still manage the hub from the assistant. When the limit gets close,
+ * the gate's notice is appended to a successful result so the AI can tell the user in passing.
  */
 export function quotaStage(gate: QuotaGate): Middleware {
   return async (call, next) => {
@@ -14,7 +15,11 @@ export function quotaStage(gate: QuotaGate): Middleware {
       connectorId: call.connector.id,
       action: call.action.name,
     });
-    if (decision.allowed) return next();
+    if (decision.allowed) {
+      const result = await next();
+      if (!decision.notice || result.isError) return result;
+      return { ...result, content: [...result.content, { type: 'text', text: decision.notice }] };
+    }
     call.audit.outcome = 'quota_exceeded';
     return errorResult(decision.message, 'hub');
   };

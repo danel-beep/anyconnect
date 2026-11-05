@@ -5,6 +5,7 @@ import { CLIENT_POLICY_IDS } from './hub/client-policies.js';
 import { parseKey } from './lib/crypto.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
 import type { S3Config } from './lib/s3.js';
+import { type MailConfig, MailConfigError, readMailConfig } from './mail/mailer.js';
 import { parseSentryDsn } from './ops/sentry.js';
 
 /**
@@ -243,6 +244,8 @@ export interface AppConfig {
   gateway: { url: string; token: string } | undefined;
   /** Payments: the active provider, its keys and prices (see `src/billing/config.ts`). */
   billing: BillingConfig;
+  /** The hub's own email (billing notices): provider and sender (see `src/mail/mailer.ts`). */
+  mail: MailConfig;
   /** Database backups (see `src/ops/backups.ts`); undefined when no bucket is configured. */
   backups: BackupConfig | undefined;
   /** Error tracking and build identity (see `src/ops/`). */
@@ -555,6 +558,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     jobs: { enabled: env.JOBS_ENABLED },
     gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
     billing: billingConfig(source, isProduction),
+    mail: mailConfig(source, publicUrl),
     backups: backupConfig(env),
     ops: {
       sentryDsn: sentryDsn(env.SENTRY_DSN),
@@ -590,6 +594,15 @@ function billingConfig(source: NodeJS.ProcessEnv, isProduction: boolean): Billin
     return readBillingConfig(source, { isProduction });
   } catch (error) {
     if (error instanceof BillingConfigError) throw new ConfigError(error.message);
+    throw error;
+  }
+}
+
+function mailConfig(source: NodeJS.ProcessEnv, publicUrl: string): MailConfig {
+  try {
+    return readMailConfig(source, { from: `${BRAND.name} <hello@${new URL(publicUrl).hostname}>` });
+  } catch (error) {
+    if (error instanceof MailConfigError) throw new ConfigError(error.message);
     throw error;
   }
 }

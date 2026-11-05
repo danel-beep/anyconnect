@@ -542,6 +542,9 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect((await hub.services.entitlements.summary(ws.id)).plan.id).toBe('free');
     expect(await (await admin.request('/admin/audit')).text()).toContain('Запрос тарифа отклонён');
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+    const revenue = await (await admin.request('/admin/revenue')).text();
+    expect(revenue).toContain('Выручка и конверсия');
+    expect(revenue).toContain('BILLING_PROVIDER=none');
 
     // Setting a plan closes an open request too.
     await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });
@@ -813,7 +816,16 @@ describe('website: public pages', () => {
 
   it('serves the landing, pricing, services, docs and legal pages in both languages', async () => {
     const browser = new TestBrowser(hub.baseUrl);
-    for (const path of ['/', '/pricing', '/services', '/services/github', '/docs', '/privacy', '/terms']) {
+    for (const path of [
+      '/',
+      '/pricing',
+      '/services',
+      '/services/github',
+      '/docs',
+      '/privacy',
+      '/terms',
+      '/refunds',
+    ]) {
       const page = await browser.request(path);
       expect(page.status, path).toBe(200);
       const html = await page.text();

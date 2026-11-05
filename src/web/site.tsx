@@ -156,6 +156,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href="/status">{t('site.footer.status')}</a>
             <a href="/privacy">{t('site.footer.privacy')}</a>
             <a href="/terms">{t('site.footer.terms')}</a>
+            <a href="/refunds">{t('site.footer.refunds')}</a>
           </div>
         </div>
         <div class="footer-bottom">
