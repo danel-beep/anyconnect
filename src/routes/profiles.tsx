@@ -6,7 +6,6 @@ import { AppError } from '../lib/errors.js';
 import { MAX_PERSONAS, PERSONA_SLUG } from '../security/personas.js';
 import {
   PROFILE_ACCESS,
-  PROFILE_BACK,
   type ProfileAccountOption,
   type ProfileDraft,
   ProfilePage,
@@ -23,10 +22,6 @@ import {
   shellInfo,
   takeFlash,
 } from './page-helpers.js';
-
-/** Where a form on a profile's page (revoking an app or a token) goes back to. */
-export const profileBack = (form: Record<string, string>): string =>
-  PROFILE_BACK.test(form.back ?? '') ? form.back! : '/app/apps';
 
 const ProfileForm = z.object({
   name: z.string().trim().min(1).max(100),
