@@ -281,7 +281,7 @@ export type ChatAnswer = 'approve' | 'decline' | 'cancel';
  * redirect back to the app), then tool calls with the client's own `_meta` and capabilities.
  */
 export class SimulatedAiClient {
-  readonly oauth: MemoryOAuthProvider;
+  readonly provider: MemoryOAuthProvider;
   /** Questions the hub asked in the chat, newest last. */
   readonly questions: string[] = [];
   /** Answers to give, in order; an empty queue declines. */
@@ -292,12 +292,12 @@ export class SimulatedAiClient {
     readonly profile: AiClientProfile,
     private readonly mcpUrl: string,
   ) {
-    this.oauth = MemoryOAuthProvider.for(profile);
+    this.provider = MemoryOAuthProvider.for(profile);
   }
 
   /** Adds the hub to the app: the 401 starts OAuth, `signIn` is the browser window. */
   async connect(signIn: (authorizationUrl: URL) => Promise<URL>): Promise<this> {
-    const probe = new StreamableHTTPClientTransport(new URL(this.mcpUrl), { authProvider: this.oauth });
+    const probe = new StreamableHTTPClientTransport(new URL(this.mcpUrl), { authProvider: this.provider });
     let unauthorized: unknown;
     try {
       await new Client({ name: this.profile.id, version: '1.0.0' }).connect(probe);
@@ -307,8 +307,8 @@ export class SimulatedAiClient {
     if (!(unauthorized instanceof UnauthorizedError)) {
       throw new Error(`expected the hub to ask for sign-in, got ${String(unauthorized)}`);
     }
-    if (!this.oauth.authorizationUrl) throw new Error('the client was not sent to sign in');
-    const callback = await signIn(this.oauth.authorizationUrl);
+    if (!this.provider.authorizationUrl) throw new Error('the client was not sent to sign in');
+    const callback = await signIn(this.provider.authorizationUrl);
     await probe.finishAuth(callback.searchParams);
     await this.open();
     return this;
@@ -317,7 +317,9 @@ export class SimulatedAiClient {
   /** Opens an MCP session with the tokens it has (a new chat). */
   async open(): Promise<Client> {
     await this.client?.close();
-    const transport = new StreamableHTTPClientTransport(new URL(this.mcpUrl), { authProvider: this.oauth });
+    const transport = new StreamableHTTPClientTransport(new URL(this.mcpUrl), {
+      authProvider: this.provider,
+    });
     const client = new Client(
       { name: this.profile.id, version: '1.0.0' },
       {

@@ -74,7 +74,7 @@ describe('AI clients connect end to end', () => {
 
   /** The grant behind the client's current access token, as the hub's token check sees it. */
   const grantOf = async (client: SimulatedAiClient) => {
-    const verified = await hub.services.oauth.verifyAccessToken(client.oauth.savedTokens!.access_token);
+    const verified = await hub.services.oauth.verifyAccessToken(client.provider.savedTokens!.access_token);
     return hub.services.db.query.oauthGrants.findFirst({ where: (g, { eq }) => eq(g.id, verified!.grantId) });
   };
 
@@ -91,7 +91,7 @@ describe('AI clients connect end to end', () => {
     });
 
     it('signs in with OAuth the way this client does and is recognised by name', async () => {
-      const registered = client.oauth.client!;
+      const registered = client.provider.client!;
       if (profile.identity.kind === 'metadata_document') {
         expect(registered.client_id).toBe(profile.identity.url);
       } else {
@@ -100,8 +100,8 @@ describe('AI clients connect end to end', () => {
         const confidential = profile.identity.body.token_endpoint_auth_method !== 'none';
         expect(Boolean(registered.client_secret)).toBe(confidential);
       }
-      expect(client.oauth.savedTokens?.access_token).toMatch(/^ac_at_/);
-      expect(client.oauth.savedTokens?.refresh_token).toMatch(/^ac_rt_/);
+      expect(client.provider.savedTokens?.access_token).toMatch(/^ac_at_/);
+      expect(client.provider.savedTokens?.refresh_token).toMatch(/^ac_rt_/);
 
       const grant = (await grantOf(client))!;
       const aiClient = await hub.services.aiClients.get(workspaceId, grant.aiClientId!);
@@ -205,7 +205,7 @@ describe('AI clients connect end to end', () => {
     );
 
     it('refreshes its access token when it expires and keeps working', async () => {
-      const old = client.oauth.savedTokens!;
+      const old = client.provider.savedTokens!;
       const grant = (await grantOf(client))!;
       await hub.services.database.pool.query(
         "UPDATE oauth_tokens SET expires_at = now() - interval '1 second' WHERE grant_id = $1 AND type = 'access'",
@@ -214,8 +214,8 @@ describe('AI clients connect end to end', () => {
       await client.open();
       const result = await callAnyway(client, 'demo_echo', { account: 'main', message: 'after refresh' });
       expect(textOf(result)).toContain('after refresh');
-      expect(client.oauth.savedTokens!.access_token).not.toBe(old.access_token);
-      expect(client.oauth.savedTokens!.refresh_token).not.toBe(old.refresh_token);
+      expect(client.provider.savedTokens!.access_token).not.toBe(old.access_token);
+      expect(client.provider.savedTokens!.refresh_token).not.toBe(old.refresh_token);
     });
 
     it('loses access when the user disconnects it on the dashboard', async () => {

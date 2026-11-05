@@ -189,11 +189,11 @@ describe('connection edge cases', () => {
 
   it('signs an app out with the revocation endpoint', async () => {
     const client = await claude().connect(ownerAllows);
-    const { refresh_token } = client.oauth.savedTokens!;
+    const { refresh_token } = client.provider.savedTokens!;
     const revoked = await fetch(`${hub.baseUrl}/oauth/revoke`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ token: refresh_token!, client_id: client.oauth.client!.client_id }),
+      body: new URLSearchParams({ token: refresh_token!, client_id: client.provider.client!.client_id }),
     });
     expect(revoked.status).toBe(200);
     await expect(client.open()).rejects.toBeInstanceOf(UnauthorizedError);

@@ -148,7 +148,7 @@ describe.each(
       const { response } = await browser.walk(url);
       return allow(browser, response, profile);
     });
-    const verified = await hub.services.oauth.verifyAccessToken(client.oauth.savedTokens!.access_token);
+    const verified = await hub.services.oauth.verifyAccessToken(client.provider.savedTokens!.access_token);
     const other = await hub.services.aiClients.ensure(workspaceId, {
       matchKey: 'app:chatgpt',
       name: 'ChatGPT',
