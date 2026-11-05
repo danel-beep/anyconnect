@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getPlan, limitsFor, planFits, seatsFor } from '../src/billing/plans.js';
+import { payingUser } from '../src/billing/payers.js';
+import { coversPlan, getPlan, PLANS, type Plan } from '../src/billing/plans.js';
 import demo from '../src/connectors/builtin/demo.js';
 import type { AccountRow } from '../src/core/accounts.js';
 import { buildCatalog, ownerText } from '../src/hub/catalog.js';
@@ -114,24 +115,44 @@ describe('the team cap in the access policy', () => {
   });
 });
 
-describe('the per-seat Team plan', () => {
-  const team = getPlan('team');
+describe('who pays for a team', () => {
+  const members = new Map([
+    ['usr_ann', 'owner' as const],
+    ['usr_bob', 'member' as const],
+  ]);
+  const team = { mode: 'payer' as const, payerUserId: 'usr_ann', members };
 
-  it('is bought for 2 to 200 people and pools actions and messengers', () => {
-    expect([seatsFor(team, 1), seatsFor(team, 5.7), seatsFor(team, 999), seatsFor(team, null)]).toEqual([
-      2, 5, 200, 2,
-    ]);
-    expect(limitsFor(team, 4)).toMatchObject({ seats: 4, actions: 100_000, messengers: 8, accounts: null });
-    // Plans priced per workspace keep their own limits.
-    expect(seatsFor(getPlan('pro'), 7)).toBeUndefined();
-    expect(limitsFor(getPlan('pro'), 7)).toEqual(getPlan('pro').limits);
+  it('charges everyone’s use to the payer, and in “each” mode each member’s to themselves', () => {
+    expect(payingUser(team, 'usr_bob')).toBe('usr_ann');
+    expect(payingUser(team, null)).toBe('usr_ann');
+    const each = { ...team, mode: 'each' as const };
+    expect(payingUser(each, 'usr_bob')).toBe('usr_bob');
+    // The team's own accounts and its shared key stay with the payer, as does anyone who left.
+    expect(payingUser(each, null)).toBe('usr_ann');
+    expect(payingUser(each, 'usr_gone')).toBe('usr_ann');
   });
 
-  it('is for teams, as personal plans are for people', () => {
-    expect(planFits(team, 'team')).toBe(true);
-    expect(planFits(team, 'personal')).toBe(false);
-    expect(planFits(getPlan('pro'), 'team')).toBe(false);
-    expect(planFits(getPlan('free'), 'team')).toBe(true);
+  it('lets someone take over paying only with a plan that gives the team at least as much', () => {
+    const [free, personal, pro, business, unlimited] = [
+      'free',
+      'personal',
+      'pro',
+      'business',
+      'unlimited',
+    ].map((id) => getPlan(id)) as [Plan, Plan, Plan, Plan, Plan];
+    expect(coversPlan(pro, personal)).toBe(true);
+    expect(coversPlan(personal, pro)).toBe(false);
+    expect(coversPlan(personal, free)).toBe(true);
+    expect(coversPlan(pro, pro)).toBe(true);
+    // Unlimited accounts beat any number; a plan with fewer actions never covers one with more.
+    expect(coversPlan(unlimited, business)).toBe(true);
+    expect(coversPlan(pro, business)).toBe(false);
+    expect(coversPlan(business, unlimited)).toBe(false);
+  });
+
+  it('sells no plan per seat or to teams: every public plan is a person’s', () => {
+    expect(PLANS.map((p) => p.id)).not.toContain('team');
+    expect(PLANS.filter((p) => p.public).map((p) => p.id)).toEqual(['free', 'personal', 'pro']);
     expect(getPlan('business').public).toBe(false);
   });
 });

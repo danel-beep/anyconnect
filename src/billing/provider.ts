@@ -21,7 +21,7 @@ export interface CheckoutInput {
   interval: BillingInterval;
   /** The provider's price for this plan and interval (from the hub's price map). */
   priceId: string;
-  /** How many of the price: seats on a per-seat plan, otherwise 1. */
+  /** How many of the price (the hub buys 1 of every plan today). */
   quantity: number;
   /** The workspace's customer at this provider, when it paid before. */
   customerId: string | null;
@@ -52,7 +52,7 @@ export interface SubscriptionChange {
   customerId: string | null;
   /** The price the subscription is on now (mapped to a plan by the hub). */
   priceId: string | null;
-  /** How many of the price (seats on a per-seat plan). */
+  /** How many of the price the customer pays for. */
   quantity: number | null;
   interval: BillingInterval | null;
   status: SubscriptionStatus;
@@ -79,8 +79,8 @@ export interface BillingProvider {
   /** A hosted page where the customer updates the card, sees invoices or cancels. */
   portal(input: { subscription: ProviderSubscriptionRef; returnUrl: string }): Promise<{ url: string }>;
   /**
-   * Moves an existing subscription to another price or quantity (seats), prorated. The webhook
-   * confirms it.
+   * Moves an existing subscription to another price or quantity, prorated. The webhook confirms
+   * it.
    */
   changeSubscription(
     subscription: ProviderSubscriptionRef,

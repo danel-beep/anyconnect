@@ -52,6 +52,8 @@ a.stat{color:inherit;text-decoration:none}
 a.stat:hover{border-color:var(--border-strong)}
 @media (max-width:1000px){.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:520px){.stats{grid-template-columns:1fr 1fr}}
+/* Inside a card the boxes fit as many to a row as its width allows: one under another on a phone. */
+.card .stats{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 @media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:minmax(0,1fr)}}
@@ -227,7 +229,8 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 .top-list .bar .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Plan cards in the dashboard */
-.plan-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+/* As many plans to a row as fit: the grid follows the number of public plans. */
+.plan-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .focus-plan{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .focus-plan form{max-width:320px}
 .paid-sub{margin:12px 0}
@@ -242,7 +245,6 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 .plan-mini .plan{padding:18px;gap:10px}
 .plan-mini .price .amount{font-size:28px}
 .plan.current{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
-@media (max-width:1100px){.plan-mini{grid-template-columns:1fr 1fr}}
 @media (max-width:560px){.plan-mini{grid-template-columns:1fr}}
 
 /* Danger zone */

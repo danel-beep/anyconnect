@@ -1,32 +1,29 @@
-import { and, count, desc, eq, gt, isNull, or, sql, sum } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import type { AccountLimits } from '../core/accounts.js';
 import { type Principal, usageCaller } from '../core/principal.js';
-import type { TeamLimits } from '../core/teams.js';
 import type { Db } from '../db/client.js';
 import {
-  accounts,
   limitGrants,
   planRequests,
   type SubscriptionStatus,
   subscriptions,
-  usageCounters,
-  type WorkspaceKind,
-  workspaceMembers,
+  type TeamBillingMode,
   workspaces,
 } from '../db/schema.js';
 import type { QuotaDecision, QuotaGate } from '../hub/quota.js';
 import type { UsageMeter } from '../hub/usage.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
+import { type Payers, payingUser, type TeamBilling } from './payers.js';
 import { monthPeriod, type Period } from './period.js';
 import {
   addLimit,
+  coversPlan,
   DEFAULT_PLAN_ID,
   findPlan,
   getPlan,
   isMetric,
   type Limits,
-  limitsFor,
   METRICS,
   type Metric,
   type Plan,
@@ -36,12 +33,17 @@ import { type StartPhase, startNow } from './start.js';
 export type SubscriptionRow = typeof subscriptions.$inferSelect;
 export type LimitGrantRow = typeof limitGrants.$inferSelect;
 
-/** What a workspace may use right now: its plan, its start (trial, steps) and admin grants applied. */
+/**
+ * What a person may use right now: their plan, its start (trial, steps) and admin grants applied.
+ * Asked for a team, these are the entitlements of whoever pays for it (see `billing/payers.ts`).
+ */
 export interface Entitlements {
   plan: Plan;
   subscription: SubscriptionRow | undefined;
-  /** A person's own workspace or a team's. */
-  workspaceKind: WorkspaceKind;
+  /** The person's own workspace whose plan this is: the workspace asked for, or a team's payer's. */
+  payerId: string;
+  /** Set when asked for a team: how it pays, and whether the plan is the asking member's own. */
+  team?: TeamPayment;
   limits: Limits;
   /** The trial or step of the plan's start in force now (see `Plan.start`). */
   phase: StartPhase | undefined;
@@ -56,8 +58,44 @@ export interface Entitlements {
   countFrom: string;
 }
 
+/** How a team pays, as seen by the member asking (see `Entitlements.team`). */
+export interface TeamPayment {
+  slug: string;
+  mode: TeamBillingMode;
+  /** Who pays for the team as a whole. */
+  payer: { userId: string; name: string };
+  /** The plan is the asking member's own: they pay for the team, or everyone pays for themselves. */
+  own: boolean;
+}
+
 export interface UsageSummary extends Entitlements {
+  /** Counted against the plan: everything it pays for (a person's own space and their teams). */
   used: { actions: number; accounts: number };
+}
+
+/** A team's plan and payment as the team page and the AI show them to one member. */
+export interface TeamBillingView {
+  team: TeamBilling;
+  /** The plan that pays for the team as a whole (its payer's), and what that plan has used. */
+  pool: UsageSummary;
+  /** Actions taken in the team this month, whoever paid for them. */
+  teamActions: number;
+  /** The viewer's own plan (in `each` mode it pays for their use of the team). */
+  mine?: UsageSummary | undefined;
+  /** The viewer may pay for the team with their own plan now. */
+  canPay: boolean;
+}
+
+/** A team a person's plan pays for, and how much of it (see `EntitlementService.planUses`). */
+export interface PlanUse {
+  team: TeamBilling;
+  /**
+   * `everyone`: all use of the team · `team`: the team's own accounts and shared key, and the
+   * person's own use (they pay, everyone else uses their own plan) · `self`: only the person's own use.
+   */
+  covers: 'everyone' | 'team' | 'self';
+  /** Actions the team took from the plan this month. */
+  actions: number;
 }
 
 /** A refused limit check: HTTP 402 with a code the website turns into an upgrade hint. */
@@ -82,35 +120,57 @@ export interface EntitlementListener {
   limitReached?(workspaceId: string, ent: Entitlements, limit: number): Promise<void>;
 }
 
+/** Refusals of team billing changes, with codes the website shows in the user's language. */
+export const billingError = {
+  adminOnly: () =>
+    new AppError(403, 'team_admin_only', 'Only the team’s owner and admins can change how the team pays.'),
+  planTooSmall: (mine: string, theirs: string, payer: string, url: string) =>
+    new AppError(
+      409,
+      'plan_too_small',
+      `The user’s ${mine} plan gives the team less than the ${theirs} plan ${payer} pays for it with. ` +
+        `Move to a bigger plan first (${url}), then pay for the team.`,
+    ),
+  notPayer: () => new AppError(400, 'not_team_payer', 'The user does not pay for this team.'),
+  ownerPays: () =>
+    new AppError(
+      400,
+      'team_owner_pays',
+      'The team’s owner pays for it unless another member takes over. To have everyone pay for ' +
+        'themselves instead, switch the team to everyone using their own plan (mode "each").',
+    ),
+};
+
 /**
- * Plans, limits and grants of workspaces. Implements the hub's `QuotaGate` (actions per month, and
- * seats in a team), the account service's `AccountLimits` and the team service's `TeamLimits`.
- * Payment providers and admins change plans through `setPlan`; admins add limits with `grant`.
+ * Plans, limits and grants. A plan belongs to a person (their own workspace); a team runs on its
+ * payer's plan, or each member's own (`billing/payers.ts`). Implements the hub's `QuotaGate`
+ * (actions per month, charged to the payer) and the account service's `AccountLimits`.
+ * Payment providers and admins change plans through `setPlan`; admins add limits with `grant`;
+ * members change who pays for a team with `changeTeamBilling`.
  */
-export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits {
-  /** Short-lived snapshot of usage per workspace, bumped locally between refreshes. */
+export class EntitlementService implements QuotaGate, AccountLimits {
+  /** Short-lived snapshot of usage per payer, bumped locally between refreshes. */
   private readonly usageCache = new Map<string, { at: number; period: string; actions: number }>();
   private readonly callerCache = new Map<string, { at: number; period: string; actions: number }>();
-  /** `workspace:countFrom:level` already hinted to the AI or notified (per process; notices dedupe in the DB). */
+  /** `payer:countFrom:level` already hinted to the AI or notified (per process; notices dedupe in the DB). */
   private readonly told = new Set<string>();
   private readonly listeners: EntitlementListener[] = [];
-  /** Who holds a team's seats, per workspace and seat count. */
-  private readonly seatCache = new Map<string, { at: number; holders: Set<string> }>();
 
   constructor(
     private readonly deps: {
       db: Db;
       usage: UsageMeter;
-      /** Absolute URL of the pricing page, quoted to the AI when a limit is reached. */
+      payers: Payers;
+      /** Absolute URL of the billing page, quoted to the AI when a limit is reached. */
       pricingUrl: string;
-      /** Absolute URL of the teams page, where a team's owner buys seats. */
-      teamsUrl?: string;
+      /** A team's page (where its members see and change who pays), by slug. */
+      teamUrl: (slug: string) => string;
       now?: () => Date;
     },
   ) {}
 
-  private get teamsUrl(): string {
-    return this.deps.teamsUrl ?? this.deps.pricingUrl;
+  get payers(): Payers {
+    return this.deps.payers;
   }
 
   private now(): Date {
@@ -154,7 +214,29 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       .orderBy(desc(limitGrants.createdAt));
   }
 
-  async entitlements(workspaceId: string): Promise<Entitlements> {
+  /**
+   * What `userId` may use in `workspaceId` (`null`: the workspace as a whole): a person's own
+   * workspace answers for itself; a team answers with its payer's plan, or in `each` mode with the
+   * member's own.
+   */
+  async entitlements(workspaceId: string, userId: string | null = null): Promise<Entitlements> {
+    const team = await this.deps.payers.team(workspaceId);
+    if (!team) return this.planOf(workspaceId);
+    const ent = await this.planOf(await this.deps.payers.payerOf(workspaceId, userId));
+    const own = userId !== null && payingUser(team, userId) === userId;
+    return {
+      ...ent,
+      team: {
+        slug: team.slug,
+        mode: team.mode,
+        payer: { userId: team.payerUserId, name: team.payerName },
+        own,
+      },
+    };
+  }
+
+  /** The entitlements of a person's own workspace (where plans live). */
+  private async planOf(workspaceId: string): Promise<Entitlements> {
     const now = this.now();
     const [workspace] = await this.deps.db
       .select({ createdAt: workspaces.createdAt, kind: workspaces.kind })
@@ -167,8 +249,10 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       this.grants(workspaceId, { activeOnly: true }),
     ]);
     const plan = this.planFor(subscription, now);
-    const { phase, schedule, trialEnd } = startNow(plan, workspace.createdAt, now);
-    const limits = { ...(phase?.limits ?? limitsFor(plan, subscription?.quantity)) };
+    // The start (trial, steps) is a person's, once: a team never gets one of its own.
+    const { phase, schedule, trialEnd } =
+      workspace.kind === 'personal' ? startNow(plan, workspace.createdAt, now) : { schedule: [] };
+    const limits = { ...(phase?.limits ?? plan.limits) };
     for (const grant of grants) {
       if (isMetric(grant.metric)) limits[grant.metric] = addLimit(limits[grant.metric], grant.amount);
     }
@@ -177,59 +261,103 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       trialEnd && trialEnd.getTime() <= now.getTime() ? trialEnd.toISOString().slice(0, 10) : '';
     // Trial usage does not eat into the first post-trial month (ISO days compare as strings).
     const countFrom = [period.start, trialEndDay].sort().at(-1) ?? period.start;
-    return {
-      plan,
-      subscription,
-      workspaceKind: workspace.kind,
-      limits,
-      phase,
-      schedule,
-      grants,
-      period,
-      countFrom,
-    };
+    return { plan, subscription, payerId: workspaceId, limits, phase, schedule, grants, period, countFrom };
   }
 
-  /** Actions since `from` (`YYYY-MM-DD`, see `Entitlements.countFrom`). */
-  async actionsUsed(workspaceId: string, from: string): Promise<number> {
-    const [row] = await this.deps.db
-      .select({ calls: sum(usageCounters.calls) })
-      .from(usageCounters)
-      .where(and(eq(usageCounters.workspaceId, workspaceId), sql`${usageCounters.day} >= ${from}`))
-      .limit(1);
-    return Number(row?.calls ?? 0);
+  /** Actions charged to a payer's plan since `from` (`YYYY-MM-DD`, see `Entitlements.countFrom`). */
+  async actionsUsed(payerId: string, from: string): Promise<number> {
+    return this.deps.usage.billedTotal(payerId, from);
   }
 
-  async accountsUsed(workspaceId: string): Promise<number> {
-    const [row] = await this.deps.db
-      .select({ n: count() })
-      .from(accounts)
-      .where(eq(accounts.workspaceId, workspaceId));
-    return row?.n ?? 0;
+  /** Accounts that count against a payer's plan: their own and those of the teams they pay for. */
+  async accountsUsed(payerId: string): Promise<number> {
+    return this.deps.payers.accountsOf(payerId);
   }
 
-  async summary(workspaceId: string): Promise<UsageSummary> {
-    const ent = await this.entitlements(workspaceId);
+  /** What `userId` may use in a workspace and what that plan has used (see {@link entitlements}). */
+  async summary(workspaceId: string, userId: string | null = null): Promise<UsageSummary> {
+    const ent = await this.entitlements(workspaceId, userId);
     const [actions, accountsCount] = await Promise.all([
-      this.actionsUsed(workspaceId, ent.countFrom),
-      this.accountsUsed(workspaceId),
+      this.actionsUsed(ent.payerId, ent.countFrom),
+      this.accountsUsed(ent.payerId),
     ]);
     return { ...ent, used: { actions, accounts: accountsCount } };
   }
 
+  /** Where a payer's actions went this month: their own space and each team they paid for. */
+  async usageByWorkspace(payerId: string): Promise<{ workspaceId: string; calls: number }[]> {
+    const ent = await this.planOf(payerId);
+    return this.deps.usage.billedByWorkspace(payerId, ent.countFrom);
+  }
+
+  /**
+   * What a person's plan pays for besides their own space: the teams they pay for, and the teams
+   * where everyone uses their own plan; with the actions each took from the plan this month.
+   */
+  async planUses(userId: string): Promise<{ own: number; teams: PlanUse[] }> {
+    const home = await this.deps.payers.home(userId);
+    if (!home) return { own: 0, teams: [] };
+    const [teams, byWorkspace] = await Promise.all([
+      this.deps.payers.teamsOf(userId),
+      this.usageByWorkspace(home),
+    ]);
+    const calls = new Map(byWorkspace.map((r) => [r.workspaceId, r.calls]));
+    return {
+      own: calls.get(home) ?? 0,
+      teams: teams
+        .filter((t) => t.payerUserId === userId || t.mode === 'each')
+        .map((t) => ({
+          team: t,
+          covers: t.payerUserId !== userId ? 'self' : t.mode === 'each' ? 'team' : 'everyone',
+          actions: calls.get(t.teamId) ?? 0,
+        })),
+    };
+  }
+
+  /** A team's payment for one member's page or chat (`viewerId` null: the team's shared key). */
+  async teamBilling(teamId: string, viewerId: string | null): Promise<TeamBillingView> {
+    const team = await this.deps.payers.team(teamId);
+    if (!team) throw notFound('Team');
+    const member = viewerId !== null && team.members.has(viewerId) ? viewerId : null;
+    const [pool, mine] = await Promise.all([
+      this.summary(teamId, null),
+      member === null
+        ? undefined
+        : team.mode === 'each' || member === team.payerUserId
+          ? this.summary(teamId, member)
+          : this.ownSummary(member),
+    ]);
+    const teamActions = await this.deps.usage.workspaceTotal(teamId, pool.period.start);
+    const canPay =
+      member !== null &&
+      member !== team.payerUserId &&
+      (member === team.ownerUserId || (mine !== undefined && coversPlan(mine.plan, pool.plan)));
+    return { team, pool, teamActions, mine, canPay };
+  }
+
+  /** A person's own plan and use, wherever they are asking from. */
+  private async ownSummary(userId: string): Promise<UsageSummary | undefined> {
+    const home = await this.deps.payers.home(userId);
+    return home ? this.summary(home) : undefined;
+  }
+
   // --- Enforcing ---------------------------------------------------------------
 
+  /** Whose plan a caller's use counts against (stage `meter` charges executed calls to it). */
+  payerOf(principal: Principal): Promise<string> {
+    return this.deps.payers.payerOf(principal.workspaceId, principal.shared ? null : principal.userId);
+  }
+
   async checkAction(principal: Principal): Promise<QuotaDecision> {
-    const ent = await this.entitlements(principal.workspaceId);
-    const seats = await this.seatCheck(principal, ent);
-    if (!seats.allowed) return seats;
+    const ent = await this.entitlements(principal.workspaceId, principal.shared ? null : principal.userId);
     const limit = ent.limits.actions;
     if (limit === null) return { allowed: true };
-    const used = await this.cachedUsage(this.usageCache, principal.workspaceId, ent.countFrom, () =>
-      this.actionsUsed(principal.workspaceId, ent.countFrom),
+    const payer = ent.payerId;
+    const used = await this.cachedUsage(this.usageCache, payer, ent.countFrom, () =>
+      this.actionsUsed(payer, ent.countFrom),
     );
     if (used >= limit) {
-      this.limitReached(principal.workspaceId, ent, limit);
+      this.limitReached(payer, ent, limit);
       return { allowed: false, message: this.actionsMessage(ent, limit) };
     }
     // The free allowance belongs to the person at the AI provider, not to a sign-up: several hub
@@ -242,9 +370,28 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       if (byCaller >= limit) return { allowed: false, message: this.actionsMessage(ent, limit) };
       this.bump(this.callerCache, caller);
     }
-    this.bump(this.usageCache, principal.workspaceId);
-    const notice = this.nearLimitNotice(principal.workspaceId, ent, limit, used + 1);
+    this.bump(this.usageCache, payer);
+    const notice = this.nearLimitNotice(ent, limit, used + 1);
     return notice ? { allowed: true, notice } : { allowed: true };
+  }
+
+  /** Whose plan this is, for the AI: the user's own, or the one a teammate pays for the team with. */
+  private whose(ent: Entitlements): string {
+    if (!ent.team) return `the ${ent.plan.id} plan`;
+    if (ent.team.own)
+      return ent.team.mode === 'each'
+        ? `the user’s own ${ent.plan.id} plan (in this team everyone uses their own)`
+        : `the user’s ${ent.plan.id} plan, which also pays for this team`;
+    return `the ${ent.plan.id} plan ${ent.team.payer.name} pays for this team with`;
+  }
+
+  /** How to get more, for the AI: a bigger plan, or (in someone else's team plan) asking or paying. */
+  private upgradeHint(ent: Entitlements): string {
+    if (!ent.team || ent.team.own) return `they can upgrade at ${this.deps.pricingUrl}`;
+    return (
+      `${ent.team.payer.name} can move to a bigger plan, or the user can pay for the team with a plan ` +
+      `of their own (${this.deps.teamUrl(ent.team.slug)})`
+    );
   }
 
   /**
@@ -252,32 +399,34 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
    * per level and month, so the assistant can mention it in passing instead of the user hitting
    * the wall unannounced.
    */
-  private nearLimitNotice(
-    workspaceId: string,
-    ent: Entitlements,
-    limit: number,
-    used: number,
-  ): string | undefined {
+  private nearLimitNotice(ent: Entitlements, limit: number, used: number): string | undefined {
     const level = [...NEAR_LIMIT_LEVELS].reverse().find((l) => used >= Math.ceil(limit * l));
     if (!level || used >= limit) return undefined;
-    const key = `${workspaceId}:${ent.countFrom}:${level}`;
+    const key = `${ent.payerId}:${ent.countFrom}:${level}`;
     if (this.told.has(key)) return undefined;
     this.remember(key);
     const reset = ent.period.resetsAt.toISOString().slice(0, 10);
+    if (!ent.team) {
+      return (
+        `Manyplug note (not from the service): the user has used ${used} of ${limit} actions this month ` +
+        `on the ${ent.plan.id} plan; the count resets on ${reset}. Finish the task, then mention this ` +
+        `once, briefly and without pressure; a bigger plan is at ${this.deps.pricingUrl}.`
+      );
+    }
     return (
-      `Manyplug note (not from the service): the user has used ${used} of ${limit} actions this month ` +
-      `on the ${ent.plan.id} plan; the count resets on ${reset}. Finish the task, then mention this ` +
-      `once, briefly and without pressure; a bigger plan is at ${this.deps.pricingUrl}.`
+      `Manyplug note (not from the service): ${used} of ${limit} actions this month are used on ` +
+      `${this.whose(ent)}; the count resets on ${reset}. Finish the task, then mention this once, ` +
+      `briefly and without pressure: ${this.upgradeHint(ent)}.`
     );
   }
 
-  private limitReached(workspaceId: string, ent: Entitlements, limit: number): void {
-    const key = `${workspaceId}:${ent.countFrom}:reached`;
+  private limitReached(payerId: string, ent: Entitlements, limit: number): void {
+    const key = `${payerId}:${ent.countFrom}:reached`;
     if (this.told.has(key) || !this.listeners.length) return;
     this.remember(key);
     for (const listener of this.listeners) {
       // Never delays or fails the refused call; the notice service logs its own failures.
-      listener.limitReached?.(workspaceId, ent, limit).catch(() => this.told.delete(key));
+      listener.limitReached?.(payerId, ent, limit).catch(() => this.told.delete(key));
     }
   }
 
@@ -286,62 +435,17 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
     if (this.told.size > 20_000) this.told.delete(this.told.values().next().value!);
   }
 
-  /**
-   * In a team, as many people as the plan has seats use it: the owner and those who joined first.
-   * More members than seats happen when a trial ends or seats are removed; the others are told to
-   * ask for seats instead of being removed. The team's shared connection is nobody's seat.
-   */
-  private async seatCheck(principal: Principal, ent: Entitlements): Promise<QuotaDecision> {
-    const seats = ent.limits.seats;
-    if (ent.workspaceKind !== 'team' || seats === null || principal.shared) return { allowed: true };
-    let holders = await this.seatHolders(principal.workspaceId, seats);
-    // A free seat means the cached list may predate someone who just joined: look again.
-    if (!holders.has(principal.userId) && holders.size < seats)
-      holders = await this.seatHolders(principal.workspaceId, seats, true);
-    if (holders.has(principal.userId)) return { allowed: true };
-    return {
-      allowed: false,
-      message:
-        `This team’s ${ent.plan.id} plan has ${seats} seat${seats === 1 ? '' : 's'}, all taken by members ` +
-        `who joined earlier, so this user cannot use the team’s services right now. Tell the user to ask ` +
-        `the team’s owner to add seats at ${this.teamsUrl}. Do not retry.`,
-    };
-  }
-
-  private async seatHolders(workspaceId: string, seats: number, fresh = false): Promise<Set<string>> {
-    const key = `${workspaceId}:${seats}`;
-    const hit = this.seatCache.get(key);
-    if (!fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.holders;
-    const rows = await this.deps.db
-      .select({ userId: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, workspaceId))
-      .orderBy(sql`(${workspaceMembers.role} = 'owner') desc`, workspaceMembers.createdAt)
-      .limit(seats);
-    const holders = new Set(rows.map((r) => r.userId));
-    this.seatCache.set(key, { at: Date.now(), holders });
-    if (this.seatCache.size > 10_000) this.seatCache.delete(this.seatCache.keys().next().value!);
-    return holders;
-  }
-
-  /** Throws `PlanLimitError` when `taken` seats (members and open invitations) fill the team's plan. */
-  async assertCanAddMember(workspaceId: string, taken: number): Promise<void> {
-    const ent = await this.entitlements(workspaceId);
-    const limit = ent.limits.seats;
-    if (limit === null || taken < limit) return;
-    throw new PlanLimitError(
-      'seats',
-      limit,
-      `The team’s ${ent.plan.id} plan has ${limit} seat${limit === 1 ? '' : 's'} and members and open ` +
-        `invitations take all of them. Add seats at ${this.teamsUrl} or take back an invitation.`,
-    );
-  }
-
   private actionsMessage(ent: Entitlements, limit: number): string {
     const reset = ent.period.resetsAt.toISOString().slice(0, 10);
+    if (!ent.team) {
+      return (
+        `The Manyplug plan limit is reached: ${limit} actions this month on the ${ent.plan.id} plan ` +
+        `(resets on ${reset}). Tell the user; they can upgrade at ${this.deps.pricingUrl}. Do not retry.`
+      );
+    }
     return (
-      `The Manyplug plan limit is reached: ${limit} actions this month on the ${ent.plan.id} plan ` +
-      `(resets on ${reset}). Tell the user; they can upgrade at ${this.deps.pricingUrl}. Do not retry.`
+      `The Manyplug plan limit is reached: ${limit} actions this month on ${this.whose(ent)} ` +
+      `(resets on ${reset}). Tell the user; ${this.upgradeHint(ent)}. Do not retry.`
     );
   }
 
@@ -366,13 +470,18 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
     if (hit) hit.actions += 1;
   }
 
-  /** Throws `PlanLimitError` when one more account would exceed the plan. */
-  async assertCanAddAccount(workspaceId: string): Promise<void> {
-    const ent = await this.entitlements(workspaceId);
+  /**
+   * Throws `PlanLimitError` when one more account would exceed the plan that pays for it: in a team,
+   * the payer's, or in `each` mode the owner's own for a member's account (`ownerUserId`; `null` is
+   * an account of the team).
+   */
+  async assertCanAddAccount(workspaceId: string, ownerUserId: string | null = null): Promise<void> {
+    const ent = await this.entitlements(workspaceId, ownerUserId);
     const limit = ent.limits.accounts;
     if (limit === null) return;
-    const used = await this.accountsUsed(workspaceId);
-    if (used >= limit) {
+    const used = await this.accountsUsed(ent.payerId);
+    if (used < limit) return;
+    if (!ent.team) {
       throw new PlanLimitError(
         'accounts',
         limit,
@@ -380,6 +489,55 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
           `Remove an account or upgrade at ${this.deps.pricingUrl}.`,
       );
     }
+    throw new PlanLimitError(
+      'accounts',
+      limit,
+      `The connected accounts of ${this.whose(ent)} are all in use: it allows ${limit} across ` +
+        `everything it pays for. Remove an account; ${this.upgradeHint(ent)}.`,
+    );
+  }
+
+  // --- Who pays for a team --------------------------------------------------------
+
+  /**
+   * Changes how a team pays. Any member may pay for it with their own plan when that plan gives
+   * the team at least what it has now (so nobody shrinks the team's limits by accident); the owner
+   * may always take paying back. Whoever pays may stop, and the owner pays again. Only the owner and
+   * admins switch between one payer and each member paying for themselves.
+   */
+  async changeTeamBilling(
+    actorId: string,
+    teamId: string,
+    change: { pay?: boolean; mode?: TeamBillingMode },
+  ): Promise<TeamBilling> {
+    const team = await this.deps.payers.team(teamId, { fresh: true });
+    const role = team?.members.get(actorId);
+    if (!team || !role) throw notFound('Team');
+    let payerUserId: string | null | undefined;
+    if (change.pay === true && actorId !== team.payerUserId) {
+      if (actorId !== team.ownerUserId) {
+        const home = await this.deps.payers.home(actorId);
+        const [mine, theirs] = await Promise.all([
+          home ? this.planOf(home).then((e) => e.plan) : getPlan(DEFAULT_PLAN_ID),
+          this.entitlements(teamId, null).then((e) => e.plan),
+        ]);
+        if (!coversPlan(mine, theirs))
+          throw billingError.planTooSmall(mine.id, theirs.id, team.payerName, this.deps.pricingUrl);
+      }
+      payerUserId = actorId === team.ownerUserId ? null : actorId;
+    }
+    if (change.pay === false) {
+      if (actorId !== team.payerUserId) throw billingError.notPayer();
+      if (actorId === team.ownerUserId) throw billingError.ownerPays();
+      payerUserId = null;
+    }
+    const mode = change.mode !== undefined && change.mode !== team.mode ? change.mode : undefined;
+    if (mode !== undefined && role === 'member') throw billingError.adminOnly();
+    await this.deps.payers.set(teamId, {
+      ...(mode !== undefined ? { mode } : {}),
+      ...(payerUserId !== undefined ? { payerUserId } : {}),
+    });
+    return (await this.deps.payers.team(teamId, { fresh: true }))!;
   }
 
   // --- Changing ----------------------------------------------------------------
@@ -398,14 +556,14 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       interval?: 'month' | 'year' | null;
       cancelAtPeriodEnd?: boolean;
       providerUpdatedAt?: Date | null;
-      /** Seats bought on a per-seat plan (1 for other plans). */
+      /** How many of the provider's price were bought (see `subscriptions.quantity`). */
       quantity?: number | null;
     } = {},
   ): Promise<SubscriptionRow> {
     if (!findPlan(planId)) throw new AppError(400, 'unknown_plan', `Unknown plan "${planId}"`);
     const quantity = opts.quantity ?? 1;
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10_000)
-      throw new AppError(400, 'bad_quantity', 'The number of seats must be a whole number from 1');
+      throw new AppError(400, 'bad_quantity', 'The quantity must be a whole number from 1');
     const values = {
       planId,
       quantity,
@@ -425,8 +583,6 @@ export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits 
       .onConflictDoUpdate({ target: subscriptions.workspaceId, set: { ...values, updatedAt: new Date() } })
       .returning();
     this.usageCache.delete(workspaceId);
-    for (const key of this.seatCache.keys())
-      if (key.startsWith(`${workspaceId}:`)) this.seatCache.delete(key);
     await this.closeRequests(workspaceId);
     return row!;
   }

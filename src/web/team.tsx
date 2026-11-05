@@ -1,10 +1,10 @@
 import type { FC } from 'hono/jsx';
-import type { MemberRole, ShareLevel } from '../db/schema.js';
-import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
+import type { MemberRole, ShareLevel, TeamBillingMode } from '../db/schema.js';
+import { AppShell, Flash, PageHead, type ShellInfo, type UsageView } from './app.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { Layout } from './pages.js';
-import { CodeBlock, CopyField, fmtAgo, fmtDate, fmtNumber, Meter, Tabs } from './ui.js';
+import { CodeBlock, CopyField, fmtAgo, fmtDate, fmtNumber, Tabs, UsageStat } from './ui.js';
 
 /**
  * The team pages: the list of the user's teams (`/app/teams`), one team (`/app/team/:slug`) and the
@@ -99,8 +99,8 @@ export interface TeamPageView {
     email: string;
     role: MemberRole;
     joinedAt: Date;
-    /** False when the team has more members than seats and this one is beyond them. */
-    holdsSeat: boolean;
+    /** This member pays for the team (all of it, or in "each" mode its own accounts and key). */
+    pays: boolean;
   }[];
   invitations: { id: string; email: string; role: MemberRole; expiresAt: Date }[];
   /** An invitation just created: its link is shown once. */
@@ -109,35 +109,41 @@ export interface TeamPageView {
   sharedWithMe: (TeamAccountView & { owner: string; access: ShareLevel })[];
   teamAccounts: (TeamAccountView & { access: ShareLevel; managed: boolean })[];
   services: { id: string; name: string }[];
-  plan: {
-    id: string;
-    name: string;
-    seats: number | null;
-    taken: number;
-    actions: { used: number; limit: number | null };
-    trial?: { until: Date; seats: number | null } | undefined;
-    live?:
-      | { interval: 'month' | 'year' | null; quantity: number; until: Date | null; ending: boolean }
-      | undefined;
-    team: {
-      month: number;
-      year: number;
-      actions: number | null;
-      messengers: number | null;
-      min: number;
-      max: number;
-    };
-    payments: boolean;
-    /** Seats and period picked in a link (from the AI's `buy_plan`). */
-    focus?: { seats?: number | undefined; interval?: 'month' | 'year' | undefined } | undefined;
-  };
+  plan: TeamPlanView;
   keys: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null }[];
   /** A shared key just created: shown once. */
   newKey?: string | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
 
-const usd = (n: number) => `$${n}`;
+/**
+ * Who pays for a team and how much of that plan is used, as one member sees it (filled from
+ * `EntitlementService.teamBilling`). A team has no plan of its own: it runs on its payer's plan.
+ */
+export interface TeamPlanView {
+  mode: TeamBillingMode;
+  /** Who pays for the team as a whole; `you` when it is the viewer. */
+  payer: { name: string; you: boolean };
+  /** The payer's plan, and what it used across everything it pays for. */
+  plan: string;
+  actions: { used: number; limit: number | null };
+  accounts: { used: number; limit: number | null };
+  /** Actions taken in this team this month, whoever paid for them. */
+  teamActions: number;
+  /** The start in force on the payer's plan: a free trial of another plan or a step down. */
+  phase?: UsageView['phase'];
+  resetsAt: Date;
+  /** The viewer's own plan (for the "pay for the team" hint). */
+  myPlan?: string | undefined;
+  /** In "each" mode, the viewer's own plan and use when someone else pays for the team. */
+  mine?:
+    | { plan: string; actions: { used: number; limit: number | null }; phase?: UsageView['phase'] }
+    | undefined;
+  /** The viewer may pay for the team with their own plan now (the owner may always take it back). */
+  canPay: boolean;
+  /** The viewer pays for the team and is not its owner, so they may stop. */
+  canStop: boolean;
+}
 
 export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }> = ({
   ctx,
@@ -354,9 +360,16 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
                 <strong>{m.name}</strong>
                 {m.userId === view.me.userId ? <span class="badge">{t('team.you')}</span> : null}{' '}
                 <span class="badge">{roleText(t, m.role)}</span>
+                {m.pays ? (
+                  <>
+                    {' '}
+                    <span class="badge accent">
+                      {t(view.plan.mode === 'each' ? 'team.members.paysTeam' : 'team.members.pays')}
+                    </span>
+                  </>
+                ) : null}
                 <div class="small muted">
                   {m.email} · {t('team.members.joined', { date: fmtDate(lang, m.joinedAt) })}
-                  {m.holdsSeat ? '' : ` · ${t('team.members.noSeat')}`}
                 </div>
               </span>
               {owner && m.role !== 'owner' ? (
@@ -524,91 +537,132 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
   );
 };
 
+/** Who pays for the team, what that plan has used, and the buttons to change who pays and how. */
 const TeamPlanCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = ({ ctx, view, admin }) => {
   const { t, lang } = ctx;
   const { plan } = view;
   const base = `/app/team/${view.team.slug}`;
-  const suggested = Math.min(
-    plan.team.max,
-    Math.max(plan.team.min, view.members.length, plan.focus?.seats ?? plan.live?.quantity ?? 0),
-  );
-  const yearly = (plan.focus?.interval ?? plan.live?.interval) === 'year';
+  const csrf = <input type="hidden" name="csrf" value={ctx.csrf} />;
+  const planName = (id: string) => t(`plan.${id}.name` as 'plan.free.name');
+  const phaseText = (phase: UsageView['phase']) =>
+    !phase
+      ? undefined
+      : phase.kind === 'trial'
+        ? t('team.plan.trial', { plan: planName(phase.asPlan ?? 'pro'), date: fmtDate(lang, phase.until) })
+        : t('app.usage.step', { date: fmtDate(lang, phase.until) });
+  const billingUrl = `/app/billing?team=${encodeURIComponent(view.team.slug)}`;
+  const each = plan.mode === 'each';
+  const who = each
+    ? plan.payer.you
+      ? 'team.plan.eachPaidByYou'
+      : 'team.plan.eachPaidBy'
+    : plan.payer.you
+      ? 'team.plan.paidByYou'
+      : 'team.plan.paidBy';
   return (
     <div class="card" id="plan">
       <h2>{t('team.plan.title')}</h2>
       <p>
-        <strong>{t('team.plan.current', { plan: plan.name })}</strong>
-        {plan.live?.until
-          ? ` · ${t(plan.live.ending ? 'team.plan.ends' : 'team.plan.renews', { date: fmtDate(lang, plan.live.until) })}`
-          : ''}
+        <strong>{t(who, { name: plan.payer.name, plan: planName(plan.plan) })}</strong>
       </p>
-      {plan.trial ? (
-        <p class="muted">
-          {t('team.plan.trial', { date: fmtDate(lang, plan.trial.until), seats: plan.trial.seats ?? '∞' })}{' '}
-          {t('team.plan.free')}
+      <p class="muted">{t('team.plan.pool')}</p>
+      <div class="stats">
+        <UsageStat
+          lang={lang}
+          label={t('team.plan.actions')}
+          {...plan.actions}
+          lines={[
+            t('team.plan.inTeam', { n: fmtNumber(lang, plan.teamActions) }),
+            plan.actions.limit === null
+              ? t('app.usage.noLimit')
+              : t('app.usage.resets', { date: fmtDate(lang, plan.resetsAt) }),
+          ]}
+        />
+        <UsageStat
+          lang={lang}
+          label={t('team.plan.accounts')}
+          {...plan.accounts}
+          lines={[phaseText(plan.phase)]}
+        />
+        {plan.mine ? (
+          <UsageStat
+            lang={lang}
+            label={t('team.plan.mine', { plan: planName(plan.mine.plan) })}
+            {...plan.mine.actions}
+            lines={[phaseText(plan.mine.phase), t('team.plan.mineHint')]}
+          />
+        ) : null}
+      </div>
+      {plan.canPay ? (
+        <form method="post" action={`${base}/billing`} data-confirm={t('team.plan.payConfirm')}>
+          {csrf}
+          <input type="hidden" name="pay" value="1" />
+          <p class="muted">
+            {view.me.role === 'owner'
+              ? t('team.plan.ownerTakesBack')
+              : t(each ? 'team.plan.payHintEach' : 'team.plan.payHint', {
+                  plan: planName(plan.myPlan ?? plan.plan),
+                })}
+          </p>
+          <button type="submit" class="primary">
+            {t('team.plan.pay')}
+          </button>
+        </form>
+      ) : plan.payer.you ? (
+        <p>
+          <a href={billingUrl}>{t('team.plan.changeMine')}</a>
         </p>
-      ) : plan.id === 'free' ? (
-        <p class="muted">{t('team.plan.free')}</p>
+      ) : (
+        <p class="hint">
+          {t('team.plan.needBigger', { plan: planName(plan.plan) })}{' '}
+          <a href={billingUrl}>{t('team.plan.getBigger')}</a>
+        </p>
+      )}
+      {plan.canStop ? (
+        <form method="post" action={`${base}/billing`} data-confirm={t('team.plan.stopConfirm')}>
+          {csrf}
+          <input type="hidden" name="pay" value="0" />
+          <button type="submit" class="ghost">
+            {t('team.plan.stop')}
+          </button>
+        </form>
       ) : null}
-      <p class="small">
-        {plan.seats === null
-          ? t('team.plan.seatsUnlimited', { used: plan.taken })
-          : t('team.plan.seatsUsed', { used: plan.taken, limit: plan.seats })}
-      </p>
-      <Meter used={plan.taken} limit={plan.seats} label={t('team.plan.seats')} />
-      <p class="small">
-        {t('team.plan.actions')}: {fmtNumber(lang, plan.actions.used)}
-        {plan.actions.limit === null ? '' : ` / ${fmtNumber(lang, plan.actions.limit)}`}
-      </p>
-      <Meter used={plan.actions.used} limit={plan.actions.limit} label={t('team.plan.actions')} />
-      <p class="muted">
-        {t('team.plan.team', { month: usd(plan.team.month), year: usd(plan.team.year) })}{' '}
-        {t('team.plan.teamLimits', {
-          actions: plan.team.actions === null ? '∞' : fmtNumber(lang, plan.team.actions),
-          messengers: plan.team.messengers ?? '∞',
-        })}
-      </p>
-      {!admin ? (
-        <p class="hint">{t('team.plan.ownerOnly')}</p>
-      ) : plan.payments ? (
-        <form method="post" action={`${base}/plan`} class="inline-form">
-          <input type="hidden" name="csrf" value={ctx.csrf} />
-          <div>
-            <label for="plan-seats">{t('team.plan.seats')}</label>
-            <input
-              id="plan-seats"
-              type="number"
-              name="seats"
-              min={Math.max(plan.team.min, view.members.length)}
-              max={plan.team.max}
-              value={String(suggested)}
-              required
-            />
-          </div>
-          <div>
-            <label for="plan-interval">{t('team.plan.interval')}</label>
-            <select id="plan-interval" name="interval">
-              <option value="month" selected={!yearly}>
-                {t('team.plan.month')}
+      <hr />
+      <h3>{t('team.plan.mode')}</h3>
+      {admin ? (
+        <form
+          method="post"
+          action={`${base}/billing`}
+          class="inline-form"
+          data-confirm={t('team.plan.modeConfirm')}
+        >
+          {csrf}
+          <div class="wide-2">
+            <label for="plan-mode" class="sr-only">
+              {t('team.plan.mode')}
+            </label>
+            <select id="plan-mode" name="mode">
+              <option value="payer" selected={!each}>
+                {t('team.plan.mode.payer')}
               </option>
-              <option value="year" selected={yearly}>
-                {t('team.plan.year')}
+              <option value="each" selected={each}>
+                {t('team.plan.mode.each')}
               </option>
             </select>
           </div>
           <div>
-            <button type="submit" class="primary block">
-              {plan.live ? t('team.plan.change') : t('team.plan.buy')}
+            <button type="submit" class="block">
+              {t('team.plan.modeSave')}
             </button>
           </div>
         </form>
       ) : (
-        <p class="hint">
-          {ctx.supportEmail
-            ? t('team.plan.paymentsOff', { email: ctx.supportEmail })
-            : t('team.plan.paymentsOffNoEmail')}
+        <p>
+          {t(each ? 'team.plan.mode.each' : 'team.plan.mode.payer')}.{' '}
+          <span class="muted">{t('team.plan.adminOnly')}</span>
         </p>
       )}
+      <p class="hint">{t('team.plan.modeHint')}</p>
     </div>
   );
 };

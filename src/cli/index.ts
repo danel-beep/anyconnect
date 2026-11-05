@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import { eq } from 'drizzle-orm';
-import { findPlan, METRICS, PLANS, planFits } from '../billing/plans.js';
+import { findPlan, METRICS, PLANS } from '../billing/plans.js';
 import { loadConfig } from '../config.js';
 import { toAccountView } from '../core/accounts.js';
 import { createUser, findUserByEmail, getDefaultWorkspace, setPassword } from '../core/identity.js';
@@ -38,9 +38,9 @@ Usage: npm run cli -- <command> [options]
   users:suspend --email E [--reason R]   Suspend a user (signs them out everywhere)
   users:reactivate --email E             Let a suspended user sign in again
   plans:list                             List plans and their limits
-  plans:set (--email E | --team SLUG) --plan ID [--seats N] [--days N]
-                                         Put a user's workspace or a team on a plan (optionally
-                                         for N days); --seats for plans priced per person
+  plans:set --email E --plan ID [--days N]
+                                         Put a user on a plan (optionally for N days); the teams
+                                         they pay for run on it too
   limits:grant --email E --metric M (--amount N | --unlimited) [--days N] [--reason R]
                                          Add an extra limit on top of the plan
   connectors:list                        List available services
@@ -116,8 +116,6 @@ async function main() {
       unlimited: { type: 'boolean' },
       api: { type: 'boolean' },
       q: { type: 'string' },
-      team: { type: 'string' },
-      seats: { type: 'string' },
       key: { type: 'string' },
       'target-url': { type: 'string' },
       yes: { type: 'boolean' },
@@ -304,29 +302,17 @@ async function main() {
       case 'plans:set': {
         const plan = findPlan(values.plan);
         if (!plan) throw new Error('--plan is required and must be a plan id (see plans:list)');
-        const workspace = values.team
-          ? await services.teams.bySlug(values.team)
-          : (await workspaceFor(services, values.email)).workspace;
-        if (!workspace) throw new Error(`No team with the address ${values.team}`);
-        if (!planFits(plan, workspace.kind))
-          throw new Error(
-            `The ${plan.id} plan is for ${plan.audience} workspaces, not this ${workspace.kind} one`,
-          );
+        // Plans are people's: a team runs on the plan of whoever pays for it.
+        const { workspace } = await workspaceFor(services, values.email);
         const days = values.days ? Number(values.days) : undefined;
         if (days !== undefined && !(Number.isInteger(days) && days > 0))
           throw new Error('--days must be a positive whole number');
-        const seats = values.seats ? Number(values.seats) : undefined;
-        if (seats !== undefined && !(plan.perSeat && Number.isInteger(seats) && seats > 0))
-          throw new Error('--seats is a positive whole number, for plans priced per person');
         await services.entitlements.setPlan(workspace.id, plan.id, {
           provider: 'manual',
           periodEnd: days ? new Date(Date.now() + days * 86_400_000) : null,
           note: 'set with the CLI',
-          ...(seats ? { quantity: seats } : {}),
         });
-        const limits = (await services.entitlements.entitlements(workspace.id)).limits;
-        const people = plan.perSeat ? `, ${limits.seats} seats` : '';
-        console.log(`Workspace ${workspace.id} is on ${plan.id}${people}${days ? ` for ${days} days` : ''}.`);
+        console.log(`Workspace ${workspace.id} is on ${plan.id}${days ? ` for ${days} days` : ''}.`);
         break;
       }
       case 'limits:grant': {
