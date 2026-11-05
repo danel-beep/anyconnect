@@ -22,13 +22,22 @@ describe('monetization', () => {
       `UPDATE workspaces SET created_at = now() - make_interval(days => $2) WHERE id = $1`,
       [workspaceId, days],
     );
-  const useActions = (workspaceId: string, n: number) =>
-    s().database.pool.query(
+  /** Uses up n more actions as the meter would: counted for a personal workspace and charged to its plan. */
+  const useActions = async (workspaceId: string, n: number) => {
+    const day = new Date().toISOString().slice(0, 10);
+    await s().database.pool.query(
       `INSERT INTO usage_counters (workspace_id, day, caller, connector_id, action, calls)
        VALUES ($1, $2, 'seed', 'demo', 'echo', $3)
-       ON CONFLICT DO NOTHING`,
-      [workspaceId, new Date().toISOString().slice(0, 10), n],
+       ON CONFLICT (workspace_id, day, caller, connector_id, action)
+       DO UPDATE SET calls = usage_counters.calls + EXCLUDED.calls`,
+      [workspaceId, day, n],
     );
+    await s().database.pool.query(
+      `INSERT INTO billing_usage (payer_id, day, workspace_id, calls) VALUES ($1, $2, $1, $3)
+       ON CONFLICT (payer_id, day, workspace_id) DO UPDATE SET calls = billing_usage.calls + EXCLUDED.calls`,
+      [workspaceId, day, n],
+    );
+  };
   const call = async (name: string, args: Record<string, unknown> = {}) => {
     const catalog = await s().hub.getCatalog(admin.principal);
     return s().hub.callTool(admin.principal, catalog, name, args);
@@ -68,6 +77,7 @@ describe('monetization', () => {
   beforeEach(async () => {
     mailer.sent.length = 0;
     await s().database.pool.query('DELETE FROM usage_counters');
+    await s().database.pool.query('DELETE FROM billing_usage');
     await s().entitlements.setPlan(admin.workspaceId, 'free');
   });
 
@@ -85,8 +95,7 @@ describe('monetization', () => {
     const second = await call('demo_echo', { account: 'main', message: 'hi' });
     expect(JSON.stringify(second.content)).not.toContain('Manyplug note');
 
-    await useActions(admin.workspaceId, 0);
-    await s().database.pool.query(`UPDATE usage_counters SET calls = 150 WHERE caller = 'seed'`);
+    await useActions(admin.workspaceId, 29); // 121 + 29: the whole 150
     // The usage cache keeps a snapshot for a few seconds: start from a fresh plan row.
     await s().entitlements.setPlan(admin.workspaceId, 'free');
     const refused = await call('demo_echo', { account: 'main', message: 'hi' });

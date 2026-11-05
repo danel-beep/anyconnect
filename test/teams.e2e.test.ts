@@ -14,7 +14,7 @@ import { ConnectorError, defineConnector } from '../src/connectors/sdk.js';
 import { AccountAlerts } from '../src/core/account-alerts.js';
 import { createUser } from '../src/core/identity.js';
 import type { Principal } from '../src/core/principal.js';
-import { accountShares, oauthGrants, users, workspaces } from '../src/db/schema.js';
+import { accountShares, oauthGrants, users } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
 import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
@@ -230,15 +230,21 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     const team = (await hub.services.teams.bySlug(slug))!;
     teamId = team.id;
     expect(team).toMatchObject({ kind: 'team', name: 'Acme Sales' });
-    // The owner's own workspace stays theirs: an admin signing in again does not put the team on
-    // the admin's unlimited plan, and the admin panel keeps showing the personal workspace.
+    // The owner's own workspace stays theirs (the admin panel keeps showing it, and an admin signing
+    // in again gives only it the unlimited plan); the team has no plan of its own and runs on the
+    // owner's, here the admin's unlimited one.
     expect((await hub.services.users.ownedWorkspaces(people.ann.id)).map((w) => w.kind)).toEqual([
       'personal',
       'team',
     ]);
     expect((await hub.services.users.personalWorkspace(people.ann.id))?.id).toBe(people.ann.personal);
     expect((await new TestBrowser(hub.baseUrl).login()).status).toBe(303);
-    expect((await hub.services.entitlements.entitlements(teamId)).plan.id).toBe('free');
+    expect(await hub.services.entitlements.subscription(teamId)).toBeUndefined();
+    expect(await hub.services.entitlements.entitlements(teamId)).toMatchObject({
+      plan: { id: 'unlimited' },
+      payerId: people.ann.personal,
+      team: { slug, mode: 'payer', payer: { userId: people.ann.id, name: 'Ann Lee' }, own: false },
+    });
 
     const list = await (await people.ann.browser.request('/app/teams')).text();
     expect(list).toContain(`href="${teamPage}"`);
@@ -568,70 +574,38 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     await accounts.delete(teamId, officeDemo.id);
   });
 
-  it('counts seats: three during the trial, then the seats the team pays for', async () => {
-    const { teams, entitlements, billing } = hub.services;
-    expect((await entitlements.entitlements(teamId)).limits.seats).toBe(3);
-    const carolInvite = await teams.invite(people.ann.id, teamId, { email: people.carol.email });
-    await expect(teams.invite(people.ann.id, teamId, { email: 'dave@example.com' })).rejects.toMatchObject({
-      code: 'plan_limit',
-    });
-    await teams.revokeInvitation(people.ann.id, teamId, carolInvite.invitation.id);
-    await teams.invite(people.ann.id, teamId, { email: 'dave@example.com' });
-
-    // After the trial the free plan has one seat: the owner's. Bob is told why instead of removed.
-    await hub.services.db
-      .update(workspaces)
-      .set({ createdAt: new Date(Date.now() - 90 * 86_400_000) })
-      .where(eq(workspaces.id, teamId));
-    const blocked = await call(as(people.bob), 'notes_read', { account: 'mine' });
-    expect(blocked.isError).toBe(true);
-    expect(text(blocked)).toContain('seat');
-    expect((await call(as(people.ann), 'notes_read', { account: 'mine' })).isError).toBeFalsy();
-    expect((await call(as(people.bob), 'manyplug_team')).isError).toBeFalsy();
-    // The shared connection takes no seat.
-    expect(
-      (await call(as(people.ann, { shared: true }), 'notes_read', { account: 'sales_notes' })).isError,
-    ).toBeFalsy();
-
-    // The owner buys five seats on the team page.
-    const start = await post(people.ann, `${teamPage}/plan`, { seats: '5', interval: 'month' });
-    expect(start.status).toBe(303);
-    const checkout = new URL(start.headers.get('location')!);
-    expect(checkout.pathname).toBe('/billing/test/checkout');
-    const pay = await people.ann.browser.request(checkout.pathname + checkout.search);
-    const paid = await people.ann.browser.request('/billing/test/checkout', {
-      form: TestBrowser.hiddenInputs(await pay.text()),
-    });
-    expect(paid.headers.get('location')).toContain(`${teamPage}?paid=1`);
-    const ent = await entitlements.entitlements(teamId);
-    expect(ent.plan.id).toBe('team');
-    expect(ent.subscription?.quantity).toBe(5);
-    expect(ent.limits).toMatchObject({ seats: 5, actions: 125_000, messengers: 10 });
+  it('charges the team’s use to the owner’s plan, which nobody buys for the team itself', async () => {
+    const { billing, usage, db } = hub.services;
+    // Bob's call in the team counts against Ann's plan, in her own workspace's bill.
     expect((await call(as(people.bob), 'notes_read', { account: 'mine' })).isError).toBeFalsy();
-
-    // Personal plans are not for teams, the Team plan not for a person, and never fewer than 2 seats.
-    const base = {
-      userId: people.ann.id,
-      email: people.ann.email,
-      interval: 'month' as const,
-      successUrl: hub.baseUrl,
-      cancelUrl: hub.baseUrl,
-    };
-    await expect(billing.checkout({ ...base, workspaceId: teamId, planId: 'pro' })).rejects.toMatchObject({
-      code: 'plan_mismatch',
-    });
+    const [own, inTeam] = await Promise.all([
+      usage.billedTotal(people.bob.personal, '2000-01-01'),
+      usage.billedByWorkspace(people.ann.personal, '2000-01-01'),
+    ]);
+    expect(own).toBe(0);
+    expect(inTeam.find((r) => r.workspaceId === teamId)?.calls).toBeGreaterThan(0);
+    // A team has no plan of its own to buy.
     await expect(
-      billing.checkout({ ...base, workspaceId: people.bob.personal, planId: 'team' }),
-    ).rejects.toMatchObject({ code: 'plan_mismatch' });
-    await expect(
-      billing.checkout({ ...base, workspaceId: teamId, planId: 'team', seats: 1 }),
-    ).rejects.toMatchObject({ code: 'bad_seats' });
-    // The AI sees prices per person and the team's seats.
-    const plan = json(await call(as(people.ann), 'manyplug_plan'));
-    expect(plan.usage.seats).toBe(5);
-    expect(plan.subscription.seats).toBe(5);
-    expect(plan.plans.map((p: { id: string }) => p.id)).toEqual(['free', 'team']);
-    expect(plan.plans[1]).toMatchObject({ usd_per_month: 10, priced: 'per person', people: '2-200' });
+      billing.checkout({
+        workspaceId: teamId,
+        userId: people.ann.id,
+        email: people.ann.email,
+        planId: 'pro',
+        interval: 'month',
+        successUrl: hub.baseUrl,
+        cancelUrl: hub.baseUrl,
+      }),
+    ).rejects.toMatchObject({ code: 'team_no_plan' });
+    // Everyone in the team sees who pays, on the team page and in the chat.
+    const page = await (await people.ann.browser.request(teamPage)).text();
+    expect(page).toContain('Вы оплачиваете команду своим тарифом «Безлимитный».');
+    const plan = json(await call(as(people.bob), 'manyplug_plan'));
+    expect(plan.team_billing).toMatchObject({ mode: 'payer', paid_by: 'Ann Lee', plan: 'unlimited' });
+    expect(plan.plans.map((p: { id: string }) => p.id)).toEqual(['free', 'personal', 'pro']);
+    // The team itself was never given a subscription.
+    expect(
+      await db.query.subscriptions.findFirst({ where: (s, { eq: is }) => is(s.workspaceId, teamId) }),
+    ).toBeUndefined();
   });
 
   it('runs the team by role: admins invite, only the owner promotes, members leave on their own', async () => {
@@ -639,9 +613,11 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     // Bob is a member: the AI is not offered what only admins may do, and the service refuses it too.
     const bobTools = (await catalogOf(as(people.bob))).tools.map((t) => t.name);
     expect(bobTools).toContain('manyplug_share_account');
-    for (const name of ['manyplug_invite_member', 'manyplug_remove_member', 'manyplug_cancel_plan']) {
+    for (const name of ['manyplug_invite_member', 'manyplug_remove_member']) {
       expect(bobTools).not.toContain(name);
     }
+    // A member's own plan is theirs to change from the team's connector too.
+    expect(bobTools).toEqual(expect.arrayContaining(['manyplug_plan', 'manyplug_team_billing']));
     await expect(teams.invite(people.bob.id, teamId, { email: 'erin@example.com' })).rejects.toMatchObject({
       code: 'team_admin_only',
     });

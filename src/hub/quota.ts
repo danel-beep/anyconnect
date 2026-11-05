@@ -11,4 +11,9 @@ export type QuotaDecision =
  */
 export interface QuotaGate {
   checkAction(principal: Principal, unit: { connectorId: string; action: string }): Promise<QuotaDecision>;
+  /**
+   * The workspace whose plan a caller's use counts against: a person's own; in a team its payer's,
+   * or the member's own (stage `meter` charges executed calls to it).
+   */
+  payerOf?(principal: Principal): Promise<string>;
 }

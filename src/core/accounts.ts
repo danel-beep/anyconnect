@@ -128,7 +128,11 @@ function isUniqueViolation(error: unknown): boolean {
  */
 /** How many accounts a workspace may have (implemented by the billing layer). */
 export interface AccountLimits {
-  assertCanAddAccount(workspaceId: string): Promise<void>;
+  /**
+   * Throws when the plan that pays for the new account is full. `ownerUserId`: whose it will be (in
+   * a team a member, or `null` for the team's own); it decides whose plan pays in some teams.
+   */
+  assertCanAddAccount(workspaceId: string, ownerUserId?: string | null): Promise<void>;
 }
 
 /**
@@ -151,9 +155,9 @@ export class AccountService {
     private readonly limits?: AccountLimits,
   ) {}
 
-  /** Throws when the workspace's plan does not allow one more account. */
-  async assertCanCreate(workspaceId: string): Promise<void> {
-    await this.limits?.assertCanAddAccount(workspaceId);
+  /** Throws when the plan that would pay for one more account (see `AccountLimits`) is full. */
+  async assertCanCreate(workspaceId: string, ownerUserId?: string | null): Promise<void> {
+    await this.limits?.assertCanAddAccount(workspaceId, ownerUserId);
   }
 
   async list(workspaceId: string): Promise<AccountRow[]> {
@@ -261,8 +265,8 @@ export class AccountService {
   ): Promise<AccountRow> {
     const input = parseWith(CreateAccountInput, rawInput, 'account');
     const connector = await this.connector(workspaceId, input.connectorId);
-    await this.assertCanCreate(workspaceId);
     const placed = await this.ownerAndName(workspaceId, connector.id, input.label, owner);
+    await this.assertCanCreate(workspaceId, placed.ownerUserId);
     const name = input.name ?? placed.name;
     const config = parseWith(connector.config, input.config, 'config');
     const credentials = parseWith(connector.credentials, input.credentials, 'credentials');

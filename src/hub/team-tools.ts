@@ -16,6 +16,7 @@ export const TEAM_ONLY_ACTIONS: ReadonlySet<string> = new Set([
   'share_account',
   'invite_member',
   'remove_member',
+  'team_billing',
 ]);
 
 const LEVEL_TEXT = {

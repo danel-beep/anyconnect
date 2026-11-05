@@ -1,11 +1,11 @@
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { billingEvents, subscriptions, workspaceMembers, workspaces } from '../db/schema.js';
+import { billingEvents, subscriptions, workspaces } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 import type { Logger } from '../logger.js';
 import { type BillingConfig, PAID_PLANS, priceKey } from './config.js';
 import type { EntitlementService, SubscriptionRow } from './entitlements.js';
-import { findPlan, type Plan, planFits } from './plans.js';
+import { findPlan } from './plans.js';
 import {
   type BillingInterval,
   type BillingProvider,
@@ -19,8 +19,8 @@ export type BillingEventRow = typeof billingEvents.$inferSelect;
 export type CheckoutOutcome =
   /** Send the user to the provider's hosted checkout. */
   | { kind: 'redirect'; url: string }
-  /** The workspace already pays at the provider: its subscription was moved to the new plan or seats. */
-  | { kind: 'changed'; planId: string; seats?: number };
+  /** The workspace already pays at the provider: its subscription was moved to the new plan. */
+  | { kind: 'changed'; planId: string };
 
 /** Why buying is not possible right now (shown on the billing page and to the AI). */
 export class BillingError extends AppError {
@@ -111,24 +111,26 @@ export class BillingService {
     interval: BillingInterval;
     successUrl: string;
     cancelUrl: string;
-    /** Seats on a per-seat plan (default: one for each member); ignored for other plans. */
-    seats?: number;
   }): Promise<CheckoutOutcome> {
     const provider = this.requireProvider();
     const plan = findPlan(input.planId);
     if (!plan || !PAID_PLANS.includes(plan)) {
       throw new BillingError('unknown_plan', `"${input.planId}" is not a plan that can be bought`);
     }
-    const { workspaceKind } = await this.deps.entitlements.entitlements(input.workspaceId);
-    if (!planFits(plan, workspaceKind)) {
+    const [workspace] = await this.deps.db
+      .select({ kind: workspaces.kind })
+      .from(workspaces)
+      .where(eq(workspaces.id, input.workspaceId))
+      .limit(1);
+    if (workspace?.kind === 'team') {
+      // Plans belong to people: a team runs on its payer's (see `billing/payers.ts`).
       throw new BillingError(
-        'plan_mismatch',
-        workspaceKind === 'team'
-          ? `A team buys the team plan, not ${plan.id}`
-          : `The ${plan.id} plan is for teams: create a team first`,
+        'team_no_plan',
+        'A team has no plan of its own: it runs on the plan of whoever pays for it. Buy a plan for yourself, then pay for the team with it.',
       );
     }
-    const quantity = await this.quantityFor(plan, input.workspaceId, input.seats);
+    // One of the plan's price: no plan is sold per unit (the provider seam still carries a quantity).
+    const quantity = 1;
     const priceId = this.deps.config.prices.get(priceKey(plan.id, input.interval));
     if (!priceId) {
       throw new BillingError(
@@ -158,7 +160,7 @@ export class BillingService {
         },
         'billing: plan change requested',
       );
-      return { kind: 'changed', planId: plan.id, ...(plan.perSeat ? { seats: quantity } : {}) };
+      return { kind: 'changed', planId: plan.id };
     }
     if (BillingService.isPaidByProvider(sub)) {
       // Paid through a provider that is no longer active (e.g. moved from Paddle to Stripe).
@@ -173,28 +175,6 @@ export class BillingService {
       provider.checkout({ ...input, planId: plan.id, priceId, quantity, customerId }),
     );
     return { kind: 'redirect', url };
-  }
-
-  /** How many of the plan's price to buy: seats for a per-seat plan (at least one per member), else 1. */
-  private async quantityFor(plan: Plan, workspaceId: string, seats: number | undefined): Promise<number> {
-    if (!plan.perSeat) return 1;
-    const [row] = await this.deps.db
-      .select({ n: count() })
-      .from(workspaceMembers)
-      .where(eq(workspaceMembers.workspaceId, workspaceId));
-    const members = row?.n ?? 1;
-    const { min, max } = plan.perSeat;
-    const wanted = seats ?? Math.max(min, members);
-    if (!Number.isInteger(wanted) || wanted < min || wanted > max) {
-      throw new BillingError('bad_seats', `The ${plan.id} plan is bought for ${min} to ${max} people`);
-    }
-    if (wanted < members) {
-      throw new BillingError(
-        'too_few_seats',
-        `The team has ${members} members: buy at least ${members} seats or remove someone first`,
-      );
-    }
-    return wanted;
   }
 
   /** The provider's page to update the card, download invoices or cancel. */
@@ -352,7 +332,7 @@ export class BillingService {
     if (!workspaceId) return { ignore: 'unknown workspace' };
     const sub = await this.deps.entitlements.subscription(workspaceId);
     const sameSubscription = sub?.provider === providerId && sub.externalId === change.externalId;
-    // An event without a quantity keeps the seats the subscription had.
+    // An event without a quantity keeps the quantity the subscription had.
     const quantity = change.quantity ?? (sameSubscription ? sub.quantity : 1);
     if (sameSubscription && sub.providerUpdatedAt && change.occurredAt < sub.providerUpdatedAt) {
       return { workspaceId, ignore: 'older than the current state' };

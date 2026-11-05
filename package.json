@@ -20,11 +20,13 @@
     "format": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:visual": "vitest run --config vitest.visual.config.ts",
     "eval": "vitest run eval",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/cli/index.ts db:migrate",
     "distribution": "tsx scripts/distribution.ts",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "check:fast": "npm run lint && npm run typecheck && vitest run --changed origin/main"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
@@ -62,6 +64,7 @@
     "drizzle-kit": "^0.31.11",
     "hoodiecrow-imap": "^3.3.1",
     "pino-pretty": "^13.2.0",
+    "playwright": "^1.63.0",
     "simple-icons": "^16.36.0",
     "smtp-server": "^3.21.3",
     "tsx": "^4.23.15",

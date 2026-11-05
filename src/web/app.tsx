@@ -20,11 +20,11 @@ import {
   Icon,
   type IconName,
   initials,
-  Meter,
   Prefs,
   pctClass,
   ServiceLogo,
   Tabs,
+  UsageStat,
 } from './ui.js';
 
 // ---------------------------------------------------------------------------
@@ -377,7 +377,6 @@ export const CallsTable: FC<{
 
 const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx, usage, extra }) => {
   const { t, lang } = ctx;
-  const limitText = (v: number | null) => (v === null ? '∞' : fmtNumber(lang, v));
   const exhausted = usage.actions.limit !== null && usage.actions.used >= usage.actions.limit;
   return (
     <>
@@ -388,40 +387,34 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
         </div>
       ) : null}
       <div class="stats">
-        <div class="stat">
-          <span class="label">{t('app.usage.actions')}</span>
-          <div class="value">
-            {fmtNumber(lang, usage.actions.used)}{' '}
-            <span class="muted small">/ {limitText(usage.actions.limit)}</span>
-          </div>
-          <Meter used={usage.actions.used} limit={usage.actions.limit} label={t('app.usage.actions')} />
-          <div class="sub">
+        <UsageStat
+          lang={lang}
+          label={t('app.usage.actions')}
+          {...usage.actions}
+          lines={[
             <a href="/app/billing">
               {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
-            </a>
-            {' · '}
-            {usage.actions.limit === null
+            </a>,
+            usage.actions.limit === null
               ? t('app.usage.noLimit')
-              : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}
-          </div>
-        </div>
-        <div class="stat">
-          <span class="label">{t('app.usage.accounts')}</span>
-          <div class="value">
-            {usage.accounts.used} <span class="muted small">/ {limitText(usage.accounts.limit)}</span>
-          </div>
-          <Meter used={usage.accounts.used} limit={usage.accounts.limit} label={t('app.usage.accounts')} />
-          <div class="sub">
-            {usage.phase?.kind === 'trial'
+              : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) }),
+          ]}
+        />
+        <UsageStat
+          lang={lang}
+          label={t('app.usage.accounts')}
+          {...usage.accounts}
+          lines={[
+            usage.phase?.kind === 'trial'
               ? t('app.usage.trial', {
                   plan: t(`plan.${usage.phase.asPlan ?? 'pro'}.name` as 'plan.free.name'),
                   date: fmtDate(lang, usage.phase.until),
                 })
               : usage.phase
                 ? t('app.usage.step', { date: fmtDate(lang, usage.phase.until) })
-                : t('app.usage.accountsHint')}
-          </div>
-        </div>
+                : t('app.usage.accountsHint'),
+          ]}
+        />
         {extra}
       </div>
     </>
@@ -1436,14 +1429,15 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <option value="0">{t('app.tokens.never')}</option>
             </select>
           </div>
-          <div class="wide-2">
+          {/* The API switch and its explanation get their own line under the fields. */}
+          <div class="wide">
             <label class="check">
               <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
             </label>
             <p class="hint">{t('app.tokens.apiHint')}</p>
           </div>
-          <div>
-            <button type="submit" class="block">
+          <div class="wide">
+            <button type="submit" class="primary">
               {t('app.tokens.create')}
             </button>
           </div>
@@ -1646,9 +1640,44 @@ export interface BillingView {
   gift: boolean;
   /** The user's invite link and what it brought. */
   invite?: { link: string; invited: number; rewarded: number; days: number } | undefined;
+  /** Actions of the user's own space this month (shown next to the teams on their plan). */
+  ownActions: number;
+  /** Teams the plan pays for, all or part of (`PlanUse`), with their actions this month. */
+  teams: { name: string; slug: string; covers: 'everyone' | 'team' | 'self'; actions: number }[];
+  /** Sent here from a team (`?team=`) to get a plan to pay for it with: the way back. */
+  backTo?: { name: string; slug: string; pays: boolean } | undefined;
 }
 
 const planLabel = (ctx: PageCtx, id: string) => ctx.t(`plan.${id}.name` as 'plan.free.name');
+
+const teamPlanUrl = (slug: string) => `/app/team/${encodeURIComponent(slug)}#plan`;
+
+/** "Your plan also pays for": the user's own space and the teams on their plan, this month. */
+const PlanTeamsCard: FC<{ ctx: PageCtx; view: BillingView }> = ({ ctx, view }) => {
+  const { t, lang } = ctx;
+  const actions = (n: number) => t('app.billing.teamsActions', { n: fmtNumber(lang, n) });
+  return (
+    <div class="card" id="teams">
+      <h2>{t('app.billing.teamsTitle')}</h2>
+      <p class="muted">{t('app.billing.teamsText')}</p>
+      <ul class="plain">
+        <li>
+          <span>{t('app.billing.teamsOwn')}</span>
+          <span class="small muted">{actions(view.ownActions)}</span>
+        </li>
+        {view.teams.map((team) => (
+          <li>
+            <span>
+              <a href={teamPlanUrl(team.slug)}>{team.name}</a>{' '}
+              <span class="small muted">· {t(`app.billing.covers.${team.covers}`)}</span>
+            </span>
+            <span class="small muted">{actions(team.actions)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
 
 /** The buy (or switch) button of a plan, posting the interval the page switch shows. */
 const BuyForm: FC<{
@@ -1797,6 +1826,14 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
         </div>
       ) : null}
       {ctx.billing && view.testMode ? <div class="notice info">{t('app.billing.testMode')}</div> : null}
+      {view.backTo ? (
+        <div class="notice info">
+          {t(view.backTo.pays ? 'app.billing.backToTeamPays' : 'app.billing.backToTeam', {
+            team: view.backTo.name,
+          })}{' '}
+          <a href={teamPlanUrl(view.backTo.slug)}>{t('app.billing.backLink', { team: view.backTo.name })}</a>
+        </div>
+      ) : null}
       {focusPlan && view.focus && view.plan.public && canBuy(focusPlan.id, view.focus.interval) ? (
         <div class="card focus-plan">
           <h2>
@@ -1865,6 +1902,7 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
           </>
         ) : null}
       </div>
+      {view.teams.length ? <PlanTeamsCard ctx={ctx} view={view} /> : null}
       {view.invite ? <InviteCard ctx={ctx} invite={view.invite} /> : null}
       {!view.plan.public ? null : ctx.billing ? null : view.requested ? (
         <div class="notice info">
@@ -1905,10 +1943,6 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                   <span class="btn block" aria-disabled="true">
                     {t('app.billing.yours')}
                   </span>
-                ) : plan.audience === 'team' ? (
-                  <a class="btn block" href="/app/teams">
-                    {t('app.billing.forTeams')}
-                  </a>
                 ) : plan.priceMonthly === 0 ? (
                   view.paid ? (
                     <span class="small muted">{t('app.billing.freeByCancel')}</span>
@@ -2107,6 +2141,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
             <li>
               <span>
                 {agentName(s.userAgent) ?? t('app.settings.unknownDevice')}
+                {s.current ? ' ' : null}
                 {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
               </span>
               <span class="small muted">

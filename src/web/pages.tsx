@@ -66,9 +66,18 @@ export const PasskeyForm: FC<{
   hidden: Record<string, string>;
   /** Rendered below the error line, e.g. an "or" divider before the next sign-in option. */
   after?: Child;
+  class?: string;
   children?: Child;
-}> = ({ mode, options, action, error, hidden, after, children }) => (
-  <form method="post" action={action} data-passkey={mode} data-options={options} data-error={error} hidden>
+}> = ({ mode, options, action, error, hidden, after, class: cls, children }) => (
+  <form
+    method="post"
+    action={action}
+    class={cls}
+    data-passkey={mode}
+    data-options={options}
+    data-error={error}
+    hidden
+  >
     {Object.entries(hidden).map(([name, value]) => (
       <input type="hidden" name={name} value={value} />
     ))}

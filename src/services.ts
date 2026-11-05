@@ -3,6 +3,7 @@ import { AdminService } from './admin/service.js';
 import { Analytics } from './analytics/index.js';
 import { WorkspaceBillingTools } from './billing/assistant.js';
 import { EntitlementService } from './billing/entitlements.js';
+import { Payers } from './billing/payers.js';
 import type { BillingProvider } from './billing/provider.js';
 import { createBillingProvider, TestBillingProvider } from './billing/providers/index.js';
 import { ReferralService } from './billing/referrals.js';
@@ -265,11 +266,13 @@ export function createServices(
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
+  const payers = new Payers(db);
   const entitlements = new EntitlementService({
     db,
     usage,
+    payers,
     pricingUrl: `${config.publicUrl}/app/billing`,
-    teamsUrl: `${config.publicUrl}/app/teams`,
+    teamUrl: (slug) => `${config.publicUrl}/app/team/${encodeURIComponent(slug)}#plan`,
   });
   const billingProvider =
     overrides.billing ??
@@ -313,7 +316,7 @@ export function createServices(
     accounts,
     mcpUrl: config.mcpUrl,
     publicUrl: config.publicUrl,
-    limits: entitlements,
+    membersChanged: (teamId) => payers.forget(teamId),
     // The OAuth server is built further down; these run only when someone leaves a team.
     revokeGrant: (id) => oauth.revokeGrantById(id),
     revokeToken: (workspaceId, id) => apiTokens.revoke(workspaceId, id),
@@ -539,7 +542,6 @@ export function createServices(
         billing,
         referrals,
         publicUrl: config.publicUrl,
-        teamSlug: (workspaceId) => teams.slugOf(workspaceId),
       }),
       profiles: new WorkspaceProfileTools(personas),
       apps: new WorkspaceAppTools(aiApps, personas),

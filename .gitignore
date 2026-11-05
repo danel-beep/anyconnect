@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 coverage/
 .env
@@ -7,3 +7,4 @@ coverage/
 *.log
 .DS_Store
 .claude/worktrees/
+visual-failures/

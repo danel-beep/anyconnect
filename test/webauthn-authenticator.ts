@@ -68,7 +68,7 @@ export class SoftwareAuthenticator {
   }
 
   /** navigator.credentials.create() + PublicKeyCredential.toJSON(). */
-  create(options: { challenge: string; user: { id: string } }) {
+  create(options: { challenge: string; user: { id: string } }, opts: { aaguid?: string } = {}) {
     const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const jwk = publicKey.export({ format: 'jwk' });
     const id = randomBytes(16);
@@ -83,7 +83,8 @@ export class SoftwareAuthenticator {
     );
     const idLength = Buffer.alloc(2);
     idLength.writeUInt16BE(id.length);
-    const attested = Buffer.concat([Buffer.alloc(16), idLength, id, coseKey]);
+    const aaguid = opts.aaguid ? Buffer.from(opts.aaguid.replace(/-/g, ''), 'hex') : Buffer.alloc(16);
+    const attested = Buffer.concat([aaguid, idLength, id, coseKey]);
     const authData = this.authData(FLAG_UP | FLAG_UV | FLAG_AT, 0, attested);
     this.keys.push({ id, privateKey, userHandle: options.user.id, counter: 0 });
     return {

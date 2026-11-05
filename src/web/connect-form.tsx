@@ -181,7 +181,7 @@ export const AiCanDo: FC<{
   const count = (risk: RiskLevel) => actions.filter((a) => a.risk === risk).length;
   const changes = count('write') + count('dangerous');
   return (
-    <div class="card tight ai-can-do">
+    <div class="card ai-can-do">
       <h2 class="h3">{t('connect.canDo')}</h2>
       <p class="small muted">
         {changes

@@ -138,8 +138,22 @@
     {
       "idx": 19,
       "version": "7",
-      "when": 1793886220512,
-      "tag": "0019_telegram_chat_automation",
+      "when": 1793885374218,
+      "tag": "0019_user_vaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793899450338,
+      "tag": "0020_team_billing",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793902285711,
+      "tag": "0021_telegram_chat_automation",
       "breakpoints": true
     }
   ]

@@ -47,6 +47,8 @@ h1,h2{text-wrap:balance}
 p{text-wrap:pretty}
 .hero .lead{max-width:540px;margin:0 0 30px}
 .hero-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+/* On a phone the hero buttons are full width, one under the other, so neither floats. */
+@media (max-width:520px){.hero .hero-actions{flex-direction:column;align-items:stretch}.hero .hero-actions .btn{width:100%}}
 .hero-note{margin:18px 0 0;color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap}
 .hero-note span{display:inline-flex;align-items:center;gap:6px}
 .hero-note svg{width:14px;height:14px;color:var(--accent-ink)}
@@ -135,20 +137,27 @@ p{text-wrap:pretty}
 .ask .btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
 .ask .btns span{text-align:center;border-radius:8px;padding:7px;background:var(--card);border:1px solid var(--border);font-weight:560}
 .ask .btns span.yes{border-color:var(--accent);color:var(--accent-ink)}
-.codebox{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font:450 12.5px/1.6 ${MONO};white-space:pre;overflow:hidden;color:var(--muted)}
+.codebox{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font:450 12.5px/1.6 ${MONO};white-space:pre;overflow-x:auto;color:var(--muted)}
 .codebox b{color:var(--text);font-weight:600}
 .codebox i{font-style:normal;color:var(--accent-ink)}
 
 /* Services grid */
 .svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .svc{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);text-decoration:none;transition:border-color .15s,transform .15s}
+/* A card with a description starts at the top, so titles line up across a row. */
+.svc:has(.meta){align-items:flex-start}
 a.svc:hover{border-color:var(--border-strong);text-decoration:none;transform:translateY(-1px)}
 .svc .name{font-weight:580;display:block}
 .svc .meta{font-size:12.5px;color:var(--muted);display:block}
-/* Services page: categories side by side, each a column of its cards */
-.svc-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0 12px;align-items:start}
+/* Services page: categories flow like a newspaper (CSS columns), so a short category does not leave a
+   tall empty gap next to a long one; a long category may continue in the next column, but its title
+   stays with its first card and a card is never split. */
+.svc-cats{columns:260px 4;column-gap:12px;margin-top:32px}
+.svc-cats>[data-filter-group]{display:flow-root;margin:0 0 28px}
+.svc-cats .cat-title{break-after:avoid}
+.svc-cats .svc{break-inside:avoid}
+.svc-cats .cat-title{margin-top:0}
 .svc-cats .svc-grid{grid-template-columns:1fr}
-.svc-cats .svc{min-height:92px}
 /* Not connectable yet: one quiet row of chips under the grid */
 .roadmap-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .road{display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border:1px dashed var(--border-strong);border-radius:999px;color:var(--muted);font-size:13.5px;line-height:1.2;text-decoration:none}
@@ -173,7 +182,8 @@ a.road:hover{color:var(--text);border-style:solid;text-decoration:none}
 .billing-switch button[aria-pressed=true]{background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .billing-switch .save{font-size:11px;color:var(--accent-ink);margin-left:4px}
 html:not(.js) .billing-switch{display:none}
-.plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
+/* As many plans to a row as fit: the grid follows the number of public plans. */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:16px;position:relative}
 .plan.featured{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .plan .tag{position:absolute;top:-11px;left:20px;background:var(--accent);color:var(--accent-text);font:600 11px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:6px 8px}
@@ -191,8 +201,8 @@ html:not(.js) .when-year{display:none}
 .plan li.off{color:var(--muted)}
 .plan li.off svg{color:var(--muted)}
 .plan .btn{margin-top:auto}
-@media (max-width:1060px){.plans{grid-template-columns:1fr 1fr}}
 @media (max-width:600px){.plans{grid-template-columns:1fr}}
+.compare{table-layout:fixed}
 .compare th,.compare td{text-align:center}
 .compare th:first-child,.compare td:first-child{text-align:left}
 .compare td svg{width:18px;height:18px;vertical-align:middle;color:var(--accent-ink)}
@@ -238,6 +248,8 @@ html:not(.js) .when-year{display:none}
 .svc-page{padding-top:48px}
 .svc-page .svc-hero{align-items:flex-start;flex-wrap:wrap}
 .svc-hero .section-title{font-size:clamp(26px,3.2vw,36px)}
+/* On a phone the logo sits above the title, so the text gets the full width. */
+@media (max-width:640px){.svc-page .svc-hero{flex-direction:column;gap:14px}.svc-hero>.grow{min-width:0;width:100%}}
 .svc-facts{list-style:none;display:flex;flex-wrap:wrap;gap:8px 18px;padding:0;margin:14px 0 0;font-size:14px;color:var(--muted)}
 .svc-facts li{display:flex;align-items:center;gap:7px}
 .svc-facts svg{width:16px;height:16px;color:var(--accent-ink);flex:none}
@@ -256,12 +268,13 @@ html:not(.js) .when-year{display:none}
   .svc-page{padding-top:28px}
   table.stack-sm,table.stack-sm tbody{display:block}
   table.stack-sm thead{display:none}
-  table.stack-sm tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 16px;border-top:1px solid var(--border)}
-  table.stack-sm td{border:0;padding:0}
+  table.stack-sm tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:12px 24px;border-top:1px solid var(--border)}
+  table.stack-sm td{border:0;padding:0;width:auto}
   .card.flush table.stack-sm td:first-child,.card.flush table.stack-sm td:last-child{padding:0}
 }
 .section-title{font-size:clamp(28px,3.6vw,40px);letter-spacing:-.03em;margin:0 0 6px;line-height:1.1}
 .card-head.pad{padding:20px 24px 4px;margin:0}
+.card-head.pad+.table-wrap,.card-head.pad+table{margin-top:12px}
 .logo-g{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#fff;flex:none}
 .logo-g svg{width:15px;height:15px}
 

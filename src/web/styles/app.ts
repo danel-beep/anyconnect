@@ -39,19 +39,26 @@ export const APP_SHELL_CSS = `
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;min-width:0}
+/* Two cards side by side (narrow screens): a label gets room for two lines in every card, so one that
+   wraps does not push only that card's number lower than its neighbour's. */
+@media (max-width:1000px){.stat .label{min-height:2.7em;align-items:flex-start}}
 .stat .label{font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
-.stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums}
+.stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+/* Words rather than a number (a plan, "two-step sign-in on"): smaller, so they fit a half-width card. */
+.stat .value.small-value{font-size:18px;letter-spacing:-.01em;line-height:1.3}
 .stat .sub{font-size:12.5px;color:var(--muted)}
 .stat .meter{margin-top:10px}
 a.stat{color:inherit;text-decoration:none}
 a.stat:hover{border-color:var(--border-strong)}
 @media (max-width:1000px){.stats{grid-template-columns:1fr 1fr}}
 @media (max-width:520px){.stats{grid-template-columns:1fr 1fr}}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:1fr}}
+/* Inside a card the boxes fit as many to a row as its width allows: one under another on a phone. */
+.card .stats{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:minmax(0,1fr)}}
 .grid-2>.card,.grid-3>.card{margin:0}
-.grid-2,.grid-3{margin-bottom:16px;align-items:start}
+.grid-2,.grid-3{margin-bottom:16px;align-items:stretch}
 
 /* Onboarding */
 .onboard{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 16px}
@@ -78,7 +85,7 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .menu{position:relative}
 .menu>summary{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--border-strong);color:var(--muted)}
 .menu>summary:hover{color:var(--text)}
-.menu>summary svg{width:16px;height:16px}
+.menu>summary svg{width:18px;height:18px;stroke-width:3.2}
 .menu-pop{position:absolute;right:0;top:38px;z-index:10;min-width:220px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px -12px rgba(0,0,0,.3);padding:6px;display:flex;flex-direction:column}
 .menu-pop form{margin:0}
 .menu-pop button,.menu-pop a{width:100%;justify-content:flex-start;border:0;background:none;min-height:36px;padding:0 10px;border-radius:8px;font-weight:500;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:8px}
@@ -202,14 +209,19 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 
 /* Activity chart */
 .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:8px 0 0;border-bottom:1px solid var(--border)}
-.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:3px}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+/* A long period (90 or 365 days) still fits the card: thinner gaps the more bars there are. */
+.chart:has(>.col:nth-child(61)){gap:1px}
+.chart:has(>.col:nth-child(181)){gap:0}
 .chart .col span{display:block;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
 .chart .col.zero span{background:var(--border)}
 .chart .col span.err{background:var(--danger);border-radius:3px 3px 0 0}
 .chart .col span.err+span{border-radius:0}
 .log-filters{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding-bottom:14px}
 .log-filters select{width:auto;min-width:180px;max-width:100%;min-height:36px;padding:6px 10px;font-size:14px}
-.log-filters .check{margin:0;font-size:14px}
+.log-filters .check{margin:0;font-size:14px;align-items:center}
+.log-filters .check>input{margin:0}
+.log-filters button{min-height:36px}
 @media (max-width:640px){.log-filters select{flex:1 1 100%}}
 .chart-axis{display:flex;justify-content:space-between;font:500 11.5px/1 ${SANS};font-variant-numeric:tabular-nums;color:var(--muted);padding-top:8px}
 .top-list{display:flex;flex-direction:column;gap:10px}
@@ -217,7 +229,8 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 .top-list .bar .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Plan cards in the dashboard */
-.plan-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+/* As many plans to a row as fit: the grid follows the number of public plans. */
+.plan-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .focus-plan{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
 .focus-plan form{max-width:320px}
 .paid-sub{margin:12px 0}
@@ -232,7 +245,6 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 .plan-mini .plan{padding:18px;gap:10px}
 .plan-mini .price .amount{font-size:28px}
 .plan.current{border-color:var(--ok);box-shadow:0 0 0 1px var(--ok)}
-@media (max-width:1100px){.plan-mini{grid-template-columns:1fr 1fr}}
 @media (max-width:560px){.plan-mini{grid-template-columns:1fr}}
 
 /* Danger zone */
@@ -241,6 +253,9 @@ details.fold>.fold-body{padding:0 24px 20px;max-width:none;color:inherit}
 
 .pad-x{padding:0 24px 16px;margin:0}
 ul.plain.pad-x{padding:0 24px 6px}
+/* A flush card that opens with plain content (an empty state) still needs its top padding. */
+.pad{padding:20px 24px;margin:0}
+.card.flush>.pad-x:first-child:not(ul){padding-top:20px}
 .wide-2{grid-column:span 2}
 @media (max-width:640px){.wide-2{grid-column:auto}}
 .search-sm{max-width:260px;min-height:36px!important;padding:6px 12px!important}
@@ -253,17 +268,22 @@ ul.plain.pad-x{padding:0 24px 6px}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
 .filters input[type=search]{max-width:320px}
 .filters select{width:auto;min-width:150px}
+.filters button{min-height:42px}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--border);font-size:13px;color:var(--muted)}
 .user-cell{display:flex;align-items:center;gap:10px;min-width:0}
-.user-cell a{font-weight:560;color:var(--text);text-decoration:none}
+.user-cell a{font-weight:560;color:var(--text);text-decoration:none;min-width:0}
+/* In a list (not a table, which scrolls) a long email may break rather than run into the time. */
+.plain .user-cell a{overflow-wrap:anywhere}
 .user-cell a:hover{text-decoration:underline}
 .inline-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
 .inline-form label{margin:0 0 6px}
 .inline-form .wide{grid-column:1/-1}
+/* A button next to a field is exactly as tall as the field. */
+.inline-form button,.inline-form .btn{min-height:42px}
 @media (max-width:520px){.copy{flex-direction:column}.copy button{width:100%}}
 @media (max-width:640px){.lang-link,.crumbs a,.icon-btn{min-height:40px;min-width:40px;display:inline-grid;place-items:center}}
 .choice-list{border:0;padding:0;margin:0 0 16px;display:grid;gap:8px}
-.choice{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:12px;cursor:pointer}
+.choice{margin:0;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:12px;cursor:pointer}
 .choice:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .choice input{margin-top:3px;width:auto}
 .choice span{display:flex;flex-direction:column;gap:2px}
@@ -303,6 +323,8 @@ ul.plain.pad-x{padding:0 24px 6px}
 @media (max-width:640px){
   .table-wrap{background:linear-gradient(to right,var(--card) 30%,transparent) left/32px 100% no-repeat local,linear-gradient(to left,var(--card) 30%,transparent) right/32px 100% no-repeat local,radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.18),transparent) left/10px 100% no-repeat scroll,radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.18),transparent) right/10px 100% no-repeat scroll}
   .table-wrap table{min-width:520px}
+  /* A table that turns into stacked rows on a phone must not keep the scrolling width. */
+  .table-wrap table.stack-sm{min-width:0}
 }
 @media (max-width:640px){.acc:has(.ops.inline){grid-template-columns:auto minmax(0,1fr) auto}.acc .ops.inline{grid-column:auto}}
 @media (max-width:640px){
@@ -387,6 +409,16 @@ select.narrow{max-width:320px}
 .reauth-row .small{flex:1 1 220px}
 .lock-group{border:0;margin:0;padding:0;min-width:0}
 .lock-group:disabled .card{opacity:.6}
+/* Passkeys: one row per key inside the card; "Add" sits under the list like the other cards' actions */
+.pk-list{border-top:1px solid var(--border);margin:14px 0 16px}
+.pk-list .pk.acc{padding:12px 0}
+.pk-list .pk.acc:last-child{border-bottom:1px solid var(--border)}
+.pk .pk-name{overflow-wrap:anywhere}
+.pk .sub{white-space:normal}
+.pk{scroll-margin-top:16px}
+.pk:target{animation:pk-new 2.4s ease-out}
+@keyframes pk-new{from{background:var(--accent-soft)}to{background:transparent}}
+@media (max-width:640px){.pk.acc{grid-template-columns:auto minmax(0,1fr) auto}.pk.acc .ops{grid-column:auto}}
 .chart{position:relative}
 .chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13.5px}
 .error-list>li+li{border-top:1px solid var(--border)}
@@ -428,5 +460,6 @@ select.narrow{max-width:320px}
 .heat-9{background:color-mix(in srgb,var(--accent) 74%,transparent)}
 .heat-10{background:color-mix(in srgb,var(--accent) 82%,transparent)}
 .an-note{margin-top:8px}
-@media (max-width:640px){.top-list.an-list .bar{grid-template-columns:minmax(0,1fr) 48px 40px 36px}.an-funnel .bar{grid-template-columns:minmax(0,1fr) 60px 52px 48px}}
+/* On a phone a funnel step's name gets its own line above the bar. */
+@media (max-width:640px){.top-list.an-list .bar{grid-template-columns:minmax(0,1fr) 48px 40px 36px}.an-funnel .bar{grid-template-columns:minmax(0,1fr) 60px 48px;gap:4px 12px}.an-funnel .bar .name{grid-column:1/-1}}
 `;

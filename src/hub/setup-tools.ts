@@ -481,8 +481,6 @@ const TEAM_ADMIN_TOOLS: ReadonlySet<string> = new Set([
   'add_service',
   'remove_service',
   'update_settings',
-  'buy_plan',
-  'cancel_plan',
   // An AI app of a team is everyone's who uses it: renaming or disconnecting it affects them all.
   'rename_app',
   'disconnect_app',
