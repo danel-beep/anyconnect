@@ -3,6 +3,7 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import type { Context, MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { safeEqual } from '../lib/crypto.js';
+import { rateLimitIp } from '../lib/rate-limit.js';
 
 /**
  * The client's IP. Behind `hops` proxies that each append the address they saw to X-Forwarded-For,
@@ -24,6 +25,11 @@ export function clientIp(c: Context, trust: { hops: number; header?: string }): 
   } catch {
     return 'unknown';
   }
+}
+
+/** The client as per-IP rate limits count it: its address, or its /64 for IPv6. */
+export function clientRateKey(c: Context, trust: { hops: number; header?: string }): string {
+  return rateLimitIp(clientIp(c, trust));
 }
 
 export interface CookieOptions {

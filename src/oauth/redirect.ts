@@ -63,15 +63,4 @@ export function redirectUriMatches(registered: readonly string[], requested: str
   });
 }
 
-/** Well-known AI clients, shown with a "known app" badge on the consent screen. */
-const KNOWN_HOSTS: Record<string, string> = {
-  'claude.ai': 'Claude',
-  'claude.com': 'Claude',
-  'chatgpt.com': 'ChatGPT',
-  'chat.openai.com': 'ChatGPT',
-  'platform.openai.com': 'OpenAI',
-};
-
-export function knownClientName(host: string): string | undefined {
-  return KNOWN_HOSTS[host.toLowerCase()];
-}
+export { knownClientName } from '../core/ai-apps.js';

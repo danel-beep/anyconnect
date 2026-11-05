@@ -21,8 +21,11 @@ import {
   type WorkspaceAdmin,
 } from '../core/workspace-admin.js';
 import { AppError, badRequest } from '../lib/errors.js';
+import { appActions, type WorkspaceApps } from './app-tools.js';
 import { billingActions, type WorkspaceBilling } from './billing-tools.js';
 import type { CatalogAllow } from './catalog-types.js';
+import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
+import { securityActions, type UserSecurity } from './security-tools.js';
 import { TEAM_ONLY_ACTIONS, teamActions } from './team-tools.js';
 
 /**
@@ -38,8 +41,9 @@ import { TEAM_ONLY_ACTIONS, teamActions } from './team-tools.js';
  * lift its own restrictions: a change that tightens access rules applies at once, but one that
  * loosens them anywhere (more access, fewer confirmations, a shorter undo window, a tool or account
  * turned back on) is held for the user's confirmation (`assessRisk` with `confirm`), which only the
- * user can give, in the chat's own prompt, in Telegram or on the hub's page. Personas, AI clients
- * and sign-in security stay on the website.
+ * user can give, in the chat's own prompt, in Telegram or on the hub's page. The same goes for
+ * access profiles (`profile-tools.ts`): narrowing one applies at once, widening one waits. Sign-in
+ * security stays on the website.
  */
 
 export const SETUP_CONNECTOR_ID = BRAND.slug;
@@ -54,6 +58,12 @@ export interface SetupContext {
   admin: WorkspaceAdmin;
   /** Plans and payments (`billing-tools.ts`); absent in hubs built without billing. */
   billing?: WorkspaceBilling;
+  /** Access profiles (`profile-tools.ts`); absent in hubs built without the security layer. */
+  profiles?: WorkspaceProfiles;
+  /** AI apps (`app-tools.ts`); absent in hubs built without the security layer. */
+  apps?: WorkspaceApps;
+  /** The user's sign-in security, read only (`security-tools.ts`). */
+  security?: UserSecurity;
   signal: AbortSignal;
 }
 
@@ -65,6 +75,7 @@ export interface SetupActionSpec<TInput extends AnyObjectSchema> {
   risk: RiskLevel;
   requiresConfirmation?: boolean;
   hints?: ActionHints;
+  tags?: ActionDefinition['tags'];
   /** Raises the risk of one call or holds it for the user (see `ActionDefinition.assessRisk`). */
   assessRisk?(input: z.output<TInput>, ctx: SetupContext): Promise<RiskAssessment | undefined>;
   run(input: z.output<TInput>, ctx: SetupContext): Promise<ActionResult>;
@@ -439,8 +450,13 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       };
     },
   }),
+  ...profileActions(setupAction),
   ...billingActions(setupAction),
+  // Rarely needed: listed after the rest while they fit, always found by search. The team tools
+  // show only inside a team (but the overview), where the access profile tools give them room.
+  ...appActions(setupAction),
   ...teamActions(setupAction),
+  ...securityActions(setupAction),
 ];
 
 /** Setup tools a team's shared connection still sees: reading only (it cannot change the setup). */
@@ -457,6 +473,19 @@ const TEAM_ADMIN_TOOLS: ReadonlySet<string> = new Set([
   'update_settings',
   'buy_plan',
   'cancel_plan',
+  // An AI app of a team is everyone's who uses it: renaming or disconnecting it affects them all.
+  'rename_app',
+  'disconnect_app',
+]);
+/**
+ * Setup tools for what teams do not have yet: access profiles (`/mcp/<profile>` addresses belong
+ * to a person's own workspace).
+ */
+const NOT_IN_TEAMS: ReadonlySet<string> = new Set([
+  'access_profiles',
+  'create_access_profile',
+  'update_access_profile',
+  'delete_access_profile',
 ]);
 
 /**
@@ -473,6 +502,7 @@ export function teamCatalogFilter(
     return (connector, action, account) => {
       if (account === undefined && isSetupConnector(connector.id)) {
         if (TEAM_ONLY_ACTIONS.has(action.name) && !view?.member) return false;
+        if (view && NOT_IN_TEAMS.has(action.name)) return false;
         if (view && !view.member && !SHARED_CONNECTION_TOOLS.has(action.name)) return false;
         if (view?.member && !view.admin && TEAM_ADMIN_TOOLS.has(action.name)) return false;
       }
@@ -485,7 +515,7 @@ export function teamCatalogFilter(
 export const SETUP_CONNECTOR: ConnectorDefinition = {
   id: SETUP_CONNECTOR_ID,
   name: BRAND.name,
-  description: 'Setting up this hub: services, accounts, settings and the plan.',
+  description: 'Setting up this hub: services, accounts, access rules and profiles, settings and the plan.',
   version: '1.0.0',
   config: z.object({}),
   credentials: z.object({}),

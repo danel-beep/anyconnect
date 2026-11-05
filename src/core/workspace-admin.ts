@@ -230,10 +230,17 @@ export class WorkspaceAdmin {
   ): Promise<{ via: 'oauth' | 'form'; problem?: string }> {
     const provider = resolveProvider(connector.oauth!);
     const app = workspaceId
-      ? await this.deps.apps.pick(workspaceId, provider.id).catch(() => undefined)
-      : this.deps.apps.hasHubApp(provider.id);
+      ? await this.deps.apps.pick(workspaceId, connector).catch(() => undefined)
+      : this.deps.apps.hasHubApp(connector);
     if (app) return { via: 'oauth' };
     if (connector.oauth!.optional) return { via: 'form' };
+    if (this.deps.apps.envProviders().includes(provider.id)) {
+      // The hub has an app for the provider, but only its own services use it.
+      return {
+        via: 'oauth',
+        problem: `Services you add yourself connect with your own ${provider.name} OAuth app: register one with the redirect URI ${this.deps.publicUrl}/connect/callback and add it with POST /api/v1/oauth/apps.`,
+      };
+    }
     return {
       via: 'oauth',
       problem: `No ${provider.name} OAuth app is configured on this hub yet (the hub owner sets OAUTH_APP_${provider.id.toUpperCase()}_CLIENT_ID).`,
@@ -271,19 +278,9 @@ export class WorkspaceAdmin {
     if (input.forTeam && !view) throw badRequest('Team accounts exist only in a team.');
     const connector = await this.deps.connectors.get(workspaceId, input.service);
     if (!connector) throw badRequest(`Unknown service "${input.service}". List them with the services tool.`);
-    let method = this.connectMethod(connector);
-    if (connector.oauth) {
-      const route = await this.oauthRoute(workspaceId, connector);
-      if (route.problem) throw badRequest(route.problem);
-      // Optional OAuth without an app: the link opens the form for a personal token.
-      method = route.via;
-    }
-    const url = new URL(`/connect/${encodeURIComponent(connector.id)}`, this.deps.publicUrl);
+    const method = await this.linkMethod(workspaceId, connector);
     // The page connects into this team, as the member who opens it (or for the whole team).
-    if (view) {
-      url.searchParams.set('team', view.team.slug);
-      url.searchParams.set('returnTo', `/app/team/${view.team.slug}`);
-    }
+    const url = this.connectPage(connector.id, view?.team.slug);
     if (input.forTeam) url.searchParams.set('owner', 'team');
     if (input.reconnect) {
       const account = await this.accountFor(principal, input.reconnect, {
@@ -300,6 +297,51 @@ export class WorkspaceAdmin {
       if (input.name) url.searchParams.set('name', input.name);
     }
     return { url: url.toString(), method, service: connector.id };
+  }
+
+  /**
+   * Where an account is signed in again, for notices sent outside a chat (an expired sign-in): its
+   * connect link, or its page when the service cannot connect right now (the page says why). The
+   * connect page checks that whoever opens the link may change the account.
+   */
+  async reconnectUrl(workspaceId: string, accountId: string): Promise<string> {
+    const slug = await this.deps.teams?.slugOf(workspaceId);
+    try {
+      const account = await this.deps.accounts.get(workspaceId, accountId);
+      const connector = await this.deps.connectors.get(workspaceId, account.connectorId);
+      if (!connector) throw notFound(`Service "${account.connectorId}"`);
+      await this.linkMethod(workspaceId, connector);
+      const url = this.connectPage(connector.id, slug);
+      url.searchParams.set('account', account.id);
+      return url.toString();
+    } catch {
+      const page = slug ? `/app/team/${slug}` : `/app/accounts/${encodeURIComponent(accountId)}`;
+      return new URL(page, this.deps.publicUrl).toString();
+    }
+  }
+
+  /** How a link connects the service now; throws (user-safe) when it cannot. */
+  private async linkMethod(workspaceId: string, connector: ConnectorDefinition): Promise<ConnectMethod> {
+    if (!connector.oauth) return this.connectMethod(connector);
+    const route = await this.oauthRoute(workspaceId, connector);
+    if (route.problem) throw badRequest(route.problem);
+    // Optional OAuth without an app: the link opens the form for a personal token.
+    return route.via;
+  }
+
+  /** The hub's connect page; in a team it connects into the team, as whoever opens it. */
+  private connectPage(service: string, teamSlug: string | undefined): URL {
+    const url = new URL(`/connect/${encodeURIComponent(service)}`, this.deps.publicUrl);
+    if (teamSlug) {
+      url.searchParams.set('team', teamSlug);
+      url.searchParams.set('returnTo', `/app/team/${teamSlug}`);
+    }
+    return url;
+  }
+
+  /** The workspace's accounts by id (to show ids as `service:account`). */
+  async accountsById(workspaceId: string): Promise<Map<string, AccountRow>> {
+    return new Map((await this.deps.accounts.list(workspaceId)).map((a) => [a.id, a]));
   }
 
   async findAccount(workspaceId: string, ref: AccountRef, service?: string): Promise<AccountRow> {

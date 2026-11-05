@@ -10,7 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import demo from '../src/connectors/builtin/demo.js';
 import { ConnectorRegistry } from '../src/connectors/registry.js';
-import { defineConnector } from '../src/connectors/sdk.js';
+import { ConnectorError, defineConnector } from '../src/connectors/sdk.js';
+import { AccountAlerts } from '../src/core/account-alerts.js';
 import { createUser } from '../src/core/identity.js';
 import type { Principal } from '../src/core/principal.js';
 import { accountShares, oauthGrants, users, workspaces } from '../src/db/schema.js';
@@ -37,6 +38,15 @@ const notes = defineConnector({
       input: z.object({ text: z.string() }),
       risk: 'write',
       run: ({ text }, ctx) => ({ added: text, notebook: ctx.account.name }),
+    }),
+    action({
+      name: 'sync',
+      description: 'Syncs the notebook (its sign-in has expired)',
+      input: z.object({}),
+      hints: { readOnly: true },
+      run: () => {
+        throw new ConnectorError('auth', 'Token expired');
+      },
     }),
   ],
 });
@@ -447,6 +457,13 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     const client = new Client({ name: 'bob-app', version: '1.0.0' });
     await client.connect(new StreamableHTTPClientTransport(new URL(teamUrl), { authProvider: app }));
     expect(client.getInstructions()).toContain('you act for Bob Stone');
+    // What makes a team work is listed, not left to search; what only admins may do is not offered.
+    const listed = (await client.listTools()).tools.map((t) => t.name);
+    expect(listed).toEqual(
+      expect.arrayContaining(['manyplug_team', 'manyplug_share_account', 'manyplug_connect_account']),
+    );
+    for (const hidden of ['manyplug_invite_member', 'manyplug_access_profiles', 'manyplug_rename_app'])
+      expect(listed).not.toContain(hidden);
     const mine = await client.callTool({ name: 'notes_read', arguments: { account: 'mine' } });
     expect(mine.structuredContent ?? JSON.parse((mine.content as { text: string }[])[0]!.text)).toMatchObject(
       {
@@ -497,6 +514,58 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     // Bob cannot make a team account by editing the link.
     const forged = await people.bob.browser.request(`/connect/demo?team=${slug}&owner=team`);
     expect(forged.status).toBe(403);
+  });
+
+  it('tells only whoever manages an account that its sign-in expired', async () => {
+    const { accounts, db, connectors, admin, logger } = hub.services;
+    const bob = as(people.bob);
+    const notebook = async (name: string) => (await accountByName(teamId, name))!;
+    // In the chat: Bob gets the link for his own notebook, and is told who signs in the team's.
+    const own = text(await call(bob, 'notes_sync', { account: 'bob' }));
+    expect(own).toContain('the user has to sign in again, here: ');
+    const link = new URL(own.match(/here: (\S+)\. Tell/)![1]!);
+    expect(link.pathname).toBe('/connect/notes');
+    expect([link.searchParams.get('team'), link.searchParams.get('account')]).toEqual([
+      slug,
+      (await notebook('bob')).id,
+    ]);
+    const shared = text(await call(bob, 'notes_sync', { account: 'sales_notes' }));
+    expect(shared).toContain('whoever manages the account has to sign in again');
+    expect(shared).not.toContain('/connect/');
+    for (const name of ['bob', 'sales_notes'])
+      await accounts.markStatus((await notebook(name)).id, 'active', null);
+
+    // Outside the chat: each person hears about what they can fix, and only that.
+    const bobDemo = (await accounts.list(teamId)).find((a) => a.label === 'Bob demo')!;
+    const officeDemo = await accounts.create(
+      teamId,
+      { connectorId: 'demo', label: 'Office demo', config: { greeting: 'Hi' }, credentials: { secret: 'x' } },
+      { userId: null },
+    );
+    const sent: Record<string, { account: string; url: string }[]> = {};
+    const alerts = new AccountAlerts({
+      db,
+      connectors,
+      logger,
+      notifier: {
+        notify: async (userId, notice) => {
+          sent[userId] = notice.accounts.map(({ account, url }) => ({ account, url }));
+          return 'sent';
+        },
+      },
+      reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
+    });
+    for (const account of [bobDemo, officeDemo])
+      await accounts.markStatus(account.id, 'needs_reauth', 'Token expired');
+    expect(await alerts.notifyReauth()).toEqual({ notified: 2, waiting: 0 });
+    expect(Object.keys(sent).sort()).toEqual([people.ann.id, people.bob.id].sort());
+    expect(sent[people.bob.id]!.map((a) => a.account)).toEqual(['Bob demo']);
+    expect(sent[people.ann.id]!.map((a) => a.account)).toEqual(['Office demo']);
+    const fix = new URL(sent[people.bob.id]![0]!.url);
+    expect(fix.pathname).toBe('/connect/demo');
+    expect([fix.searchParams.get('team'), fix.searchParams.get('account')]).toEqual([slug, bobDemo.id]);
+    await accounts.markStatus(bobDemo.id, 'active', null);
+    await accounts.delete(teamId, officeDemo.id);
   });
 
   it('counts seats: three during the trial, then the seats the team pays for', async () => {

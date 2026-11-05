@@ -2,6 +2,7 @@ import { FONT_FACES, MONO, SANS } from './assets.js';
 import { APP_SHELL_CSS } from './styles/app.js';
 import { BRAND_CSS } from './styles/brands.js';
 import { CONNECT_CSS } from './styles/connect.js';
+import { PROFILES_CSS } from './styles/profiles.js';
 import { SITE_CSS } from './styles/site.js';
 import { THEMES, themeCss } from './theme.js';
 
@@ -249,5 +250,6 @@ export const APP_CSS = [
   SITE_CSS,
   APP_SHELL_CSS,
   CONNECT_CSS,
+  PROFILES_CSS,
   BRAND_CSS,
 ].join('\n');

@@ -192,6 +192,7 @@ describe('HTTP manifest connectors', () => {
           lastUsedAt: null,
           ownerUserId: null,
           checkedAt: null,
+          reauthNotifiedAt: null,
         },
       ],
     });

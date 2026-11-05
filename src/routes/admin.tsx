@@ -13,6 +13,7 @@ import { AppError } from '../lib/errors.js';
 import { IpAllowlist } from '../lib/ip-allowlist.js';
 import {
   AdminAuditPage,
+  AdminErrorsPage,
   AdminOverviewPage,
   AdminSystemPage,
   AdminUserPage,
@@ -129,38 +130,47 @@ export function adminRoutes() {
       return render(c, g.ok);
     };
 
-  /** A change to a user: checks, runs, logs (inside AdminService) and redirects back with a note. */
-  const change =
+  /** A form post in the panel: gate, CSRF, rate limit, run, and back to `back` with a note. */
+  const adminPost =
     (
-      run: (
-        c: AppContext,
-        actor: AdminActor,
-        userId: string,
-        form: Record<string, string>,
-      ) => Promise<string | undefined>,
+      back: (c: AppContext) => string,
+      run: (c: AppContext, actor: AdminActor, form: Record<string, string>) => Promise<string | undefined>,
     ) =>
     async (c: AppContext) => {
       const s = c.get('services');
-      const userId = c.req.param('id')!;
-      const back = `/admin/users/${encodeURIComponent(userId)}`;
+      const to = back(c);
       const form = await bodyParams(c);
       // The gate first: to anyone but an admin the panel does not exist, not even as a CSRF error.
-      const g = await gate(c, back);
+      const g = await gate(c, to);
       if ('response' in g) return g.response;
       if (!csrfOk(c, form)) return csrfFailedPage(c);
       if (!s.rateLimiter.consume(`admin:${g.ok.user.id}`, 60, 60_000).allowed) {
         setFlash(c, 'bad', 'admin.flash.error', { message: c.get('t')('login.rateLimited') });
-        return c.redirect(back, 303);
+        return c.redirect(to, 303);
       }
       try {
-        const redirect = await run(c, g.ok.actor, userId, form);
-        return c.redirect(redirect ?? back, 303);
+        const redirect = await run(c, g.ok.actor, form);
+        return c.redirect(redirect ?? to, 303);
       } catch (error) {
         if (!(error instanceof AppError) && !(error instanceof z.ZodError)) throw error;
         setFlash(c, 'bad', 'admin.flash.error', { message: uiError(c, error).slice(0, 300) });
-        return c.redirect(back, 303);
+        return c.redirect(to, 303);
       }
     };
+
+  /** A change to a user: checks, runs, logs (inside AdminService) and redirects back with a note. */
+  const change = (
+    run: (
+      c: AppContext,
+      actor: AdminActor,
+      userId: string,
+      form: Record<string, string>,
+    ) => Promise<string | undefined>,
+  ) =>
+    adminPost(
+      (c) => `/admin/users/${encodeURIComponent(c.req.param('id')!)}`,
+      (c, actor, form) => run(c, actor, c.req.param('id')!, form),
+    );
 
   // --- Pages ------------------------------------------------------------------
   app.get(
@@ -413,15 +423,45 @@ export function adminRoutes() {
         .query('select 1')
         .then(() => true)
         .catch(() => false);
-      const shell = await shellInfo(c, auth.workspace.id);
+      const [shell, health, runs, errors] = await Promise.all([
+        shellInfo(c, auth.workspace.id),
+        s.ops.health.run({ cacheMs: 2000 }),
+        s.ops.jobRuns.list().catch(() => []),
+        s.ops.errorStore.summary(new Date(Date.now() - DAY)).catch(() => ({ open: 0, recent: 0 })),
+      ]);
+      const byName = new Map(runs.map((r) => [r.name, r]));
       const checks = systemChecks(c, auth.actor.ip);
       return c.html(
         <AdminSystemPage
           ctx={pageCtx(c, auth.user)}
           shell={shell}
           view={{
-            version: s.version,
+            version: s.ops.release,
             env: cfg.env,
+            health: health.checks.map((h) => ({
+              name: h.name,
+              status: h.status,
+              critical: h.critical,
+              detail: h.detail,
+              ms: h.ms,
+            })),
+            jobs: s.jobs.definitionsList.map((j) => {
+              const run = byName.get(j.name);
+              return {
+                name: j.name,
+                description: j.description,
+                cron: j.cron,
+                lastSucceededAt: run?.lastSucceededAt ?? null,
+                lastFailedAt: run?.lastFailedAt ?? null,
+                lastError: run?.lastError ?? null,
+                lastDurationMs: run?.lastDurationMs ?? null,
+                consecutiveFailures: run?.consecutiveFailures ?? 0,
+                runs: run?.runs ?? 0,
+                failures: run?.failures ?? 0,
+              };
+            }),
+            jobsHere: cfg.jobs.enabled,
+            errors,
             publicUrl: cfg.publicUrl,
             database,
             checks,
@@ -433,7 +473,51 @@ export function adminRoutes() {
     }),
   );
 
+  app.get(
+    '/admin/errors',
+    view(async (c, auth) => {
+      const s = c.get('services');
+      const status = c.req.query('status') === 'resolved' ? 'resolved' : 'open';
+      const [rows, shell] = await Promise.all([
+        s.ops.errorStore.list({ status, limit: 100 }),
+        shellInfo(c, auth.workspace.id),
+      ]);
+      return c.html(
+        <AdminErrorsPage
+          ctx={pageCtx(c, auth.user)}
+          shell={shell}
+          view={{
+            status,
+            rows,
+            sentry: Boolean(s.config.ops.sentryDsn),
+            retentionDays: s.config.ops.errorRetentionDays,
+          }}
+        />,
+      );
+    }),
+  );
+
   // --- Changes ------------------------------------------------------------------
+  for (const [verb, resolved] of [
+    ['resolve', true],
+    ['reopen', false],
+  ] as const) {
+    app.post(
+      `/admin/errors/:id/${verb}`,
+      adminPost(
+        () => (resolved ? '/admin/errors' : '/admin/errors?status=resolved'),
+        async (c, actor) => {
+          const s = c.get('services');
+          const id = c.req.param('id')!;
+          if (!(await s.ops.errorStore.setResolved(id, resolved)))
+            throw new AppError(404, 'not_found', 'Not found');
+          await s.adminPanel.record(actor, resolved ? 'error.resolve' : 'error.reopen', { error: id });
+          setFlash(c, 'ok', resolved ? 'admin.flash.errorResolved' : 'admin.flash.errorReopened');
+          return undefined;
+        },
+      ),
+    );
+  }
   app.post(
     '/admin/users/:id/plan',
     change(async (c, actor, userId, form) => {
@@ -619,6 +703,23 @@ function systemChecks(c: AppContext, actorIp: string | null | undefined): System
     },
     { label: t('admin.sys.adminSession'), level: 'ok', detail: t('admin.sys.hours', { n: hours }) },
     paymentsCheck(c),
+    {
+      label: t('admin.sys.errors'),
+      level: 'ok',
+      detail: cfg.ops.sentryDsn
+        ? t('admin.sys.errorsSentry')
+        : `${t('admin.sys.errorsBuiltin')} · ${off('SENTRY_DSN')}`,
+    },
+    {
+      label: t('admin.sys.backups'),
+      level: cfg.backups ? 'ok' : 'warn',
+      detail: cfg.backups
+        ? t('admin.sys.backupsOn', {
+            bucket: `${cfg.backups.storage.bucket}/${cfg.backups.prefix}`,
+            days: cfg.backups.retentionDays,
+          })
+        : `${t('admin.sys.backupsOff')} · ${off('BACKUP_S3_ENDPOINT')}`,
+    },
     {
       label: t('admin.sys.telegram'),
       level: s.telegramBot ? 'ok' : 'off',

@@ -39,6 +39,7 @@ function rows(services: string[]) {
       lastUsedAt: null,
       ownerUserId: null,
       checkedAt: null,
+      reauthNotifiedAt: null,
     })),
   );
 }

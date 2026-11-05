@@ -1,3 +1,5 @@
+import { CYRILLIC } from '../lib/slug.js';
+
 /**
  * The website's two small scripts, served from our own origin (`script-src 'self'`).
  * Every page works without them; they only add comfort: theme switch, copy buttons, tabs,
@@ -85,6 +87,13 @@ for(var k in domains){if(domains[k].indexOf(dom)>=0)return k}return /\\.[a-z]{2,
 function update(){var key=(pick&&pick.value)||fromMail();if(key===last)return;last=key;
 $$('[data-variant]',g).forEach(function(v){var on=v.getAttribute('data-variant')===key;v.open=on;if(on)v.setAttribute('data-matched','');else v.removeAttribute('data-matched');var b=v.querySelector('[data-variant-match]');if(b)b.hidden=!on})}
 if(pick)pick.addEventListener('change',update);if(mail)mail.addEventListener('input',update);update()});
+
+/* Access profiles: the address field shows the address the name gives (the hub makes it when left empty) */
+var TR=${JSON.stringify(CYRILLIC)};
+function slug(v){var l=v.toLowerCase(),s='';for(var i=0;i<l.length;i++){var ch=l.charAt(i);s+=TR.hasOwnProperty(ch)?TR[ch]:ch}
+if(s.normalize)s=s.normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'');return s.replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,28).replace(/-+$/,'')}
+$$('[data-slug-target]').forEach(function(src){var out=d.querySelector(src.getAttribute('data-slug-target'));if(!out)return;var empty=out.getAttribute('placeholder')||'';
+function update(){out.setAttribute('placeholder',slug(src.value)||empty)}src.addEventListener('input',update);update()});
 
 /* A page shown in answer to a form post (e.g. a new token) gets a clean address, so reloading it
    does not post the form again. */

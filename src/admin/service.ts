@@ -311,6 +311,11 @@ export class AdminService {
 
   // --- Changing ----------------------------------------------------------------
 
+  /** Records a hub-level admin action that is not about a user (e.g. `error.resolve`). */
+  async record(actor: AdminActor, action: string, details: Record<string, unknown> = {}): Promise<void> {
+    await this.log(actor, action, {}, details);
+  }
+
   private async log(
     actor: AdminActor,
     action: string,

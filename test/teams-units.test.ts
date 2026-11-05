@@ -157,6 +157,7 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
     lastUsedAt: null,
     ownerUserId: null,
     checkedAt: null,
+    reauthNotifiedAt: null,
     ...partial,
   };
 }

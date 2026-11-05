@@ -12,10 +12,12 @@ import { buildCatalog } from '../src/hub/catalog.js';
 import { type CallContext, Executor, type Middleware, STAGE_ORDER } from '../src/hub/executor.js';
 import { MemoryIdempotencyStore } from '../src/hub/idempotency.js';
 import { dataResult, type ExecResult, errorResult } from '../src/hub/result.js';
+import { circuitStage } from '../src/hub/stages/circuit.js';
 import { idempotencyStage } from '../src/hub/stages/idempotency.js';
 import { limitsStage } from '../src/hub/stages/limits.js';
 import { riskStage } from '../src/hub/stages/risk.js';
 import { shapeStage } from '../src/hub/stages/shape.js';
+import { CircuitBreaker } from '../src/lib/circuit-breaker.js';
 import { RateLimiter } from '../src/lib/rate-limit.js';
 
 const svc = defineConnector({
@@ -146,6 +148,7 @@ describe('action metadata', () => {
           lastUsedAt: null,
           ownerUserId: null,
           checkedAt: null,
+          reauthNotifiedAt: null,
         },
       ],
     });
@@ -265,6 +268,109 @@ describe('limits stage', () => {
     expect(read.audit.retries).toBe(2);
     expect((await executor.execute(call('send', { to: 'bob' }))).isError).toBe(true);
     expect(attempts.send).toBe(1);
+    limiter.close();
+  });
+});
+
+describe('circuit breaker', () => {
+  it('opens after repeated failures, lets one trial through, backs off', () => {
+    let now = 0;
+    const breaker = new CircuitBreaker({ threshold: 3, openMs: 1_000, maxOpenMs: 4_000, now: () => now });
+    for (let i = 0; i < 3; i++) {
+      expect(breaker.check('a').allowed).toBe(true);
+      breaker.failure('a');
+    }
+    expect(breaker.check('a')).toEqual({ allowed: false, retryAfterSeconds: 1, failures: 3 });
+    expect(breaker.check('b').allowed).toBe(true); // other keys are not affected
+
+    now = 1_000;
+    expect(breaker.check('a')).toEqual({ allowed: true, trial: true });
+    // Only one trial at a time.
+    expect(breaker.check('a').allowed).toBe(false);
+    breaker.failure('a'); // the trial failed: open twice as long
+    now = 2_500;
+    expect(breaker.check('a').allowed).toBe(false);
+    now = 3_000;
+    expect(breaker.check('a')).toEqual({ allowed: true, trial: true });
+    breaker.success('a');
+    expect(breaker.check('a')).toEqual({ allowed: true, trial: false });
+  });
+
+  it('a released trial lets the next call try', () => {
+    let now = 0;
+    const breaker = new CircuitBreaker({ threshold: 1, openMs: 1_000, now: () => now });
+    breaker.failure('a');
+    now = 1_000;
+    expect(breaker.check('a').allowed).toBe(true);
+    breaker.release('a');
+    expect(breaker.check('a').allowed).toBe(true);
+  });
+
+  it('fails fast for one account while its service keeps failing', async () => {
+    const breaker = new CircuitBreaker({ threshold: 2, openMs: 60_000 });
+    let calls = 0;
+    let answer: ExecResult = errorResult('Service unavailable', 'upstream');
+    const executor = new Executor({ circuit: circuitStage(breaker) }, async () => {
+      calls++;
+      return answer;
+    });
+    await executor.execute(call('read'));
+    await executor.execute(call('read'));
+    const blocked = call('read');
+    const result = await executor.execute(blocked);
+    expect(calls).toBe(2);
+    expect(result.error).toEqual({ kind: 'upstream', retryAfterSeconds: 60 });
+    expect(blocked.audit.outcome).toBe('circuit_open');
+    expect(JSON.stringify(result.content)).toContain('Svc is not responding for account \\"main\\"');
+
+    // Another account of the same service still goes through.
+    const other = call(
+      'read',
+      {},
+      { account: { id: 'acc_2', name: 'b', label: 'B', description: null, identity: null } },
+    );
+    answer = dataResult('ok');
+    expect((await executor.execute(other)).isError).toBeFalsy();
+    expect(calls).toBe(3);
+  });
+
+  it('counts only service-side failures of calls that reached the service', async () => {
+    const breaker = new CircuitBreaker({ threshold: 2 });
+    const answers: ExecResult[] = [
+      errorResult('Service unavailable', 'upstream'),
+      errorResult('No such message', 'not_found'), // the service answered: it is up
+      errorResult('Service unavailable', 'upstream'),
+    ];
+    const executor = new Executor({ circuit: circuitStage(breaker) }, async () => answers.shift()!);
+    for (let i = 0; i < 3; i++) await executor.execute(call('read'));
+    expect(breaker.check('acct:acc_1').allowed).toBe(true);
+
+    // A stage after it that refuses the call does not count either way.
+    const refusing = new Executor(
+      { circuit: circuitStage(breaker), idempotency: async () => errorResult('Duplicate', 'hub') },
+      async () => dataResult('never'),
+    );
+    await refusing.execute(call('read'));
+    expect(breaker.check('acct:acc_1').allowed).toBe(true);
+  });
+
+  it('judges each retry of the limits stage on its own', async () => {
+    const limiter = new RateLimiter();
+    const breaker = new CircuitBreaker({ threshold: 2, openMs: 60_000 });
+    let calls = 0;
+    const executor = new Executor(
+      { limits: limitsStage({ rateLimiter: limiter, backoffMs: 1 }), circuit: circuitStage(breaker) },
+      async () => {
+        calls++;
+        return errorResult('Service unavailable', 'upstream');
+      },
+    );
+    const first = call('read');
+    const result = await executor.execute(first);
+    // Two real attempts open the circuit; the third (a retry) is stopped without calling.
+    expect(calls).toBe(2);
+    expect(first.audit.outcome).toBe('circuit_open');
+    expect(result.isError).toBe(true);
     limiter.close();
   });
 });

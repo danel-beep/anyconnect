@@ -78,8 +78,8 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     icon: 'telegram',
     category: 'messengers',
     blurb: {
-      ru: 'Ваш бот: чаты, поиск по переписке, ответы.',
-      en: 'Your bot: chats, message search, replies.',
+      ru: 'Ваш бот, а с Telegram Business и личные чаты: поиск по переписке, ответы.',
+      en: 'Your bot, and with Telegram Business your own chats: message search, replies.',
     },
   },
   whatsapp: {
@@ -165,6 +165,161 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     category: 'crm',
     blurb: { ru: 'Контакты, компании и сделки.', en: 'Contacts, companies and deals.' },
   },
+  confluence: {
+    icon: 'confluence',
+    category: 'docs',
+    blurb: { ru: 'Поиск и чтение страниц, новые страницы.', en: 'Search and read pages, write new ones.' },
+  },
+  gsheets: {
+    icon: 'googlesheets',
+    category: 'docs',
+    blurb: { ru: 'Чтение и запись ячеек, новые строки.', en: 'Read and write cells, append rows.' },
+  },
+  clickup: {
+    icon: 'clickup',
+    category: 'tasks',
+    blurb: { ru: 'Ваши задачи, списки, статусы.', en: 'Your tasks, lists and statuses.' },
+  },
+  gitlab: {
+    icon: 'gitlab',
+    category: 'dev',
+    blurb: { ru: 'Задачи и merge request’ы.', en: 'Issues and merge requests.' },
+  },
+  calendly: {
+    icon: 'calendly',
+    category: 'calendar',
+    blurb: { ru: 'Записи на встречи и ссылки для записи.', en: 'Booked meetings and booking links.' },
+  },
+  zendesk: {
+    icon: 'zendesk',
+    category: 'crm',
+    blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
+  },
+  intercom: {
+    icon: 'intercom',
+    category: 'crm',
+    blurb: { ru: 'Разговоры с клиентами и контакты.', en: 'Customer conversations and contacts.' },
+  },
+  pipedrive: {
+    glyph: 'users',
+    category: 'crm',
+    blurb: { ru: 'Сделки, люди и организации.', en: 'Deals, people and organizations.' },
+  },
+  freshdesk: {
+    glyph: 'users',
+    category: 'crm',
+    blurb: { ru: 'Тикеты, ответы клиентам, заметки.', en: 'Tickets, customer replies, notes.' },
+  },
+  mailchimp: {
+    icon: 'mailchimp',
+    category: 'crm',
+    blurb: { ru: 'Подписчики, теги, отчёты рассылок.', en: 'Subscribers, tags, campaign reports.' },
+  },
+  monday: {
+    glyph: 'grid',
+    category: 'tasks',
+    blurb: { ru: 'Доски, элементы, статусы и апдейты.', en: 'Boards, items, statuses and updates.' },
+  },
+  sentry: {
+    icon: 'sentry',
+    category: 'dev',
+    blurb: { ru: 'Ошибки, стек вызовов, решение проблем.', en: 'Errors, stack traces, resolving issues.' },
+  },
+  figma: {
+    icon: 'figma',
+    category: 'docs',
+    blurb: { ru: 'Файлы, фреймы, экспорт, комментарии.', en: 'Files, frames, exports, comments.' },
+  },
+  typeform: {
+    icon: 'typeform',
+    category: 'docs',
+    blurb: { ru: 'Формы и ответы на них.', en: 'Forms and their responses.' },
+  },
+  wordpress: {
+    icon: 'wordpress',
+    category: 'docs',
+    blurb: { ru: 'Записи, черновики, публикация, комментарии.', en: 'Posts, drafts, publishing, comments.' },
+  },
+  vercel: {
+    icon: 'vercel',
+    category: 'dev',
+    blurb: { ru: 'Деплои, логи сборки, домены.', en: 'Deployments, build logs, domains.' },
+  },
+  cloudflare: {
+    icon: 'cloudflare',
+    category: 'dev',
+    blurb: { ru: 'DNS-записи и сброс кэша.', en: 'DNS records and cache purges.' },
+  },
+  bitbucket: {
+    icon: 'bitbucket',
+    category: 'dev',
+    blurb: { ru: 'Pull request’ы, ревью и пайплайны.', en: 'Pull requests, reviews and pipelines.' },
+  },
+  brevo: {
+    icon: 'brevo',
+    category: 'crm',
+    blurb: { ru: 'Контакты, списки, рассылки, письма.', en: 'Contacts, lists, campaigns, emails.' },
+  },
+  calcom: {
+    icon: 'caldotcom',
+    category: 'calendar',
+    blurb: { ru: 'Записи на встречи и типы встреч.', en: 'Bookings and event types.' },
+  },
+  webflow: {
+    icon: 'webflow',
+    category: 'docs',
+    blurb: { ru: 'CMS: черновики, правка, публикация.', en: 'CMS: drafts, edits, publishing.' },
+  },
+  zoom: {
+    icon: 'zoom',
+    category: 'calendar',
+    blurb: { ru: 'Встречи, ссылки, переносы, записи.', en: 'Meetings, links, reschedules, recordings.' },
+  },
+  miro: {
+    icon: 'miro',
+    category: 'docs',
+    blurb: { ru: 'Доски, стикеры и карточки.', en: 'Boards, stickies and cards.' },
+  },
+  sendgrid: {
+    glyph: 'mail',
+    category: 'crm',
+    blurb: { ru: 'Письма, шаблоны, контакты, статистика.', en: 'Emails, templates, contacts, stats.' },
+  },
+  smartsheet: {
+    glyph: 'grid',
+    category: 'tasks',
+    blurb: { ru: 'Таблицы, строки и комментарии.', en: 'Sheets, rows and comments.' },
+  },
+  twilio: {
+    glyph: 'bell',
+    category: 'messengers',
+    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'Texts, numbers and the call log.' },
+  },
+  postmark: {
+    glyph: 'mail',
+    category: 'crm',
+    blurb: { ru: 'Транзакционные письма и доставка.', en: 'Transactional email and delivery.' },
+  },
+  pagerduty: {
+    icon: 'pagerduty',
+    category: 'dev',
+    blurb: { ru: 'Инциденты, заметки, дежурства.', en: 'Incidents, notes, on-call.' },
+  },
+  netlify: {
+    icon: 'netlify',
+    category: 'dev',
+    blurb: { ru: 'Сайты, деплои, сборки, формы.', en: 'Sites, deploys, builds, forms.' },
+  },
+  harvest: {
+    glyph: 'clock',
+    category: 'tasks',
+    blurb: { ru: 'Учёт времени, таймеры, отчёты.', en: 'Time tracking, timers, reports.' },
+  },
+  toggl: {
+    icon: 'toggl',
+    category: 'tasks',
+    blurb: { ru: 'Таймеры и записи времени.', en: 'Timers and time entries.' },
+  },
   http: {
     glyph: 'braces',
     category: 'custom',
@@ -187,8 +342,6 @@ export const PLANNED_SERVICES: {
   glyph?: IconName;
   category: ServiceCategory;
 }[] = [
-  { name: 'Zendesk', icon: 'zendesk', category: 'crm' },
-  { name: 'Intercom', icon: 'intercom', category: 'crm' },
   { name: 'Shopify', icon: 'shopify', category: 'payments' },
   { name: 'Dropbox', icon: 'dropbox', category: 'files' },
   { name: 'Discord', icon: 'discord', category: 'messengers' },

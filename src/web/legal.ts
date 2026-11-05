@@ -12,7 +12,7 @@ interface Facts {
   supportEmail?: string | undefined;
 }
 
-const UPDATED = { ru: 'Редакция от 4 ноября 2026 года', en: 'Last updated November 4, 2026' };
+const UPDATED = { ru: 'Редакция от 5 ноября 2026 года', en: 'Last updated November 5, 2026' };
 
 export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc {
   const contact =
@@ -56,6 +56,13 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'ИИ-приложения и ваши переписки',
+        paragraphs: [
+          'Manyplug никогда не получает историю ваших чатов, память ИИ-приложения и файлы, которые вы дали ИИ-приложению. В каждом запросе ИИ-приложение передаёт только название инструмента и нужные ему аргументы, например поисковый запрос. Аргументы используются только для этого запроса и не хранятся; лишь действие, которое что-то меняет, запоминается на несколько минут, чтобы повторный запрос не выполнил его дважды.',
+          'Если ИИ-приложение передаёт с запросами анонимный идентификатор пользователя (так делает ChatGPT), мы храним только его необратимый хеш, чтобы считать расход по аккаунту ИИ.',
+        ],
+      },
+      {
         title: 'Данные из сервисов Google',
         paragraphs: [
           'Если вы подключаете Gmail, Google Календарь или Google Диск, Manyplug получает доступ только к тем данным, которые нужны для запроса вашего ИИ-ассистента: найти и прочитать письма, отправить ответ, посмотреть или создать событие, найти и прочитать файл. Данные передаются только выбранному вами ИИ-приложению и не сохраняются. Исключение: результат действия, например отправки письма, несколько минут хранится в памяти, чтобы повторный запрос не отправил письмо дважды.',
@@ -82,6 +89,14 @@ const privacy: Record<Locale, Builder> = {
         title: 'Cookie',
         paragraphs: [
           'Мы используем только необходимые cookie: сессия входа, защита форм от подделки, выбранный язык. Рекламных и аналитических cookie нет. Выбранная тема хранится в вашем браузере.',
+        ],
+      },
+      {
+        title: 'Ваши права',
+        paragraphs: [
+          'Подключения и журнал действий видны в личном кабинете. Вы можете запросить копию своих данных, их исправление или удаление, написав по адресу ниже. Мы отвечаем в течение 30 дней.',
+          'Manyplug не предназначен для детей младше 16 лет, и мы сознательно не собираем их данные.',
+          'При изменении политики новая редакция публикуется на этой странице с датой. О существенных изменениях мы сообщаем на сайте до того, как они вступят в силу.',
         ],
       },
       {
@@ -120,6 +135,13 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'AI apps and your conversations',
+        paragraphs: [
+          'Manyplug never receives your chat history, the AI app’s memory or files you gave the AI app. For each request the AI app sends only the name of a tool and the arguments it needs, for example a search query. The arguments are used for that one request and are not stored, except that a write action is remembered for a few minutes so that a repeated request does not run it twice.',
+          'If an AI app sends an anonymous user ID with requests (ChatGPT does), we keep only a one-way hash of it, to count usage per AI account.',
+        ],
+      },
+      {
         title: 'Data from Google services',
         paragraphs: [
           'If you connect Gmail, Google Calendar or Google Drive, Manyplug accesses only the data your AI assistant needs for a request: finding and reading emails, sending a reply, viewing or creating an event, finding and reading a file. The data goes only to the AI app you chose and is not stored, except that the result of a write action (for example, a sent email) is kept in memory for a few minutes so that a repeated request does not send it twice.',
@@ -146,6 +168,14 @@ const privacy: Record<Locale, Builder> = {
         title: 'Cookies',
         paragraphs: [
           'We only use necessary cookies: the sign-in session, form protection and your language. No advertising or analytics cookies. Your theme choice is kept in your browser.',
+        ],
+      },
+      {
+        title: 'Your rights',
+        paragraphs: [
+          'You can see your connections and activity in the dashboard, and ask us for a copy of your data, to correct it or to delete it: write to the contact below. We answer within 30 days.',
+          'Manyplug is not meant for children under 16, and we do not knowingly collect their data.',
+          'When this policy changes, the new version is published on this page with its date. Material changes are announced on the website before they take effect.',
         ],
       },
       {

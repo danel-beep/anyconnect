@@ -1,6 +1,12 @@
 import { CAPABILITY_INTERFACES, getCapability } from './capabilities.js';
-import { resolveProvider, validateProvider } from './oauth/providers.js';
-import { actionCapabilities, actionRisk, type ConnectorDefinition, type RateLimitSpec } from './sdk.js';
+import { BUILTIN_PROVIDERS, resolveProvider, validateProvider } from './oauth/providers.js';
+import {
+  actionCapabilities,
+  actionRisk,
+  type ConnectorDefinition,
+  type OAuthProviderSpec,
+  type RateLimitSpec,
+} from './sdk.js';
 
 const CONNECTOR_ID = /^[a-z][a-z0-9_]{1,23}$/;
 const ACTION_NAME = /^[a-z][a-z0-9_]{0,39}$/;
@@ -34,8 +40,45 @@ export class ConnectorRegistry implements ConnectorResolver {
     validateConnector(connector);
     if (this.connectors.has(connector.id))
       throw new Error(`Connector "${connector.id}" is already registered`);
+    if (this.redefinesProvider(connector)) {
+      throw new Error(
+        `Connector "${connector.id}" defines its own OAuth provider under an id another provider already has; reference that provider by its id`,
+      );
+    }
     this.connectors.set(connector.id, connector);
     return this;
+  }
+
+  /**
+   * Whether the hub's own code defines an OAuth provider with this id (built in, or declared by a
+   * registered connector). Only those specs are used with the hub-wide OAuth apps (`OAUTH_APP_*`):
+   * a service a user defines may not take such an id for a provider of its own.
+   */
+  hasOAuthProvider(id: string): boolean {
+    return this.knownProvider(id) !== undefined;
+  }
+
+  /** Whether this very connector (not just one with its id) is registered here. */
+  includes(connector: ConnectorDefinition): boolean {
+    return this.connectors.get(connector.id) === connector;
+  }
+
+  /** A connector that brings another spec under the id of a provider the hub already has. */
+  private redefinesProvider(connector: ConnectorDefinition): boolean {
+    // A reference by id (`provider: 'google'`) uses the provider that has the id.
+    const own = inlineProvider(connector);
+    if (!own) return false;
+    const known = this.knownProvider(own.id);
+    return known !== undefined && known !== own;
+  }
+
+  private knownProvider(id: string): OAuthProviderSpec | undefined {
+    if (Object.hasOwn(BUILTIN_PROVIDERS, id)) return BUILTIN_PROVIDERS[id];
+    for (const connector of this.connectors.values()) {
+      const provider = inlineProvider(connector);
+      if (provider?.id === id) return provider;
+    }
+    return undefined;
   }
 
   all(): ConnectorDefinition[] {
@@ -49,6 +92,12 @@ export class ConnectorRegistry implements ConnectorResolver {
   async get(_workspaceId: string, connectorId: string): Promise<ConnectorDefinition | undefined> {
     return this.connectors.get(connectorId);
   }
+}
+
+/** The provider spec a connector declares itself, if it does not reference one by id. */
+function inlineProvider(connector: ConnectorDefinition): OAuthProviderSpec | undefined {
+  const provider = connector.oauth?.provider;
+  return provider && typeof provider !== 'string' ? provider : undefined;
 }
 
 export function validateConnector(connector: ConnectorDefinition): void {

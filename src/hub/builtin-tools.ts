@@ -12,6 +12,7 @@ export const MAX_BATCH_CALLS = 10;
 const readOnly = (title: string): ToolAnnotations => ({
   title,
   readOnlyHint: true,
+  destructiveHint: false,
   idempotentHint: true,
   openWorldHint: false,
 });

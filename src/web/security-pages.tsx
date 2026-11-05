@@ -98,6 +98,10 @@ export interface SecurityView {
   hasFactor: boolean;
   recoveryCodes: number;
   passkeys: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null; backedUp: boolean }[];
+  /** Browsers signed in now (reviewed in Settings). */
+  sessions: number;
+  /** Approving held-back actions in Telegram; absent when this server has no Telegram bot. */
+  telegram?: { linked: boolean } | undefined;
 }
 
 export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }> = ({ t, lang, view }) => {
@@ -275,6 +279,35 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
           )}
         </div>
       </fieldset>
+
+      <div class="card" id="more">
+        <h2>{t('security.more')}</h2>
+        <ul class="plain">
+          <li>
+            <span class="grow">
+              <strong>{t('security.browsers')}</strong>
+              <div class="small muted">{t('security.browsersN', { n: view.sessions })}</div>
+            </span>
+            <a class="btn sm" href="/app/settings#sessions">
+              {t('security.review')}
+            </a>
+          </li>
+          {view.telegram ? (
+            <li>
+              <span class="grow">
+                <strong>{t('security.telegram')}</strong>
+                <div class="small muted">
+                  {view.telegram.linked ? t('security.telegramOn') : t('security.telegramOff')}
+                </div>
+              </span>
+              <a class={view.telegram.linked ? 'btn sm' : 'btn sm primary'} href="/confirm#telegram">
+                {view.telegram.linked ? t('security.review') : t('security.telegramLink')}
+              </a>
+            </li>
+          ) : null}
+        </ul>
+        <p class="hint">{t('security.chat')}</p>
+      </div>
     </Layout>
   );
 };

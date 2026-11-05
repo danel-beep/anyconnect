@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gt, lt } from 'drizzle-orm';
+import { BRAND } from '../brand.js';
 import { type CapabilityDefinition, getCapability } from '../connectors/capabilities.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import { ACCOUNT_ARGUMENT, FIELDS_ARGUMENT } from '../connectors/registry.js';
@@ -11,14 +12,18 @@ import {
   ConnectorError,
 } from '../connectors/sdk.js';
 import type { AccountService } from '../core/accounts.js';
+import { knownAppOfClient } from '../core/ai-apps.js';
 import { getWorkspace } from '../core/identity.js';
 import type { Principal } from '../core/principal.js';
 import type { WorkspaceAdmin } from '../core/workspace-admin.js';
 import type { Db } from '../db/client.js';
 import { oauthClients, toolCalls } from '../db/schema.js';
+import type { CircuitBreaker } from '../lib/circuit-breaker.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
+import type { ErrorReporter } from '../ops/errors.js';
+import type { WorkspaceApps } from './app-tools.js';
 import type { WorkspaceBilling } from './billing-tools.js';
 import { BUILTIN_TOOLS, MAX_BATCH_CALLS } from './builtin-tools.js';
 import {
@@ -37,6 +42,7 @@ import {
   ownAccounts,
   ownerText,
 } from './catalog.js';
+import { restrictionsFor } from './client-policies.js';
 import { searchTools } from './discovery.js';
 import {
   type CallContext,
@@ -47,6 +53,7 @@ import {
 } from './executor.js';
 import type { IdempotencyStore } from './idempotency.js';
 import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
+import type { WorkspaceProfiles } from './profile-tools.js';
 import type { QuotaGate } from './quota.js';
 import {
   carryUntrusted,
@@ -58,6 +65,7 @@ import {
   type ToolCallResult,
   toTransport,
 } from './result.js';
+import type { UserSecurity } from './security-tools.js';
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
@@ -77,7 +85,11 @@ export interface HubDeps {
   accounts: AccountService;
   logger: Logger;
   rateLimiter: RateLimiter;
+  /** Fails fast while a service keeps failing for an account (`circuit` stage); off without it. */
+  circuitBreaker?: CircuitBreaker;
   idempotency: IdempotencyStore;
+  /** Where unexpected failures go (error tracker); without it they are only logged. */
+  errors?: Pick<ErrorReporter, 'capture'>;
   toolTimeoutMs: number;
   /** Result size budget in tokens (default for actions that do not set their own). */
   maxResultTokens: number;
@@ -95,7 +107,19 @@ export interface HubDeps {
    * The hub's setup tools (`manyplug_*`, connector `manyplug`) and the workspace operations they
    * run. Without it the AI cannot manage the hub from the chat.
    */
-  setup?: { connector: ConnectorDefinition; admin: WorkspaceAdmin; billing?: WorkspaceBilling };
+  setup?: {
+    connector: ConnectorDefinition;
+    admin: WorkspaceAdmin;
+    billing?: WorkspaceBilling;
+    profiles?: WorkspaceProfiles;
+    apps?: WorkspaceApps;
+    security?: UserSecurity;
+  };
+  /**
+   * Directory rules enforced for clients of known AI apps (ids from `client-policies.ts`, config
+   * `CLIENT_POLICIES`). Default: none.
+   */
+  clientPolicies?: readonly string[];
   /** Per-caller catalog filter (policy, personas). */
   catalogFilter?: (principal: Principal) => Promise<CatalogAllow | undefined> | CatalogAllow | undefined;
   /** Team workspaces: who is calling and whose each account is (labels, `account: "mine"`). */
@@ -138,7 +162,7 @@ const isEmpty = (value: unknown) => value === undefined || value === null || val
 export class Hub {
   readonly executor: Executor;
   private readonly usageCache = new Map<string, { at: number; usage: Record<string, number> }>();
-  private readonly clientNames = new Map<string, { at: number; name: string | null }>();
+  private readonly clients = new Map<string, { at: number; name: string | null; app: string | undefined }>();
 
   constructor(private readonly deps: HubDeps) {
     this.executor = new Executor(
@@ -210,18 +234,34 @@ export class Hub {
       tokenBudget: this.deps.toolListTokenBudget ?? DEFAULT_PROFILE.tokenBudget,
     };
     if (!principal.clientId) return profile;
-    let entry = this.clientNames.get(principal.clientId);
+    let entry = this.clients.get(principal.clientId);
     if (!entry || Date.now() - entry.at > CACHE_TTL_MS) {
       const [row] = await this.deps.db
-        .select({ metadata: oauthClients.metadata })
+        .select({ registrationType: oauthClients.registrationType, metadata: oauthClients.metadata })
         .from(oauthClients)
         .where(eq(oauthClients.id, principal.clientId))
         .limit(1);
-      entry = { at: Date.now(), name: row?.metadata.client_name ?? null };
-      this.clientNames.set(principal.clientId, entry);
+      entry = {
+        at: Date.now(),
+        name: row?.metadata.client_name ?? null,
+        app: row
+          ? knownAppOfClient({
+              id: principal.clientId,
+              registrationType: row.registrationType,
+              redirectUris: row.metadata.redirect_uris,
+            })
+          : undefined,
+      };
+      this.clients.set(principal.clientId, entry);
     }
-    const limit = entry.name ? CLIENT_LIMITS.find((l) => l.match.test(entry.name!)) : undefined;
-    return limit ? { ...profile, maxTools: limit.maxTools } : profile;
+    const { name, app } = entry;
+    const limit = name ? CLIENT_LIMITS.find((l) => l.match.test(name)) : undefined;
+    const restrictions = restrictionsFor(app, this.deps.clientPolicies ?? []);
+    return {
+      ...profile,
+      ...(limit ? { maxTools: limit.maxTools } : {}),
+      ...(restrictions ? { restrictions } : {}),
+    };
   }
 
   // -------------------------------------------------------------------------
@@ -248,8 +288,11 @@ export class Hub {
   ): Promise<ExecResult> {
     const tool = catalog.tools.find((t) => t.name === toolName);
     if (!tool) {
+      const search = catalog.tools.some((t) => t.name === BUILTIN_TOOLS.search_tools.name)
+        ? `${BUILTIN_TOOLS.search_tools.name} or `
+        : '';
       return errorResult(
-        `Unknown tool "${toolName}". Find tools with ${BUILTIN_TOOLS.search_tools.name} or ${BUILTIN_TOOLS.list_accounts.name}.`,
+        `Unknown tool "${toolName}". Find tools with ${search}${BUILTIN_TOOLS.list_accounts.name}.`,
       );
     }
     const started = Date.now();
@@ -766,6 +809,9 @@ export class Hub {
       principal,
       admin: setup.admin,
       ...(setup.billing ? { billing: setup.billing } : {}),
+      ...(setup.profiles ? { profiles: setup.profiles } : {}),
+      ...(setup.apps ? { apps: setup.apps } : {}),
+      ...(setup.security ? { security: setup.security } : {}),
       signal,
     };
     const call: CallContext = {
@@ -892,16 +938,12 @@ export class Hub {
       }
       return normalizeResult(value);
     } catch (error) {
-      return this.handleError(error, call.tool.name, call.connector, account);
+      return this.handleError(error, call);
     }
   }
 
-  private async handleError(
-    error: unknown,
-    toolName: string,
-    connector: ConnectorDefinition,
-    account: CatalogAccount | undefined,
-  ): Promise<ExecResult> {
+  private async handleError(error: unknown, call: CallContext): Promise<ExecResult> {
+    const { connector, account } = call;
     if (error instanceof ToolTimeoutError) {
       return errorResult(
         `The call timed out after ${Math.round(this.deps.toolTimeoutMs / 1000)} seconds.`,
@@ -909,17 +951,37 @@ export class Hub {
       );
     }
     if (account && error instanceof ConnectorError && error.kind === 'auth') {
-      // Flag the account so the user sees in the panel that it must be reconnected.
+      // Flag the account so the user sees in the panel (and gets told) that it must be reconnected.
       await this.deps.accounts.markStatus(account.id, 'needs_reauth', error.message).catch(() => {});
+      const fix = await this.reconnectHint(call.principal, connector.id, account.id);
       return errorResult(
-        `Authorization with ${connector.name} failed for account "${account.name}": ${error.message}. The user needs to reconnect this account.`,
+        `Sign-in to ${connector.name} for account "${account.name}" stopped working: ${error.message.replace(/\.+$/, '')}. ` +
+          `This will not fix itself: ${fix}. Tell the user, and do not retry this account until it is signed in again.`,
         'auth',
       );
     }
-    return this.toErrorResult(error, toolName);
+    return this.toErrorResult(error, call.tool.name, connector.id);
   }
 
-  private toErrorResult(error: unknown, toolName: string): ExecResult {
+  /**
+   * Who signs the account in again, and where: the caller's own link when they may (setup tools
+   * available). In a team only an account's owner can (a team account: the team's admins).
+   */
+  private async reconnectHint(principal: Principal, service: string, accountId: string): Promise<string> {
+    const dashboard = `the user has to sign in again from the ${BRAND.name} dashboard (Accounts)`;
+    const admin = this.deps.setup?.admin;
+    if (!admin) return dashboard;
+    try {
+      const link = await admin.connectLink(principal, { service, reconnect: accountId });
+      return `the user has to sign in again, here: ${link.url}`;
+    } catch (error) {
+      if (error instanceof AppError && error.status === 403)
+        return 'whoever manages the account has to sign in again (its owner; a team account, the team’s owner or an admin), so the user asks them';
+      return dashboard; // e.g. the service's sign-in app was removed: the dashboard explains it
+    }
+  }
+
+  private toErrorResult(error: unknown, toolName: string, connectorId?: string): ExecResult {
     if (error instanceof ConnectorError) {
       const retry = error.options.retryAfterSeconds
         ? ` Retry after ${error.options.retryAfterSeconds} s.`
@@ -927,8 +989,16 @@ export class Hub {
       return errorResult(`${error.message}${retry}`, error.kind, error.options.retryAfterSeconds);
     }
     if (error instanceof AppError) return errorResult(appErrorText(error));
-    const ref = Math.random().toString(36).slice(2, 10);
-    this.deps.logger.error({ err: error, tool: toolName, ref }, 'tool call failed');
+    let ref: string;
+    if (this.deps.errors) {
+      ref = this.deps.errors.capture(error, {
+        source: 'tool',
+        context: { tool: toolName, ...(connectorId ? { connector: connectorId } : {}) },
+      });
+    } else {
+      ref = Math.random().toString(36).slice(2, 10);
+      this.deps.logger.error({ err: error, tool: toolName, ref }, 'tool call failed');
+    }
     return errorResult(`Internal error while running ${toolName} (ref ${ref}).`, 'internal');
   }
 

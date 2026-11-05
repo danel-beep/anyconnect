@@ -125,7 +125,7 @@ export class ConnectService {
       await this.deps.accounts.assertCanCreate(who.workspaceId);
     }
 
-    const app = await this.deps.apps.pick(who.workspaceId, provider.id, input.appId);
+    const app = await this.deps.apps.pick(who.workspaceId, connector, input.appId);
     if (!app) {
       throw new AppError(
         400,
@@ -202,7 +202,7 @@ export class ConnectService {
       throw new AppError(400, 'oauth_denied', `${provider.name} did not grant access: ${reason}`);
     }
     if (!params.code) throw badRequest(`${provider.name} did not return an authorization code`);
-    const app = await this.deps.apps.resolve(row.workspaceId, row.appRef);
+    const app = await this.deps.apps.resolve(row.workspaceId, row.appRef, connector);
     if (!app) throw badRequest('The OAuth app used for this connection was removed. Start again.');
 
     let tokens: Awaited<ReturnType<typeof exchangeCode>>;

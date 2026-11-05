@@ -59,4 +59,6 @@ export type IdPrefix =
   | 'adm' // admin audit log entry
   | 'inv' // team invitation
   | 'shr' // account shared with a team member (or the whole team)
-  | 'preq'; // plan request (manual upgrades before payments)
+  | 'preq' // plan request (manual upgrades before payments)
+  | 'err' // error group (the hub's own error tracker)
+  | 'inc'; // status page incident

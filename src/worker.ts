@@ -1,5 +1,6 @@
 import { bootstrap } from './bootstrap.js';
 import { ConfigError, loadConfig } from './config.js';
+import { installProcessHandlers } from './ops/process.js';
 import { createServices } from './services.js';
 
 /**
@@ -18,9 +19,10 @@ async function main() {
     throw error;
   }
   const services = createServices(config);
+  installProcessHandlers({ logger: services.logger, errors: services.ops.errors });
   await bootstrap(services);
   await services.jobs.start();
-  services.logger.info({ version: services.version }, 'Manyplug worker is running');
+  services.logger.info({ release: services.ops.release }, 'Manyplug worker is running');
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
