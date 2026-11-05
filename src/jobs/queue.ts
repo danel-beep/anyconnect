@@ -135,8 +135,11 @@ export class JobQueue {
           } catch (err) {
             // A failed job goes back to the queue for a retry without a NOTIFY: look again when the
             // retry is due instead of after the backstop.
-            const timer = setTimeout(() => workerId && boss.notifyWorker(workerId), retryDelay * 1000 + 500);
-            timer.unref();
+            // pg-boss sets the retry time by the database clock after this handler returns: wake
+            // twice, so saving the failure or a small clock difference cannot push it to the backstop.
+            for (const extraMs of [2_000, 10_000]) {
+              setTimeout(() => workerId && boss.notifyWorker(workerId), retryDelay * 1000 + extraMs).unref();
+            }
             throw err;
           }
         },
