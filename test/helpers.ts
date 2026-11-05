@@ -230,6 +230,11 @@ export class TestBrowser {
     throw new Error(`Too many redirects from ${start.toString()}`);
   }
 
+  /** Every cookie of the jar, e.g. to hand a signed-in session to a real browser. */
+  cookieEntries(): [string, string][] {
+    return [...this.cookies];
+  }
+
   /** Value of a cookie, by its full name. */
   cookie(name: string): string | undefined {
     return this.cookies.get(name);

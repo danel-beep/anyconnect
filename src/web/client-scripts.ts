@@ -40,6 +40,10 @@ $$('[data-nav-toggle]').forEach(function(b){b.addEventListener('click',function(
 d.addEventListener('focusin',function(e){if(root.classList.contains('nav-open')&&!(e.target.closest&&e.target.closest('.sidebar,.site-nav,[data-nav-toggle]')))setNav(false)});
 d.addEventListener('click',function(e){if(!root.classList.contains('nav-open'))return;var nav=e.target.closest&&e.target.closest('.sidebar,.site-nav');if(!nav||e.target.closest('a'))setNav(false)});
 
+/* A side-scrolling strip (doc menu, tabs) on a phone shows its current item, not just the first ones */
+$$('.doc-nav,.nav-tabs,.tabs').forEach(function(strip){var cur=strip.querySelector('[aria-current],[aria-selected=true]');if(!cur||strip.scrollWidth<=strip.clientWidth)return;
+var s=strip.getBoundingClientRect(),c=cur.getBoundingClientRect();strip.scrollLeft+=c.left-s.left-(s.width-c.width)/2});
+
 /* Header shadow on scroll */
 var header=d.querySelector('[data-site-header]');if(header){var onScroll=function(){header.classList.toggle('scrolled',window.scrollY>8)};onScroll();window.addEventListener('scroll',onScroll,{passive:true})}
 

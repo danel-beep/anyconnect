@@ -80,23 +80,36 @@ label{display:block;font-weight:560;font-size:14px;margin:16px 0 6px}
 input[type=email],input[type=password],input[type=text],input[type=url],input[type=number],input[type=search],input[type=date],select,textarea{width:100%;min-height:42px;padding:9px 12px;border:1px solid var(--border-strong);border-radius:10px;background:var(--card);color:var(--text);font:inherit;transition:border-color .15s,box-shadow .15s}
 textarea{min-height:84px;resize:vertical}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-input[readonly]{font-family:${MONO};font-size:13.5px;background:var(--code-bg)}
+/* Read-only text fields hold codes and links to copy; a read-only email is just shown, quietly. */
+input[type=text][readonly]{font-family:${MONO};font-size:13.5px;background:var(--code-bg)}
+input[type=email][readonly]{color:var(--muted);border-style:dashed}
 input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;margin:0 8px 0 0;vertical-align:-3px}
 .check{display:flex;align-items:flex-start;gap:8px;font-weight:450;margin:12px 0}
+/* The box sits on the middle of the first text line; the gap alone spaces it from the text. */
+.check>input[type=checkbox],.check>input[type=radio]{margin:.2em 0 0;flex:none}
 .hint{color:var(--muted);font-size:13px;margin:6px 0 0}
 .back-link{margin:0 0 12px;font-size:14px}.back-link a{color:var(--muted);text-decoration:none}.back-link a:hover{color:var(--text)}
 .hint>svg{width:15px;height:15px;vertical-align:-3px}
 .error{color:var(--danger);margin:8px 0 0}
-.field-row{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
 @media (max-width:640px){.field-row{grid-template-columns:1fr}}
 
 /* Surfaces */
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin:0 0 16px}
-.card.flush{padding:0;overflow:hidden}
+/* A flush card clips to its rounded corners; something wider (a table on a phone) scrolls inside it. */
+.card.flush{padding:0;overflow-x:auto;overflow-y:hidden}
 .card.tight{padding:16px 18px}
 .card>h2:first-child,.card>h3:first-child{margin-top:0}
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;flex-wrap:wrap}
 .card-head h2,.card-head h3{margin:0}
+/* The head's button stays on the right of the title, also on a phone (the title wraps instead); a note or
+   a description simply goes under the title when there is no room. */
+.card-head>:last-child:not(:first-child):is(form,button,.btn){margin-left:auto}
+@media (max-width:640px){
+  .card-head:has(>:last-child:not(:first-child):is(form,button,.btn)){flex-wrap:nowrap;align-items:flex-start}
+  .card-head:has(>:last-child:not(:first-child):is(form,button,.btn))>:first-child{min-width:0;flex:1 1 auto}
+  .card-head>:last-child:not(:first-child):is(form,button,.btn){flex:none;white-space:nowrap}
+}
 .panel{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
 .warning,.notice{background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:10px;padding:10px 14px;margin:12px 0;color:var(--text)}
 .notice.info{background:var(--accent-soft);border-color:var(--accent)}
@@ -109,6 +122,8 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 
 /* Badges, dots */
 .badge{display:inline-flex;align-items:center;gap:6px;font:560 12px/1 ${SANS};padding:5px 9px;border-radius:99px;border:1px solid var(--border);color:var(--muted);background:var(--card);white-space:nowrap;vertical-align:1px}
+/* A badge right after a name or another badge keeps a little air. */
+strong+.badge,.badge+.badge{margin-left:6px}
 .badge.ok{color:var(--ok);border-color:transparent;background:var(--ok-soft)}
 .badge.bad{color:var(--danger);border-color:transparent;background:var(--danger-soft)}
 .badge.accent{color:var(--accent-ink);border-color:transparent;background:var(--accent-soft)}
@@ -119,9 +134,12 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 .dot.accent{background:var(--accent)}
 
 /* Lists, tables */
-ul.plain{list-style:none;padding:0;margin:0}
-ul.plain>li{padding:12px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center}
-ul.plain>li:first-child{border-top:0}
+ul.plain,ol.plain{list-style:none;padding:0;margin:0}
+ul.plain>li,ol.plain>li{padding:12px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center}
+ul.plain>li:first-child,ol.plain>li:first-child{border-top:0}
+/* On a phone a row of label and quiet text value (not a button) puts the value on its own line,
+   the same in every row of the list, so long labels are not squeezed into one word per line. */
+@media (max-width:640px){:is(ul,ol).plain>li:has(>.muted:last-child:not(:first-child)){flex-wrap:wrap;gap:2px 12px}:is(ul,ol).plain>li:has(>.muted:last-child:not(:first-child))>:first-child{flex:1 1 100%}}
 ul.bullets{margin:4px 0 12px;padding-left:20px}
 ul.bullets li+li{margin-top:4px}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -133,6 +151,7 @@ th{color:var(--muted);font-weight:560;font-size:12.5px;border-top:0;background:v
 tbody tr:hover td{background:var(--bg-subtle)}
 table.kv th{background:none;width:38%;font-size:13px;vertical-align:top}
 table.kv td,table.kv th{padding:8px 0}
+table.kv th{padding-right:16px}
 pre.args,pre.block{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
 
 /* Copy field */
@@ -158,6 +177,7 @@ html:not(.js) .tabs-nojs-title{display:block;margin-top:20px}
 
 /* Meter */
 .meter{height:8px;border-radius:99px;background:var(--bg-subtle);border:1px solid var(--border);overflow:hidden}
+.meter+p{margin-top:16px}
 .meter>span{display:block;height:100%;background:var(--accent);border-radius:99px;min-width:2px}
 .meter.ok>span{background:var(--ok)}
 .meter.bad>span{background:var(--danger)}

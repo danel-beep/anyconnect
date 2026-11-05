@@ -36,7 +36,15 @@ export function defaultStages(deps: {
 }): StageMap {
   return {
     audit: auditStage(deps),
-    ...(deps.meter ? { meter: meterStage({ meter: deps.meter, logger: deps.logger }) } : {}),
+    ...(deps.meter
+      ? {
+          meter: meterStage({
+            meter: deps.meter,
+            logger: deps.logger,
+            ...(deps.quota?.payerOf ? { payer: (p) => deps.quota!.payerOf!(p) } : {}),
+          }),
+        }
+      : {}),
     ...(deps.quota ? { quota: quotaStage(deps.quota) } : {}),
     risk: riskStage,
     confirm: confirmFloorStage,

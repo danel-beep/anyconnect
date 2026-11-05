@@ -5,7 +5,8 @@
  * Contract with the pages: a `<form data-passkey="register|authenticate" data-options="URL"
  * action="URL" hidden>` is shown when the browser supports passkeys. On submit, the form fields
  * are POSTed as JSON to `data-options`, the browser ceremony runs with the returned options, and
- * the fields plus `response` are POSTed to `action`. The server answers `{ redirect }`, or
+ * the fields plus `response` are POSTed to `action`. The server answers `{ redirect }` (followed with
+ * a full reload, even when only the anchor differs from the current URL), or
  * `{ error, redirect? }` with a 4xx status. Elements with `data-role="passkey-unsupported"` are
  * hidden when passkeys work; `data-role="passkey-error"` shows errors (`data-error` = fallback).
  */
@@ -94,6 +95,19 @@ export const WEBAUTHN_JS = String.raw`(function () {
     return out;
   }
 
+  // The server often sends the user back to the page they are on with a new anchor
+  // ("/security#pk-..."). Assigning such a URL only scrolls, so the page would keep showing the old
+  // list: reload it instead (with the new anchor, so the browser still scrolls to it).
+  function go(url) {
+    var loc = window.location;
+    var here = loc.pathname + loc.search;
+    var hash = url.indexOf('#');
+    var path = hash < 0 ? url : url.slice(0, hash);
+    if (path !== here && path !== loc.href.split('#')[0]) { loc.assign(url); return; }
+    if (hash >= 0) loc.hash = url.slice(hash);
+    loc.reload();
+  }
+
   function run(form) {
     var mode = form.getAttribute('data-passkey');
     var errorBox = form.querySelector('[data-role=passkey-error]');
@@ -113,10 +127,10 @@ export const WEBAUTHN_JS = String.raw`(function () {
         return postJson(form.getAttribute('action'), body);
       })
       .then(function (result) {
-        window.location.assign(result.redirect || '/');
+        go(result.redirect || '/');
       })
       .catch(function (error) {
-        if (error && error.redirect) { window.location.assign(error.redirect); return; }
+        if (error && error.redirect) { go(error.redirect); return; }
         if (button) button.disabled = false;
         if (!errorBox) return;
         // Our own errors carry a translated message; browser exceptions (NotAllowedError...) do not.

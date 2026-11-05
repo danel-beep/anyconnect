@@ -19,8 +19,6 @@ export const METRICS = [
   'backgroundJobs',
   /** How long the activity log is kept, in days. */
   'historyDays',
-  /** People who can use one workspace. */
-  'seats',
 ] as const;
 
 export type Metric = (typeof METRICS)[number];
@@ -32,28 +30,21 @@ export const PERIODIC_METRICS: ReadonlySet<Metric> = new Set(['actions']);
 export type LimitValue = number | null;
 export type Limits = Record<Metric, LimitValue>;
 
-/** Which workspaces a plan is for: a person's own, or a team's (see `core/teams.ts`). */
-export type PlanAudience = 'personal' | 'team';
-
+/**
+ * A plan always belongs to a person (their own workspace). A team has no plan of its own: it runs
+ * on the plan of whoever pays for it, or each member's own (see `billing/payers.ts`).
+ */
 export interface Plan {
   id: string;
-  /** Monthly price in USD; 0 = free. Per seat for `perSeat` plans. */
+  /** Monthly price in USD; 0 = free. */
   priceMonthly: number;
-  /** Price for a year paid at once, in USD. Per seat for `perSeat` plans. */
+  /** Price for a year paid at once, in USD. */
   priceYearly: number;
-  /** For `perSeat` plans, the limits of one seat (see {@link limitsFor}). */
   limits: Limits;
   /**
-   * Priced per person: the team buys `min`…`max` seats, `seats` is the number bought and each
-   * `scaled` limit is multiplied by it (a pool the whole team shares); other limits are the team's.
-   */
-  perSeat?: { min: number; max: number; scaled: readonly Metric[] };
-  /** Only workspaces of this kind can be on the plan; undefined: any. */
-  audience?: PlanAudience;
-  /**
-   * How a new workspace starts on this plan, counted from the day it was created: a trial with
-   * another plan's limits, then published steps down to the plan's own limits. Everything here is
-   * shown on the pricing page and to the AI, so nobody's limits change by surprise.
+   * How a person starts on this plan, counted from the day their workspace was created: a trial
+   * with another plan's limits, then published steps down to the plan's own limits. Everything here
+   * is shown on the pricing page and to the AI, so nobody's limits change by surprise.
    */
   start?: PlanStart;
   /** Shown on the pricing page. Hidden plans (internal, partners) are assigned by admins only. */
@@ -74,11 +65,11 @@ export const PLANS: readonly Plan[] = [
     id: 'free',
     priceMonthly: 0,
     priceYearly: 0,
-    limits: { actions: 150, accounts: 3, messengers: 0, backgroundJobs: 1, historyDays: 7, seats: 1 },
+    limits: { actions: 150, accounts: 3, messengers: 0, backgroundJobs: 1, historyDays: 7 },
     // 14 days of Pro without a card, then 500 → 300 → 150 actions a month (business model, Nov 2026).
-    // A new team tries itself with up to 3 people.
+    // Once per person: a team gets no trial of its own.
     start: {
-      trial: { days: 14, plan: 'pro', except: { messengers: 0, seats: 3 } },
+      trial: { days: 14, plan: 'pro', except: { messengers: 0 } },
       steps: [
         { untilDay: 30, limits: { actions: 500 } },
         { untilDay: 60, limits: { actions: 300 } },
@@ -90,8 +81,7 @@ export const PLANS: readonly Plan[] = [
     id: 'personal',
     priceMonthly: 5,
     priceYearly: 50,
-    limits: { actions: 10_000, accounts: 15, messengers: 1, backgroundJobs: 5, historyDays: 90, seats: 1 },
-    audience: 'personal',
+    limits: { actions: 10_000, accounts: 15, messengers: 1, backgroundJobs: 5, historyDays: 90 },
     public: true,
     featured: true,
   },
@@ -105,35 +95,11 @@ export const PLANS: readonly Plan[] = [
       messengers: 3,
       backgroundJobs: null,
       historyDays: 365,
-      seats: 1,
     },
-    audience: 'personal',
     public: true,
   },
   {
-    /**
-     * Teams: one connector URL, each person signs in as themselves (`docs/TEAMS.md`). Per seat; the
-     * actions and cloud messengers of every seat form one pool.
-     */
-    id: 'team',
-    priceMonthly: 10,
-    priceYearly: 100,
-    limits: {
-      actions: 25_000,
-      accounts: null,
-      messengers: 2,
-      backgroundJobs: null,
-      historyDays: 365,
-      seats: 1,
-    },
-    perSeat: { min: 2, max: 200, scaled: ['actions', 'messengers'] },
-    audience: 'team',
-    public: true,
-  },
-  {
-    /**
-     * Superseded by `team` (Nov 2026): no longer offered, kept for admins and anyone already on it.
-     */
+    /** Not offered (Nov 2026): kept for admins to assign, e.g. to someone who pays for a big team. */
     id: 'business',
     priceMonthly: 29,
     priceYearly: 290,
@@ -143,7 +109,6 @@ export const PLANS: readonly Plan[] = [
       messengers: 10,
       backgroundJobs: null,
       historyDays: 365,
-      seats: 3,
     },
     public: false,
   },
@@ -158,7 +123,6 @@ export const PLANS: readonly Plan[] = [
       messengers: null,
       backgroundJobs: null,
       historyDays: 365,
-      seats: null,
     },
     public: false,
   },
@@ -189,28 +153,16 @@ export function getPlan(id: string | null | undefined): Plan {
 
 export const isMetric = (value: string): value is Metric => (METRICS as readonly string[]).includes(value);
 
-/** The seats a subscription of `quantity` gives on a `perSeat` plan (undefined for other plans). */
-export function seatsFor(plan: Plan, quantity: number | null | undefined): number | undefined {
-  if (!plan.perSeat) return undefined;
-  const { min, max } = plan.perSeat;
-  return Math.min(max, Math.max(min, Math.floor(quantity ?? min)));
-}
+/** Whether `value` is at least `than` (null is no limit, above any number). */
+const atLeastLimit = (value: LimitValue, than: LimitValue): boolean =>
+  value === null || (than !== null && value >= than);
 
-/** A plan's limits for a subscription of `quantity` seats (the plan's own limits unless `perSeat`). */
-export function limitsFor(plan: Plan, quantity?: number | null): Limits {
-  const seats = seatsFor(plan, quantity);
-  if (seats === undefined) return { ...plan.limits };
-  const limits: Limits = { ...plan.limits, seats };
-  for (const metric of plan.perSeat!.scaled) {
-    const one = plan.limits[metric];
-    limits[metric] = one === null ? null : one * seats;
-  }
-  return limits;
-}
-
-/** Whether a workspace of this kind can be on the plan. */
-export const planFits = (plan: Plan, kind: PlanAudience): boolean =>
-  plan.audience === undefined || plan.audience === kind;
+/**
+ * Whether plan `a` gives at least what plan `b` gives (actions and accounts). Someone may take over
+ * paying for a team only with a plan that does not leave the team with less.
+ */
+export const coversPlan = (a: Plan, b: Plan): boolean =>
+  atLeastLimit(a.limits.actions, b.limits.actions) && atLeastLimit(a.limits.accounts, b.limits.accounts);
 
 /** Adds an extra amount to a limit; null on either side means no limit. */
 export function addLimit(base: LimitValue, extra: LimitValue): LimitValue {

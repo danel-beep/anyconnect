@@ -334,7 +334,6 @@ const usd = (n: number) => `$${Number.isInteger(n) ? n : (Math.round(n * 100) / 
 const limitText = (t: Translate, lang: string, metric: Metric, value: number | null): string => {
   if (value === null) return t(`plan.metric.${metric}.unlimited`);
   if (metric === 'messengers' && value === 0) return t('plan.metric.messengers.none');
-  if (metric === 'seats' && value === 1) return t('plan.metric.seats.solo');
   return t(`plan.metric.${metric}`, { n: fmtNumber(lang, value) });
 };
 
@@ -372,21 +371,13 @@ export const PlanCard: FC<{
   const start = plan.start ? startText(t, lang, plan) : undefined;
   // What every plan gives today; features still being built are listed apart in the compare table.
   // Every plan has every service and safety feature, which the pricing intro says once for all.
-  const features: Metric[] = [
-    'actions',
-    'accounts',
-    'historyDays',
-    ...(plan.perSeat === undefined && (plan.limits.seats ?? 1) > 1 ? (['seats'] as const) : []),
-  ];
-  const perSeat = plan.perSeat;
+  const features: Metric[] = ['actions', 'accounts', 'historyDays'];
   const featureText = (metric: Metric): string => {
     if (metric === 'actions' && start)
       return t('plan.metric.actionsSteps', {
         n: fmtNumber(lang, plan.limits.actions ?? 0),
         months: start.months,
       });
-    if (perSeat && metric === 'actions' && plan.limits.actions !== null)
-      return t('plan.metric.actionsPerSeat', { n: fmtNumber(lang, plan.limits.actions) });
     return limitText(t, lang, metric, plan.limits[metric]);
   };
   return (
@@ -400,7 +391,7 @@ export const PlanCard: FC<{
         <div class="price">
           <span class="amount when-month">${plan.priceMonthly}</span>
           <span class="amount when-year">{usd(plan.priceYearly / 12)}</span>
-          <span class="per">{t(perSeat ? 'pricing.perSeat' : 'pricing.perMonth')}</span>
+          <span class="per">{t('pricing.perMonth')}</span>
         </div>
         <div class="price-year">
           {plan.priceMonthly === 0 ? (
@@ -414,36 +405,11 @@ export const PlanCard: FC<{
             )
           ) : (
             <>
-              <span class="when-month">
-                {t(perSeat ? 'pricing.orYearPerSeat' : 'pricing.orYear', { price: `$${plan.priceYearly}` })}
-              </span>
-              <span class="when-year">
-                {t(perSeat ? 'pricing.billedYearPerSeat' : 'pricing.billedYear', {
-                  price: `$${plan.priceYearly}`,
-                })}
-              </span>
+              <span class="when-month">{t('pricing.orYear', { price: `$${plan.priceYearly}` })}</span>
+              <span class="when-year">{t('pricing.billedYear', { price: `$${plan.priceYearly}` })}</span>
             </>
           )}
         </div>
-        {perSeat ? (
-          // A per-person price next to personal plans: say what the smallest team pays.
-          <div class="price-year">
-            <span class="when-month">
-              {t('pricing.teamSize', {
-                min: perSeat.min,
-                max: perSeat.max,
-                price: usd(perSeat.min * plan.priceMonthly),
-              })}
-            </span>
-            <span class="when-year">
-              {t('pricing.teamSize', {
-                min: perSeat.min,
-                max: perSeat.max,
-                price: usd((perSeat.min * plan.priceYearly) / 12),
-              })}
-            </span>
-          </div>
-        ) : null}
       </div>
       <ul>
         {features.map((metric) => (
@@ -452,6 +418,10 @@ export const PlanCard: FC<{
             <span>{featureText(metric)}</span>
           </li>
         ))}
+        <li>
+          <Check />
+          <span>{t('plan.feature.teams')}</span>
+        </li>
       </ul>
       {action}
     </div>
@@ -490,9 +460,9 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
 );
 
 const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
-  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan;
-  // a team plan is bought on the team's page, so it starts with creating the team.
-  const target = plan.audience === 'team' ? '/app/teams' : '/app/billing';
+  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan.
+  // A plan is always a person's own; a team runs on the plan of whoever pays for it.
+  const target = '/app/billing';
   const href =
     plan.priceMonthly === 0
       ? ctx.user
@@ -523,9 +493,10 @@ export type FaqKey =
   | 'reset'
   | 'upgrade'
   | 'many'
-  | 'jobs';
+  | 'jobs'
+  | 'teams';
 
-const PRICING_FAQ: FaqKey[] = ['action', 'reset', 'limit', 'upgrade', 'many', 'jobs'];
+const PRICING_FAQ: FaqKey[] = ['action', 'reset', 'limit', 'upgrade', 'teams', 'many', 'jobs'];
 
 export const faqItems = (t: Translate, keys: FaqKey[]) =>
   keys.map((key) => ({ q: t(`faq.${key}.q`), a: t(`faq.${key}.a`) }));
@@ -570,17 +541,15 @@ export const Faq: FC<{ t: Translate; lang: Locale; keys: FaqKey[] }> = ({ t, lan
 // Pricing
 // ---------------------------------------------------------------------------
 
-const COMPARE: Metric[] = ['actions', 'accounts', 'historyDays', 'seats'];
+const COMPARE: Metric[] = ['actions', 'accounts', 'historyDays'];
 /** Limits for features still being built: shown once, under their own heading. */
 const COMPARE_SOON: Metric[] = ['messengers', 'backgroundJobs'];
 
 const cell = (t: Translate, lang: string, metric: Metric, plan: Plan) => {
   const v = plan.limits[metric];
-  if (plan.perSeat && metric === 'seats') return `${plan.perSeat.min}–${plan.perSeat.max}`;
   if (v === null) return t('pricing.unlimited');
   if (v === 0) return '—';
   if (metric === 'historyDays') return t('pricing.days', { n: v });
-  if (plan.perSeat?.scaled.includes(metric)) return t('pricing.perSeatCell', { n: fmtNumber(lang, v) });
   return fmtNumber(lang, v);
 };
 
@@ -642,13 +611,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 <tr>
                   <td>{t('pricing.price')}</td>
                   {plans.map((p) => (
-                    <td class="num">
-                      {p.priceMonthly === 0
-                        ? t('pricing.free')
-                        : p.perSeat
-                          ? t('pricing.perSeatCell', { n: `$${p.priceMonthly}` })
-                          : `$${p.priceMonthly}`}
-                    </td>
+                    <td class="num">{p.priceMonthly === 0 ? t('pricing.free') : `$${p.priceMonthly}`}</td>
                   ))}
                 </tr>
                 {COMPARE.map((metric) => (
@@ -670,7 +633,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                     ))}
                   </tr>
                 ))}
-                {(['security', 'unified', 'custom', 'personas'] as const).map((f) => (
+                {(['teams', 'security', 'unified', 'custom', 'personas'] as const).map((f) => (
                   <tr>
                     <td>{t(`pricing.row.${f}`)}</td>
                     {plans.map(() => (

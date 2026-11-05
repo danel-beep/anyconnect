@@ -113,7 +113,6 @@ export interface PlanRow {
   /** Billing interval of a paid plan, otherwise null. */
   interval: string | null;
   workspaces: number;
-  seats: number;
   /** Workspaces with at least one call through the hub in the period, and their calls. */
   active: number;
   calls: number;
@@ -161,7 +160,7 @@ const startOf = (day: string) => `${day}T00:00:00.000Z`;
 export function monthlyRevenue(planId: string, interval: string | null, quantity: number | null): number {
   const plan = findPlan(planId);
   if (!plan) return 0;
-  const units = plan.perSeat ? Math.max(plan.perSeat.min, quantity ?? 1) : 1;
+  const units = Math.max(1, quantity ?? 1);
   const price = interval === 'year' ? plan.priceYearly / 12 : plan.priceMonthly;
   return Math.round(price * units * 100) / 100;
 }
@@ -528,6 +527,8 @@ export class AnalyticsReports {
             (s.workspace_id is not null and s.status not in ('canceled', 'paused')
               and (s.current_period_end is null or s.current_period_end > ${at})) as live
           from workspaces w left join subscriptions s on s.workspace_id = w.id
+          -- Plans are people's: a team has none (it runs on its payer's plan).
+          where w.kind = 'personal'
         ),
         eff as (
           select s.id,
@@ -570,13 +571,11 @@ export class AnalyticsReports {
         kind,
         interval,
         workspaces: 0,
-        seats: 0,
         active: 0,
         calls: 0,
         mrr: 0,
       };
       row.workspaces += n;
-      row.seats += n * Math.max(1, num(g.quantity));
       row.active += num(g.active);
       row.calls += num(g.calls);
       if (kind === 'paid') {

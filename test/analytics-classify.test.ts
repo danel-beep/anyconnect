@@ -169,9 +169,11 @@ describe('analytics: browsers, crawlers, languages, paths', () => {
   it('turns plans into monthly revenue', () => {
     expect(monthlyRevenue('personal', 'month', 1)).toBe(5);
     expect(monthlyRevenue('pro', 'year', 1)).toBe(10);
-    // Team: per seat, at least the plan's minimum.
-    expect(monthlyRevenue('team', 'month', 5)).toBe(50);
-    expect(monthlyRevenue('team', 'month', 1)).toBe(20);
+    // A provider quantity above one multiplies the price (no plan is sold that way today).
+    expect(monthlyRevenue('pro', 'month', 2)).toBe(24);
+    expect(monthlyRevenue('pro', 'month', null)).toBe(12);
+    // A plan that no longer exists (e.g. the per-seat Team plan) brings nothing.
+    expect(monthlyRevenue('team', 'month', 5)).toBe(0);
     expect(monthlyRevenue('nope', 'month', 1)).toBe(0);
   });
 });
