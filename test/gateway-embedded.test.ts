@@ -3,7 +3,7 @@ import { loadConfig } from '../src/config.js';
 import { planEmbeddedGateway, startEmbeddedGateway } from '../src/gateway/embedded.js';
 import { createLogger } from '../src/logger.js';
 import { HttpGatewayClient } from '../src/messaging/gateway-client.js';
-import { resetDatabase, TEST_DATABASE_URL, TEST_KEY } from './helpers.js';
+import { freePort, resetDatabase, TEST_DATABASE_URL, TEST_KEY } from './helpers.js';
 
 describe('embedded messenger gateway', () => {
   it('is off by default and refuses to run next to a separate gateway', () => {
@@ -24,10 +24,11 @@ describe('embedded messenger gateway', () => {
       GATEWAY_EMBEDDED_PORT: '0',
     };
     expect(() => planEmbeddedGateway(env)).toThrow(/not a port/);
-    const plan = planEmbeddedGateway({ ...env, GATEWAY_EMBEDDED_PORT: '19431' })!;
-    expect(plan.url).toBe('http://127.0.0.1:19431');
+    const port = String(await freePort());
+    const plan = planEmbeddedGateway({ ...env, GATEWAY_EMBEDDED_PORT: port })!;
+    expect(plan.url).toBe(`http://127.0.0.1:${port}`);
     expect(plan.token.length).toBeGreaterThanOrEqual(32);
-    expect(planEmbeddedGateway({ ...env, GATEWAY_EMBEDDED_PORT: '19431' })!.token).not.toBe(plan.token);
+    expect(planEmbeddedGateway({ ...env, GATEWAY_EMBEDDED_PORT: port })!.token).not.toBe(plan.token);
     const hubConfig = loadConfig({ ...env, GATEWAY_URL: plan.url, GATEWAY_TOKEN: plan.token });
     expect(hubConfig.gateway).toEqual({ url: plan.url, token: plan.token });
 
