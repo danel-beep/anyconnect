@@ -175,8 +175,19 @@ export interface VaultView {
   /** Locked here: the code this browser's request shows, and whether the request still waits. */
   thisCode?: string;
   waiting?: boolean;
-  /** Open here: other browsers asking to be let in. */
-  requests: { deviceId: string; code: string; createdAt: Date }[];
+  /**
+   * Open here: other browsers (with the code they show) and AI apps or personal tokens (by name)
+   * asking to be let in.
+   */
+  requests: {
+    kind: 'device' | 'oauth' | 'api_token';
+    subject: string;
+    code?: string;
+    name?: string;
+    createdAt: Date;
+  }[];
+  /** Locked here: AI apps waiting for an Allow from a browser where the vault is open. */
+  waitingApps: string[];
   devices: number;
   recovery: boolean;
 }
@@ -208,17 +219,32 @@ const VaultCard: FC<{ t: Translate; lang: string; vault: VaultView; Hidden: FC }
               {vault.requests.map((r) => (
                 <li>
                   <span class="grow">
-                    <code class="device-code">{r.code}</code>
-                    <div class="small muted">{t('vault.requested', { when: fmtAgo(lang, r.createdAt) })}</div>
+                    {r.kind === 'device' ? (
+                      <code class="device-code">{r.code}</code>
+                    ) : (
+                      <strong>{r.name}</strong>
+                    )}
+                    <div class="small muted">
+                      {r.kind === 'device' ? t('vault.requestBrowser') : t('vault.requestApp')} ·{' '}
+                      {t('vault.requested', { when: fmtAgo(lang, r.createdAt) })}
+                    </div>
                   </span>
                   <span class="row">
-                    <form class="inline" method="post" action={`/security/vault/devices/${r.deviceId}/allow`}>
+                    <form
+                      class="inline"
+                      method="post"
+                      action={`/security/vault/requests/${r.kind}/${r.subject}/allow`}
+                    >
                       <Hidden />
                       <button class="primary" type="submit">
                         {t('vault.allow')}
                       </button>
                     </form>
-                    <form class="inline" method="post" action={`/security/vault/devices/${r.deviceId}/deny`}>
+                    <form
+                      class="inline"
+                      method="post"
+                      action={`/security/vault/requests/${r.kind}/${r.subject}/deny`}
+                    >
                       <Hidden />
                       <button type="submit">{t('vault.deny')}</button>
                     </form>
@@ -232,6 +258,9 @@ const VaultCard: FC<{ t: Translate; lang: string; vault: VaultView; Hidden: FC }
       </>
     ) : vault.waiting ? (
       <>
+        {vault.waitingApps.length > 0 ? (
+          <p class="notice info">{t('vault.lockedApps', { apps: vault.waitingApps.join(', ') })}</p>
+        ) : null}
         <p>{t('vault.lockedHint')}</p>
         <p>
           <code class="device-code">{vault.thisCode}</code>

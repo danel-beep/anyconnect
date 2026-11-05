@@ -272,7 +272,9 @@ export class TestBrowser {
     const page = await (await owner.request('/security')).text();
     const at = page.indexOf(`<code class="device-code">${code}</code>`);
     const action =
-      at < 0 ? undefined : page.slice(at).match(/action="(\/security\/vault\/devices\/[^"]+\/allow)"/)?.[1];
+      at < 0
+        ? undefined
+        : page.slice(at).match(/action="(\/security\/vault\/requests\/device\/[^"]+\/allow)"/)?.[1];
     if (!action) throw new Error(`The owner's browser shows no request with code ${code}`);
     const response = await owner.request(action, { form: { csrf: TestBrowser.hiddenInputs(page).csrf! } });
     if (response.status !== 303) throw new Error(`Allowing the browser failed: ${response.status}`);

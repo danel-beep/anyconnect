@@ -82,9 +82,9 @@ export interface GrantVaultLinks {
   linkTokens(
     userId: string,
     from: { kind: 'code' | 'refresh'; token: string },
-    issued: { accessToken: string; refreshToken: string },
+    issued: { grantId: string; accessToken: string; refreshToken: string },
   ): Promise<void>;
-  unlink(tokenHashes: string[]): Promise<void>;
+  unlink(tokenHashes: string[], grantId?: string): Promise<void>;
 }
 
 export class OAuthServer {
@@ -383,23 +383,25 @@ export class OAuthServer {
         .update(oauthAuthorizationCodes)
         .set({ grantId })
         .where(eq(oauthAuthorizationCodes.codeHash, codeHash));
-      return this.issueTokens(tx, grantId, row.scopes);
+      return { grantId, response: await this.issueTokens(tx, grantId, row.scopes) };
     });
     await this.linkVault(row.userId, { kind: 'code', token: code }, issued);
-    return issued;
+    return issued.response;
   }
 
   /** Best-effort: a failure here never fails the token request (the app just stays without a vault). */
   private async linkVault(
     userId: string,
     from: { kind: 'code' | 'refresh'; token: string },
-    issued: TokenResponse,
+    issued: { grantId: string; response: TokenResponse },
   ): Promise<void> {
-    if (!this.deps.vaultLinks || !issued.refresh_token) return;
+    const { grantId, response } = issued;
+    if (!this.deps.vaultLinks || !response.refresh_token) return;
     try {
       await this.deps.vaultLinks.linkTokens(userId, from, {
-        accessToken: issued.access_token,
-        refreshToken: issued.refresh_token,
+        grantId,
+        accessToken: response.access_token,
+        refreshToken: response.refresh_token,
       });
     } catch (error) {
       this.deps.logger.warn({ err: error }, 'could not link the vault to new OAuth tokens');
@@ -446,10 +448,10 @@ export class OAuthServer {
           .where(eq(oauthTokens.tokenHash, tokenHash));
       }
       await tx.update(oauthGrants).set({ lastUsedAt: new Date() }).where(eq(oauthGrants.id, row.grant.id));
-      return this.issueTokens(tx, row.grant.id, scopes);
+      return { grantId: row.grant.id, response: await this.issueTokens(tx, row.grant.id, scopes) };
     });
     await this.linkVault(row.grant.userId, { kind: 'refresh', token: presented }, issued);
-    return issued;
+    return issued.response;
   }
 
   private async issueTokens(
@@ -521,7 +523,10 @@ export class OAuthServer {
         .where(and(eq(oauthTokens.grantId, grantId), isNull(oauthTokens.revokedAt)))
         .returning({ tokenHash: oauthTokens.tokenHash });
       // A revoked app loses its way into the vault at once, not at the next maintenance run.
-      await this.deps.vaultLinks?.unlink(revoked.map((t) => t.tokenHash));
+      await this.deps.vaultLinks?.unlink(
+        revoked.map((t) => t.tokenHash),
+        grantId,
+      );
     });
   }
 

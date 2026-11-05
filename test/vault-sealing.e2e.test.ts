@@ -205,16 +205,52 @@ describe('sealed accounts (protected by default)', () => {
     }
   });
 
-  it('an app approved from a browser without the device key cannot open sealed accounts', async () => {
+  it('an app without a way into the vault says what to do, and one Allow lets it in for good', async () => {
+    // Approved from a browser where the vault is locked: like an app connected before the vault existed.
     const other = browser();
     const otherProvider = new MemoryOAuthProvider();
-    const otherClient = await connect(hub, otherProvider, other);
-    const result = await otherClient.callTool({
-      name: 'demo_account_info',
-      arguments: { account: 'sealed' },
+    let otherClient = await connect(hub, otherProvider, other);
+    const ask = () => otherClient.callTool({ name: 'demo_account_info', arguments: { account: 'sealed' } });
+    const locked = await ask();
+    expect(locked.isError).toBe(true);
+    // The AI gets the exact step, with the link and the app's name, not a bare "vault locked".
+    expect(text(locked)).toContain(`${hub.baseUrl}/security#vault`);
+    expect(text(locked)).toContain('Allow');
+    expect(text(locked)).toContain('Vault Test Client');
+    // The open browser names the app on every page and on Security, next to Allow.
+    expect(await (await signedIn.request('/app')).text()).toContain('Vault Test Client просит открыть');
+    const security = await (await signedIn.request('/security')).text();
+    const action = security.match(/action="(\/security\/vault\/requests\/oauth\/[^"]+\/allow)"/)?.[1];
+    expect(action).toBeDefined();
+    // The request holds only public keys: nothing in it opens the vault.
+    const [row] = await hub.services.database.pool
+      .query("select keys from vault_requests where kind = 'oauth'")
+      .then((r) => r.rows as { keys: { ref: string; publicKey: string }[] }[]);
+    expect(JSON.stringify(row!.keys)).not.toContain(otherProvider.savedTokens!.access_token);
+    const allowed = await signedIn.request(action!, {
+      form: { csrf: TestBrowser.hiddenInputs(security).csrf! },
     });
-    expect(result.isError).toBe(true);
-    expect(text(result)).toMatch(/vault/i);
+    expect(allowed.status).toBe(303);
+
+    expect((await ask()).isError).toBeFalsy();
+    // Its tokens rotate and it keeps the way in: the request covered the refresh token too.
+    const refreshed = await fetch(`${hub.baseUrl}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: otherProvider.savedTokens!.refresh_token!,
+        client_id: otherProvider.client!.client_id,
+      }),
+    });
+    expect(refreshed.status).toBe(200);
+    otherProvider.savedTokens = (await refreshed.json()) as Tokens;
+    await otherClient.close();
+    otherClient = await connect(hub, otherProvider, other);
+    expect((await ask()).isError).toBeFalsy();
+    expect(await hub.services.vaults.requests(userId)).not.toContainEqual(
+      expect.objectContaining({ kind: 'oauth' }),
+    );
     await otherClient.close();
   });
 
@@ -262,20 +298,20 @@ describe('sealed accounts (protected by default)', () => {
     // The locked browser sees no requests and has nothing to approve them with.
     const page = await (await thief.request('/security')).text();
     expect(page).not.toContain('/allow');
-    const [request] = await hub.services.vaults.deviceRequests(userId);
-    const forced = await thief.request(`/security/vault/devices/${request!.deviceId}/allow`, {
+    const [request] = (await hub.services.vaults.requests(userId)).filter((r) => r.kind === 'device');
+    const forced = await thief.request(`/security/vault/requests/device/${request!.subject}/allow`, {
       form: { csrf: TestBrowser.hiddenInputs(page).csrf! },
     });
     expect(forced.status).toBe(303);
-    expect(await hub.services.vaults.hasWrap(userId, 'device', request!.deviceId)).toBe(false);
+    expect(await hub.services.vaults.hasWrap(userId, 'device', request!.subject)).toBe(false);
 
     const open = await (await signedIn.request('/security')).text();
-    const declined = await signedIn.request(`/security/vault/devices/${request!.deviceId}/deny`, {
+    const declined = await signedIn.request(`/security/vault/requests/device/${request!.subject}/deny`, {
       form: { csrf: TestBrowser.hiddenInputs(open).csrf! },
     });
     expect(declined.status).toBe(303);
-    expect((await hub.services.vaults.deviceRequests(userId)).map((r) => r.deviceId)).not.toContain(
-      request!.deviceId,
+    expect((await hub.services.vaults.requests(userId)).map((r) => r.subject)).not.toContain(
+      request!.subject,
     );
   });
 
@@ -336,6 +372,31 @@ describe('sealed accounts (protected by default)', () => {
     );
     const result = await patClient.callTool({ name: 'demo_account_info', arguments: { account: 'sealed' } });
     expect(result.isError).toBeFalsy();
+    await patClient.close();
+  });
+
+  it('a personal token made outside a browser asks for access by its name and gets it with Allow', async () => {
+    const { token } = await hub.services.apiTokens.create({
+      workspaceId,
+      userId,
+      name: 'Nightly script',
+      scopes: ['mcp'],
+    });
+    const patClient = new Client({ name: 'pat', version: '1.0.0' });
+    await patClient.connect(
+      new StreamableHTTPClientTransport(new URL(hub.mcpUrl), {
+        requestInit: { headers: { authorization: `Bearer ${token}` } },
+      }),
+    );
+    const ask = () => patClient.callTool({ name: 'demo_account_info', arguments: { account: 'sealed' } });
+    const locked = await ask();
+    expect(locked.isError).toBe(true);
+    expect(text(locked)).toContain('"Nightly script"');
+    const security = await (await signedIn.request('/security')).text();
+    expect(security).toContain('Nightly script');
+    const action = security.match(/action="(\/security\/vault\/requests\/api_token\/[^"]+\/allow)"/)?.[1];
+    await signedIn.request(action!, { form: { csrf: TestBrowser.hiddenInputs(security).csrf! } });
+    expect((await ask()).isError).toBeFalsy();
     await patClient.close();
   });
 });

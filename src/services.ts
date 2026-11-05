@@ -131,6 +131,8 @@ export interface Services {
   vaults: VaultService;
   /** The vault open in the current request, if any. */
   vaultScopes: VaultScopes;
+  /** AI apps' and tokens' ways into vaults, and their requests to be let in. */
+  vaultLinks: VaultGrantLinks;
   /**
    * Keeps the current request's open vault for a held-back call on a sealed account, which the
    * runner executes later (when held back, and again when approved on the web).
@@ -318,7 +320,8 @@ export function createServices(
     redirectUri: `${config.publicUrl}/connect/callback`,
     logger,
   });
-  const vaultLinks = new VaultGrantLinks(vaults, vaultScopes);
+  const vaultLinks = new VaultGrantLinks(vaults, vaultScopes, { db, publicUrl: config.publicUrl });
+  vaultScopes.setLockedHelp((source) => vaultLinks.explainLocked(source));
   const apiTokens = new ApiTokenService(db, vaultLinks);
   const teams = new TeamService({
     db,
@@ -668,6 +671,7 @@ export function createServices(
     accounts,
     vaults,
     vaultScopes,
+    vaultLinks,
     retainVault,
     oauthApps,
     tokens,

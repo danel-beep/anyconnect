@@ -3,6 +3,7 @@ import { accounts } from '../db/schema.js';
 import { DataKey, type KeyWrapper, type SecretBox } from '../lib/crypto.js';
 import { isSealedKey, type VaultPublicKey } from '../lib/vault.js';
 import { lockedError, type VaultScopes } from './vault-scope.js';
+import type { VaultLockedError } from './vaults.js';
 
 /**
  * Per-account envelope encryption.
@@ -58,6 +59,11 @@ export class AccountKeyring {
 
   isSealed(account: AccountKeyMaterial): boolean {
     return account.dataKeyEncrypted !== null && isSealedKey(account.dataKeyEncrypted);
+  }
+
+  /** The error for a sealed account this request cannot open, with the step that fixes it. */
+  lockedError(): Promise<VaultLockedError> {
+    return this.scopes ? this.scopes.lockedError() : Promise.resolve(lockedError());
   }
 
   /** Opens the caller's vault when the account is sealed, so the synchronous methods can use it. */

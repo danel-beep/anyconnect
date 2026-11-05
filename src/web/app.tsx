@@ -66,7 +66,7 @@ export interface ShellInfo {
    * The personal vault in this browser (`docs/VAULTS.md`): `locked` when protected accounts exist
    * but this browser cannot open them yet; `requests` from other browsers waiting for an approval.
    */
-  vault?: { locked: boolean; requests: number } | undefined;
+  vault?: { locked: boolean; requests: number; app?: string } | undefined;
 }
 
 /** Above every dashboard page except Security itself, which shows the same in full. */
@@ -85,7 +85,9 @@ const VaultBanner: FC<{ t: PageCtx['t']; vault: ShellInfo['vault'] }> = ({ t, va
   if (vault.requests > 0) {
     return (
       <div class="notice info reauth-row vault-banner" role="status">
-        <span class="grow">{t('vault.banner.request')}</span>
+        <span class="grow">
+          {vault.app ? t('vault.banner.app', { app: vault.app }) : t('vault.banner.request')}
+        </span>
         <a class="btn sm primary" href="/security#vault">
           {t('vault.banner.review')}
         </a>
