@@ -35,6 +35,9 @@ import { SecondFactorService } from './core/second-factors.js';
 import { TeamService } from './core/teams.js';
 import { TotpService } from './core/totp.js';
 import { activeUserCheck, memberCheck, UserService } from './core/users.js';
+import { VaultGrantLinks } from './core/vault-links.js';
+import { VaultScopes } from './core/vault-scope.js';
+import { VaultService } from './core/vaults.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
 import { TelegramLanding } from './growth/telegram-landing.js';
@@ -69,7 +72,12 @@ import { ConfirmationCenter, type DescribeCall } from './security/confirmations.
 import { isTeamAdmin } from './security/members.js';
 import { NotificationChannels } from './security/notifications.js';
 import { TelegramOwnerNotifier } from './security/owner-notifier.js';
-import { PendingCallService, principalOf } from './security/pending-calls.js';
+import {
+  latestRunAt,
+  type PendingCallRow,
+  PendingCallService,
+  principalOf,
+} from './security/pending-calls.js';
 import { PersonaService } from './security/personas.js';
 import { PolicyService } from './security/policy-service.js';
 import { PendingCallRunner } from './security/runner.js';
@@ -118,6 +126,15 @@ export interface Services {
   /** Invite links and the month of Pro for a paying invitee. */
   referrals: ReferralService;
   accounts: AccountService;
+  /** User vaults: sealed accounts (docs/VAULTS.md). */
+  vaults: VaultService;
+  /** The vault open in the current request, if any. */
+  vaultScopes: VaultScopes;
+  /**
+   * Keeps the current request's open vault for a held-back call on a sealed account, which the
+   * runner executes later (when held back, and again when approved on the web).
+   */
+  retainVault: (row: PendingCallRow) => Promise<void>;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
   /** OAuth tokens of connected accounts. */
@@ -246,7 +263,9 @@ export function createServices(
   const oauthApps = new OAuthAppService(db, secrets, config.oauthApps, (connector) =>
     connectors.builtin.includes(connector),
   );
-  const keyring = new AccountKeyring(secrets, secrets);
+  const vaults = new VaultService(db);
+  const vaultScopes = new VaultScopes(vaults);
+  const keyring = new AccountKeyring(secrets, secrets, vaultScopes);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
   const payers = new Payers(db);
@@ -281,7 +300,7 @@ export function createServices(
   entitlements.listen(billingNotices);
   billing.listen(billingNotices);
   billing.listen(referrals);
-  const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
+  const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements, vaults);
   const customServices = new CustomServiceManager({
     db,
     store: customStore,
@@ -293,7 +312,8 @@ export function createServices(
     redirectUri: `${config.publicUrl}/connect/callback`,
     logger,
   });
-  const apiTokens = new ApiTokenService(db);
+  const vaultLinks = new VaultGrantLinks(vaults, vaultScopes);
+  const apiTokens = new ApiTokenService(db, vaultLinks);
   const teams = new TeamService({
     db,
     accounts,
@@ -425,6 +445,12 @@ export function createServices(
     logger,
     ...(telegramLanding ? { onOtherStart: telegramLanding.handle } : {}),
   });
+  // A held-back call on a sealed account runs later, outside the AI app's request: keep its open
+  // vault in memory until then (docs/VAULTS.md).
+  const retainVault = async (row: PendingCallRow) => {
+    if (row.accountId && (await accounts.isSealed(row.accountId)))
+      await vaultScopes.hold(row.id, latestRunAt(row));
+  };
   const securityStages: StageMap = {
     policy: policyStage(policies),
     confirm: confirmStage({
@@ -433,6 +459,7 @@ export function createServices(
       center: confirmations,
       stateKey: secrets.deriveKey('confirm-state'),
       waitMs: config.confirmations.waitMs,
+      retain: retainVault,
     }),
     untrusted: untrustedStage,
   };
@@ -531,7 +558,8 @@ export function createServices(
   const pendingRunner = new PendingCallRunner({
     pending: pendingCalls,
     center: confirmations,
-    run: async (row, args) => toStored(await hub.runApproved(principalOf(row), row, args)),
+    run: (row, args) =>
+      vaultScopes.runHeld(row.id, async () => toStored(await hub.runApproved(principalOf(row), row, args))),
     logger,
     intervalMs: config.confirmations.runnerIntervalMs,
   });
@@ -551,6 +579,7 @@ export function createServices(
     accessTokenTtlSeconds: config.oauth.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: config.oauth.refreshTokenTtlSeconds,
     logger,
+    vaultLinks,
   });
   const userActive = activeUserCheck(db);
   const isMember = memberCheck(db);
@@ -625,6 +654,9 @@ export function createServices(
     billingNotices,
     referrals,
     accounts,
+    vaults,
+    vaultScopes,
+    retainVault,
     oauthApps,
     tokens,
     connect,

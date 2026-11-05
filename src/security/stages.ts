@@ -87,6 +87,11 @@ export interface ConfirmStageDeps {
   stateKey: Buffer;
   /** How long a call waits inline for a Telegram/web decision before returning "pending". */
   waitMs: number;
+  /**
+   * Called for every call held back here, in the caller's request: keeps what the later run needs
+   * and only this request has (the caller's open vault, `VaultScopes.hold`).
+   */
+  retain?: (row: PendingCallRow) => Promise<void>;
 }
 
 export function toStored(result: ExecResult): StoredResult {
@@ -229,6 +234,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       if (undoWindowSeconds > 0) {
         const scheduled = await pending.decide(row.id, true, 'elicitation');
         if (!scheduled) return outcome(call, (await pending.get(row.id)) ?? row);
+        await deps.retain?.(scheduled);
         await center.notify(scheduled);
         return outcome(call, scheduled);
       }
@@ -271,6 +277,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
         ...input,
         channels: await center.channelsFor(call.principal.userId),
       });
+      await deps.retain?.(row);
       await center.notify(row);
       return outcome(call, row);
     }
@@ -279,6 +286,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     //    whoever sits in that chat is not necessarily the person the hub would ask.
     if (call.interaction?.canAsk && !call.principal.shared) {
       const row = await pending.requestConfirmation({ ...input, channels: ['elicitation'] });
+      await deps.retain?.(row);
       call.audit.outcome = 'awaiting_confirmation';
       return {
         content: [{ type: 'text', text: pendingText(row, 'This action needs the user’s confirmation.') }],
@@ -291,6 +299,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       ...input,
       channels: await center.channelsFor(call.principal.userId),
     });
+    await deps.retain?.(row);
     await center.notify(row);
     const final = await pending.waitForOutcome(row.id, deps.waitMs, call.signal);
     return outcome(call, final ?? row);

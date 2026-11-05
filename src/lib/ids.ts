@@ -61,4 +61,5 @@ export type IdPrefix =
   | 'shr' // account shared with a team member (or the whole team)
   | 'preq' // plan request (manual upgrades before payments)
   | 'err' // error group (the hub's own error tracker)
-  | 'inc'; // status page incident
+  | 'inc' // status page incident
+  | 'dev'; // browser device key of a user vault

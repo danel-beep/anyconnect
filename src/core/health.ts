@@ -4,6 +4,7 @@ import type { ConnectorResolver } from '../connectors/registry.js';
 import type { Db } from '../db/client.js';
 import { accounts } from '../db/schema.js';
 import type { Logger } from '../logger.js';
+import { notSealedAccount } from './account-keys.js';
 import type { AccountService } from './accounts.js';
 import type { TokenManager } from './oauth-tokens.js';
 
@@ -14,6 +15,9 @@ import type { TokenManager } from './oauth-tokens.js';
  *   e.g. Microsoft's expire after 90 days without use);
  * - periodically re-runs each account's connection test, so a revoked password or token shows up
  *   as `needs_reauth` / `error` in the panel and in `manyplug_list_accounts` before the AI hits it.
+ *
+ * Accounts sealed to their owner's vault are skipped: the hub cannot open them outside the owner's
+ * requests, so their tokens refresh on the next call (`docs/VAULTS.md`).
  */
 export class AccountHealthService {
   constructor(
@@ -59,7 +63,13 @@ export class AccountHealthService {
     const rows = await this.deps.db
       .select({ id: accounts.id, workspaceId: accounts.workspaceId })
       .from(accounts)
-      .where(and(eq(accounts.enabled, true), or(isNull(accounts.checkedAt), lt(accounts.checkedAt, cutoff))))
+      .where(
+        and(
+          eq(accounts.enabled, true),
+          or(isNull(accounts.checkedAt), lt(accounts.checkedAt, cutoff)),
+          notSealedAccount(),
+        ),
+      )
       .orderBy(asc(accounts.checkedAt))
       .limit(limit);
     let failing = 0;

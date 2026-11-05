@@ -103,6 +103,8 @@ export interface SecurityView {
   sessions: number;
   /** Approving held-back actions in Telegram; absent when this server has no Telegram bot. */
   telegram?: { linked: boolean } | undefined;
+  vault?: VaultView;
+  flash?: { kind: 'ok' | 'bad'; text: string };
 }
 
 type PasskeyView = SecurityView['passkeys'][number];
@@ -167,6 +169,118 @@ const PasskeyRow: FC<{ t: Translate; lang: string; p: PasskeyView; Hidden: FC }>
   </div>
 );
 
+/** The personal vault as seen from this browser (`docs/VAULTS.md`). */
+export interface VaultView {
+  open: boolean;
+  /** Locked here: the code this browser's request shows, and whether the request still waits. */
+  thisCode?: string;
+  waiting?: boolean;
+  /** Open here: other browsers asking to be let in. */
+  requests: { deviceId: string; code: string; createdAt: Date }[];
+  devices: number;
+  recovery: boolean;
+}
+
+const VaultCard: FC<{ t: Translate; lang: string; vault: VaultView; Hidden: FC }> = ({
+  t,
+  lang,
+  vault,
+  Hidden,
+}) => (
+  <div class="card" id="vault">
+    <h2>
+      {t('vault.title')}{' '}
+      <span class={vault.open ? 'badge ok' : 'badge'}>
+        {vault.open ? t('vault.open') : t('vault.locked')}
+      </span>
+    </h2>
+    <p class="small muted">{t('vault.hint')}</p>
+    {vault.open ? (
+      <>
+        {vault.requests.length > 0 ? (
+          <>
+            <h3>{t('vault.requests')}</h3>
+            <p class="small muted">{t('vault.requestsHint')}</p>
+            <ul class="plain">
+              {vault.requests.map((r) => (
+                <li>
+                  <span class="grow">
+                    <code class="device-code">{r.code}</code>
+                    <div class="small muted">{t('vault.requested', { when: fmtAgo(lang, r.createdAt) })}</div>
+                  </span>
+                  <span class="row">
+                    <form class="inline" method="post" action={`/security/vault/devices/${r.deviceId}/allow`}>
+                      <Hidden />
+                      <button class="primary" type="submit">
+                        {t('vault.allow')}
+                      </button>
+                    </form>
+                    <form class="inline" method="post" action={`/security/vault/devices/${r.deviceId}/deny`}>
+                      <Hidden />
+                      <button type="submit">{t('vault.deny')}</button>
+                    </form>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        <p class="small muted">{t('vault.devices', { n: vault.devices })}</p>
+      </>
+    ) : vault.waiting ? (
+      <>
+        <p>{t('vault.lockedHint')}</p>
+        <p>
+          <code class="device-code">{vault.thisCode}</code>
+        </p>
+      </>
+    ) : (
+      <form method="post" action="/security/vault/ask">
+        <Hidden />
+        <p>{t('vault.lockedExpired')}</p>
+        <button class="primary" type="submit">
+          {t('vault.askAgain')}
+        </button>
+      </form>
+    )}
+
+    <h3>
+      {t('vault.recovery')}{' '}
+      <span class="badge">{vault.recovery ? t('security.on') : t('vault.optional')}</span>
+    </h3>
+    <p class="small muted">{t('vault.recoveryHint')}</p>
+    {vault.open ? (
+      <form method="post" action="/security/vault/recovery-key">
+        <Hidden />
+        {vault.recovery ? <p class="small muted">{t('vault.recoveryReplaceHint')}</p> : null}
+        <button type="submit">
+          {vault.recovery ? t('vault.recoveryReplace') : t('vault.recoveryCreate')}
+        </button>
+      </form>
+    ) : vault.recovery ? (
+      <form method="post" action="/security/vault/unlock">
+        <Hidden />
+        <p class="small">{t('vault.lockedOr')}</p>
+        <label for="recovery-key">{t('vault.recoveryInput')}</label>
+        <input
+          id="recovery-key"
+          type="text"
+          name="recoveryKey"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck={false}
+          required
+        />
+        <div class="actions start">
+          <button type="submit">{t('vault.recoveryUse')}</button>
+        </div>
+      </form>
+    ) : (
+      <p class="small muted">{t('vault.lockedNoRecovery')}</p>
+    )}
+  </div>
+);
+
 export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }> = ({ t, lang, view }) => {
   const hidden = { csrf: view.csrf, ...(view.next ? { next: view.next } : {}) };
   const Hidden = () => (
@@ -199,8 +313,16 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
         </div>
       )}
 
+      {view.flash ? (
+        <div class={`notice ${view.flash.kind}`} role="status">
+          {view.flash.text}
+        </div>
+      ) : null}
+
       {/* Until the sign-in is confirmed, every control here is visibly off rather than failing on click. */}
       <fieldset class="lock-group" disabled={!view.recent}>
+        {view.vault ? <VaultCard t={t} lang={lang} vault={view.vault} Hidden={Hidden} /> : null}
+
         <div class="card" id="totp">
           <h2>
             {t('security.totp')}{' '}
@@ -335,6 +457,27 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
     </Layout>
   );
 };
+
+/** A freshly created vault recovery key: shown exactly once. */
+export const RecoveryKeyPage: FC<{ t: Translate; lang: string; recoveryKey: string; continueTo: string }> = ({
+  t,
+  lang,
+  recoveryKey,
+  continueTo,
+}) => (
+  <Layout title={t('vault.keyTitle')} narrow lang={lang}>
+    <div class="card">
+      <h1>{t('vault.keyTitle')}</h1>
+      <p class="muted">{t('vault.keyHint')}</p>
+      <p>
+        <code class="recovery-key">{recoveryKey}</code>
+      </p>
+      <p>
+        <a href={continueTo}>{t('vault.keyDone')} →</a>
+      </p>
+    </div>
+  </Layout>
+);
 
 /** Freshly generated recovery codes: shown exactly once. */
 export const RecoveryCodesPage: FC<{ t: Translate; lang: string; codes: string[]; continueTo: string }> = ({

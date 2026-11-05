@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../db/client.js';
-import { userVaults, type VaultWrapKind, vaultWraps } from '../db/schema.js';
+import { userVaults, type VaultWrapKind, vaultDeviceRequests, vaultWraps } from '../db/schema.js';
 import { generateRecoveryKey, recoveryKeySecret, UnlockedVault, VaultPublicKey } from '../lib/vault.js';
 
 /** The wrap context: names the user, the kind and the secret's row, so a wrap cannot be moved. */
@@ -9,6 +10,31 @@ export const vaultWrapContext = (userId: string, kind: VaultWrapKind, ref: strin
 
 /** `ref` of the single recovery wrap. */
 export const RECOVERY_REF = '-';
+
+/** How long a browser's request to open the vault waits for an approval. */
+export const DEVICE_REQUEST_TTL_MS = 7 * 86_400_000;
+
+/**
+ * The code both browsers show for one request, so the user approves the browser in front of them
+ * and not one an attacker signed in at the same time: 6 digits of the device public key's hash.
+ */
+export function deviceCode(publicKey: string): string {
+  const n = createHash('sha256').update(publicKey).digest().readUInt32BE(0) % 1_000_000;
+  const digits = n.toString().padStart(6, '0');
+  return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+}
+
+export interface DeviceRequest {
+  deviceId: string;
+  code: string;
+  createdAt: Date;
+}
+
+export interface VaultDevice {
+  deviceId: string;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
 
 export class VaultLockedError extends Error {
   constructor(message = 'The vault is locked: this request carries no secret that opens it') {
@@ -97,6 +123,95 @@ export class VaultService {
     return vault;
   }
 
+  /** True when the user has a wrap for this secret (e.g. this browser was approved). */
+  async hasWrap(userId: string, kind: VaultWrapKind, ref: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ ref: vaultWraps.ref })
+      .from(vaultWraps)
+      .where(and(eq(vaultWraps.userId, userId), eq(vaultWraps.kind, kind), eq(vaultWraps.ref, ref)))
+      .limit(1);
+    return row !== undefined;
+  }
+
+  /** True when a recovery key is set. */
+  hasRecoveryKey(userId: string): Promise<boolean> {
+    return this.hasWrap(userId, 'recovery', RECOVERY_REF);
+  }
+
+  /**
+   * A browser without a way into the vault asks for one. Only the public half of its device key is
+   * stored; approving it ({@link approveDevice}) needs a browser where the vault is open.
+   */
+  async requestDevice(userId: string, deviceId: string, secret: Buffer): Promise<DeviceRequest> {
+    const publicKey = UnlockedVault.devicePublicKey(secret).encoded;
+    const [row] = await this.db
+      .insert(vaultDeviceRequests)
+      .values({ userId, deviceId, publicKey })
+      .onConflictDoUpdate({
+        target: [vaultDeviceRequests.userId, vaultDeviceRequests.deviceId],
+        set: { publicKey, createdAt: new Date() },
+      })
+      .returning();
+    return { deviceId, code: deviceCode(publicKey), createdAt: row!.createdAt };
+  }
+
+  /** Requests still waiting, newest first. */
+  async deviceRequests(userId: string): Promise<DeviceRequest[]> {
+    const rows = await this.db
+      .select()
+      .from(vaultDeviceRequests)
+      .where(
+        and(
+          eq(vaultDeviceRequests.userId, userId),
+          gt(vaultDeviceRequests.createdAt, new Date(Date.now() - DEVICE_REQUEST_TTL_MS)),
+        ),
+      )
+      .orderBy(desc(vaultDeviceRequests.createdAt));
+    return rows.map((r) => ({ deviceId: r.deviceId, code: deviceCode(r.publicKey), createdAt: r.createdAt }));
+  }
+
+  /**
+   * Lets the requesting browser in: seals the private key to its device public key. The vault must
+   * be open in this request (another browser of the same user). False if the request is gone.
+   */
+  async approveDevice(userId: string, vault: UnlockedVault, deviceId: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const [request] = await tx
+        .delete(vaultDeviceRequests)
+        .where(and(eq(vaultDeviceRequests.userId, userId), eq(vaultDeviceRequests.deviceId, deviceId)))
+        .returning();
+      if (!request || request.createdAt.getTime() < Date.now() - DEVICE_REQUEST_TTL_MS) return false;
+      const wrapped = vault.sealTo(
+        VaultPublicKey.decode(request.publicKey),
+        vaultWrapContext(userId, 'device', deviceId),
+      );
+      await tx
+        .insert(vaultWraps)
+        .values({ userId, kind: 'device', ref: deviceId, wrapped })
+        .onConflictDoUpdate({
+          target: [vaultWraps.userId, vaultWraps.kind, vaultWraps.ref],
+          set: { wrapped, createdAt: new Date(), lastUsedAt: null },
+        });
+      return true;
+    });
+  }
+
+  async denyDevice(userId: string, deviceId: string): Promise<void> {
+    await this.db
+      .delete(vaultDeviceRequests)
+      .where(and(eq(vaultDeviceRequests.userId, userId), eq(vaultDeviceRequests.deviceId, deviceId)));
+  }
+
+  /** Browsers that can open the vault. */
+  async devices(userId: string): Promise<VaultDevice[]> {
+    const rows = await this.db
+      .select({ ref: vaultWraps.ref, createdAt: vaultWraps.createdAt, lastUsedAt: vaultWraps.lastUsedAt })
+      .from(vaultWraps)
+      .where(and(eq(vaultWraps.userId, userId), eq(vaultWraps.kind, 'device')))
+      .orderBy(desc(vaultWraps.createdAt));
+    return rows.map((r) => ({ deviceId: r.ref, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt }));
+  }
+
   /** Opens the vault with the recovery key the user typed. */
   unlockWithRecoveryKey(userId: string, recoveryKey: string): Promise<UnlockedVault> {
     let secret: Buffer;
@@ -125,6 +240,12 @@ export class VaultService {
     await db
       .delete(vaultWraps)
       .where(and(eq(vaultWraps.userId, userId), eq(vaultWraps.kind, kind), eq(vaultWraps.ref, ref)));
+  }
+
+  /** Removes the wraps of several secrets of one kind at once (revoked or expired tokens). */
+  async removeWrapsByRef(kind: VaultWrapKind, refs: string[], db: DbExecutor = this.db): Promise<void> {
+    if (refs.length === 0) return;
+    await db.delete(vaultWraps).where(and(eq(vaultWraps.kind, kind), inArray(vaultWraps.ref, refs)));
   }
 
   /**

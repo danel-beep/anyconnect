@@ -1,6 +1,8 @@
 import { bearerAuthChallengeResponse, verifyBearerToken } from '@modelcontextprotocol/server';
 import { Hono } from 'hono';
+import { principalFromAuthInfo } from '../core/auth.js';
 import { isMcpSubPath } from '../core/mcp-paths.js';
+import { bearerVaultSecret } from '../core/vault-scope.js';
 import { VISITOR_CALLABLE } from '../hub/visitor.js';
 import { clientRateKey, publicCors } from '../web/http.js';
 import type { AppContext, AppEnv } from './context.js';
@@ -58,7 +60,11 @@ export function mcpRoutes() {
     } catch (error) {
       return bearerAuthChallengeResponse(error, { requiredScopes, resourceMetadataUrl });
     }
-    return s.mcp.fetch(c.req.raw, { authInfo });
+    // The caller's vault opens (lazily) with the token it presented: sealed accounts work only here.
+    const secret = authInfo.token
+      ? bearerVaultSecret(principalFromAuthInfo(authInfo), authInfo.token)
+      : undefined;
+    return s.vaultScopes.run(secret, () => s.mcp.fetch(c.req.raw, { authInfo }));
   };
 
   app.all('/mcp', (c) => handle(c));

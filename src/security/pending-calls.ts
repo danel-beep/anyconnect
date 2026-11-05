@@ -372,3 +372,13 @@ export class PendingCallService {
       .where(and(inArray(pendingCalls.status, FINAL), lt(pendingCalls.updatedAt, new Date(now - DAY))));
   }
 }
+
+/**
+ * The latest time a held-back call can still run: its undo window after the latest approval
+ * (an unanswered confirmation expires at `expiresAt`), plus a minute for the runner's tick.
+ */
+export function latestRunAt(row: PendingCallRow): number {
+  const executeAt = row.executeAt?.getTime() ?? 0;
+  const afterApproval = row.expiresAt.getTime() + row.undoWindowSeconds * 1000;
+  return Math.max(executeAt, afterApproval) + 60_000;
+}

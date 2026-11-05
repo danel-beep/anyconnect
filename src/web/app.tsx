@@ -57,7 +57,38 @@ export interface ShellInfo {
   brokenAccounts: number;
   /** Admins only: plan requests waiting for an answer. */
   planRequests?: number | undefined;
+  /**
+   * The personal vault in this browser (`docs/VAULTS.md`): `locked` when protected accounts exist
+   * but this browser cannot open them yet; `requests` from other browsers waiting for an approval.
+   */
+  vault?: { locked: boolean; requests: number } | undefined;
 }
+
+/** Above every dashboard page except Security itself, which shows the same in full. */
+const VaultBanner: FC<{ t: PageCtx['t']; vault: ShellInfo['vault'] }> = ({ t, vault }) => {
+  if (!vault) return null;
+  if (vault.locked) {
+    return (
+      <div class="notice info reauth-row vault-banner" role="status">
+        <span class="grow">{t('vault.banner.locked')}</span>
+        <a class="btn sm" href="/security#vault">
+          {t('vault.banner.review')}
+        </a>
+      </div>
+    );
+  }
+  if (vault.requests > 0) {
+    return (
+      <div class="notice info reauth-row vault-banner" role="status">
+        <span class="grow">{t('vault.banner.request')}</span>
+        <a class="btn sm primary" href="/security#vault">
+          {t('vault.banner.review')}
+        </a>
+      </div>
+    );
+  }
+  return null;
+};
 
 const NAV: {
   id: AppSection;
@@ -198,6 +229,7 @@ export const AppShell: FC<{
           </div>
         </aside>
         <main class="content" id="main">
+          {section === 'security' ? null : <VaultBanner t={t} vault={shell.vault} />}
           {children}
         </main>
       </div>

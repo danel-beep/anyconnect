@@ -54,7 +54,7 @@ describe('AI clients connect end to end', () => {
     await hub?.close();
   });
 
-  /** A fresh browser window: the hub's sign-in page (password), then the consent screen. */
+  /** A fresh browser window: the hub's sign-in page (password), the vault approval, the consent screen. */
   const signInWindow = (profile: AiClientProfile) => async (authorizationUrl: URL) => {
     const browser = new TestBrowser(hub.baseUrl, internet.fetch);
     const { response: login, url } = await browser.walk(authorizationUrl);
@@ -62,6 +62,9 @@ describe('AI clients connect end to end', () => {
     await login.body?.cancel();
     const signedIn = await browser.login(ADMIN.email, ADMIN.password, url.searchParams.get('next')!);
     expect(signedIn.status).toBe(303);
+    // A new browser for this user: they let it open their vault from the browser they already use,
+    // so the app approved here can open their sealed accounts.
+    await browser.approveFrom(owner);
     const { response: consent } = await browser.walk(signedIn.headers.get('location')!);
     expect(consent.status).toBe(200);
     const html = await consent.text();
