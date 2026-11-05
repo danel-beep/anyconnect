@@ -147,21 +147,33 @@ export default defineConnector({
         description: 'Доски и элементы monday.com: поиск и чтение, создание, изменение колонок, обновления.',
         setup: {
           form: {
-            summary: 'Личный токен API monday.com. Меньше минуты.',
+            summary: 'Вы копируете свой личный токен API в monday.com и вставляете его сюда.',
+            minutes: 1,
+            needs: ['Аккаунт monday.com'],
             steps: [
               {
-                text: 'В monday.com нажмите на аватар → Developers, откройте My access tokens.',
+                text: 'В monday.com нажмите на аватар → **Developers** и откройте раздел **API token** (в старом интерфейсе — **My access tokens**).',
                 link: {
                   label: 'Где найти токен',
                   url: 'https://developer.monday.com/api-reference/docs/authentication',
                 },
               },
-              { text: 'Нажмите Show, затем Copy, чтобы скопировать токен.' },
-              { text: 'Вставьте токен в форму.' },
+              { text: 'Нажмите **Show**, затем **Copy**.', fills: ['token'] },
+              { text: 'Вставьте токен в форму и нажмите **Подключить**.' },
             ],
             tips: [
               'Токен действует от вашего имени и видит те же доски, что и вы.',
-              'Если нажать Regenerate, старый токен перестанет работать: тогда вставьте новый.',
+              'Если нажать **Regenerate**, старый токен перестанет работать: тогда вставьте новый через **Переподключить**.',
+            ],
+            problems: [
+              {
+                problem: 'В меню аватара нет пункта **Developers**',
+                fix: 'Если вы администратор, токен лежит в **Administration** → **Connections** → **Personal API token**. Иначе попросите администратора включить вам доступ к API.',
+              },
+              {
+                problem: '«Not Authenticated» или токен не принимается',
+                fix: 'Скопируйте токен ещё раз кнопкой **Copy**. Если его перевыпустили через **Regenerate**, вставьте новый.',
+              },
             ],
           },
         },
@@ -171,7 +183,7 @@ export default defineConnector({
           'Поставь элементу «Лендинг» статус Done и напиши апдейт, что всё готово.',
           'Перескажи последние апдейты по элементу «Редизайн».',
         ],
-        fields: { token: { label: 'Токен API', hint: 'Аватар → Developers → My access tokens.' } },
+        fields: { token: { label: 'Токен API', hint: 'Аватар → Developers → API token.' } },
         actions: {
           list_boards: { title: 'Доски', description: 'Доски с id и рабочими пространствами.' },
           get_board: { title: 'Доска', description: 'Группы и колонки доски с вариантами статусов.' },
@@ -186,21 +198,33 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'Your monday.com personal API token. Takes under a minute.',
+            summary: 'You copy your personal API token in monday.com and paste it here.',
+            minutes: 1,
+            needs: ['A monday.com account'],
             steps: [
               {
-                text: 'In monday.com, click your avatar → Developers and open My access tokens.',
+                text: 'In monday.com, click your avatar → **Developers** and open **API token** (older screens: **My access tokens**).',
                 link: {
                   label: 'Where to find the token',
                   url: 'https://developer.monday.com/api-reference/docs/authentication',
                 },
               },
-              { text: 'Click Show, then Copy.' },
-              { text: 'Paste the token into the form.' },
+              { text: 'Click **Show**, then **Copy**.', fills: ['token'] },
+              { text: 'Paste the token into the form and click **Connect**.' },
             ],
             tips: [
               'The token acts as you and sees the same boards you do.',
-              'Regenerate makes the old token stop working: paste the new one then.',
+              '**Regenerate** makes the old token stop working: paste the new one with **Reconnect** then.',
+            ],
+            problems: [
+              {
+                problem: 'There is no **Developers** item in the avatar menu',
+                fix: 'If you are an admin, the token is under **Administration** → **Connections** → **Personal API token**. Otherwise ask an admin to give you API access.',
+              },
+              {
+                problem: '“Not Authenticated”, or the token is not accepted',
+                fix: 'Copy the token again with **Copy**. If someone clicked **Regenerate**, paste the new token.',
+              },
             ],
           },
         },
@@ -210,7 +234,7 @@ export default defineConnector({
           'Set “Landing page” to Done and post an update that it is finished.',
           'Summarize the latest updates on the “Redesign” item.',
         ],
-        fields: { token: { label: 'API token', hint: 'Avatar → Developers → My access tokens.' } },
+        fields: { token: { label: 'API token', hint: 'Avatar → Developers → API token.' } },
         actions: {
           list_boards: { title: 'Boards', description: 'Boards with ids and workspaces.' },
           get_board: { title: 'Get a board', description: 'Groups and columns with status labels.' },

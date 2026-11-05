@@ -4,7 +4,7 @@ import { fontFile } from '../web/assets.js';
 import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
 import { FAVICON_SVG } from '../web/favicon.js';
 import { safeNextPath } from '../web/http.js';
-import { legalDoc } from '../web/legal.js';
+import { LEGAL_KINDS, legalDoc } from '../web/legal.js';
 import { withoutLang } from '../web/seo/urls.js';
 import { UseWith } from '../web/seo-pages.js';
 import {
@@ -161,7 +161,7 @@ export function siteRoutes() {
     return c.html(<LegalPage ctx={ctx} doc={doc} path="/support" />);
   });
 
-  for (const kind of ['privacy', 'terms'] as const) {
+  for (const kind of LEGAL_KINDS) {
     app.get(`/${kind}`, async (c) => {
       const ctx = pageCtx(c, await currentUser(c));
       const doc = legalDoc(kind, ctx.lang, {

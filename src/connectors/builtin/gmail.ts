@@ -143,13 +143,14 @@ export default defineConnector({
       ru: {
         setup: {
           oauth: {
-            summary: 'Ваш аккаунт Google. Меньше минуты, Manyplug не видит ваш пароль.',
+            summary:
+              'Вы входите в свой аккаунт Google и разрешаете Manyplug работать с почтой; пароль Manyplug не видит.',
+            minutes: 1,
+            needs: ['Аккаунт Google с Gmail: личный или рабочий Google Workspace'],
             steps: [
+              { text: 'Нажмите **Подключить** и выберите нужный аккаунт Google.' },
               {
-                text: 'Нажмите «Подключить» и выберите нужный аккаунт Google.',
-              },
-              {
-                text: 'Google покажет, что Manyplug сможет делать с почтой: читать, разбирать, писать черновики и отправлять. Нажмите «Продолжить».',
+                text: 'Google покажет, что Manyplug сможет делать с почтой: читать, разбирать, писать черновики и отправлять. Оставьте все галочки и нажмите **Продолжить**.',
               },
               {
                 text: 'Вы вернётесь сюда, и ящик появится под своим адресом. Другие аккаунты Gmail добавляются так же.',
@@ -157,7 +158,17 @@ export default defineConnector({
             ],
             tips: [
               'Переименуйте аккаунты (например, «Работа» и «Личное»), чтобы говорить ИИ, какой из них нужен.',
-              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google, раздел «Сторонние приложения и сервисы».',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google: **Безопасность → Ваши подключения к сторонним приложениям и сервисам**.',
+            ],
+            problems: [
+              {
+                problem: 'Рабочий аккаунт Google Workspace пишет «Доступ заблокирован» или «Access blocked»',
+                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → Access and data control → API controls**.',
+              },
+              {
+                problem: 'ИИ пишет, что у него нет доступа к почте',
+                fix: 'На странице Google были сняты галочки с разрешений. Нажмите **Переподключить** и оставьте отмеченными все пункты.',
+              },
             ],
           },
         },
@@ -213,21 +224,32 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary: 'Your Google account. Takes under a minute, and Manyplug never sees your password.',
+            summary:
+              'You sign in to your Google account and allow Manyplug to work with your mail; Manyplug never sees your password.',
+            minutes: 1,
+            needs: ['A Google account with Gmail: personal or a Google Workspace work account'],
             steps: [
+              { text: 'Click **Connect** and choose the Google account you want to add.' },
               {
-                text: 'Click Connect and choose the Google account you want to add.',
+                text: 'Google lists what Manyplug may do with your mail: read, organise, draft and send. Leave every box ticked and click **Continue**.',
               },
               {
-                text: 'Google lists what Manyplug may do with your mail: read, organise, draft and send. Click Continue.',
-              },
-              {
-                text: 'You are back here and the mailbox appears under its address. Add more Gmail accounts the same way.',
+                text: 'You are back here and the mailbox shows up under its address. Add more Gmail accounts the same way.',
               },
             ],
             tips: [
               'Rename accounts (for example Work and Personal) so you can tell the AI which one to use.',
-              'To cut access, delete the account here or remove Manyplug in your Google Account under Third-party connections.',
+              'To cut access, delete the account here or remove Manyplug in your Google Account under **Security → Your connections to third-party apps & services**.',
+            ],
+            problems: [
+              {
+                problem: 'A Google Workspace work account says “Access blocked”',
+                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → Access and data control → API controls**.',
+              },
+              {
+                problem: 'The AI says it has no access to your mail',
+                fix: 'Some permission boxes were unticked on the Google page. Click **Reconnect** and leave every box ticked.',
+              },
             ],
           },
         },

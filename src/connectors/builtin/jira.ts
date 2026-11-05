@@ -352,24 +352,48 @@ const ui: ConnectorUi = {
         'Задачи и проекты Jira Cloud: поиск по JQL, чтение, создание, изменение, комментарии, смена статуса.',
       setup: {
         form: {
-          summary: 'Адрес вашего Jira, почта и токен API. Около двух минут.',
+          summary:
+            'Вы создаёте токен API в аккаунте Atlassian и вводите его здесь вместе с адресом Jira и почтой.',
+          minutes: 3,
+          needs: [
+            'Jira Cloud с адресом вида acme.atlassian.net (Jira Server и Data Center на своём домене не подходят)',
+            'Почта, с которой вы входите в Atlassian',
+          ],
           steps: [
             {
-              text: 'Откройте страницу токенов API Atlassian и нажмите Create API token (без scopes).',
+              text: 'Откройте страницу токенов API Atlassian и нажмите **Create API token** (не **Create API token with scopes**).',
               link: {
                 label: 'Открыть токены API Atlassian',
                 url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
               },
             },
-            { text: 'Назовите токен Manyplug, выберите срок действия и нажмите Create.' },
-            { text: 'Скопируйте токен: Atlassian покажет его только один раз.' },
+            { text: 'Назовите токен Manyplug, выберите срок действия и нажмите **Create**.' },
             {
-              text: 'В форме укажите имя сайта (из адреса acme.atlassian.net — это acme), почту, с которой входите в Atlassian, и токен.',
+              text: 'Нажмите **Copy** и вставьте токен в форму: Atlassian показывает его только один раз.',
+              fills: ['apiToken'],
+            },
+            {
+              text: 'Введите имя сайта (из адреса acme.atlassian.net — это acme) и почту, с которой входите в Atlassian.',
+              fills: ['site', 'email'],
             },
           ],
           tips: [
             'ИИ видит в Jira то же, что и вы. Чтобы закрыть доступ, отзовите токен на той же странице.',
             'Несколько сайтов Jira? Подключите каждый отдельным аккаунтом.',
+          ],
+          problems: [
+            {
+              problem: 'Ошибка 401 или «Unauthorized»',
+              fix: 'Проверьте почту: нужна та, с которой вы входите в Atlassian. Если токен создан кнопкой **Create API token with scopes**, создайте обычный и нажмите **Переподключить**.',
+            },
+            {
+              problem: 'Ошибка 404 или «сайт не найден»',
+              fix: 'В поле «Сайт Jira» нужно только имя: acme, без https:// и .atlassian.net.',
+            },
+            {
+              problem: 'Токен перестал работать через какое-то время',
+              fix: 'У токена закончился срок действия. Создайте новый на той же странице и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -409,24 +433,48 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Jira address, email and an API token. Takes about two minutes.',
+          summary:
+            'You create an API token in your Atlassian account and enter it here with your Jira address and email.',
+          minutes: 3,
+          needs: [
+            'Jira Cloud with an address like acme.atlassian.net (Jira Server or Data Center on your own domain will not work)',
+            'The email you sign in to Atlassian with',
+          ],
           steps: [
             {
-              text: 'Open your Atlassian API tokens page and click Create API token (the one without scopes).',
+              text: 'Open your Atlassian API tokens page and click **Create API token** (not **Create API token with scopes**).',
               link: {
                 label: 'Open Atlassian API tokens',
                 url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
               },
             },
-            { text: 'Name it Manyplug, pick an expiry date and click Create.' },
-            { text: 'Copy the token: Atlassian shows it only once.' },
+            { text: 'Name it Manyplug, pick an expiry date and click **Create**.' },
             {
-              text: 'In the form, enter your site name (acme for acme.atlassian.net), the email you sign in to Atlassian with, and the token.',
+              text: 'Click **Copy** and paste the token into the form: Atlassian shows it only once.',
+              fills: ['apiToken'],
+            },
+            {
+              text: 'Enter your site name (acme for acme.atlassian.net) and the email you sign in to Atlassian with.',
+              fills: ['site', 'email'],
             },
           ],
           tips: [
             'The AI sees in Jira what you see. To cut access, revoke the token on the same page.',
             'Several Jira sites? Connect each one as its own account.',
+          ],
+          problems: [
+            {
+              problem: 'Error 401 or “Unauthorized”',
+              fix: 'Check the email: it must be the one you sign in to Atlassian with. If you used **Create API token with scopes**, create a plain token and click **Reconnect**.',
+            },
+            {
+              problem: 'Error 404 or “site not found”',
+              fix: 'The Jira site field takes only the name: acme, without https:// or .atlassian.net.',
+            },
+            {
+              problem: 'The token stopped working after a while',
+              fix: 'The token expired. Create a new one on the same page and paste it with **Reconnect**.',
+            },
           ],
         },
       },

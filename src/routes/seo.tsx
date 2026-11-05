@@ -57,6 +57,7 @@ const STATIC_PAGES: SitemapEntry[] = [
   { path: '/status', priority: 0.3 },
   { path: '/privacy', priority: 0.2 },
   { path: '/terms', priority: 0.2 },
+  { path: '/refunds', priority: 0.2 },
 ];
 
 /** What llms.txt and llms-full.txt are built from (English). */

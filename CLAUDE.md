@@ -15,7 +15,7 @@ The owner's standing rule for the whole project: build every change so the proje
 develop further. In practice:
 
 - Extend through the existing seams (connectors via the SDK, `ConnectorResolver`, `HubTokenVerifier`,
-  `BillingProvider` for payment providers (see `docs/BILLING.md`),
+  `BillingProvider` for payment providers and `Mailer` for the hub's own email (see `docs/BILLING.md`),
   `RateLimiter`, `buildCatalog` modes, `ErrorSink` / `HealthCheck` in `src/ops/`) instead of special
   cases in the hub or routes.
 - Keep layers separate (`routes → mcp/oauth → hub → core → connectors`, see `docs/ARCHITECTURE.md`).
@@ -40,6 +40,10 @@ develop further. In practice:
   `src/connectors/index.ts`. Never add inputs named `account` or `fields` (reserved by the hub).
   Give write actions an explicit `risk`; shared interfaces live in `src/connectors/capabilities.ts`
   (see `docs/CONNECTORS.md`).
+- Every connector ships a setup guide (`ui.locales.{en,ru}.setup`) written to the standard in
+  `docs/CONNECTORS.md` ("Стандарт инструкции"): time, what you need, one action per step with exact
+  button names in `**bold**`, `fills` for each form field, common problems. `test/connectors/setup-guides.test.ts`
+  enforces it; have someone without context read the guide before merging.
 - Messengers (`docs/MESSENGERS.md`): connectors declare `messenger` and use `messengerActions`;
   storage, search, outbox and pacing live in `src/messaging/`; long-lived sessions run in the
   gateway process (`src/gateway/`, `node dist/gateway/index.js`) behind `SessionDriver`. Message
@@ -51,6 +55,9 @@ develop further. In practice:
   Connectors throw `ConnectorError` for user-safe errors.
 - Unexpected errors go through `services.ops.errors.capture()` (scrubbed, grouped, shown in the admin
   panel, optionally Sentry), never a bare `logger.error`; see `docs/OPERATIONS.md`.
+- Analytics (`docs/ANALYTICS.md`): count product events with `services.analytics.track(name, key)`;
+  page views are counted by middleware. Cookieless: never store IPs or user agents, only the daily
+  visitor hash and aggregates; reports go in `AnalyticsReports` (`src/analytics/reports.ts`).
 - `src/oauth/server.ts` is framework-free; HTTP lives in `src/routes/`.
 - Secrets only via env vars. Credentials are encrypted with `SecretBox` (AAD = account id).
   Tokens are stored as SHA-256 hashes. Never log arguments, tokens or credentials.

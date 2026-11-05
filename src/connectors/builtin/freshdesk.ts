@@ -234,18 +234,38 @@ const ui: ConnectorUi = {
         'Тикеты и контакты Freshdesk: поиск, переписка, ответы клиентам, заметки, изменение тикетов.',
       setup: {
         form: {
-          summary: 'Адрес Freshdesk и ваш ключ API. Около минуты.',
+          summary:
+            'Вы копируете API-ключ из профиля Freshdesk и вставляете его сюда вместе с адресом службы поддержки.',
+          minutes: 2,
+          needs: ['Аккаунт агента Freshdesk'],
           steps: [
             {
-              text: 'Войдите в Freshdesk, нажмите на аватар справа вверху и откройте Profile settings.',
+              text: 'Войдите в Freshdesk, нажмите на аватар справа вверху и откройте **Profile settings**.',
               link: { label: 'Открыть Freshdesk', url: 'https://www.freshworks.com/freshdesk/login/' },
             },
-            { text: 'Справа нажмите View API key, пройдите проверку и скопируйте ключ.' },
-            { text: 'В форме укажите поддомен (из адреса acme.freshdesk.com — это acme) и ключ.' },
+            {
+              text: 'Справа нажмите **View API key**, пройдите проверку и скопируйте ключ.',
+              fills: ['apiKey'],
+            },
+            { text: 'В форме укажите поддомен: acme для acme.freshdesk.com.', fills: ['domain'] },
           ],
           tips: [
-            'ИИ действует от вашего имени агента. Ответ клиенту уходит только после вашего подтверждения.',
-            'Ключ меняется при смене пароля Freshdesk: тогда вставьте новый.',
+            'Ответы клиентам уходят только после вашего подтверждения.',
+            'Если сбросить ключ в Freshdesk (**Reset API key**), старый перестанет работать: вставьте новый через **Переподключить**.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что ключ не подходит',
+              fix: 'Скопируйте ключ ещё раз в **Profile settings → View API key**. Если ключ сбрасывали, вставьте новый.',
+            },
+            {
+              problem: 'Форма не может связаться со службой поддержки',
+              fix: 'Укажите только поддомен (acme), а не полный адрес, и сверьте его с адресной строкой браузера.',
+            },
+            {
+              problem: 'ИИ не видит часть обращений',
+              fix: 'Ключ действует от вашего имени как агента. Попросите администратора дать вам доступ к нужным группам.',
+            },
           ],
         },
       },
@@ -285,18 +305,38 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Freshdesk address and your API key. Takes about a minute.',
+          summary:
+            'You copy your API key from your Freshdesk profile and paste it here with your helpdesk address.',
+          minutes: 2,
+          needs: ['A Freshdesk agent account'],
           steps: [
             {
-              text: 'Sign in to Freshdesk, click your avatar at the top right and open Profile settings.',
+              text: 'Sign in to Freshdesk, click your avatar at the top right and open **Profile settings**.',
               link: { label: 'Open Freshdesk', url: 'https://www.freshworks.com/freshdesk/login/' },
             },
-            { text: 'On the right, click View API key, pass the check and copy the key.' },
-            { text: 'In the form, enter your subdomain (acme for acme.freshdesk.com) and the key.' },
+            {
+              text: 'On the right, click **View API key**, complete the check and copy the key.',
+              fills: ['apiKey'],
+            },
+            { text: 'In the form, enter your subdomain: acme for acme.freshdesk.com.', fills: ['domain'] },
           ],
           tips: [
-            'The AI acts as you, the agent. Replies to customers go out only after you confirm.',
-            'The key changes when you change your Freshdesk password: paste the new one then.',
+            'Replies to customers go out only after you confirm.',
+            'If you reset the key in Freshdesk (**Reset API key**), the old one stops working: paste the new one with **Reconnect**.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the key is not valid',
+              fix: 'Copy the key again from **Profile settings → View API key**. If it was reset, paste the new one.',
+            },
+            {
+              problem: 'The form cannot reach the helpdesk',
+              fix: 'Enter only the subdomain (acme), not the full address, and check it in your browser’s address bar.',
+            },
+            {
+              problem: 'The AI cannot see some tickets',
+              fix: 'The key acts as you, the agent. Ask an admin to give your agent access to those groups.',
+            },
           ],
         },
       },

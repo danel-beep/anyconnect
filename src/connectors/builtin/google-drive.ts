@@ -120,20 +120,30 @@ export default defineConnector({
       ru: {
         setup: {
           oauth: {
-            summary: 'Ваш аккаунт Google. Меньше минуты.',
+            summary: 'Вы входите в свой аккаунт Google и разрешаете Manyplug работать с файлами на Диске.',
+            minutes: 1,
+            needs: ['Аккаунт Google с Google Диском'],
             steps: [
+              { text: 'Нажмите **Подключить** и выберите аккаунт Google с нужными файлами.' },
               {
-                text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными файлами.',
+                text: 'Google попросит разрешить Manyplug смотреть и менять файлы на Диске. Оставьте галочку и нажмите **Продолжить**.',
               },
               {
-                text: 'Google попросит разрешить Manyplug смотреть и менять файлы на Диске. Нажмите «Продолжить».',
-              },
-              {
-                text: 'Готово: ИИ находит файлы и читает Документы, Таблицы и PDF на этом Диске.',
+                text: 'Готово: ИИ находит файлы и читает Документы, Таблицы, Презентации и текстовые файлы на этом Диске.',
               },
             ],
             tips: [
-              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google, раздел «Сторонние приложения и сервисы».',
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google: **Безопасность → Ваши подключения к сторонним приложениям и сервисам**.',
+            ],
+            problems: [
+              {
+                problem: 'Рабочий аккаунт Google Workspace пишет «Доступ заблокирован» или «Access blocked»',
+                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → Access and data control → API controls**.',
+              },
+              {
+                problem: 'ИИ пишет, что у него нет доступа к Диску',
+                fix: 'На странице Google были сняты галочки с разрешений. Нажмите **Переподключить** и оставьте отмеченными все пункты.',
+              },
             ],
           },
         },
@@ -171,20 +181,30 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary: 'Your Google account. Takes under a minute.',
+            summary: 'You sign in to your Google account and allow Manyplug to work with your Drive files.',
+            minutes: 1,
+            needs: ['A Google account with Google Drive'],
             steps: [
+              { text: 'Click **Connect** and choose the Google account with the files you need.' },
               {
-                text: 'Click Connect and choose the Google account with the files you need.',
+                text: 'Google asks to let Manyplug see and edit your Drive files. Leave the box ticked and click **Continue**.',
               },
               {
-                text: 'Google asks to let Manyplug see and edit your Drive files. Click Continue.',
-              },
-              {
-                text: 'Done: the AI can find files and read Docs, Sheets and PDFs on that Drive.',
+                text: 'Done: the AI can find files and read Docs, Sheets, Slides and text files on that Drive.',
               },
             ],
             tips: [
-              'To cut access, delete the account here or remove Manyplug in your Google Account under Third-party connections.',
+              'To cut access, delete the account here or remove Manyplug in your Google Account under **Security → Your connections to third-party apps & services**.',
+            ],
+            problems: [
+              {
+                problem: 'A Google Workspace work account says “Access blocked”',
+                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → Access and data control → API controls**.',
+              },
+              {
+                problem: 'The AI says it has no access to your Drive',
+                fix: 'Some permission boxes were unticked on the Google page. Click **Reconnect** and leave every box ticked.',
+              },
             ],
           },
         },

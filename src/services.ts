@@ -1,9 +1,11 @@
 import type { McpHttpHandler } from '@modelcontextprotocol/server';
 import { AdminService } from './admin/service.js';
+import { Analytics } from './analytics/index.js';
 import { WorkspaceBillingTools } from './billing/assistant.js';
 import { EntitlementService } from './billing/entitlements.js';
 import type { BillingProvider } from './billing/provider.js';
 import { createBillingProvider, TestBillingProvider } from './billing/providers/index.js';
+import { ReferralService } from './billing/referrals.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
 import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
@@ -34,6 +36,7 @@ import { TotpService } from './core/totp.js';
 import { activeUserCheck, memberCheck, UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
+import { TelegramLanding } from './growth/telegram-landing.js';
 import type { CatalogTeam } from './hub/catalog-types.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
@@ -49,8 +52,11 @@ import { RateLimiter } from './lib/rate-limit.js';
 import { S3Client } from './lib/s3.js';
 import type { safeFetch } from './lib/safe-fetch.js';
 import { createLogger, type Logger } from './logger.js';
+import { createMailer, type Mailer } from './mail/mailer.js';
 import { createHubMcpHandler, createVisitorMcpHandler } from './mcp/handler.js';
 import { createMessaging, type Messaging } from './messaging/index.js';
+import { BillingNotices } from './notices/billing-notices.js';
+import { NoticeService } from './notices/notices.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { BackupService, type DumpTools } from './ops/backups.js';
@@ -103,6 +109,13 @@ export interface Services {
   entitlements: EntitlementService;
   /** Payments: checkout, portal, webhooks (provider-agnostic; `billing.provider` may be undefined). */
   billing: BillingService;
+  /** The hub's own email (undefined = `MAIL_PROVIDER=none`). */
+  mailer: Mailer | undefined;
+  /** One-off emails to workspace owners (billing notices, invite rewards). */
+  notices: NoticeService;
+  billingNotices: BillingNotices;
+  /** Invite links and the month of Pro for a paying invitee. */
+  referrals: ReferralService;
   accounts: AccountService;
   /** OAuth apps of service providers (hub-wide from env, or the user's own). */
   oauthApps: OAuthAppService;
@@ -146,6 +159,8 @@ export interface Services {
   adminPanel: AdminService;
   /** Counts over the audit log for the dashboard. */
   activity: ActivityService;
+  /** First-party analytics: traffic, funnel, product usage (admin panel → Analytics). */
+  analytics: Analytics;
   /** "Sign in with Google" and other OpenID Connect providers. */
   externalLogin: ExternalLoginService;
   /** Sign-ins waiting for a second factor. */
@@ -179,6 +194,8 @@ export function createServices(
     billing?: BillingProvider;
     /** Tests: talk to fake payment provider APIs. */
     billingFetch?: typeof fetch;
+    /** A mailer instead of the configured one (tests: `MemoryMailer`). */
+    mailer?: Mailer;
     /** Tests: external sign-in providers with fake endpoints. */
     loginProviders?: OidcLoginProvider[];
     /** Tests: a fake Sentry. */
@@ -246,6 +263,14 @@ export function createServices(
   if (billingProvider instanceof TestBillingProvider) {
     billingProvider.connect((body, headers) => billing.handleWebhook(billingProvider.id, body, headers));
   }
+  const mailer =
+    overrides.mailer ?? createMailer(config.mail, { log: (fields, msg) => logger.info(fields, msg) });
+  const notices = new NoticeService({ db, mailer, publicUrl: config.publicUrl, logger });
+  const billingNotices = new BillingNotices({ db, notices, entitlements, publicUrl: config.publicUrl });
+  const referrals = new ReferralService({ db, entitlements, notices, publicUrl: config.publicUrl });
+  entitlements.listen(billingNotices);
+  billing.listen(billingNotices);
+  billing.listen(referrals);
   const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements);
   const customServices = new CustomServiceManager({
     db,
@@ -319,6 +344,12 @@ export function createServices(
     db,
     () => new Map(connectors.builtin.all().map((c) => [c.id, connectorText(c, 'en').name] as const)),
   );
+  const analytics = new Analytics({
+    db,
+    config: config.analytics,
+    publicHost: new URL(config.publicUrl).hostname,
+    onError: (error) => ops.errors.capture(error, { source: 'analytics' }),
+  });
   const rateLimiter = new RateLimiter();
   const circuitBreaker = new CircuitBreaker();
   const idempotency = new MemoryIdempotencyStore();
@@ -363,6 +394,17 @@ export function createServices(
       reason: row.reason ?? undefined,
     };
   };
+  // People who open the bot from an ad or a plain link get a short pitch and a tagged site link.
+  const telegramLanding = telegramBot
+    ? new TelegramLanding({
+        bot: telegramBot,
+        publicUrl: config.publicUrl,
+        t: translator,
+        logger,
+        // Bot starts per ad campaign, next to the visits and sign-ups the same tag brings.
+        onStart: (campaign) => analytics.track('bot.start', campaign ?? 'none'),
+      })
+    : undefined;
   const confirmations = new ConfirmationCenter({
     pending: pendingCalls,
     channels: notificationChannels,
@@ -371,6 +413,7 @@ export function createServices(
     describe: describeCall,
     t: translator,
     logger,
+    ...(telegramLanding ? { onOtherStart: telegramLanding.handle } : {}),
   });
   const securityStages: StageMap = {
     policy: policyStage(policies),
@@ -418,7 +461,15 @@ export function createServices(
     reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
     logger,
   });
-  for (const job of builtinJobs({ health, alerts, customServices, status: ops.status, backups }))
+  for (const job of builtinJobs({
+    health,
+    alerts,
+    customServices,
+    status: ops.status,
+    backups,
+    billingNotices,
+    analytics,
+  }))
     jobs.register(job);
   const hub = new Hub({
     db,
@@ -433,6 +484,7 @@ export function createServices(
       billing: new WorkspaceBillingTools({
         entitlements,
         billing,
+        referrals,
         publicUrl: config.publicUrl,
         teamSlug: (workspaceId) => teams.slugOf(workspaceId),
       }),
@@ -556,6 +608,10 @@ export function createServices(
     usage,
     entitlements,
     billing,
+    mailer,
+    notices,
+    billingNotices,
+    referrals,
     accounts,
     oauthApps,
     tokens,
@@ -585,6 +641,7 @@ export function createServices(
     externalLogin,
     adminPanel,
     activity,
+    analytics,
     pendingLogins,
     secondFactors,
     rateLimiter,
@@ -594,6 +651,7 @@ export function createServices(
     messaging,
     ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
+      await analytics.close();
       await messaging?.stop();
       await pendingRunner.stop();
       rateLimiter.close();

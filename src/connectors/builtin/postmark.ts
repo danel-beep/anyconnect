@@ -222,18 +222,42 @@ const ui: ConnectorUi = {
         'Транзакционная почта Postmark: письма и шаблоны, отправленные письма, статистика доставки.',
       setup: {
         form: {
-          summary: 'Токен сервера Postmark. Около минуты.',
+          summary: 'Вы копируете токен своего сервера в Postmark и вставляете его сюда.',
+          minutes: 2,
+          needs: [
+            'Аккаунт Postmark с сервером (Server)',
+            'Подтверждённый отправитель или домен в Postmark, чтобы отправлять письма',
+          ],
           steps: [
             {
-              text: 'Откройте Postmark → Servers, выберите сервер и вкладку API Tokens.',
+              text: 'Откройте Postmark → **Servers**, выберите сервер и вкладку **API Tokens**.',
               link: { label: 'Открыть серверы Postmark', url: 'https://account.postmarkapp.com/servers' },
             },
-            { text: 'Скопируйте Server API token (или нажмите Generate another token).' },
-            { text: 'Вставьте токен в форму. Для другого сервера подключите ещё один аккаунт.' },
+            {
+              text: 'Скопируйте **Server API token** (или нажмите **Generate another token**, чтобы выдать Manyplug отдельный).',
+              fills: ['token'],
+            },
+            {
+              text: 'Вставьте токен в форму и нажмите **Подключить**. Для другого сервера подключите ещё один аккаунт.',
+            },
           ],
           tips: [
             'Письма уходят только с подтверждённых отправителей и только после вашего подтверждения.',
             'Токен видит лишь свой сервер, а не весь аккаунт Postmark.',
+          ],
+          problems: [
+            {
+              problem: '«Request does not contain a valid Server token»',
+              fix: 'Скорее всего, вставлен токен аккаунта (Account API token). Возьмите токен на вкладке **API Tokens** нужного сервера.',
+            },
+            {
+              problem: 'Отправка падает: адрес From «is not a Sender Signature»',
+              fix: 'Подтвердите этот адрес или его домен в Postmark: **Sender Signatures** → **Add Domain or Signature**.',
+            },
+            {
+              problem: 'Письма уходят только на адреса вашего домена',
+              fix: 'Аккаунт Postmark ещё ждёт одобрения и пишет только на ваши подтверждённые домены. Владелец аккаунта может запросить одобрение в Postmark.',
+            },
           ],
         },
       },
@@ -255,18 +279,42 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Postmark server token. Takes about a minute.',
+          summary: 'You copy your server’s token in Postmark and paste it here.',
+          minutes: 2,
+          needs: [
+            'A Postmark account with a server',
+            'A confirmed sender or domain in Postmark, to send email',
+          ],
           steps: [
             {
-              text: 'Open Postmark → Servers, pick the server and open its API Tokens tab.',
+              text: 'Open Postmark → **Servers**, pick the server and open its **API Tokens** tab.',
               link: { label: 'Open Postmark servers', url: 'https://account.postmarkapp.com/servers' },
             },
-            { text: 'Copy the Server API token (or click Generate another token).' },
-            { text: 'Paste the token into the form. Connect another account for another server.' },
+            {
+              text: 'Copy the **Server API token** (or click **Generate another token** to give Manyplug its own).',
+              fills: ['token'],
+            },
+            {
+              text: 'Paste the token into the form and click **Connect**. Connect another account for another server.',
+            },
           ],
           tips: [
             'Emails go out only from confirmed senders and only after you confirm.',
             'The token sees only its own server, not your whole Postmark account.',
+          ],
+          problems: [
+            {
+              problem: '“Request does not contain a valid Server token”',
+              fix: 'You most likely pasted the Account API token. Take the token from the **API Tokens** tab of the server.',
+            },
+            {
+              problem: 'Sending fails: the From address “is not a Sender Signature”',
+              fix: 'Confirm that address or its domain in Postmark: **Sender Signatures** → **Add Domain or Signature**.',
+            },
+            {
+              problem: 'Email only goes to addresses at your own domain',
+              fix: 'Your Postmark account is still pending approval and sends only to your verified domains. The account owner can request approval in Postmark.',
+            },
           ],
         },
       },

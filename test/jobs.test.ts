@@ -50,6 +50,7 @@ describe('background job queue (pg-boss)', () => {
       health: {} as never,
       alerts: {} as never,
       customServices: {} as never,
+      billingNotices: {} as never,
       status: {} as never,
     });
     expect(new Set(jobs.map((j) => j.name)).size).toBe(jobs.length);

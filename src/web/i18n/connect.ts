@@ -7,7 +7,7 @@ export const connectEn = {
   'connect.optional': '(optional)',
   'connect.formLabelHint':
     'Shown to you and the AI, e.g. “Work” or “Personal”. Handy when you connect several accounts.',
-  'connect.howTo': 'Where to get it',
+  'connect.howTo': 'How to connect',
   'connect.seeSteps': 'Steps',
   'connect.canDo': 'What the AI will be able to do',
   'connect.canDoSummary':
@@ -38,6 +38,11 @@ export const connectEn = {
   'connect.unavailableBack': 'Back to services',
   'guide.variants': 'Steps for your provider',
   'guide.detected': 'Your provider',
+  'guide.minutes': 'About {minutes} min',
+  'guide.needs': 'You need',
+  'guide.steps': 'Steps',
+  'guide.fills': 'Paste into:',
+  'guide.problems': 'If something goes wrong',
 } as const;
 
 export const connectRu: Record<keyof typeof connectEn, string> = {
@@ -45,7 +50,7 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
   'connect.optional': '(необязательно)',
   'connect.formLabelHint':
     'Его видите вы и ИИ, например «Работа» или «Личное». Удобно, когда аккаунтов несколько.',
-  'connect.howTo': 'Где это взять',
+  'connect.howTo': 'Как подключить',
   'connect.seeSteps': 'Как получить',
   'connect.canDo': 'Что сможет ИИ',
   'connect.canDoSummary':
@@ -77,4 +82,9 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
   'connect.unavailableBack': 'К сервисам',
   'guide.variants': 'Шаги для вашего почтового сервиса',
   'guide.detected': 'Ваш сервис',
+  'guide.minutes': 'Около {minutes} мин',
+  'guide.needs': 'Понадобится',
+  'guide.steps': 'Шаги',
+  'guide.fills': 'Вставьте в поле:',
+  'guide.problems': 'Если что-то не получилось',
 };

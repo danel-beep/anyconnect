@@ -48,6 +48,8 @@ export const users = pgTable('users', {
   statusReason: text(),
   /** Preferred interface language (`ru`, `en`); null = from the browser. */
   locale: text(),
+  /** The user's invite code (`/?ref=<code>`), created on first use; see `ReferralService`. */
+  referralCode: text().unique(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   lastLoginAt: timestamp({ withTimezone: true }),
@@ -1156,6 +1158,48 @@ export const billingEvents = pgTable(
 );
 
 /**
+ * Emails and other one-off notices already sent to a workspace, so each goes out once per
+ * occasion (`key`: the trial end day, the counting period, the subscription and period...).
+ */
+export const sentNotices = pgTable(
+  'sent_notices',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** `trial_ending`, `limit_reached`, `payment_failed`, `referral_reward`. */
+    kind: text().notNull(),
+    key: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.kind, t.key] })],
+);
+
+export type ReferralStatus = 'signed_up' | 'rewarded' | 'no_reward';
+
+/**
+ * Who invited whom (one row per invited user). The inviter gets a month of Pro once the invited
+ * user starts paying; see `ReferralService`.
+ */
+export const referrals = pgTable(
+  'referrals',
+  {
+    referredUserId: text()
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    referrerUserId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text().$type<ReferralStatus>().notNull().default('signed_up'),
+    /** What the inviter got: `pro_plan` (a month of Pro), `pro_limits` (Pro limits on a paid plan) or why not. */
+    reward: text(),
+    rewardedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.referrerUserId)],
+);
+
+/**
  * Extra limits granted to a workspace on top of its plan (by an admin, a promo, support).
  * While active, `amount` is added to the plan's limit of `metric`; null `amount` lifts the limit.
  */
@@ -1313,4 +1357,113 @@ export const statusIncidents = pgTable(
     endedAt: timestamp({ withTimezone: true }),
   },
   (t) => [index().on(t.startedAt), index().on(t.component, t.endedAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Product analytics (first party, cookieless; see `docs/ANALYTICS.md`)
+// ---------------------------------------------------------------------------
+
+/**
+ * The secret of each UTC day that visitor ids are hashed with. Random, shared by every instance,
+ * deleted after two days: from then on nobody (us included) can tie a visit back to an address.
+ */
+export const analyticsSalts = pgTable('analytics_salts', {
+  day: date({ mode: 'string' }).primaryKey(),
+  salt: text().notNull(),
+  createdAt: createdAt(),
+});
+
+/**
+ * One row per visitor and UTC day on the public site: a daily aggregate, not a click log. The
+ * visitor is `hash(day salt, IP, browser)`, so the same person is a new visitor the next day and no
+ * IP address or cookie is stored. The traffic source is the first non-direct one seen that day.
+ */
+export const analyticsVisits = pgTable(
+  'analytics_visits',
+  {
+    day: date({ mode: 'string' }).notNull(),
+    /** Daily visitor id (truncated SHA-256, base64url). */
+    visitor: text().notNull(),
+    /** `direct`, a search engine, a site, or `utm_source` (`telegram`). */
+    source: text().notNull(),
+    /** `none`, `organic`, `referral`, `social`, `ai`, `paid`, `email`, `invite` or `utm_medium`. */
+    medium: text().notNull(),
+    campaign: text(),
+    term: text(),
+    content: text(),
+    /** The referring site's host, without `www.`. */
+    referrerHost: text(),
+    /** The first page of the visit (ids replaced by `:id`). */
+    landingPath: text().notNull(),
+    /** ISO 3166 country code from the IP (looked up, never stored). */
+    country: text(),
+    /** The browser's preferred language (`en`, `ru`, `de`). */
+    language: text(),
+    /** `desktop`, `mobile`, `tablet`. */
+    device: text().notNull(),
+    browser: text().notNull(),
+    os: text().notNull(),
+    /** The browser carried a sign-in session: a returning user, kept out of acquisition numbers. */
+    known: boolean().notNull().default(false),
+    pageviews: integer().notNull().default(0),
+    firstAt: timestamp({ withTimezone: true }).notNull(),
+    lastAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.visitor] }), index().on(t.source, t.day)],
+);
+
+/** Page views per UTC day and page (site and dashboard; ids in paths replaced by `:id`). */
+export const analyticsPages = pgTable(
+  'analytics_pages',
+  {
+    day: date({ mode: 'string' }).notNull(),
+    path: text().notNull(),
+    views: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.path] })],
+);
+
+/**
+ * Counters of product events per UTC day: `name` says what happened (`signup`, `connect.start`,
+ * `checkout.start`, `crawler`, `bot.start`), `key` what it happened to (a service, plan, campaign).
+ */
+export const analyticsEvents = pgTable(
+  'analytics_events',
+  {
+    day: date({ mode: 'string' }).notNull(),
+    name: text().notNull(),
+    key: text().notNull().default(''),
+    count: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.name, t.key] })],
+);
+
+/**
+ * Where a user came from, written once at sign-up from that day's (or the day before's) visit by
+ * the same visitor. `matched = false`: no visit was seen (an earlier visit, or before analytics).
+ */
+export const userAttribution = pgTable(
+  'user_attribution',
+  {
+    userId: text()
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    source: text().notNull(),
+    medium: text().notNull(),
+    campaign: text(),
+    term: text(),
+    content: text(),
+    referrerHost: text(),
+    landingPath: text(),
+    country: text(),
+    language: text(),
+    device: text(),
+    browser: text(),
+    os: text(),
+    matched: boolean().notNull(),
+    /** When the matched visit started. */
+    firstSeenAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.createdAt), index().on(t.source)],
 );

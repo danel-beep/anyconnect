@@ -182,16 +182,35 @@ const ui: ConnectorUi = {
         'Учёт времени Harvest: записи времени, запуск и остановка таймеров, проекты и задачи, отчёты.',
       setup: {
         form: {
-          summary: 'Личный токен Harvest и Account ID. Около минуты.',
+          summary: 'Вы создаёте личный токен в Harvest и копируете сюда его и номер аккаунта.',
+          minutes: 2,
+          needs: ['Аккаунт Harvest'],
           steps: [
             {
-              text: 'Откройте Harvest Developers → Personal access tokens и нажмите Create new personal access token.',
+              text: 'Откройте Harvest Developers и нажмите **Create new personal access token**.',
               link: { label: 'Открыть токены Harvest', url: 'https://id.getharvest.com/developers' },
             },
-            { text: 'Назовите токен Manyplug и создайте его.' },
-            { text: 'Скопируйте Your Token и Account ID со страницы токена и вставьте их в форму.' },
+            { text: 'Назовите токен Manyplug и нажмите **Create personal access token**.' },
+            { text: 'Скопируйте значение **Your Token** и вставьте его в форму.', fills: ['token'] },
+            {
+              text: 'Ниже, в списке **Account ID**, выберите свой аккаунт Harvest и скопируйте его номер.',
+              fills: ['accountId'],
+            },
           ],
-          tips: ['Токен действует от вашего имени и видит те же проекты и записи, что и вы.'],
+          tips: [
+            'Токен действует от вашего имени и видит те же проекты и записи, что и вы.',
+            'Отозвать токен можно на той же странице Developers.',
+          ],
+          problems: [
+            {
+              problem: 'Ошибка 401 или «Invalid token»',
+              fix: 'Скопируйте **Your Token** заново целиком, без пробелов, и нажмите **Переподключить**.',
+            },
+            {
+              problem: 'Ошибка 403 или пустые проекты',
+              fix: 'В **Account ID** указан аккаунт Forecast или другой компании. Выберите в списке аккаунт Harvest и вставьте его номер.',
+            },
+          ],
         },
       },
       prompts: [
@@ -216,16 +235,35 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Harvest personal access token and Account ID. Takes about a minute.',
+          summary: 'You create a personal access token in Harvest and copy it and your account number here.',
+          minutes: 2,
+          needs: ['A Harvest account'],
           steps: [
             {
-              text: 'Open Harvest Developers → Personal access tokens and click Create new personal access token.',
+              text: 'Open Harvest Developers and click **Create new personal access token**.',
               link: { label: 'Open Harvest tokens', url: 'https://id.getharvest.com/developers' },
             },
-            { text: 'Name it Manyplug and create it.' },
-            { text: 'Copy Your Token and the Account ID from the token page into the form.' },
+            { text: 'Name it Manyplug and click **Create personal access token**.' },
+            { text: 'Copy the value under **Your Token** and paste it into the form.', fills: ['token'] },
+            {
+              text: 'Below it, in the **Account ID** list, pick your Harvest account and copy its number.',
+              fills: ['accountId'],
+            },
           ],
-          tips: ['The token acts as you and sees the same projects and entries you do.'],
+          tips: [
+            'The token acts as you and sees the same projects and entries you do.',
+            'You can revoke the token on the same Developers page.',
+          ],
+          problems: [
+            {
+              problem: 'Error 401 or “Invalid token”',
+              fix: 'Copy **Your Token** again in full, with no spaces, and click **Reconnect**.',
+            },
+            {
+              problem: 'Error 403, or no projects show up',
+              fix: 'The **Account ID** belongs to Forecast or another company. Pick your Harvest account in the list and paste its number.',
+            },
+          ],
         },
       },
       prompts: [

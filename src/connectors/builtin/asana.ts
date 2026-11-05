@@ -155,16 +155,36 @@ export default defineConnector({
         description: 'Задачи и проекты Asana: поиск, чтение, создание, изменение, выполнение и комментарии.',
         setup: {
           form: {
-            summary: 'Личный токен доступа Asana. Около минуты.',
+            summary: 'Вы создаёте личный токен доступа в консоли разработчика Asana и вставляете его сюда.',
+            minutes: 2,
+            needs: ['Аккаунт Asana (подойдёт любой тариф)'],
             steps: [
               {
-                text: 'Откройте консоль разработчика Asana и нажмите Create new token.',
+                text: 'Откройте консоль разработчика Asana и нажмите **Create new token**.',
                 link: { label: 'Открыть консоль разработчика Asana', url: 'https://app.asana.com/0/my-apps' },
               },
-              { text: 'Назовите токен Manyplug, примите условия и нажмите Create token.' },
-              { text: 'Скопируйте токен (Asana покажет его один раз) и вставьте в форму.' },
+              {
+                text: 'Назовите токен Manyplug, отметьте согласие с условиями API и нажмите **Create token**.',
+              },
+              {
+                text: 'Нажмите **Copy** и вставьте токен в форму. Asana показывает его только один раз.',
+                fills: ['token'],
+              },
             ],
-            tips: ['Токен действует от вашего имени во всех ваших пространствах. Отозвать его можно там же.'],
+            tips: [
+              'Токен действует от вашего имени во всех ваших рабочих пространствах.',
+              'Отозвать его можно в консоли разработчика в любой момент.',
+            ],
+            problems: [
+              {
+                problem: 'Форма пишет, что токен не подходит',
+                fix: 'Создайте новый токен в консоли разработчика и скопируйте его кнопкой **Copy**, чтобы не потерять ни одного символа.',
+              },
+              {
+                problem: 'ИИ не видит проект',
+                fix: 'Токен видит то же, что и вы в Asana. Попросите добавить вас в проект или подключите аккаунт Asana, у которого он есть.',
+              },
+            ],
           },
         },
         prompts: [
@@ -201,16 +221,34 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'An Asana personal access token. Takes about a minute.',
+            summary: 'You create a personal access token in the Asana developer console and paste it here.',
+            minutes: 2,
+            needs: ['An Asana account (any plan)'],
             steps: [
               {
-                text: 'Open the Asana developer console and click Create new token.',
+                text: 'Open the Asana developer console and click **Create new token**.',
                 link: { label: 'Open the Asana developer console', url: 'https://app.asana.com/0/my-apps' },
               },
-              { text: 'Name it Manyplug, accept the terms and click Create token.' },
-              { text: 'Copy the token (Asana shows it only once) and paste it into the form.' },
+              { text: 'Name it Manyplug, tick the box to accept the API terms and click **Create token**.' },
+              {
+                text: 'Click **Copy** and paste the token into the form. Asana shows it only once.',
+                fills: ['token'],
+              },
             ],
-            tips: ['The token acts as you in all your workspaces. You can revoke it in the same place.'],
+            tips: [
+              'The token acts as you in all your workspaces.',
+              'You can revoke it in the developer console at any time.',
+            ],
+            problems: [
+              {
+                problem: 'The form says the token is not valid',
+                fix: 'Create a new token in the developer console and copy it with the **Copy** button, so no character is lost.',
+              },
+              {
+                problem: 'The AI does not see a project',
+                fix: 'The token sees what you see in Asana. Ask to be added to the project, or connect the Asana account that has it.',
+              },
+            ],
           },
         },
         prompts: [

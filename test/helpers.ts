@@ -12,6 +12,7 @@ import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
 import { base32Decode, totp } from '../src/lib/totp.js';
 import { createLogger } from '../src/logger.js';
+import type { Mailer } from '../src/mail/mailer.js';
 import { createServices, type Services } from '../src/services.js';
 
 export const TEST_DATABASE_URL =
@@ -54,7 +55,8 @@ export async function truncateAll(services: Services): Promise<void> {
              api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants, oauth_clients, web_sessions,
              pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
              login_states, admin_audit_log, limit_grants, subscriptions, user_identities,
-             error_groups, job_runs, workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
+             error_groups, job_runs, workspace_members, workspaces, users, analytics_visits,
+             analytics_pages, analytics_events, analytics_salts, user_attribution RESTART IDENTITY CASCADE`);
 }
 
 export interface TestHub {
@@ -79,6 +81,8 @@ export async function startTestHub(
     databaseUrl?: string;
     /** External sign-in providers with fake endpoints ("Sign in with Google" tests). */
     loginProviders?: OidcLoginProvider[];
+    /** Captures the hub's emails (`MemoryMailer`). */
+    mailer?: Mailer;
     /** A fake Sentry (set SENTRY_DSN in `env` too). */
     sentryFetch?: typeof fetch;
   } = {},
@@ -115,6 +119,7 @@ export async function startTestHub(
     ...(options.stages ? { stages: options.stages } : {}),
     ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
     ...(options.loginProviders ? { loginProviders: options.loginProviders } : {}),
+    ...(options.mailer ? { mailer: options.mailer } : {}),
     ...(options.sentryFetch ? { sentryFetch: options.sentryFetch } : {}),
   });
   await truncateAll(services);
@@ -138,13 +143,21 @@ export class TestBrowser {
   /** Starts as a visitor who picked Russian with the language switch (tests assert Russian texts). */
   private readonly cookies = new Map<string, string>([['ac_lang', 'ru']]);
 
+  /** Headers sent with every request (User-Agent, Accept-Language: analytics tests). */
+  readonly headers: Record<string, string> = {};
+
   constructor(private readonly origin: string) {}
 
   async request(
     url: string,
-    init: { method?: string; form?: Record<string, string>; json?: unknown } = {},
+    init: {
+      method?: string;
+      form?: Record<string, string>;
+      json?: unknown;
+      headers?: Record<string, string>;
+    } = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...this.headers, ...init.headers };
     if (this.cookies.size) headers.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
     let body: string | undefined;
     if (init.form) {

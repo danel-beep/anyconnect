@@ -180,26 +180,42 @@ const ui: ConnectorUi = {
         'Домены и DNS в Cloudflare: зоны, чтение, добавление, изменение и удаление записей, сброс кэша.',
       setup: {
         form: {
-          summary: 'API-токен Cloudflare с нужными правами. Около двух минут.',
+          summary: 'Вы создаёте в Cloudflare API-токен с правами на DNS и вставляете его сюда.',
+          minutes: 3,
+          needs: ['Аккаунт Cloudflare с доменами (зонами), которыми будет управлять ИИ'],
           steps: [
             {
-              text: 'Откройте Cloudflare → My Profile → API Tokens и нажмите Create Token.',
+              text: 'В Cloudflare откройте **My Profile → API Tokens** и нажмите **Create Token**.',
               link: {
-                label: 'Открыть токены Cloudflare',
+                label: 'Открыть API-токены Cloudflare',
                 url: 'https://dash.cloudflare.com/profile/api-tokens',
               },
             },
             {
-              text: 'Возьмите шаблон Edit zone DNS. Добавьте право Zone → Cache Purge → Purge, если ИИ можно сбрасывать кэш.',
+              text: 'Рядом с шаблоном **Edit zone DNS** нажмите **Use template**. Если ИИ может очищать кэш, добавьте право **Zone → Cache Purge → Purge**.',
             },
             {
-              text: 'В Zone Resources выберите все зоны или конкретные домены, нажмите Continue to summary → Create Token.',
+              text: 'В разделе **Zone Resources** выберите **All zones** или нужные домены, затем нажмите **Continue to summary** и **Create Token**.',
             },
-            { text: 'Скопируйте токен (он показывается один раз) и вставьте его в форму.' },
+            { text: 'Скопируйте токен. Cloudflare показывает его только один раз.', fills: ['token'] },
           ],
           tips: [
             'Не используйте Global API Key: токен с ограниченными правами безопаснее.',
-            'Изменение и удаление DNS-записей ИИ делает только после вашего подтверждения.',
+            'Записи DNS ИИ меняет и удаляет только после вашего подтверждения.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что токен не подходит',
+              fix: 'Скопируйте токен ещё раз со страницы после **Create Token**. Если она закрыта, нажмите **Roll** у токена в списке, чтобы получить новое значение.',
+            },
+            {
+              problem: 'ИИ пишет, что домен не найден',
+              fix: 'У токена нет доступа к этой зоне. Измените токен и добавьте домен в **Zone Resources**.',
+            },
+            {
+              problem: 'Очистка кэша падает с ошибкой прав',
+              fix: 'Измените токен и добавьте право **Zone → Cache Purge → Purge**.',
+            },
           ],
         },
       },
@@ -223,26 +239,42 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A Cloudflare API token with the right permissions. Takes about two minutes.',
+          summary: 'You create an API token with DNS permissions in Cloudflare and paste it here.',
+          minutes: 3,
+          needs: ['A Cloudflare account with the domains (zones) the AI should manage'],
           steps: [
             {
-              text: 'Open Cloudflare → My Profile → API Tokens and click Create Token.',
+              text: 'In Cloudflare, open **My Profile → API Tokens** and click **Create Token**.',
               link: {
                 label: 'Open Cloudflare API tokens',
                 url: 'https://dash.cloudflare.com/profile/api-tokens',
               },
             },
             {
-              text: 'Use the Edit zone DNS template. Add Zone → Cache Purge → Purge if the AI may purge the cache.',
+              text: 'Next to the **Edit zone DNS** template, click **Use template**. If the AI may purge the cache, add the permission **Zone → Cache Purge → Purge**.',
             },
             {
-              text: 'Under Zone Resources pick all zones or specific domains, then Continue to summary → Create Token.',
+              text: 'Under **Zone Resources**, pick **All zones** or the domains the AI may use, then click **Continue to summary** and **Create Token**.',
             },
-            { text: 'Copy the token (it is shown once) and paste it into the form.' },
+            { text: 'Copy the token. Cloudflare shows it only once.', fills: ['token'] },
           ],
           tips: [
             'Do not use the Global API Key: a token with limited permissions is safer.',
             'The AI changes or deletes DNS records only after you confirm.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the token is not valid',
+              fix: 'Copy the token again from the page after **Create Token**. If it is gone, use **Roll** on the token in the list to get a new value.',
+            },
+            {
+              problem: 'The AI says a domain is not found',
+              fix: 'The token has no access to that zone. Edit the token and add the domain under **Zone Resources**.',
+            },
+            {
+              problem: 'Purging the cache fails with a permission error',
+              fix: 'Edit the token and add **Zone → Cache Purge → Purge**.',
+            },
           ],
         },
       },

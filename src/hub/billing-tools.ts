@@ -22,21 +22,23 @@ export interface WorkspaceBilling {
     workspaceId: string,
     cancel: boolean,
   ): Promise<{ planId: string; until: string | null }>;
+  /** The user's invite link and what invites have brought so far. */
+  invite(userId: string): Promise<Record<string, unknown>>;
 }
 
 /**
- * The plan tools (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`): the user sees and
- * changes their plan from the chat. Paying always happens on the provider's secure page (the AI
+ * The plan tools (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`): the user sees and changes their plan from the chat. Paying always happens on the provider's secure page (the AI
  * only gets a link), so the AI can never spend money on its own; cancelling needs confirmation.
  */
+const billing = (ctx: { billing?: WorkspaceBilling }): WorkspaceBilling => {
+  // Every hub built by `createServices` has billing; a bare test hub may not.
+  if (!ctx.billing) throw new AppError(501, 'no_billing', 'Plans are not available on this server');
+  return ctx.billing;
+};
+
 export function billingActions(
   define: <T extends AnyObjectSchema>(spec: SetupActionSpec<T>) => ActionDefinition,
 ): ActionDefinition[] {
-  const billing = (ctx: { billing?: WorkspaceBilling }): WorkspaceBilling => {
-    // Every hub built by `createServices` has billing; a bare test hub may not.
-    if (!ctx.billing) throw new AppError(501, 'no_billing', 'Plans are not available on this server');
-    return ctx.billing;
-  };
   return [
     define({
       name: 'plan',
@@ -97,6 +99,29 @@ export function billingActions(
         return undo
           ? { resumed: true, plan: result.planId, renews: result.until }
           : { canceled: true, plan: result.planId, plan_stays_until: result.until, after_that: 'free' };
+      },
+    }),
+  ];
+}
+
+/**
+ * The invite tool (`manyplug_invite`): the user's referral link and stats. Rarely needed, so the
+ * setup list puts it last (it is still found by search when the tool list is full).
+ */
+export function referralActions(
+  define: <T extends AnyObjectSchema>(spec: SetupActionSpec<T>) => ActionDefinition,
+): ActionDefinition[] {
+  return [
+    define({
+      name: 'invite',
+      title: 'Invite friends',
+      description:
+        "Returns the user's invite link and how many people joined through it. When someone who joined through the link starts a paid plan, the user gets a month of Pro.",
+      input: z.object({}),
+      risk: 'read',
+      hints: { readOnly: true, idempotent: true, openWorld: false },
+      async run(_input, ctx) {
+        return billing(ctx).invite(ctx.principal.userId);
       },
     }),
   ];

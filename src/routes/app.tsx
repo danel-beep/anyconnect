@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isMetric, type Metric, PLANS, planFits } from '../billing/plans.js';
+import { REFERRAL_PROVIDER } from '../billing/referrals.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
@@ -22,7 +23,7 @@ import {
   SettingsPage,
   type UsageView,
 } from '../web/app.js';
-import { serviceAlternative } from '../web/catalog.js';
+import { SAMPLE_SERVICES, serviceAlternative } from '../web/catalog.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
 import { fmtAgo, fmtDate } from '../web/ui.js';
@@ -394,6 +395,19 @@ export function appRoutes() {
     }),
   );
 
+  /** Removes the sample accounts a new hub starts with (the Demo service), all at once. */
+  app.post(
+    '/app/samples/remove',
+    action('/app/services', async (c, auth) => {
+      const s = c.get('services');
+      const samples = (await s.accounts.list(auth.workspace.id)).filter((a) =>
+        SAMPLE_SERVICES.has(a.connectorId),
+      );
+      for (const account of samples) await s.accounts.delete(auth.workspace.id, account.id);
+      setFlash(c, 'ok', 'app.flash.samplesRemoved', { n: String(samples.length) });
+    }),
+  );
+
   app.post(
     '/app/custom/:id/delete',
     action('/app/services', async (c, auth) => {
@@ -600,11 +614,12 @@ export function appRoutes() {
     page('/app/billing', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, entitlements, request, shell] = await Promise.all([
+      const [usage, entitlements, request, shell, invite] = await Promise.all([
         usageOf(c, ws),
         s.entitlements.entitlements(ws),
         s.entitlements.openRequest(ws),
         shellInfo(c, ws),
+        s.referrals.stats(auth.user.id),
       ]);
       const sub = entitlements.subscription;
       const paid = s.billing.liveSubscription(sub);
@@ -656,6 +671,15 @@ export function appRoutes() {
               })),
             requested: request ? { planId: request.planId, at: request.createdAt } : undefined,
             flash: takeFlash(c),
+            gift: sub?.provider === REFERRAL_PROVIDER && !paid,
+            invite: entitlements.plan.public
+              ? {
+                  link: invite.link,
+                  invited: invite.invited,
+                  rewarded: invite.rewarded,
+                  days: invite.rewardDays,
+                }
+              : undefined,
           }}
         />,
       );
@@ -679,6 +703,7 @@ export function appRoutes() {
         successUrl: `${s.config.publicUrl}/app/billing?paid=1`,
         cancelUrl: `${s.config.publicUrl}/app/billing`,
       });
+      s.analytics.track('checkout.start', `${input.plan}_${input.interval}`);
       if (outcome.kind === 'redirect') return c.redirect(outcome.url, 303);
       setFlash(c, 'ok', 'app.flash.planChanging', {
         plan: c.get('t')(`plan.${outcome.planId}.name` as 'plan.free.name'),

@@ -2,10 +2,11 @@ import type { Locale } from './i18n.js';
 import type { LegalDoc } from './site.js';
 
 /**
- * Privacy policy and terms of service. Plain data so the texts can be edited (or replaced by a
+ * Privacy policy, terms of service and refund policy. Plain data so the texts can be edited (or replaced by a
  * lawyer's version) without touching page code. The hub's address and support email are filled in.
  */
-export type LegalKind = 'privacy' | 'terms';
+export type LegalKind = 'privacy' | 'terms' | 'refunds';
+export const LEGAL_KINDS: readonly LegalKind[] = ['privacy', 'terms', 'refunds'];
 
 interface Facts {
   publicUrl: string;
@@ -19,7 +20,7 @@ export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc 
     facts.supportEmail ??
     (lang === 'ru' ? 'адрес поддержки, указанный на сайте' : 'the support address listed on the website');
   const site = facts.publicUrl.replace(/^https?:\/\//, '');
-  const docs = kind === 'privacy' ? privacy : terms;
+  const docs = { privacy, terms, refunds }[kind];
   return docs[lang]({ contact, site });
 }
 
@@ -89,6 +90,13 @@ const privacy: Record<Locale, Builder> = {
         title: 'Cookie',
         paragraphs: [
           'Мы используем только необходимые cookie: сессия входа, защита форм от подделки, выбранный язык. Рекламных и аналитических cookie нет. Выбранная тема хранится в вашем браузере.',
+        ],
+      },
+      {
+        title: 'Статистика посещений',
+        paragraphs: [
+          'Мы сами считаем посещения сайта, без сторонних счётчиков и без cookie. Из IP-адреса и названия браузера вычисляется анонимный идентификатор с секретом, который меняется каждый день и удаляется через два дня, поэтому визит нельзя связать с человеком. IP-адрес не сохраняется.',
+          'Сохраняются страница, сайт или рекламная метка, с которых пришёл посетитель, страна, язык браузера и тип устройства. При регистрации мы запоминаем, откуда пришёл новый пользователь, по визиту из того же браузера в тот же или предыдущий день, чтобы понимать, какая реклама работает.',
         ],
       },
       {
@@ -171,6 +179,13 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'Visit statistics',
+        paragraphs: [
+          'We count visits to the website ourselves, without third-party trackers and without cookies. An anonymous id is computed from the IP address and the browser name with a secret that changes every day and is deleted after two days, so a visit cannot be linked to a person. The IP address is not stored.',
+          'We store the page, the referring site or ad tag a visitor came from, the country, the browser language and the device type. When you sign up, we note where you came from, using the visit from the same browser on that day or the day before, to understand which ads work.',
+        ],
+      },
+      {
         title: 'Your rights',
         paragraphs: [
           'You can see your connections and activity in the dashboard, and ask us for a copy of your data, to correct it or to delete it: write to the contact below. We answer within 30 days.',
@@ -216,6 +231,13 @@ const terms: Record<Locale, Builder> = {
         paragraphs: [
           'Бесплатный тариф предоставляется без срока, с лимитами, указанными на странице тарифов. Платные тарифы дают больше действий и аккаунтов. Лимиты на действия обнуляются каждый месяц.',
           'Мы можем менять тарифы и лимиты, заранее предупредив об изменениях, которые касаются уже оплаченного периода.',
+        ],
+      },
+      {
+        title: 'Оплата',
+        paragraphs: [
+          'Платежи принимает наш реселлер Paddle.com (Merchant of Record): он выставляет счёт, списывает оплату, начисляет налоги и обрабатывает возвраты. При оплате действуют также условия покупателя Paddle (paddle.com/legal/invoiced-consumer-terms).',
+          'Подписка продлевается автоматически в конце каждого периода, пока вы её не отмените. Отменить можно в любой момент в разделе «Тариф» или из чата; тариф остаётся до конца оплаченного периода. Возвраты описаны в политике возврата (/refunds).',
         ],
       },
       {
@@ -269,6 +291,13 @@ const terms: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'Payments',
+        paragraphs: [
+          'Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders: it invoices you, takes the payment, handles taxes and processes refunds. Paddle’s buyer terms (paddle.com/legal/invoiced-consumer-terms) also apply to your purchase.',
+          'Subscriptions renew automatically at the end of each period until you cancel. You can cancel at any time on the Plan page or from the chat; the plan stays until the end of the paid period. Refunds are covered by our refund policy (/refunds).',
+        ],
+      },
+      {
         title: 'Availability and liability',
         paragraphs: [
           'We work to keep the service running but cannot guarantee it: connected services and AI apps may change their APIs and rules. The service is provided “as is”.',
@@ -284,6 +313,71 @@ const terms: Record<Locale, Builder> = {
       {
         title: 'Contact',
         paragraphs: [`Send questions about these terms to ${contact}.`],
+      },
+    ],
+  }),
+};
+
+const refunds: Record<Locale, Builder> = {
+  ru: ({ contact, site }) => ({
+    title: 'Политика возврата',
+    updated: UPDATED.ru,
+    intro: `Здесь описано, когда и как можно вернуть деньги за платный тариф Manyplug (${site}). Коротко: в течение 14 дней после любой оплаты вернём деньги полностью, без объяснения причин.`,
+    sections: [
+      {
+        title: '14 дней на возврат',
+        paragraphs: [
+          'Если тариф не подошёл, напишите нам в течение 14 дней после оплаты (первой или очередного продления, месячной или годовой), и мы вернём всю сумму этого платежа. Объяснять причину не нужно.',
+          'После возврата подписка отменяется и аккаунт переходит на бесплатный тариф. Подключённые аккаунты и настройки сохраняются.',
+        ],
+      },
+      {
+        title: 'После 14 дней',
+        paragraphs: [
+          'Позже 14 дней оплаченный период не возвращается, но вы можете в любой момент отменить подписку: тариф останется до конца оплаченного периода, и новых списаний не будет.',
+          'Если сервис не работал по нашей вине или с вас списали деньги по ошибке, мы вернём деньги и позже — напишите нам.',
+        ],
+      },
+      {
+        title: 'Как запросить возврат',
+        paragraphs: [
+          `Напишите на ${contact} с адреса, с которого оформлена подписка, или ответьте на чек от Paddle. Возврат проводит наш реселлер Paddle.com на ту же карту или счёт; обычно деньги приходят за 5–10 рабочих дней в зависимости от банка.`,
+        ],
+      },
+      {
+        title: 'Пробный период',
+        paragraphs: ['Пробный период Pro бесплатный: деньги за него не списываются, и возвращать нечего.'],
+      },
+    ],
+  }),
+  en: ({ contact, site }) => ({
+    title: 'Refund policy',
+    updated: UPDATED.en,
+    intro: `This page explains when and how you can get your money back for a paid Manyplug plan (${site}). In short: within 14 days of any payment we refund it in full, no questions asked.`,
+    sections: [
+      {
+        title: '14-day money-back guarantee',
+        paragraphs: [
+          'If the plan is not right for you, contact us within 14 days of a payment (the first one or a renewal, monthly or yearly) and we refund that payment in full. You do not need to give a reason.',
+          'After a refund the subscription is canceled and the account moves to the free plan. Connected accounts and settings are kept.',
+        ],
+      },
+      {
+        title: 'After 14 days',
+        paragraphs: [
+          'After 14 days the paid period is not refunded, but you can cancel at any time: the plan stays until the end of the paid period and you are not charged again.',
+          'If the service did not work because of us, or you were charged by mistake, we refund later payments too. Just write to us.',
+        ],
+      },
+      {
+        title: 'How to request a refund',
+        paragraphs: [
+          `Write to ${contact} from the address you subscribed with, or reply to your Paddle receipt. Refunds are processed by our reseller Paddle.com to the original card or account and usually arrive within 5–10 business days, depending on your bank.`,
+        ],
+      },
+      {
+        title: 'Free trial',
+        paragraphs: ['The Pro trial is free: you are not charged for it, so there is nothing to refund.'],
       },
     ],
   }),

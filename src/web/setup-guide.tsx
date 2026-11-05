@@ -1,14 +1,30 @@
 import type { FC } from 'hono/jsx';
-import type { RiskLevel, SetupGuide, SetupStep } from '../connectors/sdk.js';
+import type { ResolvedSetupGuide, RiskLevel, SetupStep } from '../connectors/sdk.js';
 import type { Translate } from './i18n.js';
 import { Icon } from './ui.js';
 
 /**
- * A service's setup guide (from the connector's `ui.locales.*.setup`): what you need, numbered
- * steps with links straight to the right page of the service, steps per variant (e.g. per mail
- * provider) and tips. Used next to the connect form, on the dashboard's service page and on the
- * public service page.
+ * A service's setup guide (from the connector's `ui.locales.*.setup`, written to the standard in
+ * docs/CONNECTORS.md): how long it takes, what you need, the one thing to know first, numbered
+ * steps with links straight to the right page and the form field each value goes into, steps per
+ * variant (e.g. per mail provider), tips and fixes for common problems. Used next to the connect
+ * form, on the dashboard's service page and on the public service page.
  */
+
+/** Guide text with exact button and menu names in `**double asterisks**`, shown in bold. */
+export const GuideText: FC<{ text: string }> = ({ text }) => (
+  <>{text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b>{part}</b> : part))}</>
+);
+
+/** "About 5 min · You create an API token in Todoist and paste it here." */
+export const GuideSummary: FC<{ t: Translate; guide: ResolvedSetupGuide }> = ({ t, guide }) => (
+  <>
+    <Icon name="clock" />{' '}
+    <span>
+      <b class="guide-minutes">{t('guide.minutes', { minutes: String(guide.minutes) })}</b> · {guide.summary}
+    </span>
+  </>
+);
 
 const StepLink: FC<{ step: SetupStep }> = ({ step }) =>
   step.link ? (
@@ -17,11 +33,28 @@ const StepLink: FC<{ step: SetupStep }> = ({ step }) =>
     </a>
   ) : null;
 
-const Steps: FC<{ steps: SetupStep[] }> = ({ steps }) => (
+const Steps: FC<{ t: Translate; steps: SetupStep[]; labels: Record<string, string> }> = ({
+  t,
+  steps,
+  labels,
+}) => (
   <ol class="guide-steps">
     {steps.map((step) => (
       <li>
-        <span>{step.text}</span>
+        <span>
+          <GuideText text={step.text} />
+        </span>
+        {step.fills?.length ? (
+          <span class="guide-fills">
+            {t('guide.fills')}{' '}
+            {step.fills.map((key, i) => (
+              <>
+                {i ? ', ' : ''}
+                <b>{labels[key] ?? key}</b>
+              </>
+            ))}
+          </span>
+        ) : null}
         <StepLink step={step} />
       </li>
     ))}
@@ -38,13 +71,14 @@ export interface GuideVariantPicker {
 
 export const SetupGuideView: FC<{
   t: Translate;
-  guide: SetupGuide;
+  guide: ResolvedSetupGuide;
   /** In the connect form: the variant follows what the user picks or types (`/assets/site.js`). */
   picker?: GuideVariantPicker | undefined;
-  /** Hide the summary line (when the page shows it elsewhere). */
+  /** Hide the summary line and the notice (when the page shows them above the form). */
   bare?: boolean;
 }> = ({ t, guide, picker, bare }) => {
   const variants = Object.entries(guide.variants ?? {});
+  const labels = guide.fieldLabels;
   return (
     <div
       class="setup-guide"
@@ -53,12 +87,30 @@ export const SetupGuideView: FC<{
       data-guide-email={picker?.emailField}
       data-guide-domains={picker?.domains ? JSON.stringify(picker.domains) : undefined}
     >
-      {guide.summary && !bare ? (
+      {bare ? null : (
         <p class="guide-summary">
-          <Icon name="clock" /> {guide.summary}
+          <GuideSummary t={t} guide={guide} />
+        </p>
+      )}
+      {guide.needs.length ? (
+        <div class="guide-needs">
+          <p class="guide-label">{t('guide.needs')}</p>
+          <ul>
+            {guide.needs.map((need) => (
+              <li>
+                <GuideText text={need} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {guide.notice && !bare ? (
+        <p class="notice info guide-notice">
+          <GuideText text={guide.notice} />
         </p>
       ) : null}
-      <Steps steps={guide.steps} />
+      <p class="guide-label">{t('guide.steps')}</p>
+      <Steps t={t} steps={guide.steps} labels={labels} />
       {variants.length ? (
         <div class="guide-variants">
           <p class="guide-variants-title">{guide.variantsTitle ?? t('guide.variants')}</p>
@@ -70,7 +122,7 @@ export const SetupGuideView: FC<{
                   {t('guide.detected')}
                 </span>
               </summary>
-              <Steps steps={variant.steps} />
+              <Steps t={t} steps={variant.steps} labels={labels} />
             </details>
           ))}
         </div>
@@ -78,9 +130,28 @@ export const SetupGuideView: FC<{
       {guide.tips?.length ? (
         <ul class="guide-tips">
           {guide.tips.map((tip) => (
-            <li>{tip}</li>
+            <li>
+              <GuideText text={tip} />
+            </li>
           ))}
         </ul>
+      ) : null}
+      {guide.problems.length ? (
+        <details class="guide-problems">
+          <summary>{t('guide.problems')}</summary>
+          <dl>
+            {guide.problems.map((p) => (
+              <>
+                <dt>
+                  <GuideText text={p.problem} />
+                </dt>
+                <dd>
+                  <GuideText text={p.fix} />
+                </dd>
+              </>
+            ))}
+          </dl>
+        </details>
       ) : null}
     </div>
   );

@@ -208,24 +208,44 @@ const ui: ConnectorUi = {
         'Доски Miro: поиск досок, чтение стикеров, карточек и текста, новые стикеры, карточки и доски.',
       setup: {
         form: {
-          summary: 'Токен своего приложения Miro. Около трёх минут.',
+          summary:
+            'Вы создаёте своё приложение в настройках Miro, устанавливаете его в команду и вставляете сюда его токен.',
+          minutes: 4,
+          needs: ['Аккаунт Miro с доступом к нужным доскам'],
+          notice:
+            'Токен видит доски только одной команды Miro. Для другой команды подключите ещё один аккаунт.',
           steps: [
             {
-              text: 'Откройте Miro → Profile settings → Your apps и нажмите Create new app (если попросит — создайте Developer team).',
+              text: 'Откройте Miro → **Profile settings** → **Your apps** и нажмите **Create new app**. Если Miro попросит создать **Developer team**, создайте её.',
               link: {
                 label: 'Открыть приложения Miro',
                 url: 'https://miro.com/app/settings/user-profile/apps',
               },
             },
-            { text: 'Назовите приложение Manyplug, в Permissions отметьте boards:read и boards:write.' },
             {
-              text: 'Нажмите Install app and get OAuth token, выберите команду с нужными досками и скопируйте токен.',
+              text: 'Назовите приложение Manyplug и в **Permissions** отметьте **boards:read** и **boards:write**.',
             },
-            { text: 'Вставьте токен в форму.' },
+            {
+              text: 'Нажмите **Install app and get OAuth token**, выберите команду с нужными досками и нажмите **Install & authorize**.',
+            },
+            { text: 'Скопируйте показанный токен.', fills: ['token'] },
           ],
           tips: [
-            'Если в настройках приложения включено истечение токенов (Expire user authorization token), выключите его, иначе токен перестанет работать через час.',
-            'Токен видит доски выбранной команды. Для другой команды подключите ещё один аккаунт.',
+            'Токен действует от вашего имени. Чтобы отозвать доступ, удалите приложение в **Your apps**.',
+          ],
+          problems: [
+            {
+              problem: 'Через час токен перестал работать',
+              fix: 'В настройках приложения выключите **Expire user authorization token**, снова нажмите **Install app and get OAuth token** и вставьте новый токен через **Переподключить**.',
+            },
+            {
+              problem: 'ИИ видит доски, но не может их менять',
+              fix: 'У приложения нет права **boards:write**. Отметьте его в **Permissions**, переустановите приложение и вставьте новый токен.',
+            },
+            {
+              problem: 'Нужной доски нет в списке',
+              fix: 'Доска в другой команде. Установите приложение в эту команду и подключите её токен как ещё один аккаунт.',
+            },
           ],
         },
       },
@@ -252,21 +272,39 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A token of your own Miro app. Takes about three minutes.',
+          summary:
+            'You create your own app in Miro settings, install it in your team and paste its token here.',
+          minutes: 4,
+          needs: ['A Miro account with access to the boards you need'],
+          notice:
+            'The token sees the boards of one Miro team only. Connect another account for another team.',
           steps: [
             {
-              text: 'Open Miro → Profile settings → Your apps and click Create new app (create a Developer team if asked).',
+              text: 'Open Miro → **Profile settings** → **Your apps** and click **Create new app**. If Miro asks you to create a **Developer team**, create it.',
               link: { label: 'Open Miro apps', url: 'https://miro.com/app/settings/user-profile/apps' },
             },
-            { text: 'Name it Manyplug and tick boards:read and boards:write under Permissions.' },
             {
-              text: 'Click Install app and get OAuth token, pick the team with your boards and copy the token.',
+              text: 'Name the app Manyplug and tick **boards:read** and **boards:write** under **Permissions**.',
             },
-            { text: 'Paste the token into the form.' },
+            {
+              text: 'Click **Install app and get OAuth token**, pick the team with your boards and click **Install & authorize**.',
+            },
+            { text: 'Copy the token Miro shows.', fills: ['token'] },
           ],
-          tips: [
-            'If Expire user authorization token is on in the app settings, turn it off, or the token stops working after an hour.',
-            'The token sees the boards of the chosen team. Connect another account for another team.',
+          tips: ['The token acts as you. To cut access, delete the app under **Your apps**.'],
+          problems: [
+            {
+              problem: 'The token stopped working after an hour',
+              fix: 'In the app settings, turn off **Expire user authorization token**, click **Install app and get OAuth token** again and paste the new token with **Reconnect**.',
+            },
+            {
+              problem: 'The AI sees boards but cannot change them',
+              fix: 'The app lacks **boards:write**. Tick it under **Permissions**, reinstall the app and paste the new token.',
+            },
+            {
+              problem: 'A board is missing from the list',
+              fix: 'The board belongs to another team. Install the app in that team and connect its token as another account.',
+            },
           ],
         },
       },

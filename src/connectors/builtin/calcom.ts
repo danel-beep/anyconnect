@@ -185,19 +185,36 @@ const ui: ConnectorUi = {
       description: 'Записи и типы встреч Cal.com: ближайшие и прошедшие встречи, отмена и подтверждение.',
       setup: {
         form: {
-          summary: 'Ключ API Cal.com. Меньше минуты.',
+          summary: 'Вы создаёте API-ключ в настройках Cal.com и вставляете его сюда.',
+          minutes: 2,
+          needs: ['Аккаунт Cal.com'],
           steps: [
             {
-              text: 'Откройте Cal.com → Settings → Developer → API keys и нажмите New.',
+              text: 'В Cal.com откройте **Settings → Developer → API keys** и нажмите **New**.',
               link: {
-                label: 'Открыть ключи API Cal.com',
+                label: 'Открыть API-ключи Cal.com',
                 url: 'https://app.cal.com/settings/developer/api-keys',
               },
             },
-            { text: 'Назовите ключ Manyplug, выберите срок и скопируйте ключ (cal_…).' },
-            { text: 'Вставьте ключ в форму.' },
+            {
+              text: 'Назовите ключ Manyplug, выберите срок действия (или включите **Never expires**) и нажмите **Create**.',
+            },
+            {
+              text: 'Нажмите **Copy to clipboard** (ключ начинается с cal_). Cal.com показывает его только один раз.',
+              fills: ['apiKey'],
+            },
           ],
-          tips: ['Отмену встречи ИИ делает только после вашего подтверждения: участники получат письмо.'],
+          tips: ['Встречу ИИ отменяет только после вашего подтверждения: участники получат письмо.'],
+          problems: [
+            {
+              problem: 'Форма пишет, что ключ не подходит',
+              fix: 'Возможно, срок ключа истёк или он скопирован не полностью. Создайте новый и скопируйте его целиком.',
+            },
+            {
+              problem: 'Через какое-то время ИИ перестаёт работать с Cal.com',
+              fix: 'Срок ключа истёк. Создайте новый с более поздним сроком и вставьте его через **Переподключить**.',
+            },
+          ],
         },
       },
       prompts: [
@@ -217,19 +234,34 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Cal.com API key. Takes under a minute.',
+          summary: 'You create an API key in Cal.com settings and paste it here.',
+          minutes: 2,
+          needs: ['A Cal.com account'],
           steps: [
             {
-              text: 'Open Cal.com → Settings → Developer → API keys and click New.',
+              text: 'In Cal.com, open **Settings → Developer → API keys** and click **New**.',
               link: {
                 label: 'Open Cal.com API keys',
                 url: 'https://app.cal.com/settings/developer/api-keys',
               },
             },
-            { text: 'Name it Manyplug, pick an expiry and copy the key (cal_…).' },
-            { text: 'Paste the key into the form.' },
+            { text: 'Name it Manyplug, pick an expiry or turn on **Never expires**, and click **Create**.' },
+            {
+              text: 'Click **Copy to clipboard** (the key starts with cal_). Cal.com shows it only once.',
+              fills: ['apiKey'],
+            },
           ],
           tips: ['The AI cancels a meeting only after you confirm: attendees get an email.'],
+          problems: [
+            {
+              problem: 'The form says the key is not valid',
+              fix: 'The key may have expired or been copied in part. Create a new one and copy it whole.',
+            },
+            {
+              problem: 'The AI stops working with Cal.com after a while',
+              fix: 'The key has expired. Create a new one with a later expiry and paste it with **Reconnect**.',
+            },
+          ],
         },
       },
       prompts: [

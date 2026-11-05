@@ -180,23 +180,42 @@ export default defineConnector({
         description: 'Задачи и команды Linear: поиск, чтение, создание, изменение и комментарии.',
         setup: {
           form: {
-            summary: 'Личный ключ API Linear. Около минуты.',
+            summary: 'Вы создаёте личный ключ API в настройках Linear и вставляете его сюда.',
+            minutes: 1,
+            needs: ['Аккаунт Linear'],
             steps: [
               {
-                text: 'Откройте Linear → Settings → Security & access и в разделе Personal API keys нажмите New API key.',
+                text: 'Откройте в Linear **Settings → Security & access** и в разделе **Personal API keys** нажмите **New API key**.',
                 link: {
                   label: 'Открыть настройки Linear',
                   url: 'https://linear.app/settings/account/security',
                 },
               },
               {
-                text: 'Назовите ключ Manyplug и оставьте полный доступ (Full access) или выберите нужные команды.',
+                text: 'Назовите ключ Manyplug, оставьте **Full access** и **All teams you have access to**, затем нажмите **Create**.',
               },
-              { text: 'Скопируйте ключ (lin_api_…) и вставьте его в форму.' },
+              {
+                text: 'Скопируйте ключ (начинается с lin_api_): Linear показывает его только один раз.',
+                fills: ['apiKey'],
+              },
             ],
             tips: [
               'Ключ действует от вашего имени. Отозвать его можно на той же странице.',
               'Несколько рабочих пространств Linear? Подключите ключ от каждого отдельным аккаунтом.',
+            ],
+            problems: [
+              {
+                problem: 'Ошибка 401 или «Authentication required»',
+                fix: 'Ключ скопирован не целиком или отозван. Создайте новый и нажмите **Переподключить**.',
+              },
+              {
+                problem: 'Нет кнопки **New API key**',
+                fix: 'Администратор мог запретить участникам создавать ключи. Попросите его включить **Settings → Administration → API → Member API keys**.',
+              },
+              {
+                problem: 'ИИ видит задачи, но не может их создавать или менять',
+                fix: 'Ключ создан только на чтение. Создайте ключ с **Full access** и вставьте его через **Переподключить**.',
+              },
             ],
           },
         },
@@ -228,18 +247,39 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'A Linear personal API key. Takes about a minute.',
+            summary: 'You create a personal API key in Linear settings and paste it here.',
+            minutes: 1,
+            needs: ['A Linear account'],
             steps: [
               {
-                text: 'Open Linear → Settings → Security & access and click New API key under Personal API keys.',
+                text: 'In Linear, open **Settings → Security & access** and, under **Personal API keys**, click **New API key**.',
                 link: { label: 'Open Linear settings', url: 'https://linear.app/settings/account/security' },
               },
-              { text: 'Name it Manyplug and keep Full access, or pick the teams it may use.' },
-              { text: 'Copy the key (lin_api_…) and paste it into the form.' },
+              {
+                text: 'Name it Manyplug, keep **Full access** and **All teams you have access to**, then click **Create**.',
+              },
+              {
+                text: 'Copy the key (it starts with lin_api_): Linear shows it only once.',
+                fills: ['apiKey'],
+              },
             ],
             tips: [
               'The key acts as you. You can revoke it on the same page.',
               'Several Linear workspaces? Connect a key from each as its own account.',
+            ],
+            problems: [
+              {
+                problem: 'Error 401 or “Authentication required”',
+                fix: 'The key was copied only in part or was revoked. Create a new one and click **Reconnect**.',
+              },
+              {
+                problem: 'There is no **New API key** button',
+                fix: 'A workspace admin may have stopped members from creating keys. Ask them to turn on **Settings → Administration → API → Member API keys**.',
+              },
+              {
+                problem: 'The AI sees issues but cannot create or change them',
+                fix: 'The key is read-only. Create a key with **Full access** and paste it with **Reconnect**.',
+              },
             ],
           },
         },

@@ -173,18 +173,40 @@ const ui: ConnectorUi = {
       description: 'Контакты, списки и рассылки Brevo; отправка отдельных транзакционных писем.',
       setup: {
         form: {
-          summary: 'Ключ API Brevo. Меньше минуты.',
+          summary: 'Вы создаёте API-ключ в Brevo и вставляете его сюда.',
+          minutes: 2,
+          needs: [
+            'Аккаунт Brevo',
+            'Подтверждённый адрес отправителя в Brevo, если ИИ будет отправлять письма',
+          ],
           steps: [
             {
-              text: 'Откройте Brevo → меню профиля → SMTP & API → вкладка API keys.',
-              link: { label: 'Открыть ключи API Brevo', url: 'https://app.brevo.com/settings/keys/api' },
+              text: 'В Brevo откройте меню профиля → **SMTP & API** → вкладку **API keys**.',
+              link: { label: 'Открыть API-ключи Brevo', url: 'https://app.brevo.com/settings/keys/api' },
             },
-            { text: 'Нажмите Generate a new API key, назовите его Manyplug и скопируйте ключ (xkeysib-…).' },
-            { text: 'Вставьте ключ в форму.' },
+            { text: 'Нажмите **Generate a new API key**, назовите ключ Manyplug и нажмите **Generate**.' },
+            {
+              text: 'Скопируйте ключ (начинается с xkeysib-). Brevo показывает его только один раз.',
+              fills: ['apiKey'],
+            },
           ],
           tips: [
-            'Если в Brevo включены разрешённые IP-адреса, ключ из облака может не пройти: отключите ограничение для этого ключа.',
-            'Письма ИИ отправляет только после вашего подтверждения и только с подтверждённого адреса.',
+            'Письма ИИ отправляет только после вашего подтверждения.',
+            'Удалить ключ можно на той же странице в любой момент.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что ключ не подходит',
+              fix: 'Проверьте, что скопирован API-ключ (xkeysib-…), а не SMTP-ключ (xsmtpsib-…). При необходимости создайте новый.',
+            },
+            {
+              problem: 'Brevo блокирует запрос с незнакомого IP-адреса',
+              fix: 'В Brevo откройте **Security → Authorized IPs** и отключите ограничение по IP для API-ключей: запросы идут из облака, а не с вашего компьютера.',
+            },
+            {
+              problem: 'ИИ не может отправить письмо',
+              fix: 'Отправляйте с адреса, подтверждённого в Brevo в разделе **Senders, Domains & Dedicated IPs**.',
+            },
           ],
         },
       },
@@ -206,18 +228,34 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Brevo API key. Takes under a minute.',
+          summary: 'You create an API key in Brevo and paste it here.',
+          minutes: 2,
+          needs: ['A Brevo account', 'A verified sender address in Brevo, if the AI should send emails'],
           steps: [
             {
-              text: 'Open Brevo → the profile menu → SMTP & API → the API keys tab.',
+              text: 'In Brevo, open the profile menu → **SMTP & API** → the **API keys** tab.',
               link: { label: 'Open Brevo API keys', url: 'https://app.brevo.com/settings/keys/api' },
             },
-            { text: 'Click Generate a new API key, name it Manyplug and copy the key (xkeysib-…).' },
-            { text: 'Paste the key into the form.' },
+            { text: 'Click **Generate a new API key**, name it Manyplug and click **Generate**.' },
+            { text: 'Copy the key (it starts with xkeysib-). Brevo shows it only once.', fills: ['apiKey'] },
           ],
           tips: [
-            'If Brevo restricts API keys to authorized IPs, a cloud call may be blocked: lift the restriction for this key.',
-            'The AI sends emails only after you confirm, and only from a verified sender.',
+            'The AI sends emails only after you confirm.',
+            'You can delete the key on the same page at any time.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the key is not valid',
+              fix: 'Check that you copied an API key (xkeysib-…), not an SMTP key (xsmtpsib-…). Generate a new one if needed.',
+            },
+            {
+              problem: 'Brevo blocks the call from an unrecognised IP address',
+              fix: 'In Brevo, open **Security → Authorized IPs** and turn off the IP restriction for API keys: calls come from the cloud, not from your computer.',
+            },
+            {
+              problem: 'The AI cannot send an email',
+              fix: 'Send from an address that is verified in Brevo under **Senders, Domains & Dedicated IPs**.',
+            },
           ],
         },
       },

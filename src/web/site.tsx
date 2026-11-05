@@ -1,7 +1,7 @@
 import type { Child, FC } from 'hono/jsx';
 import { type Metric, PLANS, type Plan } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
-import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
+import type { ResolvedSetupGuide, RiskLevel } from '../connectors/sdk.js';
 import {
   CATEGORY_ORDER,
   PLANNED_SERVICES,
@@ -156,6 +156,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href="/status">{t('site.footer.status')}</a>
             <a href="/privacy">{t('site.footer.privacy')}</a>
             <a href="/terms">{t('site.footer.terms')}</a>
+            <a href="/refunds">{t('site.footer.refunds')}</a>
           </div>
         </div>
         <div class="footer-bottom">
@@ -1167,7 +1168,7 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
 export interface ServiceDetail extends PublicService {
   actions: { name: string; title: string; description: string; risk: RiskLevel }[];
   /** Setup steps for the way this service connects here (provider sign-in or the form). */
-  guide?: SetupGuide | undefined;
+  guide?: ResolvedSetupGuide | undefined;
   /** Requests to try with the AI. */
   prompts: string[];
   /** Another way in while the service cannot be connected here (e.g. Gmail over IMAP). */

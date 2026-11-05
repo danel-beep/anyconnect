@@ -1,70 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { googleEmailAuthority, OidcLoginProvider } from '../src/core/external-login.js';
 import { base32Decode, totp } from '../src/lib/totp.js';
+import { FakeOidc } from './fake-oidc.js';
 import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
 /**
  * The website end to end: "Sign in with Google" (against a fake OpenID provider), the dashboard,
  * plan limits and the admin panel's access control and limit grants.
  */
-
-const CLIENT_ID = 'test-client.apps.example';
-const ISSUER = 'https://accounts.example';
-
-type Claims = Record<string, unknown>;
-
-/** A fake OpenID provider: the test decides the ID token's claims for every code it hands out. */
-class FakeOidc {
-  private readonly tokens = new Map<string, Claims>();
-  private counter = 0;
-  readonly provider = new OidcLoginProvider(
-    {
-      id: 'google',
-      name: 'Google',
-      authorizationUrl: `${ISSUER}/auth`,
-      tokenUrl: `${ISSUER}/token`,
-      issuers: [ISSUER],
-      clientId: CLIENT_ID,
-      clientSecret: 'shh',
-      scopes: ['openid', 'email', 'profile'],
-      emailAuthority: googleEmailAuthority,
-    },
-    async (_url, init) => {
-      const code = new URLSearchParams(String(init?.body)).get('code') ?? '';
-      const claims = this.tokens.get(code);
-      this.tokens.delete(code);
-      if (!claims) return Response.json({ error: 'invalid_grant' }, { status: 400 });
-      const part = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
-      return Response.json({ id_token: `${part({ alg: 'RS256' })}.${part(claims)}.sig` });
-    },
-  );
-
-  /** Walks /auth/google → provider → callback. Returns the callback response. */
-  async signIn(
-    browser: TestBrowser,
-    claims: Claims,
-    opts: { next?: string; state?: string; nonce?: string } = {},
-  ): Promise<Response> {
-    const start = await browser.request(
-      `/auth/google${opts.next ? `?next=${encodeURIComponent(opts.next)}` : ''}`,
-    );
-    expect(start.status).toBe(302);
-    const url = new URL(start.headers.get('location')!);
-    expect(url.origin + url.pathname).toBe(`${ISSUER}/auth`);
-    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
-    const code = `code-${++this.counter}`;
-    this.tokens.set(code, {
-      iss: ISSUER,
-      aud: CLIENT_ID,
-      exp: Math.floor(Date.now() / 1000) + 600,
-      nonce: opts.nonce ?? url.searchParams.get('nonce'),
-      email_verified: true,
-      ...claims,
-    });
-    const state = opts.state ?? url.searchParams.get('state')!;
-    return browser.request(`/auth/google/callback?state=${encodeURIComponent(state)}&code=${code}`);
-  }
-}
 
 const codeFor = (secret: string, offsetSteps = 0) =>
   totp(base32Decode(secret), Date.now() + offsetSteps * 30_000);
@@ -542,6 +484,9 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect((await hub.services.entitlements.summary(ws.id)).plan.id).toBe('free');
     expect(await (await admin.request('/admin/audit')).text()).toContain('Запрос тарифа отклонён');
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+    const revenue = await (await admin.request('/admin/revenue')).text();
+    expect(revenue).toContain('Выручка и конверсия');
+    expect(revenue).toContain('BILLING_PROVIDER=none');
 
     // Setting a plan closes an open request too.
     await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });
@@ -637,6 +582,36 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(errors).not.toContain('title="demo_echo"');
     // An unknown account is ignored instead of showing an empty log.
     expect(await log('?account=nope')).toContain('title="demo_account_info"');
+  });
+
+  it('folds the catalog behind popular services and removes the demo accounts in one go', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-svc', email: 'svc@example.com' });
+    const ws = await workspaceOf((await userByEmail('svc@example.com')).id);
+    const add = (connectorId: string, name: string) =>
+      hub.services.accounts.create(ws.id, { connectorId, name, label: name, credentials: { secret: 's' } });
+    await add('demo', 'main');
+    await add('demo', 'second');
+
+    const page = await (await browser.request('/app/services')).text();
+    // A short popular row first, the full list folded under it, the search box opens it.
+    expect(page).toContain('id="popular"');
+    expect(page).toMatch(/<details class="svc-all" id="all-services"/);
+    expect(page).toContain('data-filter-expand="#all-services"');
+    expect(page).toContain('id="add-slack"');
+    // Demo accounts are one folded row, not a group of real accounts; the own-server form is folded too.
+    expect(page).toContain('class="acc acc-sample"');
+    expect(page).not.toContain('class="acc-group"');
+    expect(page).toMatch(/<details class="card fold" id="custom">/);
+
+    const { csrf } = TestBrowser.hiddenInputs(page);
+    const removed = await browser.request('/app/samples/remove', { form: { csrf: csrf! } });
+    expect(removed.status).toBe(303);
+    expect(removed.headers.get('location')).toBe('/app/services');
+    expect(await hub.services.accounts.list(ws.id)).toEqual([]);
+    const after = await (await browser.request('/app/services')).text();
+    expect(after).not.toContain('acc-sample');
+    expect(after).toContain('notice ok');
   });
 
   it('gives the custom MCP form back as filled when the address is wrong', async () => {
@@ -813,7 +788,16 @@ describe('website: public pages', () => {
 
   it('serves the landing, pricing, services, docs and legal pages in both languages', async () => {
     const browser = new TestBrowser(hub.baseUrl);
-    for (const path of ['/', '/pricing', '/services', '/services/github', '/docs', '/privacy', '/terms']) {
+    for (const path of [
+      '/',
+      '/pricing',
+      '/services',
+      '/services/github',
+      '/docs',
+      '/privacy',
+      '/terms',
+      '/refunds',
+    ]) {
       const page = await browser.request(path);
       expect(page.status, path).toBe(200);
       const html = await page.text();

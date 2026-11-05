@@ -265,23 +265,42 @@ const ui: ConnectorUi = {
       description: 'Доски, списки и карточки Trello: поиск, чтение, создание, перенос и комментарии.',
       setup: {
         form: {
-          summary: 'Ключ API и токен Trello. Около трёх минут.',
+          summary:
+            'Вы создаёте личный Power-Up в Trello, чтобы получить ключ API и токен, и вставляете оба сюда.',
+          minutes: 4,
+          needs: ['Аккаунт Trello хотя бы с одним рабочим пространством (Workspace)'],
           steps: [
             {
-              text: 'Откройте админку Power-Ups и нажмите New: Trello выдаёт ключи API только Power-Up’ам.',
-              link: { label: 'Открыть админку Power-Ups', url: 'https://trello.com/power-ups/admin' },
+              text: 'Откройте страницу администрирования Power-Ups и нажмите **New**: Trello выдаёт ключи API только для Power-Ups.',
+              link: { label: 'Открыть Power-Ups', url: 'https://trello.com/power-ups/admin' },
             },
             {
-              text: 'Заполните форму: название Manyplug, любое рабочее пространство, свою почту. Поле Iframe connector URL оставьте пустым и нажмите Create.',
+              text: 'Заполните форму: название Manyplug, любое рабочее пространство, ваша почта. Оставьте **Iframe connector URL** пустым и нажмите **Create**.',
             },
             {
-              text: 'На вкладке API key нажмите Generate a new API key и скопируйте ключ в форму.',
+              text: 'На вкладке **API key** нажмите **Generate a new API key** и скопируйте ключ.',
+              fills: ['apiKey'],
             },
             {
-              text: 'Рядом с ключом нажмите ссылку Token, разрешите доступ (Allow) и скопируйте токен в форму.',
+              text: 'Нажмите ссылку **Token** рядом с ключом, затем **Allow** и скопируйте токен.',
+              fills: ['token'],
             },
           ],
-          tips: ['Токен открывает все ваши доски. Отозвать его можно в Trello: Настройки → Приложения.'],
+          tips: ['Токен открывает все ваши доски. Отозвать его можно в Trello: **Settings → Applications**.'],
+          problems: [
+            {
+              problem: 'Проверка пишет, что ключ или токен неверный (401)',
+              fix: 'Ключ и токен связаны: скопируйте оба заново из одного и того же Power-Up. Токен от другого ключа не подойдёт.',
+            },
+            {
+              problem: 'Нет ссылки **Token**',
+              fix: 'Она появляется рядом с ключом, когда ключ создан на вкладке **API key**. Если её всё ещё нет, обновите страницу.',
+            },
+            {
+              problem: 'ИИ не видит доску',
+              fix: 'Токен видит доски того аккаунта Trello, который нажал **Allow**. Войдите как участник этой доски и создайте токен заново.',
+            },
+          ],
         },
       },
       prompts: [
@@ -316,19 +335,44 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A Trello API key and token. Takes about three minutes.',
+          summary:
+            'You create a private Power-Up in Trello to get an API key and a token, then paste both here.',
+          minutes: 4,
+          needs: ['A Trello account with at least one Workspace'],
           steps: [
             {
-              text: 'Open the Power-Ups admin and click New: Trello gives API keys to Power-Ups only.',
+              text: 'Open the Power-Ups admin page and click **New**: Trello gives API keys only to Power-Ups.',
               link: { label: 'Open the Power-Ups admin', url: 'https://trello.com/power-ups/admin' },
             },
             {
-              text: 'Fill in the form: name Manyplug, any workspace, your email. Leave Iframe connector URL empty and click Create.',
+              text: 'Fill in the form: name Manyplug, any Workspace, your email. Leave **Iframe connector URL** empty and click **Create**.',
             },
-            { text: 'On the API key tab, click Generate a new API key and copy the key into the form.' },
-            { text: 'Click the Token link next to the key, click Allow and copy the token into the form.' },
+            {
+              text: 'On the **API key** tab, click **Generate a new API key** and copy the key.',
+              fills: ['apiKey'],
+            },
+            {
+              text: 'Click the **Token** link next to the key, click **Allow** and copy the token.',
+              fills: ['token'],
+            },
           ],
-          tips: ['The token opens all your boards. You can revoke it in Trello: Settings → Applications.'],
+          tips: [
+            'The token opens all your boards. You can revoke it in Trello under **Settings → Applications**.',
+          ],
+          problems: [
+            {
+              problem: 'The check says the key or token is invalid (401)',
+              fix: 'The key and the token belong together: copy both again from the same Power-Up. A token made for another key does not work.',
+            },
+            {
+              problem: 'There is no **Token** link',
+              fix: 'It appears next to the key once the key is generated on the **API key** tab. Reload the page if you still do not see it.',
+            },
+            {
+              problem: 'The AI does not see a board',
+              fix: 'The token sees the boards of the Trello account that clicked **Allow**. Sign in as a member of that board and create the token again.',
+            },
+          ],
         },
       },
       prompts: [

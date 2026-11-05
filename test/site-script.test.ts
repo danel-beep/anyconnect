@@ -50,6 +50,7 @@ function openMenu(viewport: { width: number; height: number }, button: Rect, men
     window,
     history: {},
     navigator: {},
+    location: { hash: '' },
     localStorage: undefined,
     setTimeout,
   });
@@ -77,5 +78,133 @@ describe('dropdown menus in site.js', () => {
     const placed = openMenu({ width: 390, height: 844 }, { top: 300, bottom: 332, left: 100, right: 180 });
     expect(placed.left).toBe(8);
     expect(placed.top).toBe(338);
+  });
+});
+
+/**
+ * Runs /assets/site.js against a fake "Add a service" card: a search box filtering the full list,
+ * which sits in a folded <details>, and a popular row the search hides.
+ */
+function serviceSearch() {
+  const listeners: Record<string, ((e?: unknown) => void)[]> = {};
+  const attrs: Record<string, string> = {
+    'data-filter': '#list',
+    'data-filter-empty': '#none',
+    'data-filter-expand': '#all',
+    'data-filter-hide': '#popular',
+    'data-filter-count': '#count',
+  };
+  const input = {
+    value: '',
+    getAttribute: (k: string) => attrs[k] ?? null,
+    addEventListener: (type: string, fn: (e?: unknown) => void) => {
+      listeners[type] = [...(listeners[type] ?? []), fn];
+    },
+    dispatchEvent: (e: { type: string }) => {
+      for (const fn of listeners[e.type] ?? []) fn(e);
+    },
+  };
+  const item = (text: string) => ({ hidden: false, getAttribute: () => text });
+  const items = [item('gmail mail'), item('slack chat'), item('notion docs')];
+  const group = { hidden: false, querySelectorAll: () => items };
+  const list = {
+    addEventListener: () => {},
+    dispatchEvent: () => {},
+    querySelectorAll: (sel: string) =>
+      sel === '[data-search]' ? items : sel === '[data-filter-group]' ? [group] : [],
+  };
+  const details = {
+    open: false,
+    flags: new Set<string>(),
+    setAttribute(k: string) {
+      this.flags.add(k);
+    },
+    removeAttribute(k: string) {
+      this.flags.delete(k);
+    },
+  };
+  const popular = { hidden: false };
+  const none = { hidden: true };
+  const count = { textContent: '', getAttribute: () => '{n} found' };
+  const byId: Record<string, unknown> = {
+    '#count': count,
+    '#list': list,
+    '#all': details,
+    '#popular': popular,
+    '#none': none,
+  };
+  const noop = () => {};
+  const document = {
+    documentElement: {
+      classList: { add: noop, toggle: noop, contains: () => false },
+      getAttribute: () => null,
+    },
+    querySelectorAll: (sel: string) => (sel === '[data-filter]' ? [input] : []),
+    querySelector: (sel: string) => byId[sel] ?? null,
+    getElementById: () => null,
+    addEventListener: noop,
+  };
+  class Event {
+    constructor(readonly type: string) {}
+  }
+  runInNewContext(SITE_JS, {
+    document,
+    window: { innerHeight: 800, scrollY: 0, addEventListener: noop },
+    history: {},
+    navigator: {},
+    location: { hash: '' },
+    localStorage: undefined,
+    Event,
+    setTimeout,
+  });
+  const type = (value: string) => {
+    input.value = value;
+    input.dispatchEvent({ type: 'input' });
+  };
+  const press = (key: string) => {
+    for (const fn of listeners.keydown ?? []) fn({ key, preventDefault: noop });
+  };
+  return { type, press, items, details, popular, none, count };
+}
+
+describe('service search in site.js', () => {
+  it('opens the full list while searching, hides the popular row and restores both after', () => {
+    const page = serviceSearch();
+    page.type('mail');
+    expect(page.items.map((i) => i.hidden)).toEqual([false, true, true]);
+    expect(page.details.open).toBe(true);
+    expect(page.details.flags.has('data-searching')).toBe(true);
+    expect(page.popular.hidden).toBe(true);
+
+    expect(page.count.textContent).toBe('1 found');
+
+    page.type('nothing like this');
+    expect(page.none.hidden).toBe(false);
+    expect(page.count.textContent).toBe('0 found');
+
+    // Escape clears the box; the list goes back to folded because it was folded before.
+    page.press('Escape');
+    expect(page.items.every((i) => !i.hidden)).toBe(true);
+    expect(page.details.open).toBe(false);
+    expect(page.details.flags.has('data-searching')).toBe(false);
+    expect(page.popular.hidden).toBe(false);
+    expect(page.none.hidden).toBe(true);
+    expect(page.count.textContent).toBe('');
+  });
+
+  it('matches every word on its own, in any order', () => {
+    const page = serviceSearch();
+    page.type('chat  slack');
+    expect(page.items.map((i) => i.hidden)).toEqual([true, false, true]);
+    page.type('slack docs');
+    expect(page.none.hidden).toBe(false);
+  });
+
+  it('keeps the list open after a search when it was open before', () => {
+    const page = serviceSearch();
+    page.details.open = true;
+    page.type('slack');
+    page.type('');
+    expect(page.details.open).toBe(true);
   });
 });

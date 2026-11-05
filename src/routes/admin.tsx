@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { RevenueReport } from '../admin/revenue.js';
 import type { AdminActor } from '../admin/service.js';
+import { DIMENSIONS, type Dimension, type Filter, isDimension } from '../analytics/reports.js';
 import { missingPrices } from '../billing/config.js';
 import { monthPeriod } from '../billing/period.js';
 import { getPlan, METRICS, type Metric, PLANS } from '../billing/plans.js';
@@ -21,6 +23,15 @@ import {
   type OAuthAppView,
   type SystemCheck,
 } from '../web/admin.js';
+import {
+  AdminAnalyticsPage,
+  ANALYTICS_TABS,
+  type AnalyticsTab,
+  type AnalyticsView,
+  FUNNEL_BY,
+  RANGES,
+} from '../web/admin-analytics.js';
+import { AdminRevenuePage } from '../web/admin-revenue.js';
 import { clientIp } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
 import { type AppContext, type AppEnv, bodyParams, loginUrl } from './context.js';
@@ -218,6 +229,56 @@ export function adminRoutes() {
     }),
   );
 
+  app.get(
+    '/admin/analytics',
+    view(async (c, auth) => {
+      const s = c.get('services');
+      const tab: AnalyticsTab = (ANALYTICS_TABS as readonly string[]).includes(c.req.query('tab') ?? '')
+        ? (c.req.query('tab') as AnalyticsTab)
+        : 'traffic';
+      const days = (RANGES as readonly number[]).includes(Number(c.req.query('days')))
+        ? Number(c.req.query('days'))
+        : 30;
+      const by: Dimension = FUNNEL_BY.find((d) => d === c.req.query('by')) ?? 'source';
+      // `f.<dimension>=<value>` narrows every number on the page (a click on a row adds one).
+      const filter: Filter = {};
+      for (const dim of DIMENSIONS) {
+        const value = c.req.query(`f.${dim}`)?.trim();
+        if (value && isDimension(dim)) filter[dim] = value.slice(0, 200);
+      }
+      const now = Date.now();
+      const range = {
+        from: new Date(now - (days - 1) * DAY).toISOString().slice(0, 10),
+        to: new Date(now).toISOString().slice(0, 10),
+      };
+      const reports = s.analytics.reports;
+      const [shell, traffic, funnel, product, plans, retention] = await Promise.all([
+        shellInfo(c, auth.workspace.id),
+        tab === 'traffic' ? reports.traffic(range, filter) : undefined,
+        tab === 'funnel' ? reports.funnel(range, by, filter) : undefined,
+        tab === 'product' ? reports.product(range) : undefined,
+        tab === 'plans' ? reports.plans(range) : undefined,
+        tab === 'retention' ? reports.retention(12, filter) : undefined,
+      ]);
+      const view: AnalyticsView = {
+        tab,
+        days,
+        range,
+        filter,
+        by,
+        services: Object.fromEntries(
+          s.connectors.builtin.all().map((d) => [d.id, connectorText(d, c.get('locale')).name]),
+        ),
+        ...(traffic ? { traffic } : {}),
+        ...(funnel ? { funnel } : {}),
+        ...(product ? { product } : {}),
+        ...(plans ? { plans } : {}),
+        ...(retention ? { retention } : {}),
+      };
+      return c.html(<AdminAnalyticsPage ctx={pageCtx(c, auth.user)} shell={shell} view={view} />);
+    }),
+  );
+
   const ListQuery = z.object({
     q: z.string().max(100).optional(),
     status: z.enum(['active', 'suspended']).optional().catch(undefined),
@@ -373,6 +434,35 @@ export function adminRoutes() {
               actorEmail: a.actorEmail,
               details: (a.details ?? {}) as Record<string, unknown>,
               createdAt: a.createdAt,
+            })),
+          }}
+        />,
+      );
+    }),
+  );
+
+  app.get(
+    '/admin/revenue',
+    view(async (c, auth) => {
+      const s = c.get('services');
+      const [report, events, shell] = await Promise.all([
+        new RevenueReport(s.db).build(),
+        s.billing.recentEvents({ limit: 15 }),
+        shellInfo(c, auth.workspace.id),
+      ]);
+      return c.html(
+        <AdminRevenuePage
+          ctx={pageCtx(c, auth.user)}
+          shell={shell}
+          view={{
+            ...report,
+            provider: s.billing.provider?.name ?? null,
+            events: events.map((e) => ({
+              type: e.type,
+              status: e.status,
+              planId: e.planId,
+              outcome: e.outcome,
+              at: e.createdAt,
             })),
           }}
         />,

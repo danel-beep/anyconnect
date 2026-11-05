@@ -29,6 +29,7 @@ export const siteEn = {
   'site.footer.contact': 'Contact us',
   'site.footer.privacy': 'Privacy policy',
   'site.footer.terms': 'Terms of service',
+  'site.footer.refunds': 'Refund policy',
   'site.footer.support': 'Support',
   'site.footer.mcp': 'Built on the open Model Context Protocol',
   'site.footer.status': 'System status',
@@ -297,6 +298,7 @@ export const siteEn = {
   'category.dev': 'Development',
   'category.payments': 'Payments',
   'category.crm': 'CRM and sales',
+  'category.marketing': 'Email marketing',
   'category.custom': 'Your own',
   'category.other': 'Other',
 
@@ -418,6 +420,7 @@ export const siteRu: Record<SiteKey, string> = {
   'site.footer.contact': 'Написать нам',
   'site.footer.privacy': 'Политика конфиденциальности',
   'site.footer.terms': 'Условия использования',
+  'site.footer.refunds': 'Политика возврата',
   'site.footer.support': 'Поддержка',
   'site.footer.mcp': 'Работает на открытом протоколе MCP',
   'site.footer.status': 'Статус системы',
@@ -690,7 +693,8 @@ export const siteRu: Record<SiteKey, string> = {
   'category.dev': 'Разработка',
   'category.payments': 'Платежи',
   'category.crm': 'CRM и продажи',
-  'category.custom': 'Свои',
+  'category.marketing': 'Рассылки',
+  'category.custom': 'Свои серверы',
   'category.other': 'Другое',
 
   'services.title': 'Сервисы · Manyplug',
