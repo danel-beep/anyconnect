@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DbListener } from '../src/db/listener.js';
 import { DueLoop } from '../src/lib/due-loop.js';
 import { createLogger } from '../src/logger.js';
-import type { PendingCallRow, PendingCallService } from '../src/security/pending-calls.js';
+import {
+  PENDING_CALLS_CHANNEL,
+  type PendingCallRow,
+  type PendingCallService,
+} from '../src/security/pending-calls.js';
 import { PendingCallRunner } from '../src/security/runner.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -191,5 +196,78 @@ describe('PendingCallRunner', () => {
     expect(ran).toEqual([]);
     await vi.waitFor(() => expect(ran).toEqual(['pcl_1']), { timeout: 1000, interval: 10 });
     await runner.stop();
+  });
+
+  it('wakes on a call another instance scheduled (NOTIFY), and polls while notifications are down', async () => {
+    let claims = 0;
+    const pending = {
+      onScheduled: () => () => {},
+      nextDue: async () => undefined,
+      claimDue: async () => {
+        claims++;
+        return [];
+      },
+      maintain: async () => {},
+    } as unknown as PendingCallService;
+    let notify: (() => void) | undefined;
+    const listener: DbListener & { connected: boolean } = {
+      connected: true,
+      listen: (channel, onNotify) => {
+        expect(channel).toBe(PENDING_CALLS_CHANNEL);
+        notify = () => onNotify('');
+        return () => {
+          notify = undefined;
+        };
+      },
+    };
+    const runner = new PendingCallRunner({
+      pending,
+      center: { refresh: async () => {} } as never,
+      run: async () => ({ content: [] }),
+      logger: createLogger({ level: 'silent' }),
+      backstopMs: 60_000,
+      listener,
+      pollMs: 50,
+    });
+    runner.start();
+    await vi.waitFor(() => expect(claims).toBe(1));
+    await sleep(120);
+    expect(claims).toBe(1);
+    notify?.();
+    await vi.waitFor(() => expect(claims).toBe(2));
+    // Notifications down: back to polling every pollMs (after the 60 s sleep already planned).
+    listener.connected = false;
+    notify?.();
+    await vi.waitFor(() => expect(claims).toBeGreaterThanOrEqual(5), { timeout: 2_000, interval: 10 });
+    await runner.stop();
+  });
+
+  it('backs off when claiming fails instead of retrying a due call in a tight loop', async () => {
+    let claims = 0;
+    const errors: unknown[] = [];
+    const pending = {
+      onScheduled: () => () => {},
+      nextDue: async () => new Date(0),
+      claimDue: async () => {
+        claims++;
+        throw new Error('read-only transaction');
+      },
+      maintain: async () => {},
+    } as unknown as PendingCallService;
+    const logger = createLogger({ level: 'silent' });
+    const runner = new PendingCallRunner({
+      pending,
+      center: { refresh: async () => {} } as never,
+      run: async () => ({ content: [] }),
+      logger: Object.assign(Object.create(logger), {
+        warn: (o: { err?: unknown }) => errors.push(o.err),
+      }) as typeof logger,
+      backstopMs: 60_000,
+    });
+    runner.start();
+    await sleep(500);
+    await runner.stop();
+    expect(claims).toBe(1);
+    expect(errors).toHaveLength(1);
   });
 });

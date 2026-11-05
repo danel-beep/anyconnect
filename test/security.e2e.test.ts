@@ -1,14 +1,16 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import demo from '../src/connectors/builtin/demo.js';
 import { ConnectorRegistry } from '../src/connectors/registry.js';
 import { defineConnector } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
+import { PgListener } from '../src/db/listener.js';
 import { resultText } from '../src/hub/result.js';
 import { TELEGRAM_SECRET_HEADER } from '../src/routes/confirm.js';
-import { resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
+import { PENDING_CALLS_CHANNEL } from '../src/security/pending-calls.js';
+import { resetDatabase, startTestHub, TEST_DATABASE_URL, TestBrowser, type TestHub } from './helpers.js';
 
 let sent = 0;
 let purged = 0;
@@ -432,6 +434,12 @@ describe('data protection in the running hub', () => {
 
     const announced: Date[] = [];
     const stopListening = s.pendingCalls.onScheduled((at) => announced.push(at));
+    // Runners of other instances hear it through Postgres NOTIFY.
+    const otherInstance = new PgListener({ connectionString: TEST_DATABASE_URL, logger: s.logger });
+    let notified = 0;
+    otherInstance.listen(PENDING_CALLS_CHANNEL, () => notified++);
+    otherInstance.start();
+    await vi.waitFor(() => expect(otherInstance.connected).toBe(true), { timeout: 5_000 });
     const first = resultText(await call('inbox_send', args));
     expect(first).toContain('will run in 60 s');
     expect(sent).toBe(0);
@@ -439,7 +447,9 @@ describe('data protection in the running hub', () => {
     expect(scheduled!.status).toBe('scheduled');
     // The runner of this process hears when the call is due, so it never has to poll for it.
     expect(announced.map((at) => at.getTime())).toEqual([scheduled!.executeAt!.getTime()]);
+    await vi.waitFor(() => expect(notified).toBe(1), { timeout: 5_000 });
     stopListening();
+    await otherInstance.stop();
 
     const browser = await signIn();
     const cancelled = await browser.request(`/api/v1/pending-calls/${scheduled!.id}/cancel`, { json: {} });

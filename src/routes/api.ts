@@ -302,6 +302,7 @@ export function apiRoutes() {
     const s = c.get('services');
     const row = await s.accounts.get(principal(c).workspaceId, c.req.param('id'));
     await s.messaging.accounts.resumeSending(row.id);
+    await s.messaging.outbox.releaseHold(row.id);
     s.messaging.dispatcher.kick();
     return c.json({ ok: true });
   });

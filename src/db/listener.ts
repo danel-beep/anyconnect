@@ -100,8 +100,18 @@ export class PgListener implements DbListener {
     client.on('end', () => this.lost(undefined, client));
     try {
       await client.connect();
-      const channels = new Set([...this.subscriptions].map((s) => s.channel));
-      for (const channel of channels) await client.query(`LISTEN ${quoteIdent(channel)}`);
+      // Channels subscribed while these LISTENs run are picked up by the next round.
+      const listening = new Set<string>();
+      for (
+        let missing = this.unlistened(listening);
+        missing.length > 0;
+        missing = this.unlistened(listening)
+      ) {
+        for (const channel of missing) {
+          await client.query(`LISTEN ${quoteIdent(channel)}`);
+          listening.add(channel);
+        }
+      }
     } catch (err) {
       await client.end().catch(() => {});
       this.retry(err);
@@ -114,11 +124,28 @@ export class PgListener implements DbListener {
     this.client = client;
     this.isConnected = true;
     this.retryMs = this.options.retry?.minMs ?? 1000;
-    this.pingTimer = setInterval(() => {
-      client.query('SELECT 1').catch((err) => this.lost(err, client));
-    }, this.options.pingMs ?? 60_000);
+    this.pingTimer = setInterval(() => void this.ping(client), this.options.pingMs ?? 60_000);
     this.pingTimer.unref();
     this.resyncAll();
+  }
+
+  private unlistened(listening: Set<string>): string[] {
+    return [...new Set([...this.subscriptions].map((s) => s.channel))].filter((c) => !listening.has(c));
+  }
+
+  /**
+   * Proves the connection is alive and still hears its channels. Behind a pooler in transaction
+   * mode LISTEN seems to work but nothing arrives; the session then shows no listening channels.
+   */
+  private async ping(client: pg.Client): Promise<void> {
+    try {
+      const { rows } = await client.query<{ channel: string }>('SELECT pg_listening_channels() AS channel');
+      const heard = new Set(rows.map((r) => r.channel));
+      const deaf = [...new Set([...this.subscriptions].map((s) => s.channel))].filter((c) => !heard.has(c));
+      if (deaf.length > 0) this.lost(new Error(`not listening on ${deaf.join(', ')}`), client);
+    } catch (err) {
+      this.lost(err, client);
+    }
   }
 
   /** The connection failed or ended: switch subscribers to polling and reconnect. */

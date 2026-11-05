@@ -88,6 +88,9 @@ export class JobQueue {
       schema: this.options.schema ?? 'pgboss',
       application_name: 'manyplug-jobs',
       useListenNotify: true,
+      // Checks that the LISTEN connection still hears its channels (default every 10 s, then the
+      // most frequent idle query of the process).
+      notifyHeartbeatIntervalMs: 60_000,
       cronWorkerIntervalSeconds: this.options.cronWorkerIntervalSeconds ?? 30,
       // pg-boss's own housekeeping, every 5–60 s by default: job dependencies ("flows", unused
       // here), queue statistics, expiry and retention, its schema upgrades. Every 5 minutes is
@@ -111,17 +114,25 @@ export class JobQueue {
       // createQueue leaves an existing queue as it is: turn NOTIFY on for queues made by older releases.
       await boss.updateQueue(definition.name, { notify: true });
       if (definition.cron) await boss.schedule(definition.name, definition.cron, {}, { tz: 'UTC' });
-      await boss.work<object>(
+      let workerId: string | undefined;
+      workerId = await boss.work<object>(
         definition.name,
         {
           pollingIntervalSeconds,
           notifyPollingIntervalSeconds: Math.max(this.options.backstopSeconds ?? 300, pollingIntervalSeconds),
         },
         async (jobs) => {
-          for (const job of jobs) {
-            await runWithContext({ requestId: `job-${newRequestId()}`, job: definition.name }, () =>
-              this.runOne(definition, job.id, job.data),
-            );
+          try {
+            for (const job of jobs) {
+              await runWithContext({ requestId: `job-${newRequestId()}`, job: definition.name }, () =>
+                this.runOne(definition, job.id, job.data),
+              );
+            }
+          } catch (err) {
+            // A failed job goes back to the queue for a retry without a NOTIFY: look again at once
+            // instead of after the backstop.
+            if (workerId) boss.notifyWorker(workerId);
+            throw err;
           }
         },
       );

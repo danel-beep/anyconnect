@@ -242,6 +242,26 @@ export class Outbox {
   }
 
   /**
+   * The user lifted a sending pause: jobs held until its end are due now (pacing still applies
+   * when they are sent), and the dispatchers of every process hear about it.
+   */
+  async releaseHold(accountId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(messengerOutbox)
+        .set({ notBefore: sql`now()` })
+        .where(
+          and(
+            eq(messengerOutbox.accountId, accountId),
+            eq(messengerOutbox.status, 'queued'),
+            gt(messengerOutbox.notBefore, sql`now()`),
+          ),
+        );
+      await tx.execute(sql`select pg_notify(${OUTBOX_CHANNEL}, ${accountId})`);
+    });
+  }
+
+  /**
    * Jobs whose worker vanished mid-send. Idempotent transports get them back in the queue;
    * for the others we cannot know whether the message went out, so they become `uncertain`.
    */

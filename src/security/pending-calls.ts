@@ -12,6 +12,9 @@ import type { SecretBox } from '../lib/crypto.js';
 import { notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 
+/** Postgres NOTIFY channel: a call was scheduled (the runners of all instances listen on it). */
+export const PENDING_CALLS_CHANNEL = 'pending_calls';
+
 export type PendingCallRow = typeof pendingCalls.$inferSelect;
 
 /** The stored outcome of a held-back call, in the hub's result shape. */
@@ -143,7 +146,7 @@ export class PendingCallService {
   /** An allowed call that runs after its undo window unless cancelled. */
   async schedule(input: PendingCallInput): Promise<PendingCallRow> {
     const row = await this.insert(input, 'scheduled', new Date(Date.now() + input.undoWindowSeconds * 1000));
-    this.scheduled(row);
+    await this.scheduled(row);
     return row;
   }
 
@@ -156,9 +159,11 @@ export class PendingCallService {
     return () => this.scheduledListeners.delete(listener);
   }
 
-  private scheduled(row: PendingCallRow | undefined): void {
+  /** Wakes the runner of this process directly and the runners of other instances by NOTIFY. */
+  private async scheduled(row: PendingCallRow | undefined): Promise<void> {
     if (row?.status !== 'scheduled' || !row.executeAt) return;
     for (const listener of this.scheduledListeners) listener(row.executeAt);
+    await this.db.execute(sql`select pg_notify(${PENDING_CALLS_CHANNEL}, '')`);
   }
 
   /** When the next scheduled call is due (undefined: none is scheduled). */
@@ -293,7 +298,7 @@ export class PendingCallService {
         ),
       )
       .returning();
-    this.scheduled(row);
+    await this.scheduled(row);
     return row;
   }
 

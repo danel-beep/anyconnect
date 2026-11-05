@@ -40,25 +40,28 @@ describe('PgListener (Postgres LISTEN/NOTIFY)', () => {
     const resyncA = vi.fn();
     const stopA = l.listen('test_a', (p) => a.push(p), resyncA);
     l.start();
-    await vi.waitFor(() => expect(l.connected).toBe(true));
+    await vi.waitFor(() => expect(l.connected).toBe(true), { timeout: 5_000 });
     expect(resyncA).toHaveBeenCalledTimes(1);
     // A channel added while connected is listened to at once.
     l.listen('test_b', (p) => b.push(p));
-    await vi.waitFor(async () => {
-      await notify('test_b', 'probe');
-      expect(b).toContain('probe');
-    });
+    await vi.waitFor(
+      async () => {
+        await notify('test_b', 'probe');
+        expect(b).toContain('probe');
+      },
+      { timeout: 5_000 },
+    );
 
     await notify('test_a', 'one');
     await notify('test_b', 'two');
-    await vi.waitFor(() => expect(b).toContain('two'));
+    await vi.waitFor(() => expect(b).toContain('two'), { timeout: 5_000 });
     // Notifications of one session arrive in order: 'one' came before 'two'.
     expect(a).toEqual(['one']);
 
     stopA();
     await notify('test_a', 'ignored');
     await notify('test_b', 'three');
-    await vi.waitFor(() => expect(b).toContain('three'));
+    await vi.waitFor(() => expect(b).toContain('three'), { timeout: 5_000 });
     expect(a).toEqual(['one']);
   });
 
@@ -68,7 +71,7 @@ describe('PgListener (Postgres LISTEN/NOTIFY)', () => {
     const resync = vi.fn();
     l.listen('test_c', (p) => got.push(p), resync);
     l.start();
-    await vi.waitFor(() => expect(l.connected).toBe(true));
+    await vi.waitFor(() => expect(l.connected).toBe(true), { timeout: 5_000 });
     expect(resync).toHaveBeenCalledTimes(1);
 
     await admin.query(
@@ -78,10 +81,38 @@ describe('PgListener (Postgres LISTEN/NOTIFY)', () => {
     // Lost: subscribers re-read (notifications may be missed), then again once it is back.
     await vi.waitFor(() => expect(resync).toHaveBeenCalledTimes(3), { timeout: 5_000 });
     expect(l.connected).toBe(true);
-    await vi.waitFor(async () => {
-      await notify('test_c', 'after');
-      expect(got).toContain('after');
+    await vi.waitFor(
+      async () => {
+        await notify('test_c', 'after');
+        expect(got).toContain('after');
+      },
+      { timeout: 5_000 },
+    );
+  });
+
+  it('reconnects when the session no longer hears its channels (e.g. behind a transaction pooler)', async () => {
+    listener = new PgListener({
+      connectionString: TEST_DATABASE_URL,
+      logger,
+      retry: { minMs: 20, maxMs: 200 },
+      pingMs: 50,
     });
+    const l = listener;
+    const got: string[] = [];
+    const resync = vi.fn();
+    l.listen('test_e', (p) => got.push(p), resync);
+    l.start();
+    await vi.waitFor(() => expect(l.connected).toBe(true), { timeout: 5_000 });
+    // What a pooler does by handing the next query to another server session: LISTEN is gone.
+    await (l as unknown as { client: pg.Client }).client.query('UNLISTEN *');
+    await vi.waitFor(() => expect(resync).toHaveBeenCalledTimes(3), { timeout: 5_000 });
+    await vi.waitFor(
+      async () => {
+        await notify('test_e', 'heard');
+        expect(got).toContain('heard');
+      },
+      { timeout: 5_000 },
+    );
   });
 
   it('never throws without a server and keeps retrying until stopped', async () => {

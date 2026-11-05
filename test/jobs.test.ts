@@ -20,6 +20,11 @@ describe('background job queue (pg-boss)', () => {
     pollingIntervalSeconds: 60,
   });
   const received: unknown[] = [];
+  let flakyRuns = 0;
+  let retried: () => void;
+  const retriedOnce = new Promise<void>((resolve) => {
+    retried = resolve;
+  });
   let done: () => void;
   const finished = new Promise<void>((resolve) => {
     done = resolve;
@@ -34,6 +39,15 @@ describe('background job queue (pg-boss)', () => {
         run: async (data) => {
           received.push(data);
           done();
+        },
+      })
+      .register({
+        name: 'test.flaky',
+        description: 'Fails once, then works',
+        run: async () => {
+          flakyRuns++;
+          if (flakyRuns === 1) throw new Error('temporary failure');
+          retried();
         },
       })
       .register({ name: 'test.cron', description: 'Recurring', cron: '0 3 * * *', run: async () => {} });
@@ -52,6 +66,12 @@ describe('background job queue (pg-boss)', () => {
     expect(() => queue.register({ name: 'late', description: 'x', run: async () => {} })).toThrow(
       /before starting/,
     );
+  });
+
+  it('retries a failed job at once, not after the polling backstop (a retry sends no NOTIFY)', async () => {
+    await queue.send('test.flaky');
+    await within(10_000, retriedOnce);
+    expect(flakyRuns).toBe(2);
   });
 
   it('turns NOTIFY on for queues an older release created without it', async () => {
