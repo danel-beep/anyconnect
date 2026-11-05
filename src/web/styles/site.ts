@@ -112,6 +112,8 @@ html:not(.js) .billing-switch{display:none}
 .plan .tag{position:absolute;top:-11px;left:20px;background:var(--accent);color:var(--accent-text);font:600 11px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:6px 8px}
 .plan h3{font-size:18px;margin:0}
 .plan .for{color:var(--muted);font-size:14px;margin:4px 0 0;min-height:42px}
+/* With subgrid the rows line up across cards, so a one-line description needs no reserved second line. */
+@supports (grid-template-rows:subgrid){.plan .for{min-height:0}}
 .price{display:flex;align-items:baseline;gap:6px}
 .price .amount{font-size:40px;font-weight:660;letter-spacing:-.04em;line-height:1}
 .price .per{color:var(--muted);font-size:14px}
@@ -124,7 +126,7 @@ html:not(.js) .when-year{display:none}
 .plan li.off{color:var(--muted)}
 .plan li.off svg{color:var(--muted)}
 .plan .btn{margin-top:auto}
-@media (max-width:600px){.plans{grid-template-columns:1fr}.plan .for{min-height:0}}
+@media (max-width:600px){.plans{grid-template-columns:1fr}}
 .compare{table-layout:fixed}
 .compare th,.compare td{text-align:center}
 .compare th:first-child,.compare td:first-child{text-align:left}
