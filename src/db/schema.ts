@@ -915,6 +915,44 @@ export const dataKeys = pgTable('data_keys', {
   createdAt: createdAt(),
 });
 
+/**
+ * User vaults (see `src/lib/vault.ts`, `src/core/vaults.ts`): the public key that sealed accounts
+ * are encrypted to. The private key is never stored here, only in `vault_wraps`.
+ */
+export const userVaults = pgTable('user_vaults', {
+  userId: text()
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Raw X25519 public key, base64url. */
+  publicKey: text().notNull(),
+  createdAt: createdAt(),
+});
+
+/** What a vault wrap is unlocked with. */
+export type VaultWrapKind = 'passkey' | 'recovery' | 'oauth' | 'api_token' | 'session';
+
+/**
+ * The vault's private key wrapped under one secret the hub does not keep: a passkey PRF output,
+ * the recovery key, or a bearer token (OAuth refresh token, personal token, web session) of which
+ * only the hash is stored elsewhere. One row per secret; deleting the row (or the secret's own row,
+ * through `ref`) revokes that way in.
+ */
+export const vaultWraps = pgTable(
+  'vault_wraps',
+  {
+    userId: text()
+      .notNull()
+      .references(() => userVaults.userId, { onDelete: 'cascade' }),
+    kind: text().$type<VaultWrapKind>().notNull(),
+    /** The secret's own id: passkey credential id, OAuth grant id, token id, session id; `-` for recovery. */
+    ref: text().notNull(),
+    wrapped: text().notNull(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kind, t.ref] }), index().on(t.kind, t.ref)],
+);
+
 export type MessengerSessionState =
   /** No session yet: the user has to log in (QR code, phone code). */
   | 'needs_login'
