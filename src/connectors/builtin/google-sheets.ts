@@ -74,13 +74,28 @@ export default defineConnector({
         description: 'Google Таблицы: поиск таблиц, чтение и запись ячеек, добавление строк, новые таблицы.',
         setup: {
           oauth: {
-            summary: 'Ваш аккаунт Google. Меньше минуты.',
+            summary: 'Вы входите в свой аккаунт Google и разрешаете Manyplug работать с таблицами.',
+            minutes: 1,
+            needs: ['Аккаунт Google с Google Таблицами'],
             steps: [
-              { text: 'Нажмите «Подключить» и выберите аккаунт Google с нужными таблицами.' },
+              { text: 'Нажмите **Подключить** и выберите аккаунт Google с нужными таблицами.' },
               {
-                text: 'Google попросит разрешить Manyplug смотреть и менять таблицы и видеть список файлов на Диске. Нажмите «Продолжить».',
+                text: 'Google попросит разрешить Manyplug смотреть и менять таблицы и видеть список файлов на Диске. Оставьте все галочки и нажмите **Продолжить**.',
               },
               { text: 'Готово: ИИ видит все таблицы этого аккаунта, в том числе общие.' },
+            ],
+            tips: [
+              'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google: **Безопасность → Ваши подключения к сторонним приложениям и сервисам**.',
+            ],
+            problems: [
+              {
+                problem: 'Рабочий аккаунт Google Workspace пишет «Доступ заблокирован» или «Access blocked»',
+                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → API controls**.',
+              },
+              {
+                problem: 'ИИ пишет, что у него нет доступа к таблицам',
+                fix: 'На странице Google были сняты галочки с разрешений. Нажмите **Переподключить** и оставьте отмеченными все пункты.',
+              },
             ],
           },
         },
@@ -110,13 +125,28 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary: 'Your Google account. Takes under a minute.',
+            summary: 'You sign in to your Google account and allow Manyplug to work with your spreadsheets.',
+            minutes: 1,
+            needs: ['A Google account with Google Sheets'],
             steps: [
-              { text: 'Click Connect and choose the Google account that has your spreadsheets.' },
+              { text: 'Click **Connect** and choose the Google account that has your spreadsheets.' },
               {
-                text: 'Google asks to let Manyplug see and edit your spreadsheets and see the list of your Drive files. Click Continue.',
+                text: 'Google asks to let Manyplug see and edit your spreadsheets and see the list of your Drive files. Leave every box ticked and click **Continue**.',
               },
               { text: 'Done: the AI sees every spreadsheet of that account, including shared ones.' },
+            ],
+            tips: [
+              'To cut access, delete the account here or remove Manyplug in your Google Account under **Security → Your connections to third-party apps & services**.',
+            ],
+            problems: [
+              {
+                problem: 'A Google Workspace work account says “Access blocked”',
+                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → API controls**.',
+              },
+              {
+                problem: 'The AI says it has no access to your spreadsheets',
+                fix: 'Some permission boxes were unticked on the Google page. Click **Reconnect** and leave every box ticked.',
+              },
             ],
           },
         },

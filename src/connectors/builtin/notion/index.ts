@@ -184,41 +184,72 @@ export default defineConnector({
       ru: {
         setup: {
           oauth: {
-            summary: 'Ваше пространство Notion. Около минуты.',
+            summary: 'Вы входите в Notion и выбираете страницы, которые увидит ИИ.',
+            minutes: 1,
+            needs: ['Аккаунт Notion'],
             steps: [
+              { text: 'Нажмите **Подключить** и войдите в Notion.' },
               {
-                text: 'Нажмите «Подключить» и войдите в Notion.',
+                text: 'Выберите пространство, нажмите **Select pages** и отметьте страницы для Manyplug. ИИ увидит только их и всё, что внутри.',
               },
               {
-                text: 'Выберите пространство, затем страницы, к которым Manyplug получит доступ (Select pages). ИИ увидит только их и всё, что внутри.',
+                text: 'Нажмите **Allow access**. Вы вернётесь сюда, и пространство появится в списке аккаунтов.',
+              },
+            ],
+            tips: [
+              'Понадобятся ещё страницы? На странице в Notion откройте **•••** → **Connections** и добавьте Manyplug.',
+            ],
+            problems: [
+              {
+                problem: 'ИИ пишет, что не может найти страницу',
+                fix: 'Эта страница не открыта для Manyplug. В Notion откройте её, нажмите **•••** → **Connections** и добавьте Manyplug.',
               },
               {
-                text: 'Понадобятся ещё страницы? На странице в Notion откройте ••• → Connections и добавьте Manyplug.',
+                problem: 'Notion не даёт подключить приложение к пространству',
+                fix: 'В пространстве подключать приложения может только владелец. Попросите владельца пространства подключить Manyplug или разрешить это участникам.',
               },
             ],
           },
           form: {
-            summary: 'Секрет внутренней интеграции Notion. Около двух минут.',
+            summary:
+              'Вы создаёте внутреннюю интеграцию в Notion, открываете ей нужные страницы и вставляете сюда её секрет.',
+            minutes: 3,
+            needs: ['Пространство Notion, где вы владелец: только владельцы создают интеграции'],
             steps: [
               {
-                text: 'Откройте интеграции Notion и нажмите New integration.',
+                text: 'Откройте интеграции Notion и нажмите **New integration**.',
                 link: {
                   label: 'Открыть интеграции Notion',
                   url: 'https://www.notion.so/profile/integrations',
                 },
               },
               {
-                text: 'Назовите её Manyplug, выберите пространство, оставьте тип Internal и нажмите Save.',
+                text: 'Назовите её Manyplug, выберите пространство, оставьте тип **Internal** и нажмите **Save**.',
               },
               {
-                text: 'Скопируйте Internal Integration Secret (начинается с ntn_) и вставьте в форму.',
+                text: 'Скопируйте **Internal Integration Secret** (начинается с ntn_) и вставьте его в форму.',
+                fills: ['token'],
               },
               {
-                text: 'В Notion откройте каждую нужную страницу или базу, нажмите ••• → Connections и добавьте интеграцию.',
+                text: 'В Notion откройте каждую нужную страницу или базу, нажмите **•••** → **Connections** и добавьте интеграцию.',
               },
             ],
             tips: [
               'ИИ видит только страницы, открытые интеграции: начните с нужных и добавляйте остальные когда угодно.',
+            ],
+            problems: [
+              {
+                problem: '«API token is invalid»',
+                fix: 'Скопируйте секрет ещё раз на странице интеграции кнопкой **Show** → **Copy**. Он начинается с ntn_ или secret_.',
+              },
+              {
+                problem: 'ИИ пишет, что страница не найдена',
+                fix: 'Страница не открыта интеграции. Откройте её в Notion, нажмите **•••** → **Connections** и добавьте Manyplug.',
+              },
+              {
+                problem: 'Нет кнопки **New integration**',
+                fix: 'Интеграции создают только владельцы пространства. Попросите владельца создать её или подключитесь кнопкой входа через Notion.',
+              },
             ],
           },
         },
@@ -267,41 +298,72 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary: 'Your Notion workspace. Takes about a minute.',
+            summary: 'You sign in to Notion and choose the pages the AI may see.',
+            minutes: 1,
+            needs: ['A Notion account'],
             steps: [
+              { text: 'Click **Connect** and sign in to Notion.' },
               {
-                text: 'Click Connect and sign in to Notion.',
+                text: 'Pick the workspace, click **Select pages** and tick the pages for Manyplug. The AI sees only those pages and everything inside them.',
               },
               {
-                text: 'Pick the workspace, then choose the pages Manyplug may use (Select pages). The AI sees only those pages and everything inside them.',
+                text: 'Click **Allow access**. You are back here, and the workspace shows up in your accounts.',
+              },
+            ],
+            tips: [
+              'Need more pages later? On a page in Notion, open **•••** → **Connections** and add Manyplug.',
+            ],
+            problems: [
+              {
+                problem: 'The AI says it cannot find a page',
+                fix: 'That page is not shared with Manyplug. Open it in Notion, click **•••** → **Connections** and add Manyplug.',
               },
               {
-                text: 'Need more pages later? On a page in Notion, open ••• → Connections and add Manyplug.',
+                problem: 'Notion does not let you add the app to the workspace',
+                fix: 'Only a workspace owner can add apps there. Ask the owner to connect Manyplug or to let members do it.',
               },
             ],
           },
           form: {
-            summary: 'An internal integration secret from Notion. Takes about two minutes.',
+            summary:
+              'You create an internal integration in Notion, share the pages you need with it and paste its secret here.',
+            minutes: 3,
+            needs: ['A Notion workspace where you are an owner: only owners create integrations'],
             steps: [
               {
-                text: 'Open Notion integrations and click New integration.',
+                text: 'Open Notion integrations and click **New integration**.',
                 link: {
                   label: 'Open Notion integrations',
                   url: 'https://www.notion.so/profile/integrations',
                 },
               },
               {
-                text: 'Name it Manyplug, pick your workspace, keep the type Internal and click Save.',
+                text: 'Name it Manyplug, pick your workspace, keep the type **Internal** and click **Save**.',
               },
               {
-                text: 'Copy the Internal Integration Secret (starts with ntn_) and paste it into the form.',
+                text: 'Copy the **Internal Integration Secret** (it starts with ntn_) and paste it into the form.',
+                fills: ['token'],
               },
               {
-                text: 'In Notion, open each page or database the AI should see, click ••• → Connections and add the integration.',
+                text: 'In Notion, open each page or database the AI should see, click **•••** → **Connections** and add the integration.',
               },
             ],
             tips: [
               'The AI only sees pages shared with the integration, so start with the ones you need and add more any time.',
+            ],
+            problems: [
+              {
+                problem: '“API token is invalid”',
+                fix: 'Copy the secret again on the integration page with **Show** → **Copy**. It starts with ntn_ or secret_.',
+              },
+              {
+                problem: 'The AI says a page cannot be found',
+                fix: 'The page is not shared with the integration. Open it in Notion, click **•••** → **Connections** and add Manyplug.',
+              },
+              {
+                problem: 'There is no **New integration** button',
+                fix: 'Only workspace owners create integrations. Ask an owner to create it, or connect with the Notion sign-in button instead.',
+              },
             ],
           },
         },

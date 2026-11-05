@@ -126,26 +126,48 @@ export default defineConnector({
         setup: {
           form: {
             summary:
-              'Своё приложение Server-to-Server OAuth в Zoom Marketplace. Около пяти минут, нужны права администратора Zoom.',
+              'Вы создаёте личное приложение Server-to-Server OAuth в Zoom App Marketplace и вставляете сюда три его ключа.',
+            minutes: 6,
+            needs: [
+              'Аккаунт Zoom, где вы администратор или у вас есть право **Server-to-Server OAuth app** от администратора',
+            ],
             steps: [
               {
-                text: 'Откройте Zoom App Marketplace → Develop → Build App и выберите Server-to-Server OAuth App.',
+                text: 'Откройте Zoom App Marketplace → **Develop → Build App** и выберите **Server-to-Server OAuth App**.',
                 link: {
                   label: 'Открыть Zoom Marketplace',
                   url: 'https://marketplace.zoom.us/develop/create',
                 },
               },
               {
-                text: 'Назовите приложение Manyplug. На вкладке App Credentials скопируйте Account ID, Client ID и Client Secret.',
+                text: 'Назовите приложение Manyplug и нажмите **Create**. На вкладке **App Credentials** скопируйте **Account ID**, **Client ID** и **Client Secret**.',
+                fills: ['accountId', 'clientId', 'clientSecret'],
+              },
+              { text: 'На вкладке **Information** укажите название компании, имя и почту разработчика.' },
+              {
+                text: 'На вкладке **Scopes** нажмите **Add Scopes** и добавьте meeting:read:list_meetings:admin, meeting:read:meeting:admin, meeting:write:meeting:admin, meeting:update:meeting:admin и meeting:delete:meeting:admin.',
               },
               {
-                text: 'На вкладке Scopes добавьте meeting:read:list_meetings:admin, meeting:read:meeting:admin, meeting:write:meeting:admin, meeting:update:meeting:admin, meeting:delete:meeting:admin, cloud_recording:read:list_user_recordings:admin и user:read:user:admin.',
+                text: 'Добавьте ещё cloud_recording:read:list_user_recordings:admin и user:read:user:admin, затем на вкладке **Activation** нажмите **Activate your app**.',
               },
-              { text: 'Нажмите Activate your app, затем вставьте три значения в форму.' },
             ],
             tips: [
-              'Приложение видно только вашему аккаунту Zoom и не публикуется в Marketplace.',
-              'Отмену встречи ИИ делает только после вашего подтверждения: участники получат письмо.',
+              'Приложение доступно только вашему аккаунту Zoom и не публикуется в Marketplace.',
+              'ИИ отменяет встречу только после вашего подтверждения: участники получат письмо.',
+            ],
+            problems: [
+              {
+                problem: '«Invalid client_id or client_secret»',
+                fix: 'Скопируйте три значения заново с вкладки **App Credentials**. Если вы перевыпускали секрет, возьмите новый.',
+              },
+              {
+                problem: 'ИИ получает «Invalid access token, does not contain scopes»',
+                fix: 'Приложению не хватает разрешения. Добавьте его на вкладке **Scopes** (шаги 4–5) и нажмите здесь **Переподключить**.',
+              },
+              {
+                problem: 'Нет варианта **Server-to-Server OAuth App**',
+                fix: 'Попросите администратора Zoom дать вашей роли право **Server-to-Server OAuth app** (раздел **Roles**, расширенные возможности).',
+              },
             ],
           },
         },
@@ -176,23 +198,45 @@ export default defineConnector({
         setup: {
           form: {
             summary:
-              'Your own Server-to-Server OAuth app in the Zoom Marketplace. Takes about five minutes and needs Zoom admin rights.',
+              'You create a private Server-to-Server OAuth app in the Zoom App Marketplace and paste its three keys here.',
+            minutes: 6,
+            needs: [
+              'A Zoom account where you are an admin, or have the **Server-to-Server OAuth app** permission from your admin',
+            ],
             steps: [
               {
-                text: 'Open the Zoom App Marketplace → Develop → Build App and pick Server-to-Server OAuth App.',
+                text: 'Open the Zoom App Marketplace → **Develop → Build App** and pick **Server-to-Server OAuth App**.',
                 link: { label: 'Open Zoom Marketplace', url: 'https://marketplace.zoom.us/develop/create' },
               },
               {
-                text: 'Name it Manyplug. On App Credentials, copy the Account ID, Client ID and Client Secret.',
+                text: 'Name it Manyplug and click **Create**. On **App Credentials**, copy the **Account ID**, **Client ID** and **Client Secret**.',
+                fills: ['accountId', 'clientId', 'clientSecret'],
+              },
+              { text: 'On **Information**, fill in the company name and the developer’s name and email.' },
+              {
+                text: 'On **Scopes**, click **Add Scopes** and add meeting:read:list_meetings:admin, meeting:read:meeting:admin, meeting:write:meeting:admin, meeting:update:meeting:admin and meeting:delete:meeting:admin.',
               },
               {
-                text: 'On Scopes, add meeting:read:list_meetings:admin, meeting:read:meeting:admin, meeting:write:meeting:admin, meeting:update:meeting:admin, meeting:delete:meeting:admin, cloud_recording:read:list_user_recordings:admin and user:read:user:admin.',
+                text: 'Also add cloud_recording:read:list_user_recordings:admin and user:read:user:admin, then on **Activation** click **Activate your app**.',
               },
-              { text: 'Click Activate your app, then paste the three values into the form.' },
             ],
             tips: [
               'The app is private to your Zoom account and is not published in the Marketplace.',
               'The AI cancels a meeting only after you confirm: invitees get an email.',
+            ],
+            problems: [
+              {
+                problem: '“Invalid client_id or client_secret”',
+                fix: 'Copy the three values again from **App Credentials**. If you regenerated the secret, use the new one.',
+              },
+              {
+                problem: 'The AI gets “Invalid access token, does not contain scopes”',
+                fix: 'The app lacks a scope. Add it on **Scopes** (steps 4–5) and click **Reconnect** here.',
+              },
+              {
+                problem: 'There is no **Server-to-Server OAuth App** option',
+                fix: 'Ask your Zoom admin to give your role the **Server-to-Server OAuth app** permission (under **Roles**, in the advanced features).',
+              },
             ],
           },
         },

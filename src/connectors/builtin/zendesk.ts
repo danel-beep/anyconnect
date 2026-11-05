@@ -226,24 +226,38 @@ const ui: ConnectorUi = {
         'Тикеты и пользователи Zendesk Support: поиск, переписка, ответы клиентам, заметки, изменение тикетов.',
       setup: {
         form: {
-          summary: 'Адрес Zendesk, почта агента и токен API. Около двух минут, нужен доступ администратора.',
+          summary:
+            'Вы создаёте токен API в Zendesk Admin Center и вставляете его сюда вместе с адресом Zendesk и почтой агента.',
+          minutes: 3,
+          needs: ['Аккаунт Zendesk с правами администратора: только администраторы создают токены API'],
           steps: [
             {
-              text: 'Откройте Admin Center → Apps and integrations → APIs → API tokens (раньше — Zendesk API).',
-              link: {
-                label: 'Открыть Zendesk',
-                url: 'https://www.zendesk.com/login/',
-              },
+              text: 'Откройте **Admin Center → Apps and integrations → APIs → API tokens**.',
+              link: { label: 'Открыть Zendesk', url: 'https://www.zendesk.com/login/' },
             },
-            { text: 'Включите доступ по токену (Token access), если он выключен, и нажмите Add API token.' },
-            { text: 'Назовите токен Manyplug, скопируйте его и нажмите Save.' },
+            { text: 'Включите **Token access**, если он выключен, затем нажмите **Add API token**.' },
             {
-              text: 'В форме укажите поддомен (из адреса acme.zendesk.com — это acme), свою почту агента и токен.',
+              text: 'Назовите токен Manyplug, скопируйте его и нажмите **Save**: Zendesk показывает токен только один раз.',
+              fills: ['apiToken'],
+            },
+            {
+              text: 'В форме укажите поддомен (acme для acme.zendesk.com) и почту агента, от имени которого будет работать ИИ.',
+              fills: ['subdomain', 'email'],
             },
           ],
           tips: [
-            'ИИ действует от имени агента с этой почтой. Ответ клиенту уходит только после вашего подтверждения.',
+            'ИИ действует как агент с этой почтой. Ответы клиентам уходят только после вашего подтверждения.',
             'Удалить токен можно на той же странице Admin Center.',
+          ],
+          problems: [
+            {
+              problem: 'Проверка пишет, что данные неверные (401)',
+              fix: 'Проверьте, что почта принадлежит агенту этого Zendesk, а токен скопирован целиком. **Token access** в Admin Center должен оставаться включённым.',
+            },
+            {
+              problem: 'Проверка не находит адрес Zendesk',
+              fix: 'Укажите только поддомен: acme для acme.zendesk.com, без https:// и .zendesk.com.',
+            },
           ],
         },
       },
@@ -287,21 +301,37 @@ const ui: ConnectorUi = {
       setup: {
         form: {
           summary:
-            'Your Zendesk address, agent email and an API token. Takes about two minutes and needs admin access.',
+            'You create an API token in Zendesk Admin Center and paste it here with your Zendesk address and agent email.',
+          minutes: 3,
+          needs: ['A Zendesk account with admin access: only admins can create API tokens'],
           steps: [
             {
-              text: 'Open Admin Center → Apps and integrations → APIs → API tokens (formerly Zendesk API).',
+              text: 'Open **Admin Center → Apps and integrations → APIs → API tokens**.',
               link: { label: 'Open Zendesk', url: 'https://www.zendesk.com/login/' },
             },
-            { text: 'Turn on Token access if it is off, then click Add API token.' },
-            { text: 'Name it Manyplug, copy the token and click Save.' },
+            { text: 'Turn on **Token access** if it is off, then click **Add API token**.' },
             {
-              text: 'In the form, enter your subdomain (acme for acme.zendesk.com), your agent email and the token.',
+              text: 'Name it Manyplug, copy the token and click **Save**: Zendesk shows it only once.',
+              fills: ['apiToken'],
+            },
+            {
+              text: 'In the form, enter your subdomain (acme for acme.zendesk.com) and the email of the agent the AI acts as.',
+              fills: ['subdomain', 'email'],
             },
           ],
           tips: [
             'The AI acts as the agent with this email. Replies to customers go out only after you confirm.',
             'You can delete the token on the same Admin Center page.',
+          ],
+          problems: [
+            {
+              problem: 'The check says the credentials are wrong (401)',
+              fix: 'Check that the email belongs to an agent of this Zendesk and that the token is copied whole. **Token access** must stay on in Admin Center.',
+            },
+            {
+              problem: 'The check cannot find the Zendesk address',
+              fix: 'Enter only the subdomain: acme for acme.zendesk.com, without https:// and .zendesk.com.',
+            },
           ],
         },
       },

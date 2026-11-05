@@ -240,19 +240,31 @@ const ui: ConnectorUi = {
       description: 'CRM Pipedrive: поиск людей, организаций и сделок, создание и перенос сделок, заметки.',
       setup: {
         form: {
-          summary: 'Личный токен API Pipedrive. Меньше минуты.',
+          summary: 'Вы копируете свой личный токен API в Pipedrive и вставляете его сюда.',
+          minutes: 1,
+          needs: ['Аккаунт Pipedrive'],
           steps: [
             {
-              text: 'Откройте Pipedrive → аватар → Personal preferences → API.',
+              text: 'В Pipedrive нажмите на аватар → **Personal preferences** → вкладка **API**.',
               link: {
                 label: 'Открыть настройки API Pipedrive',
                 url: 'https://app.pipedrive.com/settings/api',
               },
             },
-            { text: 'Скопируйте Your personal API token.' },
-            { text: 'Вставьте его в форму и нажмите «Подключить».' },
+            { text: 'Скопируйте **Your personal API token** кнопкой **Copy**.', fills: ['apiToken'] },
+            { text: 'Вставьте токен в форму и нажмите **Подключить**.' },
           ],
-          tips: ['Токен действует от вашего имени. Новый токен (Generate new token) отключает старый.'],
+          tips: ['Токен действует от вашего имени. Кнопка **Generate new token** отключает старый токен.'],
+          problems: [
+            {
+              problem: 'Pipedrive отвечает «unauthorized access»',
+              fix: 'Скопируйте токен ещё раз. Если его перевыпустили через **Generate new token**, вставьте новый через **Переподключить**.',
+            },
+            {
+              problem: 'Нет вкладки **API**',
+              fix: 'Администратор вашей компании в Pipedrive мог закрыть доступ к API. Попросите его разрешить API в настройках прав пользователей.',
+            },
+          ],
         },
       },
       prompts: [
@@ -286,16 +298,28 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Pipedrive personal API token. Takes under a minute.',
+          summary: 'You copy your personal API token in Pipedrive and paste it here.',
+          minutes: 1,
+          needs: ['A Pipedrive account'],
           steps: [
             {
-              text: 'Open Pipedrive → your avatar → Personal preferences → API.',
+              text: 'In Pipedrive, click your avatar → **Personal preferences** → the **API** tab.',
               link: { label: 'Open Pipedrive API settings', url: 'https://app.pipedrive.com/settings/api' },
             },
-            { text: 'Copy Your personal API token.' },
-            { text: 'Paste it into the form and click Connect.' },
+            { text: 'Copy **Your personal API token** with **Copy**.', fills: ['apiToken'] },
+            { text: 'Paste the token into the form and click **Connect**.' },
           ],
-          tips: ['The token acts as you. Generate new token makes the old one stop working.'],
+          tips: ['The token acts as you. **Generate new token** makes the old one stop working.'],
+          problems: [
+            {
+              problem: 'Pipedrive answers “unauthorized access”',
+              fix: 'Copy the token again. If someone clicked **Generate new token**, paste the new token with **Reconnect**.',
+            },
+            {
+              problem: 'There is no **API** tab',
+              fix: 'Your company’s Pipedrive admin may have turned off API access. Ask them to allow it in the user permission settings.',
+            },
+          ],
         },
       },
       prompts: [

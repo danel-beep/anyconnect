@@ -196,20 +196,42 @@ const ui: ConnectorUi = {
       description: 'Почта SendGrid: отправка писем и шаблонов, контакты и списки, статистика доставки.',
       setup: {
         form: {
-          summary: 'Ключ API SendGrid. Около минуты.',
+          summary: 'Вы создаёте ключ API в SendGrid и вставляете его сюда.',
+          minutes: 3,
+          needs: [
+            'Аккаунт Twilio SendGrid',
+            'Подтверждённый отправитель или домен в SendGrid, чтобы отправлять письма',
+          ],
           steps: [
             {
-              text: 'Откройте SendGrid → Settings → API Keys и нажмите Create API Key.',
+              text: 'Откройте SendGrid → **Settings** → **API Keys** и нажмите **Create API Key**.',
               link: { label: 'Открыть ключи SendGrid', url: 'https://app.sendgrid.com/settings/api_keys' },
             },
             {
-              text: 'Выберите Restricted Access: Mail Send, Marketing, Stats и Template Engine (чтение), или Full Access.',
+              text: 'Назовите ключ Manyplug, выберите **Restricted Access** и дайте доступ к Mail Send, Marketing, Stats и Template Engine (чтение). Или выберите **Full Access**.',
             },
-            { text: 'Создайте ключ, скопируйте его (SG.…) и вставьте в форму.' },
+            {
+              text: 'Нажмите **Create & View** и скопируйте ключ (SG.…): SendGrid показывает его только один раз.',
+              fills: ['apiKey'],
+            },
           ],
           tips: [
             'Письма уходят только с подтверждённого отправителя и только после вашего подтверждения.',
-            'Для субаккаунта в регионе ЕС выберите сервер api.eu.sendgrid.com.',
+            'Для субаккаунта в регионе ЕС выберите в поле «Сервер» **ЕС (api.eu.sendgrid.com)**.',
+          ],
+          problems: [
+            {
+              problem: '«The provided authorization grant is invalid, expired, or revoked»',
+              fix: 'Ключ скопирован не целиком или удалён. Создайте новый ключ и вставьте его через **Переподключить**.',
+            },
+            {
+              problem: '«The from address does not match a verified Sender Identity»',
+              fix: 'Подтвердите адрес отправителя или домен: **Settings** → **Sender Authentication**.',
+            },
+            {
+              problem: 'Часть действий падает с «access forbidden»',
+              fix: 'У ключа нет нужного доступа. В **API Keys** откройте ключ через **•••** → **Edit API Key** и добавьте доступ.',
+            },
           ],
         },
       },
@@ -242,20 +264,39 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your SendGrid API key. Takes about a minute.',
+          summary: 'You create an API key in SendGrid and paste it here.',
+          minutes: 3,
+          needs: ['A Twilio SendGrid account', 'A verified sender or domain in SendGrid, to send email'],
           steps: [
             {
-              text: 'Open SendGrid → Settings → API Keys and click Create API Key.',
+              text: 'Open SendGrid → **Settings** → **API Keys** and click **Create API Key**.',
               link: { label: 'Open SendGrid API keys', url: 'https://app.sendgrid.com/settings/api_keys' },
             },
             {
-              text: 'Pick Restricted Access with Mail Send, Marketing, Stats and Template Engine (read), or Full Access.',
+              text: 'Name it Manyplug, pick **Restricted Access** and allow Mail Send, Marketing, Stats and Template Engine (read). Or pick **Full Access**.',
             },
-            { text: 'Create the key, copy it (SG.…) and paste it into the form.' },
+            {
+              text: 'Click **Create & View** and copy the key (SG.…): SendGrid shows it only once.',
+              fills: ['apiKey'],
+            },
           ],
           tips: [
             'Emails go out only from a verified sender and only after you confirm.',
-            'For an EU regional subuser, pick the api.eu.sendgrid.com server.',
+            'For an EU regional subuser, pick **EU (api.eu.sendgrid.com)** under Server.',
+          ],
+          problems: [
+            {
+              problem: '“The provided authorization grant is invalid, expired, or revoked”',
+              fix: 'The key was not copied whole, or it was deleted. Create a new key and paste it with **Reconnect**.',
+            },
+            {
+              problem: '“The from address does not match a verified Sender Identity”',
+              fix: 'Verify the sender address or domain: **Settings** → **Sender Authentication**.',
+            },
+            {
+              problem: 'Some actions fail with “access forbidden”',
+              fix: 'The key lacks that access. In **API Keys**, open the key with **•••** → **Edit API Key** and add it.',
+            },
           ],
         },
       },

@@ -159,18 +159,30 @@ const ui: ConnectorUi = {
       description: 'SMS через Twilio: отправка, входящие и отправленные сообщения, номера, журнал звонков.',
       setup: {
         form: {
-          summary: 'Account SID и Auth Token из консоли Twilio. Около минуты.',
+          summary: 'Вы копируете Account SID и Auth Token из консоли Twilio и вставляете их сюда.',
+          minutes: 2,
+          needs: ['Аккаунт Twilio', 'Номер Twilio, с которого будут уходить сообщения'],
           steps: [
             {
-              text: 'Откройте консоль Twilio: на главной странице, в блоке Account Info, есть Account SID и Auth Token.',
+              text: 'Откройте консоль Twilio: оба значения есть в блоке **Account Info** на главной странице.',
               link: { label: 'Открыть консоль Twilio', url: 'https://console.twilio.com/' },
             },
-            { text: 'Скопируйте Account SID (AC…) и вставьте в первое поле.' },
-            { text: 'Нажмите Show у Auth Token, скопируйте его и вставьте во второе поле.' },
+            { text: 'Скопируйте **Account SID** (начинается с AC).', fills: ['accountSid'] },
+            { text: 'Нажмите **Show** рядом с **Auth Token** и скопируйте его.', fills: ['authToken'] },
           ],
           tips: [
-            'SMS уходят только с номеров вашего аккаунта и только после вашего подтверждения.',
-            'На пробном аккаунте Twilio отправляет SMS лишь на подтверждённые номера.',
+            'Сообщения уходят только с номеров вашего аккаунта и только после вашего подтверждения.',
+            'Если вы смените Auth Token в Twilio, вставьте новый через **Переподключить**.',
+          ],
+          problems: [
+            {
+              problem: 'Проверка падает с «Authenticate» (ошибка 20003)',
+              fix: 'Скопируйте оба значения заново из **Account Info**. Нужен сам Auth Token, а не секрет ключа API, и SID того же аккаунта или субаккаунта.',
+            },
+            {
+              problem: 'С пробного аккаунта сообщения не уходят',
+              fix: 'Пробный аккаунт пишет только на номера, подтверждённые в **Phone Numbers → Manage → Verified Caller IDs**. Подтвердите номер или переведите аккаунт на платный.',
+            },
           ],
         },
       },
@@ -194,18 +206,30 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Account SID and Auth Token from the Twilio Console. Takes about a minute.',
+          summary: 'You copy your Account SID and Auth Token from the Twilio Console and paste them here.',
+          minutes: 2,
+          needs: ['A Twilio account', 'A Twilio phone number to send messages from'],
           steps: [
             {
-              text: 'Open the Twilio Console: the Account Info box on the home page shows the Account SID and Auth Token.',
+              text: 'Open the Twilio Console: the **Account Info** box on the home page shows both values.',
               link: { label: 'Open the Twilio Console', url: 'https://console.twilio.com/' },
             },
-            { text: 'Copy the Account SID (AC…) into the first field.' },
-            { text: 'Click Show next to Auth Token, copy it and paste it into the second field.' },
+            { text: 'Copy the **Account SID** (it starts with AC).', fills: ['accountSid'] },
+            { text: 'Click **Show** next to **Auth Token** and copy it.', fills: ['authToken'] },
           ],
           tips: [
             'Messages go out only from your account’s numbers and only after you confirm.',
-            'A Twilio trial account can only text verified numbers.',
+            'If you change the Auth Token in Twilio, paste the new one with **Reconnect**.',
+          ],
+          problems: [
+            {
+              problem: 'The check fails with “Authenticate” (error 20003)',
+              fix: 'Copy both values again from **Account Info**. Use the Auth Token itself, not an API key secret, and check that the SID is from the same account or subaccount.',
+            },
+            {
+              problem: 'Messages fail on a trial account',
+              fix: 'A trial account can only text numbers you verified under **Phone Numbers → Manage → Verified Caller IDs**. Verify the number or upgrade the account.',
+            },
           ],
         },
       },

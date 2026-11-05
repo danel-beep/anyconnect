@@ -253,27 +253,47 @@ const ui: ConnectorUi = {
         'Сайт на WordPress: поиск и чтение записей, черновики, правка и публикация, модерация комментариев.',
       setup: {
         form: {
-          summary: 'Адрес сайта, имя пользователя и пароль приложения WordPress. Около двух минут.',
+          summary:
+            'Вы создаёте пароль приложения в профиле WordPress и вставляете его сюда вместе с адресом сайта и именем пользователя.',
+          minutes: 3,
+          needs: [
+            'Сайт на WordPress 5.6 или новее, который открывается по HTTPS',
+            'Пользователь, который может писать записи (Author, Editor или Administrator)',
+          ],
           steps: [
             {
-              text: 'Войдите в админку сайта и откройте Пользователи → Профиль (Users → Profile).',
+              text: 'Войдите в админку сайта (вашсайт.com/wp-admin) и откройте **Users → Profile** (**Пользователи → Профиль**).',
               link: {
-                label: 'Как устроены пароли приложений',
+                label: 'Как работают пароли приложений',
                 url: 'https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/',
               },
             },
             {
-              text: 'Внизу, в разделе «Пароли приложений», введите имя Manyplug и нажмите «Добавить новый пароль приложения».',
+              text: 'Внизу, в разделе **Application Passwords**, введите Manyplug и нажмите **Add New Application Password**.',
             },
-            { text: 'Скопируйте пароль из 24 символов (пробелы можно оставить).' },
+            { text: 'Скопируйте пароль из 24 символов (пробелы можно оставить).', fills: ['appPassword'] },
             {
-              text: 'В форме укажите адрес сайта без https:// (например, blog.acme.com), своё имя пользователя и пароль приложения.',
+              text: 'В форме укажите адрес сайта без https:// (например, blog.acme.com) и имя пользователя, под которым вы входите.',
+              fills: ['site', 'username'],
             },
           ],
           tips: [
-            'Нужен WordPress 5.6 или новее и HTTPS. Если раздела нет, его мог отключить плагин безопасности.',
-            'ИИ создаёт только черновики. Публикация — отдельное действие, оно требует вашего подтверждения.',
-            'Пароль приложения можно отозвать в том же разделе профиля, обычный пароль при этом не меняется.',
+            'ИИ создаёт только черновики. Публикация — отдельное действие, которое ждёт вашего подтверждения.',
+            'Пароль приложения можно отозвать в том же разделе профиля; обычный пароль не меняется.',
+          ],
+          problems: [
+            {
+              problem: 'Нет раздела **Application Passwords**',
+              fix: 'Нужен WordPress 5.6 или новее и HTTPS. Возможно, его выключил плагин безопасности: поищите в нём настройку паролей приложений или REST API.',
+            },
+            {
+              problem: 'Проверка пишет, что имя пользователя или пароль неверные',
+              fix: 'Укажите имя пользователя, а не почту или отображаемое имя, и пароль приложения, а не обычный пароль.',
+            },
+            {
+              problem: 'Проверка падает с 401, хотя пароль верный',
+              fix: 'Некоторые хостинги срезают заголовок входа до WordPress. Попросите хостинг передавать заголовок Authorization в WordPress.',
+            },
           ],
         },
       },
@@ -307,27 +327,46 @@ const ui: ConnectorUi = {
       setup: {
         form: {
           summary:
-            'Your site address, user name and a WordPress application password. Takes about two minutes.',
+            'You create an application password in your WordPress profile and paste it here with the site address and your user name.',
+          minutes: 3,
+          needs: [
+            'A WordPress site, version 5.6 or newer, that opens over HTTPS',
+            'A user that can write posts (Author, Editor or Administrator)',
+          ],
           steps: [
             {
-              text: 'Sign in to your site’s admin and open Users → Profile.',
+              text: 'Sign in to your site’s admin (yoursite.com/wp-admin) and open **Users → Profile**.',
               link: {
                 label: 'How application passwords work',
                 url: 'https://make.wordpress.org/core/2020/11/05/application-passwords-integration-guide/',
               },
             },
             {
-              text: 'At the bottom, under Application Passwords, enter the name Manyplug and click Add New Application Password.',
+              text: 'At the bottom, under **Application Passwords**, type Manyplug and click **Add New Application Password**.',
             },
-            { text: 'Copy the 24-character password (the spaces can stay).' },
+            { text: 'Copy the 24-character password (the spaces can stay).', fills: ['appPassword'] },
             {
-              text: 'In the form, enter the site address without https:// (for example blog.acme.com), your user name and the application password.',
+              text: 'In the form, enter the site address without https:// (for example blog.acme.com) and the user name you sign in with.',
+              fills: ['site', 'username'],
             },
           ],
           tips: [
-            'Needs WordPress 5.6 or newer over HTTPS. If the section is missing, a security plugin may have turned it off.',
             'The AI only creates drafts. Publishing is a separate action that needs your confirmation.',
             'You can revoke the application password in the same profile section; your normal password stays.',
+          ],
+          problems: [
+            {
+              problem: 'There is no **Application Passwords** section',
+              fix: 'The site needs WordPress 5.6 or newer and HTTPS. A security plugin may have turned the feature off: look for an application passwords or REST API setting in that plugin.',
+            },
+            {
+              problem: 'The check says the user name or password is incorrect',
+              fix: 'Enter the user name, not the email or display name, and the application password, not your normal password.',
+            },
+            {
+              problem: 'The check fails with 401 although the password is right',
+              fix: 'Some hosts drop the login header before it reaches WordPress. Ask your host to pass the Authorization header through to WordPress.',
+            },
           ],
         },
       },

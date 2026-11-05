@@ -210,23 +210,40 @@ const ui: ConnectorUi = {
       description: 'CRM HubSpot: поиск, создание и изменение контактов, компаний и сделок.',
       setup: {
         form: {
-          summary: 'Токен частного приложения HubSpot. Около трёх минут, нужны права супер-администратора.',
+          summary: 'Вы создаёте в HubSpot частное приложение с доступом к CRM и вставляете сюда его токен.',
+          minutes: 4,
+          needs: ['Аккаунт HubSpot с правами супер-администратора'],
           steps: [
             {
-              text: 'В HubSpot откройте «Настройки» → «Интеграции» → «Частные приложения» (Private apps) и нажмите «Создать частное приложение».',
+              text: 'В HubSpot откройте **Настройки → Интеграции → Частные приложения** (Private apps) и нажмите **Создать частное приложение**.',
               link: { label: 'Открыть HubSpot', url: 'https://app.hubspot.com/' },
             },
-            { text: 'На вкладке «Основная информация» назовите приложение Manyplug.' },
+            { text: 'На вкладке **Основная информация** (Basic info) назовите приложение Manyplug.' },
             {
-              text: 'На вкладке «Области» (Scopes) отметьте в CRM чтение и запись для contacts, companies и deals: crm.objects.contacts.read/write, crm.objects.companies.read/write, crm.objects.deals.read/write.',
+              text: 'На вкладке **Области** (Scopes) в разделе CRM отметьте **Read** и **Write** для crm.objects.contacts, crm.objects.companies и crm.objects.deals.',
             },
             {
-              text: 'Нажмите «Создать приложение», затем на вкладке «Токен доступа» — «Показать токен» и «Копировать». Вставьте токен (pat-…) в форму.',
+              text: 'Нажмите **Создать приложение**, затем на вкладке **Токен доступа** нажмите **Показать токен** и **Копировать**. Вставьте токен (начинается с pat-) в форму.',
+              fills: ['token'],
             },
           ],
           tips: [
-            'В новых аккаунтах HubSpot этот раздел называется «Разработка» → «Устаревшие приложения» (Legacy apps): там нажмите «Создать» → «Частное».',
-            'Чтобы ИИ только читал, отметьте одни права read. Токен можно сменить в настройках приложения.',
+            'Чтобы ИИ только читал, отметьте одни права **Read**.',
+            'Токен можно сменить или удалить в настройках того же приложения.',
+          ],
+          problems: [
+            {
+              problem: 'В настройках нет пункта **Частные приложения**',
+              fix: 'В новых аккаунтах он находится в **Разработка → Устаревшие приложения** (Legacy apps): нажмите **Создать → Частное** и продолжите с шага 2.',
+            },
+            {
+              problem: 'Кнопки создания приложения нет или она неактивна',
+              fix: 'Создавать приложения может только супер-администратор. Попросите его создать приложение или выдать вам эти права.',
+            },
+            {
+              problem: 'ИИ пишет об ошибке 403 или «MISSING_SCOPES»',
+              fix: 'У приложения нет нужной области. Добавьте её на вкладке **Области**, сохраните изменения и вставьте токен через **Переподключить**.',
+            },
           ],
         },
       },
@@ -265,23 +282,40 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A HubSpot private app token. Takes about three minutes and needs super admin rights.',
+          summary: 'You create a private app with CRM access in HubSpot and paste its token here.',
+          minutes: 4,
+          needs: ['A HubSpot account where you are a super admin'],
           steps: [
             {
-              text: 'In HubSpot, open Settings → Integrations → Private apps and click Create a private app.',
+              text: 'In HubSpot, open **Settings → Integrations → Private apps** and click **Create a private app**.',
               link: { label: 'Open HubSpot', url: 'https://app.hubspot.com/' },
             },
-            { text: 'On the Basic info tab, name the app Manyplug.' },
+            { text: 'On the **Basic info** tab, name the app Manyplug.' },
             {
-              text: 'On the Scopes tab, under CRM, tick read and write for contacts, companies and deals: crm.objects.contacts.read/write, crm.objects.companies.read/write, crm.objects.deals.read/write.',
+              text: 'On the **Scopes** tab, under CRM, tick **Read** and **Write** for crm.objects.contacts, crm.objects.companies and crm.objects.deals.',
             },
             {
-              text: 'Click Create app, then on the Access token tab click Show token and Copy. Paste the token (pat-…) into the form.',
+              text: 'Click **Create app**, then on the **Access token** tab click **Show token** and **Copy**. Paste the token (it starts with pat-) into the form.',
+              fills: ['token'],
             },
           ],
           tips: [
-            'In newer HubSpot accounts this lives under Development → Legacy apps: click Create → Private there.',
-            'For read-only access, tick only the read scopes. You can rotate the token in the app settings.',
+            'For read-only access, tick only the **Read** scopes.',
+            'You can rotate or delete the token in the same app’s settings.',
+          ],
+          problems: [
+            {
+              problem: 'There is no **Private apps** item in Settings',
+              fix: 'Newer accounts have it under **Development → Legacy apps**: click **Create → Private** and continue from step 2.',
+            },
+            {
+              problem: 'The button to create an app is missing or greyed out',
+              fix: 'Only a super admin can create apps. Ask one to create the app, or to give you super admin rights.',
+            },
+            {
+              problem: 'The AI reports error 403 or “MISSING_SCOPES”',
+              fix: 'The app lacks a scope. Add it on the **Scopes** tab, save the changes and paste the token with **Reconnect**.',
+            },
           ],
         },
       },

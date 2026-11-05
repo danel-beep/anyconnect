@@ -197,22 +197,37 @@ const ui: ConnectorUi = {
         'Проекты и деплои Vercel: статус, логи сборки, домены; отмена сборки, перевод в продакшен.',
       setup: {
         form: {
-          summary: 'Токен доступа Vercel и, для команды, её id. Около минуты.',
+          summary:
+            'Вы создаёте токен доступа в Vercel и вставляете его сюда, а для проектов команды ещё и её ID.',
+          minutes: 2,
+          needs: ['Аккаунт Vercel', 'Для проектов команды: членство в этой команде'],
           steps: [
             {
-              text: 'Откройте Vercel → Account Settings → Tokens и нажмите Create.',
+              text: 'Откройте Vercel → **Account Settings → Tokens** и нажмите **Create**.',
               link: { label: 'Открыть токены Vercel', url: 'https://vercel.com/account/tokens' },
             },
             {
-              text: 'Назовите токен Manyplug, выберите область (личный аккаунт или команду) и срок, затем скопируйте токен.',
+              text: 'Назовите токен Manyplug, выберите **Scope** (ваш аккаунт или команда) и срок действия, затем скопируйте токен.',
+              fills: ['token'],
             },
             {
-              text: 'Для команды скопируйте Team ID (team_…) из Team Settings → General. Вставьте токен и id в форму.',
+              text: 'Для команды откройте **Team Settings → General** и скопируйте **Team ID** (team_…). Для личных проектов оставьте поле пустым.',
+              fills: ['team_id'],
             },
           ],
           tips: [
-            'Без Team ID видны проекты личного аккаунта. Для каждой команды — отдельный аккаунт в Manyplug.',
-            'Перевод деплоя в продакшен меняет живой сайт, поэтому ИИ спросит вас перед этим.',
+            'Каждую команду подключайте отдельным аккаунтом.',
+            'Продвижение деплоя меняет живой сайт, поэтому ИИ сначала спросит вас.',
+          ],
+          problems: [
+            {
+              problem: 'ИИ не видит проекты или видит не те',
+              fix: 'Проектам команды нужен её **Team ID** в форме, а у токена должна быть эта команда в **Scope**. Исправьте оба и нажмите **Переподключить**.',
+            },
+            {
+              problem: 'Проверка пишет, что токен неверный или истёк',
+              fix: 'Создайте новый токен в **Account Settings → Tokens** с более долгим сроком и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -239,22 +254,37 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A Vercel access token and, for a team, its id. Takes about a minute.',
+          summary:
+            'You create an access token in Vercel and paste it here, with the team’s ID if the projects belong to a team.',
+          minutes: 2,
+          needs: ['A Vercel account', 'For team projects: membership in that team'],
           steps: [
             {
-              text: 'Open Vercel → Account Settings → Tokens and click Create.',
+              text: 'Open Vercel → **Account Settings → Tokens** and click **Create**.',
               link: { label: 'Open Vercel tokens', url: 'https://vercel.com/account/tokens' },
             },
             {
-              text: 'Name it Manyplug, pick the scope (personal account or a team) and expiry, and copy the token.',
+              text: 'Name it Manyplug, pick the **Scope** (your account or a team) and an expiry, then copy the token.',
+              fills: ['token'],
             },
             {
-              text: 'For a team, copy the Team ID (team_…) from Team Settings → General. Paste the token and the id into the form.',
+              text: 'For a team, open **Team Settings → General** and copy the **Team ID** (team_…). For personal projects, leave it empty.',
+              fills: ['team_id'],
             },
           ],
           tips: [
-            'Without a Team ID you see your personal projects. Connect each team as its own account.',
+            'Connect each team as its own account.',
             'Promoting a deployment changes the live site, so the AI asks you first.',
+          ],
+          problems: [
+            {
+              problem: 'The AI sees no projects or the wrong ones',
+              fix: 'Team projects need that team’s **Team ID** in the form, and the token’s scope must include the team. Fix both and click **Reconnect**.',
+            },
+            {
+              problem: 'The check says the token is invalid or expired',
+              fix: 'Create a new token in **Account Settings → Tokens** with a longer expiry and paste it with **Reconnect**.',
+            },
           ],
         },
       },

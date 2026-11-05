@@ -237,17 +237,25 @@ export default defineConnector({
       ru: {
         setup: {
           form: {
-            summary: 'Адрес почты и пароль приложения. Около двух минут.',
+            summary:
+              'Вы создаёте пароль приложения в настройках своей почты и вводите его здесь вместе с адресом.',
+            minutes: 3,
+            needs: [
+              'Адрес почты и вход в её настройки безопасности',
+              'Для Gmail, iCloud и Yahoo — включённая двухэтапная проверка',
+            ],
             variantsTitle: 'Пароль приложения: шаги для вашего сервиса',
             steps: [
               {
-                text: 'Введите адрес почты в форме.',
+                text: 'Введите адрес почты. Почтовый сервис определится сам по адресу, при необходимости выберите его в списке.',
+                fills: ['email', 'provider'],
               },
               {
-                text: 'Создайте пароль приложения в настройках безопасности почты: шаги для вашего сервиса — прямо здесь.',
+                text: 'Создайте пароль приложения в настройках безопасности почты: шаги для вашего сервиса — ниже.',
               },
               {
-                text: 'Вставьте его в форму и нажмите «Подключить». Manyplug сразу проверит ящик.',
+                text: 'Вставьте пароль приложения в форму и нажмите **Подключить**. Manyplug сразу проверит ящик.',
+                fills: ['password'],
               },
             ],
             variants: {
@@ -255,21 +263,22 @@ export default defineConnector({
                 title: 'Gmail / Google Workspace',
                 steps: [
                   {
-                    text: 'Включите двухэтапную аутентификацию в аккаунте Google, если она ещё не включена.',
+                    text: 'Включите **двухэтапную аутентификацию** в аккаунте Google, если она ещё не включена.',
                     link: {
                       label: 'Открыть двухэтапную аутентификацию',
                       url: 'https://myaccount.google.com/signinoptions/twosv',
                     },
                   },
                   {
-                    text: 'Откройте «Пароли приложений», введите название Manyplug и нажмите «Создать».',
+                    text: 'Откройте **Пароли приложений**, введите название Manyplug и нажмите **Создать**.',
                     link: {
                       label: 'Открыть пароли приложений',
                       url: 'https://myaccount.google.com/apppasswords',
                     },
                   },
                   {
-                    text: 'Скопируйте пароль из 16 букв и вставьте в форму. Пробелы не важны.',
+                    text: 'Скопируйте пароль из 16 букв и вставьте его в форму. Пробелы не важны.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -277,7 +286,7 @@ export default defineConnector({
                 title: 'Outlook.com / Microsoft 365',
                 steps: [
                   {
-                    text: 'Аккаунты Microsoft больше не принимают пароли по IMAP. Подключите вместо этого сервис Outlook: он входит через Microsoft.',
+                    text: 'Аккаунты Microsoft больше не принимают пароли по IMAP. Подключите вместо этого сервис **Outlook**: он входит через Microsoft.',
                   },
                 ],
               },
@@ -285,17 +294,16 @@ export default defineConnector({
                 title: 'iCloud Mail',
                 steps: [
                   {
-                    text: 'Войдите в аккаунт Apple и откройте «Вход и безопасность» → «Пароли приложений».',
-                    link: {
-                      label: 'Открыть аккаунт Apple',
-                      url: 'https://account.apple.com/account/manage',
-                    },
+                    text: 'Войдите в аккаунт Apple и откройте **Вход и безопасность → Пароли приложений**.',
+                    link: { label: 'Открыть аккаунт Apple', url: 'https://account.apple.com/account/manage' },
                   },
                   {
-                    text: 'Нажмите «+», назовите пароль Manyplug и скопируйте его (xxxx-xxxx-xxxx-xxxx).',
+                    text: 'Нажмите **+**, назовите пароль Manyplug и скопируйте его (вида xxxx-xxxx-xxxx-xxxx) в форму.',
+                    fills: ['password'],
                   },
                   {
-                    text: 'В форме укажите адрес @icloud.com, а не почту аккаунта Apple, если они отличаются.',
+                    text: 'В поле адреса укажите почту @icloud.com, а не почту аккаунта Apple, если они отличаются.',
+                    fills: ['email'],
                   },
                 ],
               },
@@ -303,35 +311,32 @@ export default defineConnector({
                 title: 'Fastmail',
                 steps: [
                   {
-                    text: 'Откройте Settings → Privacy & Security → Manage app passwords and access, затем New app password.',
+                    text: 'Откройте **Settings → Privacy & Security → Manage app passwords and access** и нажмите **New app password**.',
                     link: {
                       label: 'Открыть пароли приложений Fastmail',
                       url: 'https://app.fastmail.com/settings/security/apps',
                     },
                   },
                   {
-                    text: 'Выберите доступ Mail (IMAP/SMTP), назовите пароль Manyplug и нажмите Generate.',
+                    text: 'Выберите доступ **Mail (IMAP/SMTP)**, назовите пароль Manyplug и нажмите **Generate**.',
                   },
-                  {
-                    text: 'Скопируйте пароль и вставьте в форму.',
-                  },
+                  { text: 'Скопируйте пароль и вставьте его в форму.', fills: ['password'] },
                 ],
               },
               yahoo: {
                 title: 'Yahoo Mail',
                 steps: [
                   {
-                    text: 'Откройте Account security в аккаунте Yahoo и выберите Generate app password. Если Yahoo попросит, сначала включите двухэтапную проверку.',
+                    text: 'Откройте **Account security** в аккаунте Yahoo и выберите **Generate app password**. Если Yahoo попросит, сначала включите двухэтапную проверку.',
                     link: {
                       label: 'Открыть безопасность Yahoo',
                       url: 'https://login.yahoo.com/account/security',
                     },
                   },
+                  { text: 'Назовите приложение Manyplug, нажмите **Generate** и скопируйте пароль.' },
                   {
-                    text: 'Назовите приложение Manyplug, нажмите Generate и скопируйте пароль.',
-                  },
-                  {
-                    text: 'Вставьте его в форму. Пароль от Yahoo здесь не подойдёт.',
+                    text: 'Вставьте его в форму. Обычный пароль от Yahoo здесь не подойдёт.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -339,36 +344,35 @@ export default defineConnector({
                 title: 'Яндекс Почта',
                 steps: [
                   {
-                    text: 'В настройках Яндекс Почты откройте «Почтовые программы» и разрешите доступ по IMAP с паролями приложений.',
+                    text: 'В настройках Яндекс Почты откройте **Почтовые программы** и разрешите доступ по IMAP с паролями приложений.',
                     link: {
                       label: 'Открыть настройки почтовых программ',
                       url: 'https://mail.yandex.ru/#setup/client',
                     },
                   },
                   {
-                    text: 'Откройте Яндекс ID → «Безопасность» → «Пароли приложений», выберите «Почта», назовите Manyplug и создайте.',
+                    text: 'Откройте **Яндекс ID → Безопасность → Пароли приложений**, выберите **Почта**, назовите пароль Manyplug и создайте его.',
                     link: {
                       label: 'Открыть пароли приложений',
                       url: 'https://id.yandex.ru/security/app-passwords',
                     },
                   },
-                  {
-                    text: 'Скопируйте пароль и вставьте в форму.',
-                  },
+                  { text: 'Скопируйте пароль и вставьте его в форму.', fills: ['password'] },
                 ],
               },
               mailru: {
                 title: 'Mail.ru',
                 steps: [
                   {
-                    text: 'Откройте аккаунт Mail.ru → «Безопасность» → «Пароли для внешних приложений» и добавьте пароль.',
+                    text: 'Откройте аккаунт Mail.ru → **Безопасность → Пароли для внешних приложений** и добавьте пароль.',
                     link: {
                       label: 'Открыть пароли для внешних приложений',
                       url: 'https://account.mail.ru/user/2-step-auth/passwords',
                     },
                   },
                   {
-                    text: 'Назовите его Manyplug, выберите полный доступ к ящику (IMAP, SMTP), скопируйте пароль и вставьте в форму.',
+                    text: 'Назовите его Manyplug, выберите полный доступ к ящику (IMAP, SMTP), скопируйте пароль и вставьте его в форму.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -376,13 +380,15 @@ export default defineConnector({
                 title: 'Другой сервер',
                 steps: [
                   {
-                    text: 'Узнайте адреса и порты серверов IMAP и SMTP в справке почтового сервиса или у администратора почты. Например, у Zoho это imap.zoho.com и smtp.zoho.com (для аккаунтов в ЕС — zoho.eu), а IMAP включается в настройках Zoho Mail.',
+                    text: 'Узнайте адреса и порты серверов IMAP и SMTP в справке почтового сервиса или у администратора почты. У Zoho, например, это imap.zoho.com и smtp.zoho.com (в ЕС — zoho.eu).',
                   },
                   {
-                    text: 'В форме выберите «Другой сервер» и заполните их в разделе «Дополнительные настройки».',
+                    text: 'Выберите в списке сервисов **Другой сервер** и впишите адреса серверов в разделе «Дополнительно».',
+                    fills: ['provider', 'imapHost', 'smtpHost'],
                   },
                   {
-                    text: 'Используйте пароль приложения, если сервис их выдаёт, иначе — пароль ящика.',
+                    text: 'Вставьте пароль приложения, если сервис их выдаёт, иначе пароль ящика.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -390,6 +396,24 @@ export default defineConnector({
             tips: [
               'Несколько ящиков? Подключите каждый: ИИ ищет в одном или сразу во всех.',
               'Proton Mail даёт IMAP только через приложение Proton Mail Bridge на вашем компьютере, поэтому из облака его пока не подключить.',
+            ],
+            problems: [
+              {
+                problem: '«Authentication failed» или «Invalid credentials»',
+                fix: 'Скорее всего, введён обычный пароль от почты. Создайте пароль приложения по шагам для вашего сервиса и вставьте его.',
+              },
+              {
+                problem: 'В Google нет пункта **Пароли приложений**',
+                fix: 'Сначала включите двухэтапную аутентификацию. В рабочем аккаунте Google Workspace пароли приложений может запретить администратор: тогда подключите сервис **Gmail**.',
+              },
+              {
+                problem: 'Яндекс отвечает, что доступ по IMAP выключен',
+                fix: 'В настройках Яндекс Почты → **Почтовые программы** отметьте доступ по IMAP и сохраните, затем нажмите **Переподключить**.',
+              },
+              {
+                problem: '«Не удалось подключиться к серверу» для другого сервера',
+                fix: 'Проверьте адреса и порты в разделе «Дополнительно»: обычно IMAP — порт 993 с SSL/TLS, SMTP — 465 с SSL/TLS или 587 со STARTTLS.',
+              },
             ],
           },
         },
@@ -513,17 +537,25 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'Your email address and an app password. Takes about two minutes.',
+            summary:
+              'You create an app password in your mail account settings and enter it here with your address.',
+            minutes: 3,
+            needs: [
+              'Your email address and access to its security settings',
+              'For Gmail, iCloud and Yahoo: 2-step verification turned on',
+            ],
             variantsTitle: 'App password: steps for your provider',
             steps: [
               {
-                text: 'Enter your email address in the form.',
+                text: 'Enter your email address. The provider is picked from the address; change it in the list if needed.',
+                fills: ['email', 'provider'],
               },
               {
-                text: 'Create an app password in your mail account’s security settings: the steps for your provider are right here.',
+                text: 'Create an app password in your mail account’s security settings: the steps for your provider are below.',
               },
               {
-                text: 'Paste it into the form and click Connect. Manyplug checks the mailbox right away.',
+                text: 'Paste the app password into the form and click **Connect**. Manyplug checks the mailbox right away.',
+                fills: ['password'],
               },
             ],
             variants: {
@@ -531,21 +563,19 @@ export default defineConnector({
                 title: 'Gmail / Google Workspace',
                 steps: [
                   {
-                    text: 'Turn on 2-Step Verification for your Google account, if it is not on yet.',
+                    text: 'Turn on **2-Step Verification** for your Google account, if it is not on yet.',
                     link: {
                       label: 'Open 2-Step Verification',
                       url: 'https://myaccount.google.com/signinoptions/twosv',
                     },
                   },
                   {
-                    text: 'Open App passwords, type Manyplug as the app name and click Create.',
-                    link: {
-                      label: 'Open App passwords',
-                      url: 'https://myaccount.google.com/apppasswords',
-                    },
+                    text: 'Open **App passwords**, type Manyplug as the app name and click **Create**.',
+                    link: { label: 'Open App passwords', url: 'https://myaccount.google.com/apppasswords' },
                   },
                   {
                     text: 'Copy the 16-letter password and paste it into the form. Spaces do not matter.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -553,7 +583,7 @@ export default defineConnector({
                 title: 'Outlook.com / Microsoft 365',
                 steps: [
                   {
-                    text: 'Microsoft accounts no longer accept passwords over IMAP. Connect the Outlook service instead: it signs in with Microsoft.',
+                    text: 'Microsoft accounts no longer accept passwords over IMAP. Connect the **Outlook** service instead: it signs in with Microsoft.',
                   },
                 ],
               },
@@ -561,17 +591,16 @@ export default defineConnector({
                 title: 'iCloud Mail',
                 steps: [
                   {
-                    text: 'Sign in to your Apple Account and open Sign-In and Security → App-Specific Passwords.',
-                    link: {
-                      label: 'Open Apple Account',
-                      url: 'https://account.apple.com/account/manage',
-                    },
+                    text: 'Sign in to your Apple Account and open **Sign-In and Security → App-Specific Passwords**.',
+                    link: { label: 'Open Apple Account', url: 'https://account.apple.com/account/manage' },
                   },
                   {
-                    text: 'Click Add (+), name it Manyplug and copy the password (xxxx-xxxx-xxxx-xxxx).',
+                    text: 'Click **+**, name it Manyplug and copy the password (like xxxx-xxxx-xxxx-xxxx) into the form.',
+                    fills: ['password'],
                   },
                   {
-                    text: 'In the form, use your @icloud.com address, not the Apple Account email, if they differ.',
+                    text: 'In the address field, use your @icloud.com address, not the Apple Account email, if they differ.',
+                    fills: ['email'],
                   },
                 ],
               },
@@ -579,35 +608,30 @@ export default defineConnector({
                 title: 'Fastmail',
                 steps: [
                   {
-                    text: 'Open Settings → Privacy & Security → Manage app passwords and access, then New app password.',
+                    text: 'Open **Settings → Privacy & Security → Manage app passwords and access** and click **New app password**.',
                     link: {
                       label: 'Open Fastmail app passwords',
                       url: 'https://app.fastmail.com/settings/security/apps',
                     },
                   },
-                  {
-                    text: 'Choose access to Mail (IMAP/SMTP), name it Manyplug and click Generate.',
-                  },
-                  {
-                    text: 'Copy the password and paste it into the form.',
-                  },
+                  { text: 'Choose access to **Mail (IMAP/SMTP)**, name it Manyplug and click **Generate**.' },
+                  { text: 'Copy the password and paste it into the form.', fills: ['password'] },
                 ],
               },
               yahoo: {
                 title: 'Yahoo Mail',
                 steps: [
                   {
-                    text: 'Open Account security in your Yahoo account and choose Generate app password. If Yahoo asks, turn on 2-step verification first.',
+                    text: 'Open **Account security** in your Yahoo account and choose **Generate app password**. If Yahoo asks, turn on 2-step verification first.',
                     link: {
                       label: 'Open Yahoo account security',
                       url: 'https://login.yahoo.com/account/security',
                     },
                   },
-                  {
-                    text: 'Name the app Manyplug, click Generate and copy the password.',
-                  },
+                  { text: 'Name the app Manyplug, click **Generate** and copy the password.' },
                   {
                     text: 'Paste it into the form. Your regular Yahoo password does not work here.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -615,29 +639,21 @@ export default defineConnector({
                 title: 'Yandex Mail',
                 steps: [
                   {
-                    text: 'In Yandex Mail settings, open Email clients and allow access via IMAP with app passwords.',
-                    link: {
-                      label: 'Open mail client settings',
-                      url: 'https://mail.yandex.ru/#setup/client',
-                    },
+                    text: 'In Yandex Mail settings, open **Email clients** and allow access via IMAP with app passwords.',
+                    link: { label: 'Open mail client settings', url: 'https://mail.yandex.ru/#setup/client' },
                   },
                   {
-                    text: 'Open Yandex ID → Security → App passwords, choose Mail, name it Manyplug and create it.',
-                    link: {
-                      label: 'Open app passwords',
-                      url: 'https://id.yandex.ru/security/app-passwords',
-                    },
+                    text: 'Open **Yandex ID → Security → App passwords**, choose **Mail**, name it Manyplug and create it.',
+                    link: { label: 'Open app passwords', url: 'https://id.yandex.ru/security/app-passwords' },
                   },
-                  {
-                    text: 'Copy the password and paste it into the form.',
-                  },
+                  { text: 'Copy the password and paste it into the form.', fills: ['password'] },
                 ],
               },
               mailru: {
                 title: 'Mail.ru',
                 steps: [
                   {
-                    text: 'Open Mail.ru account → Security → Passwords for external apps and add one.',
+                    text: 'Open your Mail.ru account → **Security → Passwords for external apps** and add one.',
                     link: {
                       label: 'Open passwords for external apps',
                       url: 'https://account.mail.ru/user/2-step-auth/passwords',
@@ -645,6 +661,7 @@ export default defineConnector({
                   },
                   {
                     text: 'Name it Manyplug, choose full access to the mailbox (IMAP, SMTP), copy the password and paste it into the form.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -652,13 +669,15 @@ export default defineConnector({
                 title: 'Other server',
                 steps: [
                   {
-                    text: 'Find the IMAP and SMTP server names and ports in your provider’s help or ask your mail admin. For Zoho, for example, they are imap.zoho.com and smtp.zoho.com (zoho.eu for EU accounts), and IMAP is turned on in Zoho Mail settings.',
+                    text: 'Find the IMAP and SMTP server names and ports in your provider’s help, or ask your mail admin. For Zoho, they are imap.zoho.com and smtp.zoho.com (zoho.eu in the EU).',
                   },
                   {
-                    text: 'In the form, choose Other server and fill them in under Advanced settings.',
+                    text: 'Choose **Other server** in the provider list and enter the server names under Advanced.',
+                    fills: ['provider', 'imapHost', 'smtpHost'],
                   },
                   {
-                    text: 'Use an app password if your provider offers them, otherwise the mailbox password.',
+                    text: 'Paste an app password if your provider offers them, otherwise the mailbox password.',
+                    fills: ['password'],
                   },
                 ],
               },
@@ -666,6 +685,24 @@ export default defineConnector({
             tips: [
               'Several mailboxes? Connect each one; the AI can search them one by one or all at once.',
               'Proton Mail offers IMAP only through the Proton Mail Bridge app on your own computer, so it cannot be connected from the cloud yet.',
+            ],
+            problems: [
+              {
+                problem: '“Authentication failed” or “Invalid credentials”',
+                fix: 'Most likely this is your regular mail password. Create an app password with the steps for your provider and paste that instead.',
+              },
+              {
+                problem: 'Google has no **App passwords** page',
+                fix: 'Turn on 2-Step Verification first. In a Google Workspace work account an admin may have turned app passwords off: connect the **Gmail** service instead.',
+              },
+              {
+                problem: 'Yandex says IMAP access is turned off',
+                fix: 'In Yandex Mail settings → **Email clients**, tick IMAP access and save, then click **Reconnect**.',
+              },
+              {
+                problem: '“Could not connect to the server” for another server',
+                fix: 'Check the server names and ports under Advanced: IMAP is usually port 993 with SSL/TLS, SMTP 465 with SSL/TLS or 587 with STARTTLS.',
+              },
             ],
           },
         },

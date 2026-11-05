@@ -299,20 +299,70 @@ export default defineConnector({
       ru: {
         setup: {
           oauth: {
-            summary: 'Ваше пространство Slack. Меньше минуты.',
+            summary:
+              'Вы входите в Slack и разрешаете Manyplug работать в вашем пространстве от вашего имени.',
+            minutes: 1,
+            needs: ['Аккаунт в пространстве Slack'],
             steps: [
               {
-                text: 'Нажмите «Подключить». Откроется Slack: проверьте название пространства в правом верхнем углу и при необходимости смените его.',
+                text: 'Нажмите **Подключить**. Откроется Slack: проверьте название пространства в правом верхнем углу и при необходимости смените его.',
               },
               {
-                text: 'Нажмите «Разрешить». ИИ действует от вашего имени: видит каналы, где вы состоите, и пишет как вы.',
+                text: 'Нажмите **Разрешить**. ИИ действует от вашего имени: видит каналы, где вы состоите, и пишет как вы.',
+              },
+              { text: 'Несколько пространств? Подключите каждое и назовите так, чтобы ИИ их различал.' },
+            ],
+            tips: [
+              'Сообщения в Slack уходят только после вашего подтверждения, пока вы не измените правила.',
+            ],
+            problems: [
+              {
+                problem: 'Slack просит одобрения администратора',
+                fix: 'В этом пространстве приложения одобряет администратор. Отправьте запрос прямо на той странице и подключитесь снова после одобрения.',
               },
               {
-                text: 'Несколько пространств? Подключите каждое и назовите так, чтобы ИИ их различал.',
+                problem: 'Подключилось не то пространство',
+                fix: 'Удалите аккаунт здесь, снова нажмите **Подключить** и смените пространство в правом верхнем углу до нажатия **Разрешить**.',
+              },
+            ],
+          },
+          form: {
+            summary:
+              'Вы создаёте своё приложение Slack, устанавливаете его в пространство и вставляете сюда токен пользователя.',
+            minutes: 6,
+            needs: [
+              'Пространство Slack, где вам разрешено устанавливать приложения (или администратор, который одобрит)',
+            ],
+            steps: [
+              {
+                text: 'Откройте Slack API → **Your Apps**, нажмите **Create New App** → **From scratch**, назовите приложение Manyplug, выберите пространство и нажмите **Create App**.',
+                link: { label: 'Открыть приложения Slack', url: 'https://api.slack.com/apps' },
+              },
+              {
+                text: 'Откройте **OAuth & Permissions** и в **User Token Scopes** добавьте: search:read, channels:read, channels:history, groups:read, groups:history, im:read, im:history, im:write, mpim:read, mpim:history, users:read, chat:write.',
+              },
+              { text: 'Вверху той же страницы нажмите **Install to Workspace**, затем **Разрешить**.' },
+              {
+                text: 'Скопируйте **User OAuth Token** (начинается с xoxp-) и вставьте его в форму.',
+                fills: ['token'],
               },
             ],
             tips: [
-              'В некоторых пространствах приложения разрешает администратор. Если Slack попросит одобрения, отправьте запрос прямо на той странице.',
+              'Токен действует от вашего имени. Чтобы закрыть доступ, удалите приложение в **Your Apps**.',
+            ],
+            problems: [
+              {
+                problem: '«invalid_auth» или токен не принимается',
+                fix: 'Скопируйте именно **User OAuth Token** (xoxp-), а не **Bot User OAuth Token** (xoxb-).',
+              },
+              {
+                problem: '«missing_scope», когда ИИ ищет или читает канал',
+                fix: 'Добавьте недостающее право в **User Token Scopes**, нажмите **Reinstall to Workspace** и вставьте новый токен через **Переподключить**.',
+              },
+              {
+                problem: 'Вместо установки Slack предлагает отправить запрос',
+                fix: 'Приложения в пространстве одобряет администратор. Отправьте запрос и вернитесь к шагу 3 после одобрения.',
+              },
             ],
           },
         },
@@ -359,20 +409,63 @@ export default defineConnector({
       en: {
         setup: {
           oauth: {
-            summary: 'Your Slack workspace. Takes under a minute.',
+            summary: 'You sign in to Slack and let Manyplug work in your workspace as you.',
+            minutes: 1,
+            needs: ['An account in a Slack workspace'],
             steps: [
               {
-                text: 'Click Connect. Slack opens: check the workspace name in the top-right corner and switch it if needed.',
+                text: 'Click **Connect**. Slack opens: check the workspace name in the top-right corner and switch it if needed.',
               },
               {
-                text: 'Click Allow. The AI acts as you: it sees the channels you are in and posts under your name.',
+                text: 'Click **Allow**. The AI acts as you: it sees the channels you are in and posts under your name.',
+              },
+              { text: 'Several workspaces? Connect each one and name them so the AI can tell them apart.' },
+            ],
+            tips: ['Slack messages go out only after you confirm, until you change the rules.'],
+            problems: [
+              {
+                problem: 'Slack asks for an admin’s approval',
+                fix: 'An admin approves apps in this workspace. Send the request right on that page and connect again once it is approved.',
               },
               {
-                text: 'Several workspaces? Connect each one and name them so the AI can tell them apart.',
+                problem: 'The wrong workspace got connected',
+                fix: 'Delete the account here, click **Connect** again and switch the workspace in the top-right corner before you click **Allow**.',
               },
             ],
-            tips: [
-              'Some workspaces only allow apps an admin approved. If Slack asks for approval, request it right on that page.',
+          },
+          form: {
+            summary:
+              'You create your own Slack app, install it in your workspace and paste its user token here.',
+            minutes: 6,
+            needs: ['A Slack workspace where you may install apps (or an admin who approves it)'],
+            steps: [
+              {
+                text: 'Open Slack API → **Your Apps**, click **Create New App** → **From scratch**, name it Manyplug, pick the workspace and click **Create App**.',
+                link: { label: 'Open Slack apps', url: 'https://api.slack.com/apps' },
+              },
+              {
+                text: 'Open **OAuth & Permissions** and under **User Token Scopes** add: search:read, channels:read, channels:history, groups:read, groups:history, im:read, im:history, im:write, mpim:read, mpim:history, users:read, chat:write.',
+              },
+              { text: 'At the top of the same page, click **Install to Workspace**, then **Allow**.' },
+              {
+                text: 'Copy the **User OAuth Token** (it starts with xoxp-) and paste it into the form.',
+                fills: ['token'],
+              },
+            ],
+            tips: ['The token acts as you. To cut access, delete the app under **Your Apps**.'],
+            problems: [
+              {
+                problem: '“invalid_auth”, or the token is not accepted',
+                fix: 'Copy the **User OAuth Token** (xoxp-), not the **Bot User OAuth Token** (xoxb-).',
+              },
+              {
+                problem: '“missing_scope” when the AI searches or reads a channel',
+                fix: 'Add the missing scope under **User Token Scopes**, click **Reinstall to Workspace** and paste the new token with **Reconnect**.',
+              },
+              {
+                problem: 'Slack offers to send a request instead of installing',
+                fix: 'An admin approves apps in this workspace. Send the request and continue from step 3 once it is approved.',
+              },
             ],
           },
         },

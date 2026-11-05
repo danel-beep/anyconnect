@@ -255,41 +255,64 @@ const ui: ConnectorUi = {
     ru: {
       setup: {
         oauth: {
-          summary: 'Ваш аккаунт GitHub. Меньше минуты.',
+          summary: 'Вы входите в GitHub и разрешаете Manyplug работать с вашими репозиториями.',
+          minutes: 1,
+          needs: ['Аккаунт GitHub'],
           steps: [
+            { text: 'Нажмите **Подключить** и войдите в GitHub.' },
             {
-              text: 'Нажмите «Подключить» и войдите в GitHub.',
+              text: 'Нажмите **Authorize**: Manyplug получит доступ к репозиториям, задачам, пул-реквестам и уведомлениям.',
             },
             {
-              text: 'Нажмите Authorize: Manyplug получит доступ к репозиториям, задачам, pull request’ам и уведомлениям.',
+              text: 'Для репозиториев организации может понадобиться одобрение владельца: нажмите **Request** рядом с организацией на той же странице.',
             },
+          ],
+          problems: [
             {
-              text: 'Для репозиториев организации может понадобиться одобрение владельца: GitHub покажет кнопку Request рядом с организацией.',
+              problem: 'Нет репозиториев организации',
+              fix: 'Владелец организации должен одобрить Manyplug: попросите его открыть **Settings → Third-party access** в организации и одобрить приложение.',
             },
           ],
         },
         form: {
-          summary: 'Персональный токен с точными правами (fine-grained). Около двух минут.',
+          summary: 'Вы создаёте на GitHub детальный личный токен доступа и вставляете его сюда.',
+          minutes: 3,
+          needs: ['Аккаунт GitHub', 'Одобрение владельца, если токену нужны репозитории организации'],
           steps: [
             {
-              text: 'Откройте GitHub → Settings → Developer settings → Fine-grained tokens и нажмите Generate new token.',
+              text: 'Откройте GitHub → **Settings → Developer settings → Fine-grained tokens** и нажмите **Generate new token**.',
               link: {
                 label: 'Создать токен на GitHub',
                 url: 'https://github.com/settings/personal-access-tokens/new',
               },
             },
             {
-              text: 'Назовите его Manyplug, выберите срок действия и в Repository access — репозитории, с которыми будет работать ИИ.',
+              text: 'Назовите токен Manyplug и выберите срок действия. В **Repository access** выберите репозитории, с которыми будет работать ИИ.',
             },
             {
-              text: 'В Permissions поставьте Issues и Pull requests на Read and write, Contents — на Read-only.',
+              text: 'В **Permissions** для **Issues** и **Pull requests** выберите **Read and write**, для **Contents** — **Read-only**.',
             },
             {
-              text: 'Нажмите Generate token, скопируйте его (github_pat_…) и вставьте в форму.',
+              text: 'Нажмите **Generate token** и скопируйте его (начинается с github_pat_).',
+              fills: ['token'],
             },
           ],
           tips: [
-            'Когда срок токена истечёт, у аккаунта появится «Войти заново»: создайте новый токен и вставьте его через «Переподключить».',
+            'Когда срок токена истечёт, у аккаунта появится «Нужно войти заново»: создайте новый токен и вставьте его через **Переподключить**.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что токен не подходит',
+              fix: 'Возможно, срок токена истёк или он скопирован не полностью. Создайте новый и скопируйте его целиком.',
+            },
+            {
+              problem: 'Нет репозиториев организации',
+              fix: 'При создании токена выберите организацию в **Resource owner**. Организации, возможно, тоже нужно его одобрить.',
+            },
+            {
+              problem: 'ИИ не может комментировать или открыть пул-реквест',
+              fix: 'Измените токен: для **Issues** и **Pull requests** выберите **Read and write**.',
+            },
           ],
         },
       },
@@ -346,41 +369,64 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         oauth: {
-          summary: 'Your GitHub account. Takes under a minute.',
+          summary: 'You sign in to GitHub and allow Manyplug to work with your repositories.',
+          minutes: 1,
+          needs: ['A GitHub account'],
           steps: [
+            { text: 'Click **Connect** and sign in to GitHub.' },
             {
-              text: 'Click Connect and sign in to GitHub.',
+              text: 'Click **Authorize**: Manyplug gets access to your repositories, issues, pull requests and notifications.',
             },
             {
-              text: 'Click Authorize: Manyplug gets access to your repositories, issues, pull requests and notifications.',
+              text: 'Organisation repositories may need an owner’s approval: click **Request** next to the organisation on the same page.',
             },
+          ],
+          problems: [
             {
-              text: 'Organisation repositories may need an owner’s approval: GitHub shows a Request button next to the organisation.',
+              problem: 'Repositories of an organisation are missing',
+              fix: 'An organisation owner has to approve Manyplug: ask them to open **Settings → Third-party access** in the organisation and approve it.',
             },
           ],
         },
         form: {
-          summary: 'A fine-grained personal access token. Takes about two minutes.',
+          summary: 'You create a fine-grained personal access token on GitHub and paste it here.',
+          minutes: 3,
+          needs: [
+            'A GitHub account',
+            'Owner approval, if the token should reach an organisation’s repositories',
+          ],
           steps: [
             {
-              text: 'Open GitHub → Settings → Developer settings → Fine-grained tokens and click Generate new token.',
+              text: 'Open GitHub → **Settings → Developer settings → Fine-grained tokens** and click **Generate new token**.',
               link: {
                 label: 'Create a token on GitHub',
                 url: 'https://github.com/settings/personal-access-tokens/new',
               },
             },
             {
-              text: 'Name it Manyplug, choose an expiry and, under Repository access, the repositories the AI may use.',
+              text: 'Name it Manyplug and choose an expiry. Under **Repository access**, pick the repositories the AI may use.',
             },
             {
-              text: 'Under Permissions, set Issues and Pull requests to Read and write, and Contents to Read-only.',
+              text: 'Under **Permissions**, set **Issues** and **Pull requests** to **Read and write**, and **Contents** to **Read-only**.',
             },
-            {
-              text: 'Click Generate token, copy it (github_pat_…) and paste it into the form.',
-            },
+            { text: 'Click **Generate token** and copy it (it starts with github_pat_).', fills: ['token'] },
           ],
           tips: [
-            'When the token expires, the account shows “Sign in again”: create a new token and paste it with Reconnect.',
+            'When the token expires, the account shows “Sign in again”: create a new token and paste it with **Reconnect**.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the token is not valid',
+              fix: 'The token may have expired or been copied in part. Generate a new one and copy it whole.',
+            },
+            {
+              problem: 'Repositories of an organisation are missing',
+              fix: 'Pick the organisation under **Resource owner** when you create the token. The organisation may also need to approve it.',
+            },
+            {
+              problem: 'The AI cannot comment or open a pull request',
+              fix: 'Edit the token and set **Issues** and **Pull requests** to **Read and write**.',
+            },
           ],
         },
       },

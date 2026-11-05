@@ -126,24 +126,44 @@ export default defineConnector({
           'Страницы и пространства Confluence Cloud: поиск, чтение, создание, изменение и комментарии.',
         setup: {
           form: {
-            summary:
-              'Адрес сайта Atlassian, почта и токен API. Около двух минут. Подойдёт тот же токен, что и для Jira.',
+            summary: 'Вы создаёте API-токен Atlassian и вставляете его сюда вместе с именем сайта и почтой.',
+            minutes: 2,
+            needs: ['Аккаунт Confluence Cloud', 'Почта, с которой вы входите в Atlassian'],
             steps: [
               {
-                text: 'Откройте страницу токенов API Atlassian и нажмите Create API token (без scopes).',
+                text: 'Откройте страницу API-токенов Atlassian и нажмите **Create API token** (без прав).',
                 link: {
-                  label: 'Открыть токены API Atlassian',
+                  label: 'Открыть токены Atlassian',
                   url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
                 },
               },
-              { text: 'Назовите токен Manyplug, выберите срок действия и нажмите Create.' },
-              { text: 'Скопируйте токен: Atlassian покажет его только один раз.' },
+              { text: 'Назовите токен Manyplug, выберите срок действия и нажмите **Create**.' },
               {
-                text: 'В форме укажите имя сайта (из адреса acme.atlassian.net — это acme), почту Atlassian и токен.',
+                text: 'Нажмите **Copy**: Atlassian показывает токен только один раз. Подойдёт и токен, созданный для Jira.',
+                fills: ['apiToken'],
+              },
+              {
+                text: 'В форме укажите имя сайта (acme для acme.atlassian.net) и почту, с которой входите в Atlassian.',
+                fills: ['site', 'email'],
               },
             ],
             tips: [
-              'ИИ видит в Confluence то же, что и вы. Чтобы закрыть доступ, отзовите токен на той же странице.',
+              'ИИ видит в Confluence то же, что и вы.',
+              'Чтобы закрыть доступ, отзовите токен на той же странице.',
+            ],
+            problems: [
+              {
+                problem: 'Форма пишет, что почта или токен не подходят',
+                fix: 'Укажите почту аккаунта Atlassian и токен, созданный через **Create API token**, а не **Create API token with scopes**.',
+              },
+              {
+                problem: 'Форма не находит сайт',
+                fix: 'Укажите только первую часть адреса: acme для acme.atlassian.net.',
+              },
+              {
+                problem: 'Через какое-то время ИИ перестаёт работать',
+                fix: 'Срок токена истёк. Создайте новый и вставьте его через **Переподключить**.',
+              },
             ],
           },
         },
@@ -173,24 +193,44 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary:
-              'Your Atlassian site, email and an API token. Takes about two minutes. The Jira token works too.',
+            summary: 'You create an Atlassian API token and paste it here with your site name and email.',
+            minutes: 2,
+            needs: ['A Confluence Cloud account', 'The email you sign in to Atlassian with'],
             steps: [
               {
-                text: 'Open your Atlassian API tokens page and click Create API token (the one without scopes).',
+                text: 'Open your Atlassian API tokens page and click **Create API token** (the one without scopes).',
                 link: {
                   label: 'Open Atlassian API tokens',
                   url: 'https://id.atlassian.com/manage-profile/security/api-tokens',
                 },
               },
-              { text: 'Name it Manyplug, pick an expiry date and click Create.' },
-              { text: 'Copy the token: Atlassian shows it only once.' },
+              { text: 'Name it Manyplug, pick an expiry date and click **Create**.' },
               {
-                text: 'In the form, enter your site name (acme for acme.atlassian.net), your Atlassian email and the token.',
+                text: 'Click **Copy**: Atlassian shows the token only once. A token you made for Jira works too.',
+                fills: ['apiToken'],
+              },
+              {
+                text: 'In the form, enter your site name (acme for acme.atlassian.net) and the email you sign in to Atlassian with.',
+                fills: ['site', 'email'],
               },
             ],
             tips: [
-              'The AI sees in Confluence what you see. To cut access, revoke the token on the same page.',
+              'The AI sees in Confluence what you see.',
+              'To cut access, revoke the token on the same page.',
+            ],
+            problems: [
+              {
+                problem: 'The form says the email or token is wrong',
+                fix: 'Use the email of your Atlassian account and a token made with **Create API token**, not **Create API token with scopes**.',
+              },
+              {
+                problem: 'The form cannot find the site',
+                fix: 'Enter only the first part of the address: acme for acme.atlassian.net.',
+              },
+              {
+                problem: 'The AI stops working after a while',
+                fix: 'The token has expired. Create a new one and paste it with **Reconnect**.',
+              },
             ],
           },
         },

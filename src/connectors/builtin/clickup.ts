@@ -185,17 +185,32 @@ export default defineConnector({
           'Задачи и списки ClickUp: ваши задачи, чтение, создание, изменение, комментарии и удаление.',
         setup: {
           form: {
-            summary: 'Личный токен API ClickUp. Около минуты.',
+            summary: 'Вы копируете личный API-токен в настройках ClickUp и вставляете его сюда.',
+            minutes: 1,
+            needs: ['Аккаунт ClickUp (подойдёт любой тариф)'],
             steps: [
               {
-                text: 'Откройте ClickUp → аватар → Settings → Apps.',
+                text: 'В ClickUp нажмите на аватар → **Settings** → **Apps**.',
                 link: { label: 'Открыть настройки ClickUp', url: 'https://app.clickup.com/settings/apps' },
               },
-              { text: 'В блоке API Token нажмите Generate (или Copy, если токен уже есть).' },
-              { text: 'Вставьте токен (pk_…) в форму и нажмите «Подключить».' },
+              {
+                text: 'В разделе **API Token** нажмите **Generate** или **Copy**, если токен уже есть (начинается с pk_).',
+                fills: ['token'],
+              },
             ],
             tips: [
-              'Токен действует от вашего имени во всех пространствах. Новый токен (Regenerate) отключает старый.',
+              'Токен действует от вашего имени во всех рабочих пространствах.',
+              '**Regenerate** отключает старый токен: вставьте новый через **Переподключить**.',
+            ],
+            problems: [
+              {
+                problem: 'Форма пишет, что токен не подходит',
+                fix: 'Скопируйте токен ещё раз кнопкой **Copy**. Если с тех пор нажимали **Regenerate**, старый токен перестал работать: вставьте новый.',
+              },
+              {
+                problem: 'ИИ не видит пространство или список',
+                fix: 'Токен видит то же, что и вы в ClickUp. Попросите добавить вас в это пространство или подключите аккаунт, у которого оно есть.',
+              },
             ],
           },
         },
@@ -222,16 +237,33 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'A ClickUp personal API token. Takes about a minute.',
+            summary: 'You copy your personal API token from ClickUp settings and paste it here.',
+            minutes: 1,
+            needs: ['A ClickUp account (any plan)'],
             steps: [
               {
-                text: 'Open ClickUp → your avatar → Settings → Apps.',
+                text: 'In ClickUp, click your avatar → **Settings** → **Apps**.',
                 link: { label: 'Open ClickUp settings', url: 'https://app.clickup.com/settings/apps' },
               },
-              { text: 'Under API Token, click Generate (or Copy if you already have one).' },
-              { text: 'Paste the token (pk_…) into the form and click Connect.' },
+              {
+                text: 'Under **API Token**, click **Generate**, or **Copy** if you already have a token (it starts with pk_).',
+                fills: ['token'],
+              },
             ],
-            tips: ['The token acts as you in all workspaces. Regenerate makes the old one stop working.'],
+            tips: [
+              'The token acts as you in all your workspaces.',
+              '**Regenerate** makes the old token stop working: paste the new one with **Reconnect**.',
+            ],
+            problems: [
+              {
+                problem: 'The form says the token is not valid',
+                fix: 'Copy the token again with the **Copy** button. If you clicked **Regenerate** since, the old token stopped working: paste the new one.',
+              },
+              {
+                problem: 'The AI does not see a space or list',
+                fix: 'The token sees what you see in ClickUp. Ask to be added to that space, or connect the account that has it.',
+              },
+            ],
           },
         },
         prompts: [

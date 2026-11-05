@@ -181,20 +181,42 @@ const ui: ConnectorUi = {
       description: 'Файлы Figma: проекты команды, страницы и фреймы, экспорт картинок, комментарии.',
       setup: {
         form: {
-          summary: 'Личный токен Figma. Меньше минуты.',
+          summary: 'Вы создаёте личный токен доступа в настройках Figma и вставляете его сюда.',
+          minutes: 2,
+          needs: ['Аккаунт Figma с доступом к файлам, которые будет читать ИИ'],
           steps: [
             {
-              text: 'В Figma нажмите на своё имя слева вверху → Settings → вкладка Security.',
+              text: 'В Figma нажмите на своё имя слева вверху → **Settings** → вкладку **Security**.',
               link: { label: 'Открыть Figma', url: 'https://www.figma.com/settings' },
             },
             {
-              text: 'В разделе Personal access tokens нажмите Generate new token, дайте права на чтение файлов (File content: Read) и комментарии (Comments: Read and write).',
+              text: 'В разделе **Personal access tokens** нажмите **Generate new token**, назовите токен Manyplug и выберите срок действия.',
             },
-            { text: 'Скопируйте токен (он начинается с figd_) и вставьте его в форму.' },
+            {
+              text: 'Для **File content** выберите **Read-only**, для **Comments** — **Read and write**, затем нажмите **Generate token**.',
+            },
+            {
+              text: 'Скопируйте токен (начинается с figd_). Figma показывает его только один раз.',
+              fills: ['token'],
+            },
           ],
           tips: [
             'Токен видит те же файлы, что и вы, и действует от вашего имени.',
-            'У токенов Figma есть срок действия: когда он истечёт, создайте новый.',
+            'Токены Figma истекают: создайте новый и вставьте его через **Переподключить**.',
+          ],
+          problems: [
+            {
+              problem: 'Форма пишет, что токен не подходит',
+              fix: 'Скопируйте токен целиком ещё раз, начиная с figd_. Если окно закрыто, создайте новый.',
+            },
+            {
+              problem: 'ИИ не может прочитать файл',
+              fix: 'Токен видит те файлы, которые можете открыть вы. Откройте ссылку на файл в Figma под этим аккаунтом и проверьте доступ.',
+            },
+            {
+              problem: 'ИИ не может оставить комментарий',
+              fix: 'Создайте новый токен с **Comments: Read and write** и вставьте его через **Переподключить**.',
+            },
           ],
         },
       },
@@ -222,20 +244,39 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'Your Figma personal access token. Takes under a minute.',
+          summary: 'You generate a personal access token in Figma settings and paste it here.',
+          minutes: 2,
+          needs: ['A Figma account with access to the files the AI should read'],
           steps: [
             {
-              text: 'In Figma, click your name at the top left → Settings → the Security tab.',
+              text: 'In Figma, click your name at the top left → **Settings** → the **Security** tab.',
               link: { label: 'Open Figma', url: 'https://www.figma.com/settings' },
             },
             {
-              text: 'Under Personal access tokens, click Generate new token and allow File content: Read and Comments: Read and write.',
+              text: 'Under **Personal access tokens**, click **Generate new token**, name it Manyplug and pick an expiry.',
             },
-            { text: 'Copy the token (it starts with figd_) and paste it into the form.' },
+            {
+              text: 'Set **File content** to **Read-only** and **Comments** to **Read and write**, then click **Generate token**.',
+            },
+            { text: 'Copy the token (it starts with figd_). Figma shows it only once.', fills: ['token'] },
           ],
           tips: [
             'The token sees the same files as you and acts as you.',
-            'Figma tokens expire: make a new one when it does.',
+            'Figma tokens expire: make a new one when it does and paste it with **Reconnect**.',
+          ],
+          problems: [
+            {
+              problem: 'The form says the token is not valid',
+              fix: 'Copy the whole token again, starting with figd_. If the window is closed, generate a new one.',
+            },
+            {
+              problem: 'The AI cannot read a file',
+              fix: 'The token sees the files you can open. Open the file link in Figma under this account to check access.',
+            },
+            {
+              problem: 'The AI cannot leave a comment',
+              fix: 'Generate a new token with **Comments: Read and write** and paste it with **Reconnect**.',
+            },
           ],
         },
       },

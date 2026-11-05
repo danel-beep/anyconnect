@@ -136,23 +136,42 @@ export default defineConnector({
           'Разговоры и контакты Intercom: поиск, чтение, ответы, заметки, закрытие, поиск контактов.',
         setup: {
           form: {
-            summary: 'Токен доступа приложения Intercom. Около трёх минут.',
+            summary: 'Вы создаёте приложение в Developer Hub Intercom и вставляете сюда его токен доступа.',
+            minutes: 4,
+            needs: ['Рабочее пространство Intercom с правами администратора'],
             steps: [
               {
-                text: 'Откройте Developer Hub Intercom и нажмите New app: назовите его Manyplug и выберите свой workspace.',
+                text: 'Откройте Developer Hub Intercom, нажмите **New app**, назовите приложение Manyplug и выберите своё рабочее пространство.',
                 link: {
                   label: 'Открыть Developer Hub',
                   url: 'https://app.intercom.com/a/apps/_/developer-hub',
                 },
               },
               {
-                text: 'В разделе Authentication включите права (Edit scopes): чтение и запись разговоров, чтение контактов и админов.',
+                text: 'Откройте **Authentication**, нажмите **Edit scopes** и разрешите чтение и запись разговоров, чтение контактов и админов. Сохраните.',
               },
-              { text: 'Скопируйте Access token на той же странице и вставьте в форму.' },
-              { text: 'Если ваш Intercom в Европе или Австралии, выберите регион в форме.' },
+              {
+                text: 'Скопируйте **Access token** на той же странице и вставьте его в форму.',
+                fills: ['token'],
+              },
+              {
+                text: 'Посмотрите адрес Intercom в браузере: app.eu.intercom.com — выберите регион «Европа», app.au.intercom.com — «Австралия», иначе оставьте США.',
+                fills: ['region'],
+              },
             ],
             tips: [
               'ИИ отвечает от имени владельца приложения. Ответ клиенту уходит только после вашего подтверждения.',
+              'Чтобы отозвать доступ, удалите приложение в Developer Hub.',
+            ],
+            problems: [
+              {
+                problem: 'Ошибка 401 или «Unauthorized» при подключении',
+                fix: 'Чаще всего выбран не тот регион. Сверьте его с адресом Intercom в браузере (шаг 4) и проверьте, что токен скопирован целиком.',
+              },
+              {
+                problem: 'ИИ читает разговоры, но не может ответить или закрыть их',
+                fix: 'В **Authentication → Edit scopes** не включена запись разговоров. Включите её, сохраните и нажмите **Проверить** на странице аккаунта.',
+              },
             ],
           },
         },
@@ -185,22 +204,43 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'An access token of an Intercom app. Takes about three minutes.',
+            summary: 'You create an app on Intercom’s developer page and paste its access token here.',
+            minutes: 4,
+            needs: ['An Intercom workspace where you are an admin'],
             steps: [
               {
-                text: 'Open the Intercom Developer Hub and click New app: name it Manyplug and pick your workspace.',
+                text: 'Open Intercom’s developer page, click **New app**, name it Manyplug and pick your workspace.',
                 link: {
                   label: 'Open the Developer Hub',
                   url: 'https://app.intercom.com/a/apps/_/developer-hub',
                 },
               },
               {
-                text: 'Under Authentication, click Edit scopes and allow reading and writing conversations and reading contacts and admins.',
+                text: 'Open **Authentication**, click **Edit scopes** and allow reading and writing conversations and reading contacts and admins. Save.',
               },
-              { text: 'Copy the Access token on the same page and paste it into the form.' },
-              { text: 'If your Intercom is hosted in Europe or Australia, pick that region in the form.' },
+              {
+                text: 'Copy the **Access token** on the same page and paste it into the form.',
+                fills: ['token'],
+              },
+              {
+                text: 'Look at the Intercom address in your browser: app.eu.intercom.com means region Europe, app.au.intercom.com means Australia, anything else stays US.',
+                fills: ['region'],
+              },
             ],
-            tips: ['The AI replies as the app owner. Replies to customers go out only after you confirm.'],
+            tips: [
+              'The AI replies as the app owner. Replies to customers go out only after you confirm.',
+              'To cut access, delete the app on the same developer page.',
+            ],
+            problems: [
+              {
+                problem: 'Error 401 or “Unauthorized” when connecting',
+                fix: 'Most often the region is wrong. Match it to the Intercom address in your browser (step 4) and check that the token was copied in full.',
+              },
+              {
+                problem: 'The AI reads conversations but cannot reply to or close them',
+                fix: 'Writing conversations is not allowed under **Authentication → Edit scopes**. Turn it on, save and click **Check** on the account page.',
+              },
+            ],
           },
         },
         prompts: [

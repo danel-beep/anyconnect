@@ -39,7 +39,7 @@ const LIMITS = {
 
 /** Words that make a guide vaguer or talk down to people, and internal names they do not know. */
 const BANNED: Record<(typeof LANGUAGES)[number], RegExp> = {
-  en: /\b(simply|just|easy|easily|obviously|etc|e\.g\.|i\.e\.|hub)\b/i,
+  en: /\b(simply|just|easy|easily|obviously|etc|e\.g\.|i\.e\.|the hub)\b/i,
   ru: /(?<![а-яё])(просто|всего лишь|и т\. ?д\.|т\. ?е\.|т\. ?к\.|хаб\S*)(?![а-яё])/i,
 };
 

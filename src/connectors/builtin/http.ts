@@ -171,23 +171,46 @@ export default defineConnector({
       ru: {
         setup: {
           form: {
-            summary: 'Адрес API и ключ, если он нужен. Держите документацию API под рукой.',
+            summary: 'Вы указываете адрес API сервиса и его ключ, и ИИ может вызывать этот API.',
+            minutes: 5,
+            needs: [
+              'Документация API сервиса: в ней указан адрес и способ передачи ключа',
+              'Ключ API или токен, если API его требует',
+            ],
             steps: [
               {
-                text: 'Найдите базовый адрес в документации API, например https://api.example.com/v1. ИИ сможет обращаться только к адресам внутри него.',
+                text: 'Найдите в документации API базовый адрес, например https://api.example.com/v1, и вставьте его в форму. ИИ сможет обращаться только к адресам внутри него.',
+                fills: ['baseUrl'],
               },
               {
-                text: 'Создайте ключ API в настройках сервиса (ищите разделы API, Developers или Integrations).',
+                text: 'Создайте ключ API в настройках сервиса: ищите разделы **API**, **Developers** или **Integrations**.',
+                fills: ['token'],
               },
               {
-                text: 'Выберите способ передачи ключа, как сказано в документации (чаще всего токен Bearer), и вставьте ключ в форму.',
+                text: 'В поле «Авторизация» выберите способ, который указан в документации. Чаще всего это токен **Bearer**.',
+                fills: ['auth'],
               },
               {
-                text: 'После подключения расскажите ИИ в чате об основных методах API или дайте ссылку на документацию.',
+                text: 'Нажмите **Подключить**, затем расскажите ИИ в чате об основных методах API или дайте ссылку на документацию.',
               },
             ],
             tips: [
               'Лучше ключ только на чтение. Изменяющие запросы (POST, PUT, DELETE) подчиняются вашим правилам подтверждения.',
+              'Ключ в отдельном заголовке или в параметре адреса? Укажите их имя в разделе «Дополнительно».',
+            ],
+            problems: [
+              {
+                problem: 'Проверка аккаунта показывает «HTTP 401» или «HTTP 403»',
+                fix: 'Ключ неверный или передаётся не тем способом. Сверьте поле «Авторизация» с документацией, вставьте ключ заново и нажмите **Переподключить**.',
+              },
+              {
+                problem: 'Проверка аккаунта показывает «HTTP 404»',
+                fix: 'Многие API ничего не отдают по базовому адресу, это нормально. Попросите ИИ вызвать метод из документации, чтобы убедиться, что всё работает.',
+              },
+              {
+                problem: 'API в домашней или офисной сети не отвечает',
+                fix: 'Manyplug работает в облаке и видит только адреса из интернета. Откройте API в интернет или подключите сервис с публичным адресом.',
+              },
             ],
           },
         },
@@ -242,23 +265,46 @@ export default defineConnector({
       en: {
         setup: {
           form: {
-            summary: 'The API’s base address and a key, if it needs one. Keep the API docs at hand.',
+            summary: 'You enter the service’s API address and key, and the AI can then call that API.',
+            minutes: 5,
+            needs: [
+              'The service’s API docs: they give the address and how to send the key',
+              'An API key or token, if the API needs one',
+            ],
             steps: [
               {
-                text: 'Find the base address in the API docs, for example https://api.example.com/v1. The AI can only call addresses below it.',
+                text: 'Find the base address in the API docs, for example https://api.example.com/v1, and paste it into the form. The AI can only call addresses below it.',
+                fills: ['baseUrl'],
               },
               {
-                text: 'Create an API key in the service’s settings (look for API, Developers or Integrations).',
+                text: 'Create an API key in the service’s settings: look for **API**, **Developers** or **Integrations**.',
+                fills: ['token'],
               },
               {
-                text: 'Pick how the docs say to send the key (most APIs use a Bearer token) and paste the key into the form.',
+                text: 'Under Authentication, pick the method the docs name. Most APIs use a **Bearer** token.',
+                fills: ['auth'],
               },
               {
-                text: 'After connecting, describe the main endpoints to the AI in the chat, or paste a link to the docs.',
+                text: 'Click **Connect**, then describe the main endpoints to the AI in the chat, or paste a link to the docs.',
               },
             ],
             tips: [
               'Prefer a read-only key. Write requests (POST, PUT, DELETE) follow your confirmation rules.',
+              'Key in a custom header or a query parameter? Enter its name under Advanced.',
+            ],
+            problems: [
+              {
+                problem: 'The account check shows “HTTP 401” or “HTTP 403”',
+                fix: 'The key is wrong or sent the wrong way. Compare the Authentication choice with the docs, paste the key again and click **Reconnect**.',
+              },
+              {
+                problem: 'The account check shows “HTTP 404”',
+                fix: 'Many APIs return nothing at the base address, and that is fine. Ask the AI to call an endpoint from the docs to make sure it works.',
+              },
+              {
+                problem: 'An API in your home or office network does not answer',
+                fix: 'Manyplug runs in the cloud and only reaches addresses on the internet. Make the API reachable from the internet, or use its public address.',
+              },
             ],
           },
         },
@@ -291,7 +337,7 @@ export default defineConnector({
           },
           headers: {
             label: 'Request headers',
-            hint: 'Non-secret headers sent with every request, as JSON, e.g. {"X-Api-Version": "2"}',
+            hint: 'Non-secret headers sent with every request, as JSON, for example {"X-Api-Version": "2"}',
           },
           token: { label: 'API key or token', hint: 'Needed for every method except Basic' },
           username: { label: 'Username', hint: 'For username and password authentication (Basic)' },

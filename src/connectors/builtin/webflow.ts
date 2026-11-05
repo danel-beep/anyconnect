@@ -178,20 +178,35 @@ const ui: ConnectorUi = {
       description: 'Сайты и CMS Webflow: коллекции, черновики, правка и публикация записей, заявки из форм.',
       setup: {
         form: {
-          summary: 'API-токен сайта Webflow. Около минуты.',
+          summary: 'Вы создаёте токен API в настройках сайта Webflow и вставляете его сюда.',
+          minutes: 2,
+          needs: ['Сайт в Webflow, в котором вы можете менять настройки'],
           steps: [
             {
-              text: 'Откройте сайт в Webflow → Site settings → Apps & integrations, внизу раздел API access.',
+              text: 'Откройте сайт в Webflow → **Site settings → Apps & integrations** и прокрутите вниз до **API access**.',
               link: { label: 'Открыть Webflow', url: 'https://webflow.com/dashboard' },
             },
             {
-              text: 'Нажмите Generate API token, дайте права CMS (read and write), Sites (read and write) и Forms (read).',
+              text: 'Нажмите **Generate API token**, назовите токен Manyplug и разрешите **CMS** (чтение и запись), **Sites** (чтение и запись) и **Forms** (чтение).',
             },
-            { text: 'Скопируйте токен (показывается один раз) и вставьте его в форму.' },
+            {
+              text: 'Нажмите **Generate token** и скопируйте его: Webflow показывает токен только один раз.',
+              fills: ['token'],
+            },
           ],
           tips: [
-            'Токен действует только на этот сайт. Для другого сайта подключите ещё один аккаунт.',
-            'Публикацию записей ИИ делает только после вашего подтверждения.',
+            'Токен работает только для этого сайта. Для другого сайта подключите ещё один аккаунт.',
+            'ИИ публикует записи только после вашего подтверждения.',
+          ],
+          problems: [
+            {
+              problem: 'ИИ не может менять записи CMS',
+              fix: 'У токена нет записи в **CMS**. Создайте новый токен с этим правом и вставьте его через **Переподключить**.',
+            },
+            {
+              problem: 'ИИ не видит мой другой сайт',
+              fix: 'Токен работает только для одного сайта. Подключите каждый сайт отдельным аккаунтом со своим токеном.',
+            },
           ],
         },
       },
@@ -215,20 +230,32 @@ const ui: ConnectorUi = {
     en: {
       setup: {
         form: {
-          summary: 'A Webflow site API token. Takes about a minute.',
+          summary: 'You generate an API token in your Webflow site settings and paste it here.',
+          minutes: 2,
+          needs: ['A Webflow site where you can change the site settings'],
           steps: [
             {
-              text: 'Open the site in Webflow → Site settings → Apps & integrations, the API access section at the bottom.',
+              text: 'Open the site in Webflow → **Site settings → Apps & integrations** and scroll down to **API access**.',
               link: { label: 'Open Webflow', url: 'https://webflow.com/dashboard' },
             },
             {
-              text: 'Click Generate API token and allow CMS (read and write), Sites (read and write) and Forms (read).',
+              text: 'Click **Generate API token**, name it Manyplug and allow **CMS** (read and write), **Sites** (read and write) and **Forms** (read).',
             },
-            { text: 'Copy the token (it is shown once) and paste it into the form.' },
+            { text: 'Click **Generate token** and copy it: Webflow shows it only once.', fills: ['token'] },
           ],
           tips: [
-            'The token works for this site only. Connect another account for another site.',
+            'The token works for this one site. Connect another account for another site.',
             'The AI publishes items only after you confirm.',
+          ],
+          problems: [
+            {
+              problem: 'The AI cannot change CMS items',
+              fix: 'The token lacks write access to **CMS**. Generate a new token with it and paste it with **Reconnect**.',
+            },
+            {
+              problem: 'The AI does not see my other site',
+              fix: 'A token works for one site only. Connect each site as its own account with its own token.',
+            },
           ],
         },
       },
