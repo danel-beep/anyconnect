@@ -39,6 +39,7 @@ export class AccountHealthService {
           resolveProvider(connector.oauth),
           undefined,
           AbortSignal.timeout(20_000),
+          connector,
         );
         refreshed += 1;
       } catch {
