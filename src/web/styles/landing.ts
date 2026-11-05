@@ -324,8 +324,8 @@ export const LANDING_CSS = `
   .reveal .bento.in .ok-pill{animation:lp-fade .4s ease 1s backwards}
   /* The hub: packets run along the wires while it is on screen */
   /* Three requests in a 7.2s loop: Claude → Gmail work, ChatGPT → Slack client, Cursor → GitHub */
-  .w-in .p1,.w-in .p2,.w-in .p3,.w-out .p1,.w-out .p2,.w-out .p4,.hubmap .clients li:nth-child(-n+3) .node,.hubmap .services li:nth-child(1) .map-acc:first-child,.hubmap .services li:nth-child(2) .map-acc:last-child,.hubmap .services li:nth-child(4) .node{animation:lp-route 7.2s cubic-bezier(.45,0,.55,1) infinite}
-  .hubmap .clients .node,.hubmap .map-acc,.hubmap .services li:nth-child(4) .node{animation-name:lp-hit;animation-timing-function:ease}
+  .w-in .p1,.w-in .p2,.w-in .p3,.w-out .p1,.w-out .p2,.w-out .p4{animation:lp-route 7.2s cubic-bezier(.45,0,.55,1) infinite}
+  .hubmap .clients li:nth-child(-n+3) .node,.hubmap .services li:nth-child(1) .map-acc:first-child,.hubmap .services li:nth-child(2) .map-acc:last-child,.hubmap .services li:nth-child(4) .node{animation:lp-hit 7.2s ease infinite}
   .w-in .p2,.hubmap .clients li:nth-child(2) .node{animation-delay:2.4s}
   .w-in .p3,.hubmap .clients li:nth-child(3) .node{animation-delay:4.8s}
   .w-out .p1{animation-delay:.95s}.w-out .p2{animation-delay:3.35s}.w-out .p4{animation-delay:5.75s}
