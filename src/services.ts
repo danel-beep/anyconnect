@@ -35,6 +35,7 @@ import { TotpService } from './core/totp.js';
 import { activeUserCheck, memberCheck, UserService } from './core/users.js';
 import { WorkspaceAdmin } from './core/workspace-admin.js';
 import { createDatabase, type Database, type Db } from './db/client.js';
+import { TelegramLanding } from './growth/telegram-landing.js';
 import type { CatalogTeam } from './hub/catalog-types.js';
 import type { StageMap } from './hub/executor.js';
 import { Hub, type HubDeps } from './hub/hub.js';
@@ -384,6 +385,10 @@ export function createServices(
       reason: row.reason ?? undefined,
     };
   };
+  // People who open the bot from an ad or a plain link get a short pitch and a tagged site link.
+  const telegramLanding = telegramBot
+    ? new TelegramLanding({ bot: telegramBot, publicUrl: config.publicUrl, t: translator, logger })
+    : undefined;
   const confirmations = new ConfirmationCenter({
     pending: pendingCalls,
     channels: notificationChannels,
@@ -392,6 +397,7 @@ export function createServices(
     describe: describeCall,
     t: translator,
     logger,
+    ...(telegramLanding ? { onOtherStart: telegramLanding.handle } : {}),
   });
   const securityStages: StageMap = {
     policy: policyStage(policies),

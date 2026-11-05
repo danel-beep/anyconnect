@@ -370,6 +370,51 @@ describe('data protection in the running hub', () => {
     await s.users.setProfile(userId, { locale: null });
   });
 
+  it('answers people from ads or a plain bot link with a tagged site link', async () => {
+    const s = hub.services;
+    const webhook = (chatId: number, text: string, language_code?: string) =>
+      fetch(`${hub.baseUrl}/telegram/webhook`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', [TELEGRAM_SECRET_HEADER]: s.telegramWebhookSecret },
+        body: JSON.stringify({
+          update_id: 10,
+          message: {
+            message_id: 1,
+            chat: { id: chatId, type: 'private' },
+            from: { id: chatId, ...(language_code ? { language_code } : {}) },
+            text,
+          },
+        }),
+      });
+    const last = (chatId: number) =>
+      telegram.calls.filter((c) => c.method === 'sendMessage' && c.body.chat_id === String(chatId)).at(-1)!;
+    const buttonUrl = (chatId: number) =>
+      new URL(
+        (last(chatId).body.reply_markup as { inline_keyboard: { url: string }[][] }).inline_keyboard[0]![0]!
+          .url,
+      );
+
+    await webhook(901, '/start tg_ai_1', 'ru');
+    expect(String(last(901).body.text)).toContain('подключает');
+    const tagged = buttonUrl(901);
+    expect(tagged.origin).toBe(new URL(hub.baseUrl).origin);
+    expect(Object.fromEntries(tagged.searchParams)).toEqual({
+      utm_source: 'telegram',
+      utm_medium: 'ads',
+      utm_campaign: 'tg_ai_1',
+    });
+
+    await webhook(902, '/start');
+    expect(String(last(902).body.text)).toContain('connects');
+    expect(buttonUrl(902).searchParams.get('utm_medium')).toBe('bot');
+    expect(buttonUrl(902).searchParams.has('utm_campaign')).toBe(false);
+
+    // A stale link code (mixed-case) is still reported as an invalid link, and links nothing.
+    await webhook(903, '/start Expired-Code_123');
+    expect(String(last(903).body.text)).toContain('invalid or expired');
+    expect(last(903).body.reply_markup).toBeUndefined();
+  });
+
   it('runs actions after an undo window unless the user cancels them', async () => {
     const s = hub.services;
     await s.policies.createRule(workspaceId, { aiClientId, connectorId: 'inbox', undoWindowSeconds: 60 });
