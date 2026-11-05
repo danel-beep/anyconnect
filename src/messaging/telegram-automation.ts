@@ -1,4 +1,4 @@
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { BRAND } from '../brand.js';
@@ -489,8 +489,9 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
     if (link.reconnectAccountId && !(await this.mayReconnect(link.reconnectAccountId, userKey))) {
       return this.send(chat, escapeHtml(t('bot.tc.otherAccount', { brand: BRAND.name })));
     }
-    // A new code each time the link is opened (until it is confirmed); only its hash is kept.
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    // The same code each time this person opens the link (a second scan does not void the first
+    // message); only its hash is kept.
+    const code = this.confirmCode(link.id, userKey);
     const telegram: LinkTelegram = {
       chat,
       label: identityOf({ username: from.username, name: fullName(from) }),
@@ -516,6 +517,18 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
     if (!claimed) return this.send(chat, escapeHtml(t('bot.tc.otherUser')));
     if (claimed.state === 'confirmed') return this.send(chat, await this.lastStep(t));
     await this.send(chat, await this.prompt(claimed, userKey, code, t), this.promptButtons(claimed, t));
+  }
+
+  /**
+   * The code for a link and the Telegram user who opened it: derived with the hub's key, so it is
+   * stable across reopens and cannot be worked out from the link id alone.
+   */
+  private confirmCode(linkId: string, userKey: string): string {
+    const digest = Buffer.from(
+      this.deps.keys.hubLookupKey('telegram/link-code', `${linkId}:${userKey}`),
+      'base64url',
+    );
+    return String(digest.readUIntBE(0, 6) % 1_000_000).padStart(6, '0');
   }
 
   /**
@@ -810,12 +823,15 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
       return { account, created: false };
     }
     await permissions.assertCanConnect(link.workspaceId, link.userId, link.draft.owner);
-    // Connected here before (still, or until Disconnect): that account comes back instead of a
-    // second one for the same person.
+    // Connected here before (still, until Disconnect, or until it moved to another workspace):
+    // that account comes back instead of a second one for the same person.
+    const current = connection.accountId
+      ? await service.get(link.workspaceId, connection.accountId).catch(() => undefined)
+      : undefined;
     const previousId =
-      connection.accountId ?? (await this.accountOfUser(link.workspaceId, connection.telegramUserKey));
+      current?.id ?? (await this.accountOfUser(link.workspaceId, connection.telegramUserKey));
     if (previousId) {
-      const previous = await service.get(link.workspaceId, previousId).catch(() => undefined);
+      const previous = current ?? (await service.get(link.workspaceId, previousId).catch(() => undefined));
       const sameOwner = link.draft.owner === undefined || previous?.ownerUserId === link.draft.owner.userId;
       if (previous && this.reconnects(previous) && sameOwner) {
         const manages = await permissions.assertCanManage(link.workspaceId, link.userId, previous).then(

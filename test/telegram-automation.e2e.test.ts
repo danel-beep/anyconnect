@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createUser } from '../src/core/identity.js';
 import type { Principal } from '../src/core/principal.js';
 import { accounts, messengerChats, telegramConnections, telegramLinks } from '../src/db/schema.js';
 import { maskEmail } from '../src/messaging/telegram-automation.js';
@@ -318,6 +319,40 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(await (await browser.request(foreign.path)).text()).toContain('Слишком много неверных кодов');
     await typeCode(foreign.path, code);
     expect(await state(foreign.path)).toBe('failed');
+  });
+
+  it('moves a Telegram account to another person’s workspace and back, without a second account', async () => {
+    await connectDana();
+    const [mine] = await telegramAccounts();
+
+    // Ben has his own Manyplug account. His QR code, opened by Dana: the bot names Ben's account
+    // and warns that the Telegram account moves; Dana's code typed on Ben's page moves it.
+    await createUser(hub.services.db, { email: 'ben@example.com', password: 'ben-long-password-1' });
+    const ben = new TestBrowser(hub.baseUrl);
+    expect((await ben.login('ben@example.com', 'ben-long-password-1')).status).toBe(303);
+    const path = (await ben.request('/connect/telegram')).headers.get('location')!;
+    const payload = /start=(c_[A-Za-z0-9_-]{32})/.exec(await (await ben.request(path)).text())![1]!;
+    await webhook(start(DANA, `/start ${payload}`));
+    const ask = String(lastTo(DANA).body.text);
+    expect(ask).toContain(maskEmail('ben@example.com'));
+    expect(ask).toContain('перейдёт сюда');
+    // Dana's own page cannot take Ben's link.
+    expect((await browser.request(path)).status).toBe(404);
+    const { csrf } = TestBrowser.hiddenInputs(await (await ben.request(path)).text());
+    await ben.request(`${path}/confirm`, { form: { csrf: csrf!, code: codeOf(DANA)! } });
+    const moved = await telegramAccounts();
+    expect(moved).toHaveLength(2);
+    const bens = moved.find((a) => a.id !== mine!.id)!;
+    expect(bens).toMatchObject({ status: 'active', config: { mode: 'automation' } });
+    expect(bens.workspaceId).not.toBe(principal.workspaceId);
+    expect(moved.find((a) => a.id === mine!.id)!.status).toBe('needs_reauth');
+
+    // Back in the first workspace: its old account returns, Ben's waits.
+    await connectDana();
+    const back = await telegramAccounts();
+    expect(back).toHaveLength(2);
+    expect(back.find((a) => a.id === mine!.id)!.status).toBe('active');
+    expect(back.find((a) => a.id === bens.id)!.status).toBe('needs_reauth');
   });
 
   it('finishes when the bot was added before the QR code was scanned', async () => {
