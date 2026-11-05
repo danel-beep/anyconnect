@@ -254,28 +254,11 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
           )}
         </div>
 
-        <div class="card flush" id="passkeys">
-          <div class="card-head pad">
-            <div>
-              <h2>{t('security.passkeys')}</h2>
-              <p class="small muted">{t('security.passkeysHint')}</p>
-            </div>
-            {/* No name to fill in: the hub names the passkey after where it is kept; rename it later. */}
-            <PasskeyForm
-              mode="register"
-              options="/security/passkeys/options"
-              action="/security/passkeys"
-              error={t('passkey.failed')}
-              hidden={hidden}
-              class="pk-add"
-            >
-              <button class={view.passkeys.length === 0 ? 'primary sm' : 'sm'} type="submit">
-                <Icon name="plus" /> {t('security.passkeyAdd')}
-              </button>
-            </PasskeyForm>
-          </div>
+        <div class="card" id="passkeys">
+          <h2>{t('security.passkeys')}</h2>
+          <p class="small muted">{t('security.passkeysHint')}</p>
           {view.passkeys.length === 0 ? (
-            <p class="muted pk-empty">{t('security.passkeysNone')}</p>
+            <p class="muted">{t('security.passkeysNone')}</p>
           ) : (
             <div class="acc-list pk-list">
               {view.passkeys.map((p) => (
@@ -283,9 +266,21 @@ export const SecurityPage: FC<{ t: Translate; lang: string; view: SecurityView }
               ))}
             </div>
           )}
-          <p class="small muted pk-empty" data-role="passkey-unsupported">
+          <p class="small muted" data-role="passkey-unsupported">
             {t('security.passkeyUnsupported')}
           </p>
+          {/* No name to fill in: the hub names the passkey after where it is kept; rename it later. */}
+          <PasskeyForm
+            mode="register"
+            options="/security/passkeys/options"
+            action="/security/passkeys"
+            error={t('passkey.failed')}
+            hidden={hidden}
+          >
+            <button class={view.passkeys.length === 0 ? 'primary' : undefined} type="submit">
+              <Icon name="plus" /> {t('security.passkeyAdd')}
+            </button>
+          </PasskeyForm>
         </div>
 
         <div class="card" id="recovery">

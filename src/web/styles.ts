@@ -81,7 +81,7 @@ textarea{min-height:84px;resize:vertical}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 /* Read-only text fields hold codes and links to copy; a read-only email is just shown, quietly. */
 input[type=text][readonly]{font-family:${MONO};font-size:13.5px;background:var(--code-bg)}
-input[type=email][readonly]{background:var(--bg-subtle);color:var(--muted)}
+input[type=email][readonly]{color:var(--muted);border-style:dashed}
 input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;height:16px;margin:0 8px 0 0;vertical-align:-3px}
 .check{display:flex;align-items:flex-start;gap:8px;font-weight:450;margin:12px 0}
 /* The box sits on the middle of the first text line; the gap alone spaces it from the text. */
@@ -101,8 +101,9 @@ input[type=checkbox],input[type=radio]{accent-color:var(--accent);width:16px;hei
 .card>h2:first-child,.card>h3:first-child{margin-top:0}
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;flex-wrap:wrap}
 .card-head h2,.card-head h3{margin:0}
-/* The head's action stays on the right, also when a narrow screen moves it under the title. */
+/* The head's action stays on the right of the title, also on a phone: the title wraps instead. */
 .card-head>:last-child:not(:first-child){margin-left:auto}
+@media (max-width:640px){.card-head{flex-wrap:nowrap;align-items:flex-start}.card-head>:first-child{min-width:0;flex:1 1 auto}.card-head>:last-child:not(:first-child){flex:none;max-width:50%;text-align:right}}
 .panel{background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
 .warning,.notice{background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:10px;padding:10px 14px;margin:12px 0;color:var(--text)}
 .notice.info{background:var(--accent-soft);border-color:var(--accent)}
@@ -130,8 +131,9 @@ strong+.badge,.badge+.badge{margin-left:6px}
 ul.plain,ol.plain{list-style:none;padding:0;margin:0}
 ul.plain>li,ol.plain>li{padding:12px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;align-items:center}
 ul.plain>li:first-child,ol.plain>li:first-child{border-top:0}
-/* On a phone a row whose label and value do not fit side by side puts the value on its own line. */
-@media (max-width:640px){ul.plain>li,ol.plain>li{flex-wrap:wrap;gap:4px 12px}}
+/* On a phone a row of label and quiet text value (not a button) puts the value on its own line,
+   the same in every row of the list, so long labels are not squeezed into one word per line. */
+@media (max-width:640px){:is(ul,ol).plain>li:has(>.muted:last-child:not(:first-child)){flex-wrap:wrap;gap:2px 12px}:is(ul,ol).plain>li:has(>.muted:last-child:not(:first-child))>:first-child{flex:1 1 100%}}
 ul.bullets{margin:4px 0 12px;padding-left:20px}
 ul.bullets li+li{margin-top:4px}
 .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -143,6 +145,7 @@ th{color:var(--muted);font-weight:560;font-size:12.5px;border-top:0;background:v
 tbody tr:hover td{background:var(--bg-subtle)}
 table.kv th{background:none;width:38%;font-size:13px;vertical-align:top}
 table.kv td,table.kv th{padding:8px 0}
+table.kv th{padding-right:16px}
 pre.args,pre.block{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto}
 
 /* Copy field */
@@ -168,7 +171,7 @@ html:not(.js) .tabs-nojs-title{display:block;margin-top:20px}
 
 /* Meter */
 .meter{height:8px;border-radius:99px;background:var(--bg-subtle);border:1px solid var(--border);overflow:hidden}
-.meter+*{margin-top:16px}
+.meter+p{margin-top:16px}
 .meter>span{display:block;height:100%;background:var(--accent);border-radius:99px;min-width:2px}
 .meter.ok>span{background:var(--ok)}
 .meter.bad>span{background:var(--danger)}

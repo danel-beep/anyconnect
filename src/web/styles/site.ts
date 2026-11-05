@@ -143,17 +143,21 @@ p{text-wrap:pretty}
 
 /* Services grid */
 .svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
-.svc{display:flex;align-items:flex-start;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);text-decoration:none;transition:border-color .15s,transform .15s}
+.svc{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);text-decoration:none;transition:border-color .15s,transform .15s}
+/* A card with a description starts at the top, so titles line up across a row. */
+.svc:has(.meta){align-items:flex-start}
 a.svc:hover{border-color:var(--border-strong);text-decoration:none;transform:translateY(-1px)}
 .svc .name{font-weight:580;display:block}
 .svc .meta{font-size:12.5px;color:var(--muted);display:block}
 /* Services page: categories flow like a newspaper (CSS columns), so a short category does not leave a
-   tall empty gap next to a long one; a category is never split between columns. */
+   tall empty gap next to a long one; a long category may continue in the next column, but its title
+   stays with its first card and a card is never split. */
 .svc-cats{columns:260px 4;column-gap:12px;margin-top:32px}
-.svc-cats>[data-filter-group]{break-inside:avoid;display:flow-root;margin:0 0 28px}
+.svc-cats>[data-filter-group]{display:flow-root;margin:0 0 28px}
+.svc-cats .cat-title{break-after:avoid}
+.svc-cats .svc{break-inside:avoid}
 .svc-cats .cat-title{margin-top:0}
 .svc-cats .svc-grid{grid-template-columns:1fr}
-.svc-cats .svc{min-height:92px}
 /* Not connectable yet: one quiet row of chips under the grid */
 .roadmap-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .road{display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border:1px dashed var(--border-strong);border-radius:999px;color:var(--muted);font-size:13.5px;line-height:1.2;text-decoration:none}
@@ -198,6 +202,7 @@ html:not(.js) .when-year{display:none}
 .plan .btn{margin-top:auto}
 @media (max-width:1060px){.plans{grid-template-columns:1fr 1fr}}
 @media (max-width:600px){.plans{grid-template-columns:1fr}}
+.compare{table-layout:fixed}
 .compare th,.compare td{text-align:center}
 .compare th:first-child,.compare td:first-child{text-align:left}
 .compare td svg{width:18px;height:18px;vertical-align:middle;color:var(--accent-ink)}

@@ -395,11 +395,13 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
             <span class="muted small">/ {limitText(usage.actions.limit)}</span>
           </div>
           <Meter used={usage.actions.used} limit={usage.actions.limit} label={t('app.usage.actions')} />
+          {/* Two short lines rather than one joined by "·", which breaks badly in a narrow card. */}
           <div class="sub">
             <a href="/app/billing">
               {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
             </a>
-            {' · '}
+          </div>
+          <div class="sub">
             {usage.actions.limit === null
               ? t('app.usage.noLimit')
               : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}

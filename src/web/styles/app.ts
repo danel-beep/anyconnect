@@ -39,6 +39,9 @@ export const APP_SHELL_CSS = `
 /* Stats */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;min-width:0}
+/* Cards side by side share their rows (subgrid): a label that wraps in one card does not push only
+   that card's number lower than its neighbour's. */
+.stat{display:grid;grid-row:span 5;grid-template-rows:subgrid;row-gap:0;align-content:start}
 .stat .label{font-size:13px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .stat .value{font-size:26px;font-weight:640;letter-spacing:-.03em;margin:6px 0 2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 /* Words rather than a number (a plan, "two-step sign-in on"): smaller, so they fit a half-width card. */
@@ -266,7 +269,9 @@ ul.plain.pad-x{padding:0 24px 6px}
 .filters button{min-height:42px}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid var(--border);font-size:13px;color:var(--muted)}
 .user-cell{display:flex;align-items:center;gap:10px;min-width:0}
-.user-cell a{font-weight:560;color:var(--text);text-decoration:none;overflow-wrap:anywhere;min-width:0}
+.user-cell a{font-weight:560;color:var(--text);text-decoration:none;min-width:0}
+/* In a list (not a table, which scrolls) a long email may break rather than run into the time. */
+.plain .user-cell a{overflow-wrap:anywhere}
 .user-cell a:hover{text-decoration:underline}
 .inline-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
 .inline-form label{margin:0 0 6px}
@@ -402,18 +407,16 @@ select.narrow{max-width:320px}
 .reauth-row .small{flex:1 1 220px}
 .lock-group{border:0;margin:0;padding:0;min-width:0}
 .lock-group:disabled .card{opacity:.6}
-/* Passkeys: one row per key; "Add" sits in the card head and says what failed right under it */
-.pk-add{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin:0}
-.pk-add .error{margin:0;font-size:13px;text-align:right;max-width:340px}
-.pk-list{border-top:1px solid var(--border);margin-top:14px}
-.pk-empty{padding:12px 24px 20px}
+/* Passkeys: one row per key inside the card; "Add" sits under the list like the other cards' actions */
+.pk-list{border-top:1px solid var(--border);margin:14px 0 16px}
+.pk-list .pk.acc{padding:12px 0}
+.pk-list .pk.acc:last-child{border-bottom:1px solid var(--border)}
 .pk .pk-name{overflow-wrap:anywhere}
 .pk .sub{white-space:normal}
 .pk{scroll-margin-top:16px}
-.pk.acc{padding:14px 24px}
 .pk:target{animation:pk-new 2.4s ease-out}
 @keyframes pk-new{from{background:var(--accent-soft)}to{background:transparent}}
-@media (max-width:640px){.pk-add{align-items:stretch;width:100%}.pk-add .error{text-align:left}.pk.acc{grid-template-columns:auto minmax(0,1fr) auto}.pk.acc .ops{grid-column:auto}}
+@media (max-width:640px){.pk.acc{grid-template-columns:auto minmax(0,1fr) auto}.pk.acc .ops{grid-column:auto}}
 .chart{position:relative}
 .chart-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13.5px}
 .error-list>li+li{border-top:1px solid var(--border)}
