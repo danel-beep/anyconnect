@@ -343,7 +343,11 @@ const limitText = (t: Translate, lang: string, metric: Metric, value: number | n
  * from sign-up they last.
  */
 /** The Free plan's start: the trial, then a monthly allowance that steps down to the plan's own. */
-function startText(t: Translate, lang: string, plan: Plan): { days: number; plan: string; steps: string } {
+function startText(
+  t: Translate,
+  lang: string,
+  plan: Plan,
+): { days: number; plan: string; steps: string; months: number } {
   const start = plan.start!;
   const steps = start.steps.flatMap((s) =>
     typeof s.limits.actions === 'number' ? [{ n: s.limits.actions, untilDay: s.untilDay }] : [],
@@ -354,6 +358,7 @@ function startText(t: Translate, lang: string, plan: Plan): { days: number; plan
     steps: steps
       .map((s) => t('plan.metric.stepMonth', { n: fmtNumber(lang, s.n), m: Math.ceil(s.untilDay / 30) }))
       .join(', '),
+    months: Math.ceil(Math.max(0, ...steps.map((s) => s.untilDay)) / 30),
   };
 }
 
@@ -371,19 +376,17 @@ export const PlanCard: FC<{
     'actions',
     'accounts',
     'historyDays',
-    ...(plan.perSeat !== undefined || (plan.limits.seats ?? 1) > 1 ? (['seats'] as const) : []),
+    ...(plan.perSeat === undefined && (plan.limits.seats ?? 1) > 1 ? (['seats'] as const) : []),
   ];
   const perSeat = plan.perSeat;
   const featureText = (metric: Metric): string => {
     if (metric === 'actions' && start)
       return t('plan.metric.actionsSteps', {
         n: fmtNumber(lang, plan.limits.actions ?? 0),
-        steps: start.steps,
+        months: start.months,
       });
     if (perSeat && metric === 'actions' && plan.limits.actions !== null)
       return t('plan.metric.actionsPerSeat', { n: fmtNumber(lang, plan.limits.actions) });
-    if (perSeat && metric === 'seats')
-      return t('plan.metric.seatsRange', { min: perSeat.min, max: perSeat.max });
     return limitText(t, lang, metric, plan.limits[metric]);
   };
   return (
@@ -426,10 +429,18 @@ export const PlanCard: FC<{
           // A per-person price next to personal plans: say what the smallest team pays.
           <div class="price-year">
             <span class="when-month">
-              {t('pricing.minTeam', { n: perSeat.min, price: usd(perSeat.min * plan.priceMonthly) })}
+              {t('pricing.teamSize', {
+                min: perSeat.min,
+                max: perSeat.max,
+                price: usd(perSeat.min * plan.priceMonthly),
+              })}
             </span>
             <span class="when-year">
-              {t('pricing.minTeam', { n: perSeat.min, price: usd((perSeat.min * plan.priceYearly) / 12) })}
+              {t('pricing.teamSize', {
+                min: perSeat.min,
+                max: perSeat.max,
+                price: usd((perSeat.min * plan.priceYearly) / 12),
+              })}
             </span>
           </div>
         ) : null}

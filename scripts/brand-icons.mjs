@@ -29,7 +29,7 @@ const SLUGS = [
   'shopify',
   'airtable',
   'discord',
-  'zoom',
+  // Not 'zoom': simple-icons has only Zoom's wordmark, unreadable in a logo tile (a letter mark is in brand-monograms.ts).
   'dropbox',
   'asana',
   'clickup',

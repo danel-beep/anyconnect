@@ -11,7 +11,7 @@ export const SITE_CSS = `
 .site-header .wrap{display:flex;align-items:center;gap:24px;height:64px}
 .site-nav{display:flex;gap:4px;margin-right:auto}
 .site-nav a{color:var(--muted);text-decoration:none;font-weight:520;font-size:14px;padding:8px 10px;border-radius:8px}
-.site-nav a:hover,.site-nav a[aria-current=page]{color:var(--text);background:var(--bg-subtle)}
+.site-nav a:hover,.site-nav a[aria-current]{color:var(--text);background:var(--bg-subtle)}
 .site-cta{display:flex;align-items:center;gap:8px}
 .menu-btn{display:none}
 .nav-extra{display:none}
@@ -99,7 +99,7 @@ a.road:hover{color:var(--text);border-style:solid;text-decoration:none}
 html:not(.js) .billing-switch{display:none}
 .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:stretch}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:16px;position:relative}
-@supports (grid-template-rows:subgrid){.plans{grid-auto-rows:auto auto 1fr auto}.plan{display:grid;grid-row:span 4;grid-template-rows:subgrid;row-gap:16px}}
+@supports (grid-template-rows:subgrid){.plan{display:grid;grid-row:span 4;grid-template-rows:subgrid;row-gap:16px}}
 .plan.featured{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .plan .tag{position:absolute;top:-11px;left:20px;background:var(--accent);color:var(--accent-text);font:600 11px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:6px 8px}
 .plan h3{font-size:18px;margin:0}
@@ -117,7 +117,7 @@ html:not(.js) .when-year{display:none}
 .plan li.off svg{color:var(--muted)}
 .plan .btn{margin-top:auto}
 @media (max-width:1060px){.plans{grid-template-columns:1fr 1fr}}
-@media (max-width:600px){.plans{grid-template-columns:1fr}}
+@media (max-width:600px){.plans{grid-template-columns:1fr}.plan .for{min-height:0}}
 .compare th,.compare td{text-align:center}
 .compare th:first-child,.compare td:first-child{text-align:left}
 .compare td svg{width:18px;height:18px;vertical-align:middle;color:var(--accent-ink)}

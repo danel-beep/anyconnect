@@ -54,7 +54,7 @@ export const LANDING_CSS = `
 .demo-avatar svg{width:15px;height:15px;fill:currentColor}
 .demo-status{display:inline-flex;align-items:center;gap:6px;font-weight:500;font-size:12px;color:var(--muted);padding:5px 9px;border-radius:999px;background:var(--bg-subtle)}
 .demo-body{padding:18px 20px 16px;display:flex;flex-direction:column;gap:10px}
-.demo .msg{max-width:88%;padding:10px 14px;border-radius:14px;line-height:1.5}
+.demo .msg{max-width:88%;padding:10px 14px;border-radius:14px;line-height:1.5;text-wrap:pretty}
 .demo .msg.user{align-self:flex-end;background:var(--bg-subtle);border:1px solid var(--border);border-bottom-right-radius:4px}
 .demo .msg.ai{align-self:stretch;max-width:none;padding:2px 0 0;position:relative}
 .call{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font:450 12.5px/1.4 ${MONO};background:var(--code-bg)}
@@ -76,8 +76,16 @@ export const LANDING_CSS = `
 .approve .approved{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;background:var(--ok-soft);color:var(--ok);font-weight:600;font-size:13px}
 .approve .approved svg{width:15px;height:15px;stroke-width:2.6}
 .demo .typing{position:absolute;left:0;top:8px;width:30px;height:8px;opacity:0;background:radial-gradient(circle,var(--muted) 3px,transparent 3.6px) 0 0/10px 8px repeat-x}
+.demo-replay{display:none;width:30px;height:30px;min-height:0;padding:0;border:0;background:transparent;color:var(--muted);border-radius:8px}
+.demo-replay:hover{color:var(--text);background:var(--bg-subtle)}
+.demo-replay svg{width:15px;height:15px}
+.step-guides{display:inline-flex;align-items:center;gap:6px;margin-top:16px;font-size:14px;font-weight:560;color:var(--accent-ink);text-decoration:none}
+.step-guides:hover{text-decoration:underline}
+.step-guides svg{width:14px;height:14px}
 .demo-input{display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;color:var(--muted);font-size:14px;opacity:.6;user-select:none}
 .demo-input svg{width:16px;height:16px;flex:none}
+/* Where the chat card is narrow (two-column hero on small laptops, phones), results go under their call */
+@media (min-width:961px) and (max-width:1180px){.call{grid-template-columns:auto minmax(0,1fr)}.call .res{grid-column:2}}
 @media (max-width:520px){.demo-body{padding:16px 14px}.call{grid-template-columns:auto minmax(0,1fr)}.call .res{grid-column:2}}
 
 /* Works with */
@@ -141,7 +149,7 @@ export const LANDING_CSS = `
   .hubmap-col{width:100%;max-width:560px;margin:0 auto}
   .hubmap-col.clients{flex-direction:row;flex-wrap:wrap;justify-content:center}
   .hubmap-col.clients{max-width:720px}
-  .hubmap-col.clients::after,.hubmap-col.services::before{content:"";align-self:center;height:0;border-top:2px dashed color-mix(in srgb,var(--accent) 80%,transparent)}
+  .hubmap-col.clients::after,.hubmap-col.services::before{content:"";align-self:center;height:0;border-top:2px solid rgba(255,255,255,.24)}
   /* 64% wide plus 18% margins on each side fills the line, so the rail always starts a row of its own */
   .hubmap-col.clients::after{flex:0 0 64%;margin:12px 18% 0}
   .hubmap-col.services::before{flex:none;width:64%;margin-bottom:12px}
@@ -149,7 +157,7 @@ export const LANDING_CSS = `
   .hubmap-col.clients .node{width:auto;height:40px;border-radius:999px}
   .hubmap-col.services .node{height:42px}
   .hub-core{position:relative;margin:36px auto}
-  .hub-core::before,.hub-core::after{content:"";position:absolute;left:50%;width:2px;height:36px;margin-left:-1px;background:repeating-linear-gradient(var(--accent) 0 4px,transparent 4px 8px)}
+  .hub-core::before,.hub-core::after{content:"";position:absolute;left:50%;width:2px;height:36px;margin-left:-1px;background:rgba(255,255,255,.24)}
   .hub-core::before{bottom:100%}
   .hub-core::after{top:100%}
   .versus{grid-template-columns:1fr;margin-top:40px}
@@ -210,6 +218,7 @@ export const LANDING_CSS = `
 .own-servers{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
 .own-server{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--code-bg);font:450 12.5px/1.3 ${MONO}}
 .own-server .kind{font:600 11px/1 ${MONO};letter-spacing:.04em;color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));background:var(--card);border-radius:6px;padding:4px 6px;min-width:42px;text-align:center}
+@media (max-width:480px){.own-server .ok-pill{padding:6px}.own-server .ok-pill .word{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}}
 .own-server .url{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .ok-pill{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 ${SANS};color:var(--ok);background:var(--ok-soft);border-radius:999px;padding:5px 9px}
 .bars{display:flex;flex-direction:column;gap:10px;font-size:13px}
@@ -247,7 +256,7 @@ export const LANDING_CSS = `
 .sec-icon svg{width:18px;height:18px}
 .sec-list h3{font-size:15.5px;margin:2px 0 4px}
 .sec-list p{margin:0;color:var(--muted);font-size:14px}
-.log-card{background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 30px 60px -40px rgba(0,0,0,.45);overflow:hidden}
+.log-card{align-self:center;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:0 30px 60px -40px rgba(0,0,0,.45);overflow:hidden}
 .log-head{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px}
 .log-head svg{width:16px;height:16px;color:var(--accent-ink)}
 .log-card ol{list-style:none;margin:0;padding:4px 0}
@@ -302,12 +311,14 @@ export const LANDING_CSS = `
   /* The chat plays its request once: the question is there from the first paint, the AI works,
      asks, the Allow button is pressed and the card settles into "Approved by you". */
   .demo .step:not(.s1){animation:lp-step .45s cubic-bezier(.2,.7,.2,1) backwards}
-  .demo .step.s2{animation-delay:.4s}.demo .step.s3{animation-delay:.75s}.demo .step.s4{animation-delay:1.1s}.demo .step.s5{animation-delay:3.1s}.demo .step.s6{animation-delay:3.4s}
-  .demo .approve .btns{animation:lp-hold 2.9s linear}
-  .demo .approve .yes{animation:lp-press .9s ease 1.9s backwards}
-  .demo .approve .approved{animation:lp-fade .3s ease 2.9s backwards}
-  .demo .typing{animation:lp-typing .7s linear 3.4s backwards,lp-dots .5s ease-in-out 3.4s 2}
-  .demo .s6 .text{animation:lp-fade .4s ease 4s backwards}
+  .demo .step.s2{animation-delay:.4s}.demo .step.s3{animation-delay:.75s}.demo .step.s4{animation-delay:1.1s}.demo .step.s5{animation-delay:3.6s}.demo .step.s6{animation-delay:3.9s}
+  .demo .approve .btns{animation:lp-hold 3.4s linear}
+  .demo .approve .yes{animation:lp-press .9s ease 2.4s backwards}
+  .demo .approve .approved{animation:lp-fade .3s ease 3.4s backwards}
+  .demo .typing{animation:lp-typing .7s linear 3.9s backwards,lp-dots .5s ease-in-out 3.9s 2}
+  .demo .s6 .text{animation:lp-fade .4s ease 4.5s backwards}
+  .js .demo-replay{display:inline-grid;place-items:center;animation:lp-fade .3s ease 5s backwards}
+  .demo.replay,.demo.replay *{animation:none!important}
   .reveal .demo:not(.in) *{animation-play-state:paused}
   /* Sections rise in once as they come into view */
   .reveal [data-reveal=""]:not(.in),.reveal [data-reveal=kids]:not(.in)>*{opacity:0}
@@ -325,16 +336,16 @@ export const LANDING_CSS = `
   .reveal .bento.in .ok-pill{animation:lp-fade .4s ease 1s backwards}
   /* The hub: packets run along the wires while it is on screen */
   /* Three requests in a 7.2s loop: Claude → Gmail work, ChatGPT → Slack client, Cursor → GitHub */
-  .w-in .p1,.w-in .p2,.w-in .p3,.w-out .p1,.w-out .p2,.w-out .p4{animation:lp-route 7.2s cubic-bezier(.45,0,.55,1) infinite}
-  .hubmap .clients li:nth-child(-n+3) .node,.hubmap .services li:nth-child(1) .map-acc:first-child,.hubmap .services li:nth-child(2) .map-acc:last-child,.hubmap .services li:nth-child(4) .node{animation:lp-hit 7.2s ease infinite}
+  .w-in .p1,.w-in .p2,.w-in .p3,.w-out .p1,.w-out .p2,.w-out .p4{animation:lp-route 7.2s cubic-bezier(.45,0,.55,1) 3}
+  .hubmap .clients li:nth-child(-n+3) .node,.hubmap .services li:nth-child(1) .map-acc:first-child,.hubmap .services li:nth-child(2) .map-acc:last-child,.hubmap .services li:nth-child(4) .node{animation:lp-hit 7.2s ease 3}
   .w-in .p2,.hubmap .clients li:nth-child(2) .node{animation-delay:2.4s}
   .w-in .p3,.hubmap .clients li:nth-child(3) .node{animation-delay:4.8s}
   .w-out .p1{animation-delay:.95s}.w-out .p2{animation-delay:3.35s}.w-out .p4{animation-delay:5.75s}
   .hubmap .services li:nth-child(1) .map-acc:first-child{animation-delay:1.7s}
   .hubmap .services li:nth-child(2) .map-acc:last-child{animation-delay:4.1s}
   .hubmap .services li:nth-child(4) .node{animation-delay:6.5s}
-  .core-glow{animation:lp-glow 2.4s ease-in-out infinite}
+  .core-glow{animation:lp-glow 2.4s ease-in-out 9 forwards}
   .reveal [data-live]:not(.live) *{animation-play-state:paused}
-  .cta-band.glow::before{animation:lp-drift 14s ease-in-out infinite alternate}
+  .cta-band.glow::before{animation:lp-drift 14s ease-in-out 2 alternate}
 }
 `;

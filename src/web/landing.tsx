@@ -1,4 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
+import { DEFAULT_PLAN_ID, getPlan } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import { arrangeCatalog, serviceMeta } from './catalog.js';
 import { CLIENT_GUIDES, type ClientGuide } from './clients.js';
@@ -69,7 +70,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       <Steps ctx={ctx} />
       <Features t={t} />
       <Security ctx={ctx} />
-      <section class="section border" id="pricing">
+      <section class="section" id="pricing">
         <div class="wrap">
           <SectionHead eyebrow={t('landing.pricing.eyebrow')} title={t('landing.pricing.title')}>
             {t('landing.pricing.lead')}
@@ -79,7 +80,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
           </div>
         </div>
       </section>
-      <section class="section border" id="faq">
+      <section class="section subtle" id="faq">
         <div class="wrap faq-layout">
           <div>
             <SectionHead eyebrow={t('landing.faq.eyebrow')} title={t('landing.faq.title')} />
@@ -151,7 +152,7 @@ const Hero: FC<{ ctx: PageCtx; more: number }> = ({ ctx, more }) => {
               <Icon name="check" /> {t('landing.note.free')}
             </li>
             <li>
-              <Icon name="check" /> {t('landing.note.fast')}
+              <Icon name="check" /> <TrialNote t={t} />
             </li>
             <li>
               <Icon name="check" /> {t('landing.note.encrypted')}
@@ -164,22 +165,44 @@ const Hero: FC<{ ctx: PageCtx; more: number }> = ({ ctx, more }) => {
   );
 };
 
+/** The trial a new account starts with, from the Free plan itself (none if the plan drops it). */
+const freeTrial = (t: Translate) => {
+  const trial = getPlan(DEFAULT_PLAN_ID).start?.trial;
+  return trial ? { days: trial.days, plan: t(`plan.${trial.plan}.name` as 'plan.free.name') } : undefined;
+};
+
+/** "First 14 days on Pro"; plain "five-minute setup" without a trial. */
+const TrialNote: FC<{ t: Translate }> = ({ t }) => {
+  const trial = freeTrial(t);
+  return <>{trial ? t('landing.note.trial', trial) : t('landing.note.fast')}</>;
+};
+
+const Step1Text: FC<{ t: Translate }> = ({ t }) => {
+  const trial = freeTrial(t);
+  return <>{trial ? t('landing.step1.text', trial) : t('landing.step1.plain')}</>;
+};
+
 /**
  * A chat that plays one request: a search, a read, a question to the user that they approve, the
  * send and the answer. Its final (static) state shows the request already approved.
  */
 const DemoChat: FC<{ t: Translate }> = ({ t }) => (
-  <div class="demo" role="img" aria-label={t('landing.demo.label')} data-reveal="play">
+  <div class="demo" data-reveal="play">
     <div class="demo-bar">
-      <span class="demo-avatar">
+      <span class="demo-avatar" aria-hidden="true">
         <BrandIcon slug="claude" />
       </span>
-      <strong class="grow">{t('landing.demo.title')}</strong>
-      <span class="demo-status">
+      <strong class="grow" aria-hidden="true">
+        {t('landing.demo.title')}
+      </strong>
+      <span class="demo-status" aria-hidden="true">
         <span class="dot ok" /> {t('landing.demo.connected')}
       </span>
+      <button type="button" class="icon-btn demo-replay" data-replay aria-label={t('landing.demo.replay')}>
+        <Icon name="refresh" />
+      </button>
     </div>
-    <div class="demo-body">
+    <div class="demo-body" role="img" aria-label={t('landing.demo.label')}>
       <div class="msg user step s1">{t('landing.demo.ask')}</div>
       <div class="call step s2">
         <Icon name="check" />
@@ -331,7 +354,7 @@ const HubMap: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <span class="core-glow" aria-hidden="true" />
             <BrandMark />
             <strong>{BRAND.name}</strong>
-            <span class="mono">{t('landing.map.core')}</span>
+            <span class="mono">{ctx.mcpUrl.replace(/^https?:\/\//, '')}</span>
           </div>
           <Wires count={services.length} side="out" />
           <ul class="hubmap-col services">
@@ -393,7 +416,9 @@ const Steps: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <li class="step-card">
             <span class="n">01</span>
             <h3>{t('landing.step1.title')}</h3>
-            <p>{t('landing.step1.text')}</p>
+            <p>
+              <Step1Text t={t} />
+            </p>
             <div class="visual">
               <span class="signed">
                 <Icon name="check" /> {t('landing.step1.visual')}
@@ -426,6 +451,9 @@ const Steps: FC<{ ctx: PageCtx }> = ({ ctx }) => {
               </div>
               <div class="prompt-pill">{t('landing.step3.prompt')}</div>
             </div>
+            <a class="step-guides" href={localizedPath('/docs', ctx.lang)}>
+              {t('landing.step3.guides')} <Icon name="arrow" />
+            </a>
           </li>
         </ol>
         <div class="steps-cta" data-reveal>
@@ -551,7 +579,7 @@ const Features: FC<{ t: Translate }> = ({ t }) => (
                 <span class="kind">{kind}</span>
                 <span class="url">{url}</span>
                 <span class="ok-pill">
-                  <span class="dot ok" /> {t('landing.f.api.status')}
+                  <span class="dot ok" /> <span class="word">{t('landing.f.api.status')}</span>
                 </span>
               </li>
             ))}
@@ -660,7 +688,7 @@ const LOG: {
 ];
 
 const Security: FC<{ ctx: PageCtx }> = ({ ctx: { t, lang } }) => (
-  <section class="section border subtle" id="security">
+  <section class="section subtle" id="security">
     <div class="wrap">
       <SectionHead eyebrow={t('landing.security.eyebrow')} title={t('landing.security.title')}>
         {t('landing.security.lead')}

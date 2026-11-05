@@ -1,7 +1,7 @@
 /**
- * Letter marks for services whose logos are not in simple-icons (`brand-icons.ts`): one or two
- * letters in the brand's colour, so similar services stay apart in lists instead of sharing a
- * generic icon. Use the key as `icon` in `SERVICE_META`; colours come out as `.bi-<key>` classes
+ * Letter marks for services whose logos are not in simple-icons (`brand-icons.ts`) or are only a
+ * wordmark there: one or two letters in the brand's colour, so similar services stay apart in
+ * lists instead of sharing a generic icon. Use the key as `icon` in `SERVICE_META`; colours come out as `.bi-<key>` classes
  * like the real marks (see `styles/brands.ts`).
  */
 export interface BrandMonogram {
@@ -13,6 +13,8 @@ export interface BrandMonogram {
 export const BRAND_MONOGRAMS: Record<string, BrandMonogram> = {
   // Slack's own mark is not in simple-icons: its hash in Slack's aubergine.
   slack: { text: '#', hex: '#4A154B' },
+  // simple-icons has only Zoom's wordmark, too small to read in a logo tile.
+  zoom: { text: 'Z', hex: '#0B5CFF' },
   outlook: { text: 'O', hex: '#0078D4' },
   monday: { text: 'M', hex: '#FF3D57' },
   smartsheet: { text: 'S', hex: '#0073EC' },

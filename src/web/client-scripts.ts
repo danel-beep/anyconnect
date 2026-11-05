@@ -33,7 +33,8 @@ tabs.forEach(function(t,i){t.addEventListener('click',function(){show(t.getAttri
 var saved=key&&store('ac-tab-'+key);if(saved&&tabs.some(function(t){return t.getAttribute('data-tab')===saved}))show(saved,false);else if(tabs[0])show(tabs[0].getAttribute('data-tab'),false)});
 
 /* Mobile navigation */
-function setNav(open){root.classList.toggle('nav-open',open);$$('[data-nav-toggle]').forEach(function(b){b.setAttribute('aria-expanded',open?'true':'false')})}
+function setNav(open){root.classList.toggle('nav-open',open);$$('[data-nav-toggle]').forEach(function(b){b.setAttribute('aria-expanded',open?'true':'false')});
+$$('main,footer').forEach(function(el){if(!el.querySelector('.site-nav,.sidebar'))el.inert=open})}
 /* Opening moves focus into the menu; tabbing out of it or Escape closes it (Escape returns to the button) */
 $$('[data-nav-toggle]').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();var open=!root.classList.contains('nav-open');setNav(open);var first=open&&d.querySelector('.site-nav a,.sidebar a');if(first&&first.offsetParent)first.focus()})});
 d.addEventListener('focusin',function(e){if(root.classList.contains('nav-open')&&!(e.target.closest&&e.target.closest('.sidebar,.site-nav,[data-nav-toggle]')))setNav(false)});
@@ -55,6 +56,16 @@ var onSeen=function(es,obs){es.forEach(function(e){if(e.isIntersecting){e.target
 var seen=new IntersectionObserver(onSeen,{rootMargin:'0px 0px -8% 0px'}),play=new IntersectionObserver(onSeen,{threshold:0.5});
 var live=new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('live',e.isIntersecting)})});
 els.forEach(function(el){if(el.hasAttribute('data-reveal')&&!el.classList.contains('in'))(el.getAttribute('data-reveal')==='play'?play:seen).observe(el);if(el.hasAttribute('data-live'))live.observe(el)})})();
+
+/* Replay: drop the chat's animations for one frame so they start over */
+$$('[data-replay]').forEach(function(b){b.addEventListener('click',function(){var box=b.closest('.demo');if(!box)return;box.classList.add('replay');void box.offsetWidth;box.classList.remove('replay')})});
+
+/* On the landing the header links are anchors: the one for the section in view gets aria-current */
+(function(){var links=$$('.site-nav a[href^="#"]');if(!links.length||!('IntersectionObserver' in window))return;
+var byId={};links.forEach(function(a){var s=d.getElementById(a.getAttribute('href').slice(1));if(s)byId[s.id]=a});
+var vis={},spy=new IntersectionObserver(function(es){es.forEach(function(e){vis[e.target.id]=e.isIntersecting});
+var cur=Object.keys(byId).filter(function(id){return vis[id]})[0];links.forEach(function(x){if(cur&&byId[cur]===x)x.setAttribute('aria-current','true');else x.removeAttribute('aria-current')})},{rootMargin:'-40% 0px -55% 0px'});
+Object.keys(byId).forEach(function(id){spy.observe(d.getElementById(id))})})();
 
 /* Monthly / yearly prices */
 $$('[data-interval-root]').forEach(function(box){$$('[data-interval-set]',box).forEach(function(b){b.addEventListener('click',function(){var v=b.getAttribute('data-interval-set');box.setAttribute('data-interval',v);$$('[data-interval-set]',box).forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});$$('[data-interval-input]',box).forEach(function(i){i.value=v})})})});
