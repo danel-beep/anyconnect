@@ -5,8 +5,8 @@ import { MONO } from '../assets.js';
  * the ready texts to copy (`CopyText`).
  */
 export const TEAMS_CSS = `
-.onboard.two{grid-template-columns:repeat(2,1fr)}
-@media (max-width:900px){.onboard.two{grid-template-columns:1fr}}
+.onboard-steps.two{grid-template-columns:repeat(2,1fr)}
+@media (max-width:900px){.onboard-steps.two{grid-template-columns:1fr}}
 
 .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin:0 0 16px}
 .team-tile{display:flex;align-items:center;gap:14px;padding:18px 20px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);text-decoration:none;min-width:0}

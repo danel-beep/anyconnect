@@ -554,6 +554,54 @@ export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ 
   );
 };
 
+export interface SetupStep {
+  done: boolean;
+  title: string;
+  text: string;
+  href: string;
+  /** What the link does ("Choose a service"), shown while the step is left to do. */
+  cta?: string;
+}
+
+/**
+ * "Getting started": numbered steps with progress; the first step left to do is highlighted.
+ * Shared by the overview and a team's page.
+ */
+export const SetupSteps: FC<{ ctx: PageCtx; steps: SetupStep[] }> = ({ ctx, steps }) => {
+  const { t } = ctx;
+  const done = steps.filter((s) => s.done).length;
+  const current = steps.findIndex((s) => !s.done);
+  return (
+    <section class="onboard" aria-labelledby="onboard-title">
+      <div class="onboard-head">
+        <h2 id="onboard-title">{t('app.onb.title')}</h2>
+        <span class="onboard-count">{t('app.onb.progress', { done, total: steps.length })}</span>
+        <Meter used={done} limit={steps.length} label={t('app.onb.title')} />
+      </div>
+      <div class={`onboard-steps${steps.length === 2 ? ' two' : ''}`}>
+        {steps.map((s, i) => (
+          <a
+            class={`onboard-step${s.done ? ' done' : i === current ? ' current' : ''}`}
+            href={s.href}
+            aria-current={i === current ? 'step' : undefined}
+          >
+            <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
+            <span class="onboard-body">
+              <strong>{s.title}</strong>
+              <span>{s.text}</span>
+              {s.done || !s.cta ? null : (
+                <span class="onboard-cta">
+                  {s.cta} <Icon name={s.href.startsWith('#') ? 'chevron' : 'arrow'} />
+                </span>
+              )}
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 export interface OverviewView {
   firstName: string | null;
   welcome: boolean;
@@ -575,7 +623,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
   const { t } = ctx;
   const allDone = view.steps.ai && view.steps.service && view.steps.call;
   // The AI first: once it is connected, services can be connected right from the chat ("Connect my email").
-  const steps: { done: boolean; title: string; text: string; cta: string; href: string }[] = [
+  const steps: SetupStep[] = [
     {
       done: view.steps.ai,
       title: t('app.onb.ai'),
@@ -598,9 +646,6 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
       href: '/docs#services',
     },
   ];
-  const doneCount = steps.filter((s) => s.done).length;
-  /** The first step left to do is highlighted. */
-  const current = steps.findIndex((s) => !s.done);
   return (
     <AppShell ctx={ctx} shell={shell} section="overview" title={t('app.nav.overview')}>
       <PageHead
@@ -622,35 +667,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
         </div>
       ) : null}
       <BrokenAccounts ctx={ctx} accounts={view.accounts} />
-      {allDone ? null : (
-        <section class="onboard" aria-labelledby="onboard-title">
-          <div class="onboard-head">
-            <h2 id="onboard-title">{t('app.onb.title')}</h2>
-            <span class="onboard-count">{t('app.onb.progress', { done: doneCount })}</span>
-            <Meter used={doneCount} limit={steps.length} label={t('app.onb.title')} />
-          </div>
-          <div class="onboard-steps">
-            {steps.map((s, i) => (
-              <a
-                class={`onboard-step${s.done ? ' done' : i === current ? ' current' : ''}`}
-                href={s.href}
-                aria-current={i === current ? 'step' : undefined}
-              >
-                <span class="tick">{s.done ? <Icon name="check" /> : i + 1}</span>
-                <span class="onboard-body">
-                  <strong>{s.title}</strong>
-                  <span>{s.text}</span>
-                  {s.done ? null : (
-                    <span class="onboard-cta">
-                      {s.cta} <Icon name={s.href.startsWith('#') ? 'chevron' : 'arrow'} />
-                    </span>
-                  )}
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      {allDone ? null : <SetupSteps ctx={ctx} steps={steps} />}
       {/* Until an AI app is connected, its address is the main thing on this page. */}
       {view.steps.ai ? null : <ConnectAiCard ctx={ctx} />}
       <UsageStats
@@ -897,21 +914,23 @@ export const ConnectAiCard: FC<{
               {address}
             </div>
           )}
-          <div class="ai-try">
-            <div>
-              <h3>{t('app.ai.tryTitle')}</h3>
-              <p class="hint">{t('app.ai.tryHint')}</p>
+          {profile ? null : (
+            <div class="ai-try">
+              <div>
+                <h3>{t('app.ai.tryTitle')}</h3>
+                <p class="hint">{t('app.ai.tryHint')}</p>
+              </div>
+              <div class="ai-try-list">
+                {TRY_PROMPTS.map((key, i) => (
+                  <button type="button" class="try-chip" data-copy={`#ai-try-${i}`}>
+                    <span id={`ai-try-${i}`}>{t(key)}</span>
+                    <Icon name="copy" class="copy-label" />
+                    <Icon name="check" class="copy-done" />
+                  </button>
+                ))}
+              </div>
             </div>
-            <div class="ai-try-list">
-              {TRY_PROMPTS.map((key, i) => (
-                <button type="button" class="try-chip" data-copy={`#ai-try-${i}`}>
-                  <span id={`ai-try-${i}`}>{t(key)}</span>
-                  <Icon name="copy" class="copy-label" />
-                  <Icon name="check" class="copy-done" />
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
         </>
       )}
     </div>
