@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx', 'eval/**/*.test.ts'],
     // Files run in parallel; each worker has its own Postgres database (see the setup file).
+    globalSetup: ['test/setup/global.ts'],
     setupFiles: ['test/setup/worker-database.ts'],
     // A worker holds 3–5 connections at its peak: more than 8 workers would run into Postgres's
     // default limit of 100 connections on a many-core machine, without making the run faster.

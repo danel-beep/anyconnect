@@ -5,20 +5,21 @@
 
 **Файлы идут параллельно.** Каждый процесс-исполнитель Vitest (не больше 8, на машине с N ядрами —
 N−1) работает со своей базой рядом с `TEST_DATABASE_URL`: `manyplug_test_w1`, `manyplug_test_w2`…
-`test/setup/worker-database.ts` выбирает её до загрузки `test/helpers.ts` и создаёт, если её нет;
-сама база из `TEST_DATABASE_URL` не используется и может не существовать (`npm run test:visual`
-тоже работает в своей `_w1`). Поэтому `resetDatabase()`
+Перед прогоном `test/setup/global.ts` один раз создаёт недостающие базы, а
+`test/setup/worker-database.ts` до загрузки `test/helpers.ts` направляет каждый процесс в его базу.
+Сама база из `TEST_DATABASE_URL` не используется и может не существовать. Поэтому `resetDatabase()`
 в одном файле не мешает файлам в других процессах; `test/test-isolation.test.ts` следит, чтобы так и
-оставалось. Полный прогон — 2–2,5 минуты на 4 ядрах вместо 5,5 при последовательном запуске.
+оставалось. `npm run test:visual` работает в своих базах (`manyplug_test_visual_w1`), так что его
+можно запускать одновременно с `npm test`. Полный прогон — 2–2,5 минуты на 4 ядрах вместо 5,5 при последовательном запуске.
 
-- Роли нужно право `CREATEDB` (или создайте базы `_w1`…`_wN` заранее). Если сервер отказал, setup
-  пишет причину, а тесты без базы всё равно проходят.
+- Роли нужно право `CREATEDB` (или создайте базы `_w1`…`_wN` заранее). Если сервер отказал
+  (нет права, неверный пароль), setup один раз пишет причину, а тесты без базы всё равно проходят.
 - Тест, которому нужна ещё одна база, берёт её имя от своей (`ensureTestDatabase('upstream')` →
   `manyplug_test_w1_upstream`; имена и кавычки — в `test/setup/databases.ts`), а не задаёт
   фиксированное. Так же с портами: только `port: 0` или `freePort()` из `test/helpers.ts`, никаких
   постоянных портов и других общих для машины ресурсов.
 - Базы исполнителей остаются между прогонами (так быстрее). Удалить их:
-  `psql -Atc "select 'drop database ' || quote_ident(datname) || ';' from pg_database where datname ~ '^manyplug_test_w[0-9]'" | psql`.
+  `psql -Atc "select 'drop database ' || quote_ident(datname) || ';' from pg_database where datname ~ '^manyplug_test_(visual_)?w[0-9]'" | psql`.
 - Отладить файлы по одному: `npx vitest run --no-file-parallelism <файлы>`.
 
 **Быстрая проверка во время работы:** `npm run check:fast` — lint, типы и только те тесты, которые
