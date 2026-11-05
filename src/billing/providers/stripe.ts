@@ -38,6 +38,7 @@ const StripeSubscription = z.object({
         z.object({
           id: z.string(),
           current_period_end: z.number().nullish(),
+          quantity: z.number().int().positive().nullish(),
           price: z.object({ id: z.string(), recurring: z.object({ interval: z.string() }).nullish() }),
         }),
       ),
@@ -80,7 +81,7 @@ export class StripeProvider implements BillingProvider {
     const session = await this.api<{ url: string }>('POST', '/v1/checkout/sessions', {
       mode: 'subscription',
       'line_items[0][price]': input.priceId,
-      'line_items[0][quantity]': '1',
+      'line_items[0][quantity]': String(input.quantity),
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       client_reference_id: input.workspaceId,
@@ -107,14 +108,18 @@ export class StripeProvider implements BillingProvider {
     return { url: session.url };
   }
 
-  async changePrice(subscription: ProviderSubscriptionRef, priceId: string): Promise<void> {
+  async changeSubscription(
+    subscription: ProviderSubscriptionRef,
+    change: { priceId: string; quantity: number },
+  ): Promise<void> {
     const path = `/v1/subscriptions/${encodeURIComponent(subscription.externalId)}`;
     const current = StripeSubscription.parse(await this.api('GET', path));
     const item = current.items?.data[0];
     if (!item) throw new BillingProviderError('The Stripe subscription has no items', 400);
     await this.api('POST', path, {
       'items[0][id]': item.id,
-      'items[0][price]': priceId,
+      'items[0][price]': change.priceId,
+      'items[0][quantity]': String(change.quantity),
       proration_behavior: 'create_prorations',
     });
   }
@@ -160,6 +165,7 @@ export class StripeProvider implements BillingProvider {
       externalId: sub.id,
       customerId: typeof sub.customer === 'string' ? sub.customer : (sub.customer?.id ?? null),
       priceId: item?.price.id ?? null,
+      quantity: item?.quantity ?? null,
       interval: interval === 'month' || interval === 'year' ? (interval as BillingInterval) : null,
       status,
       periodEnd: end ? new Date(end * 1000) : null,

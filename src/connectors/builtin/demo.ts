@@ -115,6 +115,7 @@ export default defineConnector({
           .describe('Error kind to simulate'),
       }),
       hints: { readOnly: true, openWorld: false },
+      tags: ['test_only'],
       run: ({ kind }) => {
         throw new ConnectorError(kind, `Simulated ${kind} error from the demo service`);
       },

@@ -1,70 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { googleEmailAuthority, OidcLoginProvider } from '../src/core/external-login.js';
 import { base32Decode, totp } from '../src/lib/totp.js';
+import { FakeOidc } from './fake-oidc.js';
 import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
 /**
  * The website end to end: "Sign in with Google" (against a fake OpenID provider), the dashboard,
  * plan limits and the admin panel's access control and limit grants.
  */
-
-const CLIENT_ID = 'test-client.apps.example';
-const ISSUER = 'https://accounts.example';
-
-type Claims = Record<string, unknown>;
-
-/** A fake OpenID provider: the test decides the ID token's claims for every code it hands out. */
-class FakeOidc {
-  private readonly tokens = new Map<string, Claims>();
-  private counter = 0;
-  readonly provider = new OidcLoginProvider(
-    {
-      id: 'google',
-      name: 'Google',
-      authorizationUrl: `${ISSUER}/auth`,
-      tokenUrl: `${ISSUER}/token`,
-      issuers: [ISSUER],
-      clientId: CLIENT_ID,
-      clientSecret: 'shh',
-      scopes: ['openid', 'email', 'profile'],
-      emailAuthority: googleEmailAuthority,
-    },
-    async (_url, init) => {
-      const code = new URLSearchParams(String(init?.body)).get('code') ?? '';
-      const claims = this.tokens.get(code);
-      this.tokens.delete(code);
-      if (!claims) return Response.json({ error: 'invalid_grant' }, { status: 400 });
-      const part = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url');
-      return Response.json({ id_token: `${part({ alg: 'RS256' })}.${part(claims)}.sig` });
-    },
-  );
-
-  /** Walks /auth/google → provider → callback. Returns the callback response. */
-  async signIn(
-    browser: TestBrowser,
-    claims: Claims,
-    opts: { next?: string; state?: string; nonce?: string } = {},
-  ): Promise<Response> {
-    const start = await browser.request(
-      `/auth/google${opts.next ? `?next=${encodeURIComponent(opts.next)}` : ''}`,
-    );
-    expect(start.status).toBe(302);
-    const url = new URL(start.headers.get('location')!);
-    expect(url.origin + url.pathname).toBe(`${ISSUER}/auth`);
-    expect(url.searchParams.get('code_challenge_method')).toBe('S256');
-    const code = `code-${++this.counter}`;
-    this.tokens.set(code, {
-      iss: ISSUER,
-      aud: CLIENT_ID,
-      exp: Math.floor(Date.now() / 1000) + 600,
-      nonce: opts.nonce ?? url.searchParams.get('nonce'),
-      email_verified: true,
-      ...claims,
-    });
-    const state = opts.state ?? url.searchParams.get('state')!;
-    return browser.request(`/auth/google/callback?state=${encodeURIComponent(state)}&code=${code}`);
-  }
-}
 
 const codeFor = (secret: string, offsetSteps = 0) =>
   totp(base32Decode(secret), Date.now() + offsetSteps * 30_000);
@@ -248,12 +190,23 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const ws = await workspaceOf(bad.id);
     const me = (token: string) =>
       fetch(`${hub.baseUrl}/api/v1/me`, { headers: { authorization: `Bearer ${token}` } });
-    const before = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: bad.id, name: 'a' });
+    const scopes = ['mcp', 'api'] as const;
+    const before = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: bad.id,
+      name: 'a',
+      scopes: [...scopes],
+    });
     expect((await me(before.token)).status).toBe(200);
     await hub.services.users.setStatus(bad.id, 'suspended', 'spam');
     expect((await me(before.token)).status).toBe(401);
     // A token that slipped through (issued in a race with the suspension) does not work either.
-    const late = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: bad.id, name: 'b' });
+    const late = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: bad.id,
+      name: 'b',
+      scopes: [...scopes],
+    });
     expect((await me(late.token)).status).toBe(401);
 
     expect((await browser.request('/app')).status).toBe(302);
@@ -274,7 +227,12 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
       `UPDATE workspaces SET created_at = now() - interval '20 days' WHERE id = $1`,
       [ws.id],
     );
-    const { token } = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: user.id, name: 't' });
+    const { token } = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: user.id,
+      name: 't',
+      scopes: ['mcp', 'api'],
+    });
     const api = async (path: string, method = 'GET', body?: unknown) => {
       const response = await fetch(`${hub.baseUrl}/api/v1${path}`, {
         method,
@@ -526,6 +484,9 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect((await hub.services.entitlements.summary(ws.id)).plan.id).toBe('free');
     expect(await (await admin.request('/admin/audit')).text()).toContain('Запрос тарифа отклонён');
     expect(await (await admin.request('/admin')).text()).not.toContain('Запросы тарифа');
+    const revenue = await (await admin.request('/admin/revenue')).text();
+    expect(revenue).toContain('Выручка и конверсия');
+    expect(revenue).toContain('BILLING_PROVIDER=none');
 
     // Setting a plan closes an open request too.
     await browser.request('/app/billing/request', { form: { csrf: csrf!, plan: 'pro' } });
@@ -621,6 +582,36 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(errors).not.toContain('title="demo_echo"');
     // An unknown account is ignored instead of showing an empty log.
     expect(await log('?account=nope')).toContain('title="demo_account_info"');
+  });
+
+  it('folds the catalog behind popular services and removes the demo accounts in one go', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-svc', email: 'svc@example.com' });
+    const ws = await workspaceOf((await userByEmail('svc@example.com')).id);
+    const add = (connectorId: string, name: string) =>
+      hub.services.accounts.create(ws.id, { connectorId, name, label: name, credentials: { secret: 's' } });
+    await add('demo', 'main');
+    await add('demo', 'second');
+
+    const page = await (await browser.request('/app/services')).text();
+    // A short popular row first, the full list folded under it, the search box opens it.
+    expect(page).toContain('id="popular"');
+    expect(page).toMatch(/<details class="svc-all" id="all-services"/);
+    expect(page).toContain('data-filter-expand="#all-services"');
+    expect(page).toContain('id="add-slack"');
+    // Demo accounts are one folded row, not a group of real accounts; the own-server form is folded too.
+    expect(page).toContain('class="acc acc-sample"');
+    expect(page).not.toContain('class="acc-group"');
+    expect(page).toMatch(/<details class="card fold" id="custom">/);
+
+    const { csrf } = TestBrowser.hiddenInputs(page);
+    const removed = await browser.request('/app/samples/remove', { form: { csrf: csrf! } });
+    expect(removed.status).toBe(303);
+    expect(removed.headers.get('location')).toBe('/app/services');
+    expect(await hub.services.accounts.list(ws.id)).toEqual([]);
+    const after = await (await browser.request('/app/services')).text();
+    expect(after).not.toContain('acc-sample');
+    expect(after).toContain('notice ok');
   });
 
   it('gives the custom MCP form back as filled when the address is wrong', async () => {
@@ -726,6 +717,61 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(await hub.services.personas.list(ws.id)).toEqual([]);
     expect((await browser.request(path)).headers.get('location')).toBe('/app/profiles');
   });
+
+  it("shows an AI app's own page: its tokens, rule and actions; renames, disconnects and removes it", async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-app', email: 'aiapp@example.com' });
+    const ws = await workspaceOf((await userByEmail('aiapp@example.com')).id);
+    const { csrf } = TestBrowser.hiddenInputs(await (await browser.request('/app/apps')).text());
+    await browser.request('/app/tokens', { form: { csrf: csrf!, name: 'Cursor', days: '0' } });
+    const [token] = await hub.services.apiTokens.list(ws.id);
+    const appId = token!.aiClientId!;
+    const base = `/app/apps/${appId}`;
+    // One call with this app's token, one with another credential.
+    await hub.services.database.pool.query(
+      `INSERT INTO tool_calls (workspace_id, connector_id, action, tool_name, principal_type, principal_id, status, duration_ms, created_at)
+       VALUES ($1, 'demo', 'echo', 'demo_echo', 'api_token', $2, 'ok', 5, now() - interval '2 minutes'),
+              ($1, 'demo', 'fail', 'demo_fail', 'api_token', 'tok_other', 'error', 5, now() - interval '1 minute')`,
+      [ws.id, token!.id],
+    );
+
+    expect(await (await browser.request('/app/apps')).text()).toContain(`href="${base}"`);
+    const page = await (await browser.request(base)).text();
+    expect(page).toContain('<h1>Cursor</h1>');
+    expect(page).toContain(`action="/app/tokens/${token!.id}/revoke"`);
+    expect(page).toContain('title="demo_echo"');
+    expect(page).not.toContain('title="demo_fail"');
+
+    // Its rule is set from its page and comes back there; the rules page links to it.
+    const rule = await browser.request('/app/rules/scoped', {
+      form: { csrf: csrf!, kind: 'app', id: appId, access: 'read', confirm: '', back: base },
+    });
+    expect(rule.headers.get('location')).toBe(base);
+    expect(await hub.services.policies.listRules(ws.id)).toContainEqual(
+      expect.objectContaining({ aiClientId: appId, access: 'read' }),
+    );
+    expect(await (await browser.request('/app/rules')).text()).toContain(`href="${base}"`);
+
+    const renamed = await browser.request(`${base}/rename`, {
+      form: { csrf: csrf!, name: 'Cursor at work' },
+    });
+    expect(renamed.headers.get('location')).toBe(base);
+    expect((await hub.services.aiClients.get(ws.id, appId)).name).toBe('Cursor at work');
+    // The token is listed under the app's new name.
+    expect(await (await browser.request('/app/apps')).text()).toContain('Cursor at work');
+
+    // Disconnecting ends the token and keeps the rule; then the app can be removed with it.
+    const disconnected = await browser.request(`${base}/disconnect`, { form: { csrf: csrf! } });
+    expect(disconnected.headers.get('location')).toBe(base);
+    expect(await hub.services.apiTokens.list(ws.id)).toEqual([]);
+    const after = await (await browser.request(base)).text();
+    expect(after).toContain(`action="${base}/forget"`);
+    expect(await hub.services.policies.listRules(ws.id)).toHaveLength(1);
+    const removed = await browser.request(`${base}/forget`, { form: { csrf: csrf! } });
+    expect(removed.headers.get('location')).toBe('/app/apps');
+    expect(await hub.services.policies.listRules(ws.id)).toEqual([]);
+    expect((await browser.request(base)).headers.get('location')).toBe('/app/apps');
+  });
 });
 
 describe('website: public pages', () => {
@@ -742,7 +788,16 @@ describe('website: public pages', () => {
 
   it('serves the landing, pricing, services, docs and legal pages in both languages', async () => {
     const browser = new TestBrowser(hub.baseUrl);
-    for (const path of ['/', '/pricing', '/services', '/services/github', '/docs', '/privacy', '/terms']) {
+    for (const path of [
+      '/',
+      '/pricing',
+      '/services',
+      '/services/github',
+      '/docs',
+      '/privacy',
+      '/terms',
+      '/refunds',
+    ]) {
       const page = await browser.request(path);
       expect(page.status, path).toBe(200);
       const html = await page.text();

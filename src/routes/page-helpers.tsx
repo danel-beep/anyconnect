@@ -1,8 +1,11 @@
 import type { Child } from 'hono/jsx';
 import { z } from 'zod';
+import { actionText } from '../connectors/sdk.js';
 import { getDefaultWorkspace } from '../core/identity.js';
+import type { toolCalls } from '../db/schema.js';
+import { SETUP_CONNECTOR } from '../hub/setup-tools.js';
 import { AppError } from '../lib/errors.js';
-import { type AppSection, AppShell, type ShellInfo } from '../web/app.js';
+import { type AppSection, AppShell, type CallView, CONNECTION_BACK, type ShellInfo } from '../web/app.js';
 import { type Frame, PageFrame } from '../web/frame.js';
 import { clearCookie, csrfToken, readCookie, setSecureCookie, verifyCsrf } from '../web/http.js';
 import type { Key, Locale } from '../web/i18n.js';
@@ -49,6 +52,7 @@ export function pageCtx(c: AppContext, user?: SessionUser): PageCtx {
     google: s.externalLogin.get('google') !== undefined,
     signupsOpen: s.config.site.signups === 'open',
     supportEmail: s.config.site.supportEmail,
+    verification: s.config.site.verification,
     billing: s.billing.enabled,
     csrf: csrfToken(c, cookieOpts(c)),
   };
@@ -81,7 +85,8 @@ export async function shellInfo(c: AppContext, workspaceId: string): Promise<She
   const user = await currentUser(c);
   const [subscription, open, accounts, planRequests] = await Promise.all([
     s.entitlements.subscription(workspaceId),
-    s.pendingCalls.listOpen(workspaceId),
+    // The user's own held-back actions, in teams too (what `/confirm` lists).
+    user ? s.pendingCalls.listOpenFor(user.id) : s.pendingCalls.listOpen(workspaceId),
     s.accounts.list(workspaceId),
     user?.role === 'admin' ? s.entitlements.countOpenRequests() : undefined,
   ]);
@@ -178,6 +183,16 @@ const ERROR_TEXTS: Partial<Record<string, Key>> = {
   provider_refused: 'error.code.provider_refused',
   provider_unavailable: 'error.code.provider_unavailable',
   paid_subscription: 'error.code.paid_subscription',
+  team_admin_only: 'error.code.team_admin_only',
+  team_owner_only: 'error.code.team_owner_only',
+  not_account_owner: 'error.code.not_account_owner',
+  team_owner_stays: 'error.code.team_owner_stays',
+  invite_wrong_email: 'error.code.invite_wrong_email',
+  already_member: 'error.code.already_member',
+  team_limit: 'error.code.team_limit',
+  bad_seats: 'error.code.bad_seats',
+  too_few_seats: 'error.code.too_few_seats',
+  plan_mismatch: 'error.code.plan_mismatch',
   csrf: 'error.csrf',
 };
 
@@ -192,19 +207,19 @@ export const appPage =
   };
 
 /** Error text for a failed form action: our own messages are user-safe, others are not shown. */
-const errorText = (c: AppContext, error: unknown): string =>
+export const errorText = (c: AppContext, error: unknown): string =>
   error instanceof AppError ? uiError(c, error) : c.get('t')('error.internal');
 
 /** Runs a form post: CSRF, session, then the action; errors come back as a flash note. */
 export const appAction =
   (
-    /** Where to go afterwards: a fixed page, or one picked from the posted form. */
-    to: string | ((form: Record<string, string>) => string),
+    /** Where to go afterwards: a fixed page, or one picked from the posted form or the request. */
+    to: string | ((form: Record<string, string>, c: AppContext) => string),
     run: (c: AppContext, auth: AppAuth, form: Record<string, string>) => Promise<Response | undefined>,
   ) =>
   async (c: AppContext) => {
     const form = await bodyParams(c);
-    const back = typeof to === 'string' ? to : to(form);
+    const back = typeof to === 'string' ? to : to(form, c);
     if (!csrfOk(c, form)) return csrfFailedPage(c);
     const auth = await requireApp(c, back);
     if ('redirect' in auth) return c.redirect(auth.redirect, 303);
@@ -223,10 +238,69 @@ export const appAction =
     return c.redirect(back, 303);
   };
 
+/**
+ * Where revoking one sign-in or token goes back to: the profile's or AI app's page it was on, else
+ * the AI apps page.
+ */
+export const connectionBack = (form: Record<string, string>): string =>
+  CONNECTION_BACK.test(form.back ?? '') ? form.back! : '/app/apps';
+
 /** A user-facing text for an error from a form action, in the page language. */
 export function uiError(c: AppContext, error: AppError | z.ZodError): string {
   const t = c.get('t');
   if (error instanceof z.ZodError) return t('app.flash.invalid');
   const key = ERROR_TEXTS[error.code];
   return key ? t(key) : error.message;
+}
+
+type ToolCallRow = typeof toolCalls.$inferSelect;
+
+/** Activity log rows as the dashboard shows them: the app or token, the action and account in words. */
+export async function callViews(
+  c: AppContext,
+  workspaceId: string,
+  rows: ToolCallRow[],
+): Promise<CallView[]> {
+  const s = c.get('services');
+  const clients = new Map((await s.aiClients.list(workspaceId)).map((x) => [x.id, x.name]));
+  const grants = new Map(
+    (await s.oauth.listGrants(workspaceId)).map((g) => [g.clientId, g.clientName ?? g.clientId]),
+  );
+  const tokens = new Map((await s.apiTokens.list(workspaceId)).map((x) => [x.id, x.name]));
+  const t = c.get('t');
+  const clientOf = (r: ToolCallRow): string | null => {
+    if (r.principalType === 'session') return t('app.call.dashboard');
+    if (r.clientId) return grants.get(r.clientId) ?? clients.get(r.clientId) ?? null;
+    if (r.principalType === 'api_token' && r.principalId) return tokens.get(r.principalId) ?? null;
+    return null;
+  };
+  const [connectors, accounts] = await Promise.all([
+    s.connectors.list(workspaceId),
+    s.accounts.list(workspaceId),
+  ]);
+  // The hub's own setup tools (`manyplug_*`) have titles too.
+  const connectorById = new Map([...connectors, SETUP_CONNECTOR].map((x) => [x.id, x]));
+  const labels = new Map(accounts.map((a) => [a.id, a.label]));
+  const titleOf = (r: ToolCallRow): string => {
+    const connector = r.connectorId ? connectorById.get(r.connectorId) : undefined;
+    const action = connector?.actions.find((a) => a.name === r.action);
+    if (connector && action) return actionText(connector, action, c.get('locale')).title;
+    // An action the service no longer has (or a custom server's tool): its name, readable.
+    const prefix = `${r.connectorId ?? ''}_`;
+    const name = r.action ?? (r.toolName.startsWith(prefix) ? r.toolName.slice(prefix.length) : r.toolName);
+    const words = name.replace(/[_-]+/g, ' ').trim();
+    return words ? words[0]!.toUpperCase() + words.slice(1) : r.toolName;
+  };
+  return rows.map((r) => ({
+    toolName: r.toolName,
+    connectorId: r.connectorId ?? '',
+    status: r.status,
+    outcome: r.outcome,
+    createdAt: r.createdAt,
+    durationMs: r.durationMs,
+    client: clientOf(r),
+    title: titleOf(r),
+    account: r.accountId ? (labels.get(r.accountId) ?? null) : null,
+    error: r.status === 'error' ? r.errorMessage : null,
+  }));
 }

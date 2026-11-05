@@ -99,7 +99,14 @@ function nextLink(header: string | null): string | undefined {
   if (!header) return undefined;
   for (const part of header.split(',')) {
     const match = part.match(/<([^>]+)>\s*;(.*)/);
-    if (match && /rel="?([^";]*\s)?next(\s[^";]*)?"?/i.test(match[2]!)) return match[1];
+    // Sentry always sends a next link and marks the last page with `results="false"`.
+    if (
+      match &&
+      /rel="?([^";]*\s)?next(\s[^";]*)?"?/i.test(match[2]!) &&
+      !/results="?false/i.test(match[2]!)
+    ) {
+      return match[1];
+    }
   }
   return undefined;
 }
@@ -221,8 +228,9 @@ class ManifestRuntime {
       if (pagination.type === 'link' || pagination.type === 'next_url') {
         // The cursor is a full URL from the service: only follow it on the API's own origin, so a
         // crafted cursor can never send the account's credentials elsewhere.
-        const next = new URL(String(cursor));
+        // Relative next links (Twilio's `next_page_uri`) resolve against the API's origin.
         const base = new URL(String(renderString(this.manifest.baseUrl, scope)));
+        const next = new URL(String(cursor), base);
         if (next.origin !== base.origin) throw new ConnectorError('invalid_input', 'Invalid cursor');
         path = next.toString();
         query = {};
@@ -344,6 +352,7 @@ function compileAction(
     inputSchema,
     ...(action.hints ? { hints: action.hints } : {}),
     ...(action.risk ? { risk: action.risk } : {}),
+    ...(action.tags?.length ? { tags: action.tags } : {}),
     ...(action.undo ? { undo: action.undo } : {}),
     ...(action.capability
       ? {
@@ -412,7 +421,7 @@ function compileAction(
  */
 export type ManifestActionExtension = Pick<
   ActionDefinition,
-  'capability' | 'undo' | 'assessRisk' | 'risk' | 'rateLimit'
+  'capability' | 'undo' | 'assessRisk' | 'risk' | 'rateLimit' | 'tags'
 >;
 
 export interface ManifestExtensions {

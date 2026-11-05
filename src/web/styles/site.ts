@@ -267,7 +267,7 @@ html:not(.js) .when-year{display:none}
 
 /* Footer */
 .site-footer{border-top:1px solid var(--border);padding:56px 0 40px;margin-top:32px}
-.footer-grid{display:grid;grid-template-columns:1.6fr repeat(3,1fr);gap:32px}
+.footer-grid{display:grid;grid-template-columns:1.6fr repeat(4,1fr);gap:32px}
 .footer-grid h4{font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:4px 0 14px}
 .footer-grid a{display:block;color:var(--text);text-decoration:none;font-size:14px;padding:4px 0}
 .footer-grid a:hover{color:var(--accent-ink)}
@@ -291,5 +291,64 @@ details.more-ways{margin-top:14px}
   .compare th:first-child,.compare td:first-child{position:sticky;left:0;z-index:1;width:132px;min-width:132px;background:var(--card);box-shadow:1px 0 0 var(--border)}
   .compare thead th:first-child{background:var(--bg-subtle)}
   .compare tr.group th{position:static;box-shadow:none}
+}
+/* Docs and search pages (src/web/seo-pages.tsx) */
+.card.guide{padding:24px;margin:0;border-bottom:1px solid var(--border)}
+.card.guide h2,.step-card-plain h2{display:block;font-size:18px}
+.compare.vs th,.compare.vs td{text-align:left}
+.compare.vs td:first-child{font-weight:560}
+.faq-group{margin:0 0 32px}
+.faq-group h2{margin:0 0 8px}
+.prose .crumbs,.guide .crumbs{margin-bottom:16px}
+.wide-cards{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+/* Use cases, audiences and the blog (src/web/content-pages.tsx) */
+.section-sub{margin:40px 0 14px}
+.persona-points{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.persona-points .card{margin:0}
+.persona-points h2{margin:0 0 6px}
+.link-list{padding-left:20px}
+.link-list li{margin:4px 0}
+.prose .svc-grid,.prose .prompt-list{margin:12px 0 0}
+.prose .prompt-list{padding-left:0}
+.post-list{display:grid;gap:12px;max-width:760px}
+.post-card{display:block;margin:0;color:inherit;text-decoration:none}
+.post-card:hover{border-color:var(--accent)}
+.post-card h2{margin:4px 0 6px}
+.post-card p{margin:0}
+@media (max-width:640px){.wide-cards{grid-template-columns:1fr}}
+
+/* Status page */
+.status-wrap{max-width:880px;padding-top:40px;padding-bottom:64px}
+.status-wrap h1{margin:0 0 20px}
+.status-banner{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;justify-content:space-between;padding:18px 20px;border-radius:var(--radius);margin:0 0 20px;border:1px solid transparent}
+.status-banner strong{font-size:18px}
+.status-banner.s-ok{background:var(--ok-soft);color:var(--ok)}
+.status-banner.s-degraded{background:var(--warn-bg);border-color:var(--warn-border);color:var(--text)}
+.status-banner.s-down{background:var(--danger-soft);color:var(--danger)}
+.status-banner.s-none{background:var(--bg-subtle);color:var(--muted)}
+.status-banner .small{color:var(--text);opacity:.8}
+.status-component{padding:20px}
+.status-component+.status-component{border-top:1px solid var(--border)}
+.status-head{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.status-head h2{font-size:16px;margin:0}
+.status-head p{margin:4px 0 0}
+.status-state{font-weight:600;font-size:14px;text-align:right;white-space:nowrap}
+.status-state.s-ok{color:var(--ok)}
+.status-state.s-degraded{color:var(--text)}
+.status-state.s-down{color:var(--danger)}
+.status-bars{display:grid;grid-template-columns:repeat(90,1fr);gap:2px;height:32px;margin:14px 0 6px}
+.status-bar{border-radius:2px;background:var(--border)}
+.status-bar.s-ok{background:var(--ok)}
+.status-bar.s-degraded{background:var(--warn-border)}
+.status-bar.s-down{background:var(--danger)}
+.status-bar.s-missing{background:var(--muted)}
+.status-scale{display:flex;justify-content:space-between;gap:8px}
+.status-section{font-size:18px;margin:32px 0 12px}
+.status-incidents li{display:flex;gap:10px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--border)}
+.status-foot{margin-top:32px}
+@media (max-width:640px){
+  .status-bars{grid-template-columns:repeat(30,1fr)}
+  .status-bars .status-bar:nth-child(-n+60){display:none}
+  .status-scale span:first-child{visibility:hidden}
 }
 `;

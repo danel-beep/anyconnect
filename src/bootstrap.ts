@@ -1,4 +1,5 @@
-import { ensureAdmin } from './core/identity.js';
+import type { AccountService } from './core/accounts.js';
+import { ensureAdmin, ensurePasswordUser } from './core/identity.js';
 import { runMigrations } from './db/migrate.js';
 import type { Services } from './services.js';
 
@@ -28,6 +29,7 @@ export async function bootstrap(services: Services): Promise<void> {
   await setupTelegram(services);
   const linked = await services.aiClients.backfill();
   if (linked.grants || linked.tokens) logger.info(linked, 'existing AI apps linked to AI clients');
+  await ensureReviewAccount(services);
   if (!config.admin) {
     if (!config.site.google)
       logger.warn('Neither ADMIN_EMAIL / ADMIN_PASSWORD nor Google sign-in is set up: nobody can sign in.');
@@ -42,24 +44,45 @@ export async function bootstrap(services: Services): Promise<void> {
   if (result.passwordUpdated)
     logger.info({ email: result.user.email }, 'owner password updated from ADMIN_PASSWORD');
   if (result.created && config.seedDemoAccounts) {
-    await accounts.create(result.workspace.id, {
-      connectorId: 'demo',
-      name: 'main',
-      label: 'Demo — main',
-      description: 'First test account',
-      config: { greeting: 'Hello' },
-      credentials: { secret: 'demo-secret-main' },
-    });
-    await accounts.create(result.workspace.id, {
-      connectorId: 'demo',
-      name: 'second',
-      label: 'Demo — second',
-      description: 'Second test account, shows multi-account routing',
-      config: { greeting: 'Привет' },
-      credentials: { secret: 'demo-secret-second' },
-    });
+    await seedDemoAccounts(accounts, result.workspace.id);
     logger.info('demo accounts created');
   }
+}
+
+/** Two accounts of the built-in Demo service: enough to try tools and multi-account routing. */
+async function seedDemoAccounts(accounts: AccountService, workspaceId: string): Promise<void> {
+  await accounts.create(workspaceId, {
+    connectorId: 'demo',
+    name: 'main',
+    label: 'Demo — main',
+    description: 'First test account',
+    config: { greeting: 'Hello' },
+    credentials: { secret: 'demo-secret-main' },
+  });
+  await accounts.create(workspaceId, {
+    connectorId: 'demo',
+    name: 'second',
+    label: 'Demo — second',
+    description: 'Second test account, shows multi-account routing',
+    config: { greeting: 'Привет' },
+    credentials: { secret: 'demo-secret-second' },
+  });
+}
+
+/**
+ * The sign-in AI app directories' reviewers get (REVIEW_ACCOUNT_EMAIL / _PASSWORD): a plain user
+ * with a password and no second factor, on the unlimited plan, with the Demo accounts connected so
+ * every hub tool can be tried without connecting a real service.
+ */
+async function ensureReviewAccount(services: Services): Promise<void> {
+  const review = services.config.directories.reviewAccount;
+  if (!review) return;
+  const result = await ensurePasswordUser(services.db, { ...review, role: 'user' });
+  await services.entitlements.ensurePlan(result.workspace.id, 'unlimited');
+  const existing = await services.accounts.list(result.workspace.id);
+  if (!existing.some((a) => a.connectorId === 'demo'))
+    await seedDemoAccounts(services.accounts, result.workspace.id);
+  if (result.created) services.logger.info({ email: review.email }, 'directory review account created');
 }
 
 /** Points the hub's Telegram bot at our webhook (Telegram only delivers to https URLs). */

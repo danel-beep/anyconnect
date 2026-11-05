@@ -25,7 +25,9 @@ function account(partial: Partial<AccountRow> & { name: string }): AccountRow {
     createdAt: now,
     updatedAt: now,
     lastUsedAt: null,
+    ownerUserId: null,
     checkedAt: null,
+    reauthNotifiedAt: null,
     ...partial,
   };
 }
@@ -139,7 +141,7 @@ describe('tool catalog', () => {
       readOnlyHint: false,
       destructiveHint: true,
     });
-    expect(catalog.tools.find((t) => t.name === 'svc_read')!.annotations.destructiveHint).toBeUndefined();
+    expect(catalog.tools.find((t) => t.name === 'svc_read')!.annotations.destructiveHint).toBe(false);
   });
 });
 

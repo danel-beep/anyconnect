@@ -39,8 +39,33 @@ services:
         sync: false
       - key: SUPPORT_EMAIL
         sync: false
+      - key: GOOGLE_SITE_VERIFICATION
+        sync: false
+      - key: BING_SITE_VERIFICATION
+        sync: false
       - key: SIGNUPS
         value: open
+      # Optional: also send errors to Sentry (docs/OPERATIONS.md)
+      - key: SENTRY_DSN
+        sync: false
+      # AI app directories (docs/DIRECTORIES.md)
+      - key: CLIENT_POLICIES
+        value: claude
+      - key: REVIEW_ACCOUNT_EMAIL
+        sync: false
+      - key: REVIEW_ACCOUNT_PASSWORD
+        sync: false
+      - key: WELL_KNOWN_MCP_REGISTRY_AUTH
+        sync: false
+      # Optional: daily encrypted database backups to an S3-compatible bucket (docs/OPERATIONS.md)
+      - key: BACKUP_S3_ENDPOINT
+        sync: false
+      - key: BACKUP_S3_BUCKET
+        sync: false
+      - key: BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
 
 databases:
   - name: anyconnect-db

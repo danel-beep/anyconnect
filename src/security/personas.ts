@@ -11,12 +11,17 @@ export type PersonaRow = typeof personas.$inferSelect;
 
 /** URL segment of a persona's MCP endpoint: `/mcp/<slug>`. */
 export const PERSONA_SLUG = /^[a-z0-9][a-z0-9-]{0,31}$/;
+/** `/mcp/team/<slug>` is a team's MCP URL, so no persona may be called `team`. */
+const RESERVED_PERSONA_SLUGS = new Set(['team']);
 
 /** Personas per workspace: plenty for work / personal / per-client splits, bounded for the policy checks. */
 export const MAX_PERSONAS = 20;
 
 export const CreatePersonaInput = z.object({
-  slug: z.string().regex(PERSONA_SLUG, 'use 1-32 lowercase letters, digits or "-"'),
+  slug: z
+    .string()
+    .regex(PERSONA_SLUG, 'use 1-32 lowercase letters, digits or "-"')
+    .refine((slug) => !RESERVED_PERSONA_SLUGS.has(slug), 'this name is reserved'),
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
   accountIds: z.array(z.string()).max(1000).default([]),

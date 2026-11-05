@@ -21,6 +21,8 @@ export interface CheckoutInput {
   interval: BillingInterval;
   /** The provider's price for this plan and interval (from the hub's price map). */
   priceId: string;
+  /** How many of the price: seats on a per-seat plan, otherwise 1. */
+  quantity: number;
   /** The workspace's customer at this provider, when it paid before. */
   customerId: string | null;
   /** Absolute URLs back to the hub. */
@@ -50,6 +52,8 @@ export interface SubscriptionChange {
   customerId: string | null;
   /** The price the subscription is on now (mapped to a plan by the hub). */
   priceId: string | null;
+  /** How many of the price (seats on a per-seat plan). */
+  quantity: number | null;
   interval: BillingInterval | null;
   status: SubscriptionStatus;
   /** End of the paid period; access continues until then even after a cancellation. */
@@ -74,8 +78,14 @@ export interface BillingProvider {
   checkout(input: CheckoutInput): Promise<{ url: string }>;
   /** A hosted page where the customer updates the card, sees invoices or cancels. */
   portal(input: { subscription: ProviderSubscriptionRef; returnUrl: string }): Promise<{ url: string }>;
-  /** Moves an existing subscription to another price (prorated). The webhook confirms it. */
-  changePrice(subscription: ProviderSubscriptionRef, priceId: string): Promise<void>;
+  /**
+   * Moves an existing subscription to another price or quantity (seats), prorated. The webhook
+   * confirms it.
+   */
+  changeSubscription(
+    subscription: ProviderSubscriptionRef,
+    change: { priceId: string; quantity: number },
+  ): Promise<void>;
   /** Cancels at the end of the paid period (`atPeriodEnd: false` takes back a scheduled cancel). */
   setCancelAtPeriodEnd(subscription: ProviderSubscriptionRef, atPeriodEnd: boolean): Promise<void>;
   /** Verifies a webhook call (signature, freshness) and normalizes it. */

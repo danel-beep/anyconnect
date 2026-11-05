@@ -6,10 +6,10 @@ import {
   connectorGuide,
   connectorText,
 } from '../connectors/sdk.js';
-import type { AccountRow } from '../core/accounts.js';
+import type { AccountOwnerInput, AccountRow } from '../core/accounts.js';
 import { connectFormFields, type FormField, fieldForIssue, readConnectForm } from '../core/connect-form.js';
 import { hubClientMetadata } from '../core/custom-services.js';
-import { getDefaultWorkspace } from '../core/identity.js';
+import { getDefaultWorkspace, type Workspace } from '../core/identity.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { serviceAlternative } from '../web/catalog.js';
 import {
@@ -35,6 +35,9 @@ import { renderInApp } from './page-helpers.js';
  *   `via=form` for optional OAuth; `via=oauth` forces the provider's sign-in) it shows a form built from the connector's schemas
  *   (`core/connect-form.ts`), posted back to `POST /connect/:connectorId`;
  * - `GET /connect/callback` is the single redirect URI registered at every provider.
+ *
+ * `team=<slug>` connects into a team the user belongs to: as their own account, or with
+ * `owner=team` (admins) as the team's. Without it the account goes to the personal workspace.
  */
 export function connectRoutes() {
   const app = new Hono<AppEnv>();
@@ -81,19 +84,18 @@ export function connectRoutes() {
       const url = new URL(c.req.url);
       return c.redirect(loginRedirect(url.pathname + url.search), 302);
     }
-    const workspace = await getDefaultWorkspace(s.db, user.id);
-    if (!workspace) throw badRequest('No workspace');
     const q = (key: string) => c.req.query(key) || undefined;
+    const { workspace, owner } = await connectTarget(c, user, q);
     const connectorId = c.req.param('connectorId');
     const connector = await s.connectors.get(workspace.id, connectorId);
     if (!connector) throw badRequest(`Unknown service "${connectorId}"`);
+    // Someone set out to connect a service; accounts created show how many got there.
+    if (!q('account'))
+      s.analytics.track('connect.start', s.connectors.builtin.includes(connector) ? connectorId : 'custom');
 
     const via = q('via') === 'oauth' ? 'oauth' : await s.admin.connectVia(workspace.id, connector);
     if (via === 'form' || q('via') === 'form') {
-      const reconnect = q('account')
-        ? await s.accounts.get(workspace.id, q('account')!).catch(() => undefined)
-        : undefined;
-      if (q('account') && reconnect?.connectorId !== connector.id) throw notFound('Account');
+      const reconnect = await reconnectTarget(c, user, workspace, connector, q('account'));
       return renderForm(c, connector, {
         oauth: via === 'oauth',
         hidden: hiddenFrom(q),
@@ -107,14 +109,15 @@ export function connectRoutes() {
     let authorizationUrl: string;
     try {
       ({ authorizationUrl } = await s.connect.start(
-        { workspaceId: workspace.id, userId: user.id },
+        { workspaceId: workspace.id, userId: user.id, ...(owner ? { owner } : {}) },
         {
           connectorId,
           ...(q('account') ? { accountId: q('account') } : {}),
           ...(q('app') ? { appId: q('app') } : {}),
           ...(q('label') ? { label: q('label') } : {}),
           ...(q('name') ? { name: q('name') } : {}),
-          ...(q('description') ? { description: q('description') } : {}),
+          // No description from a link: it goes into the AI's instructions and the user never sees
+          // it here, so a link someone sent could plant instructions for the AI.
           ...(returnTo ? { returnTo: safeNextPath(returnTo) } : {}),
         },
       ));
@@ -147,25 +150,21 @@ export function connectRoutes() {
     const t = c.get('t');
     const user = await currentUser(c);
     if (!user) return c.redirect(loginRedirect(new URL(c.req.url).pathname), 303);
-    const workspace = await getDefaultWorkspace(s.db, user.id);
-    if (!workspace) throw badRequest('No workspace');
-    const connector = await s.connectors.get(workspace.id, c.req.param('connectorId'));
-    if (!connector) throw badRequest(`Unknown service "${c.req.param('connectorId')}"`);
     const form = await bodyParams(c);
     const cookieOpts = { secure: s.config.secureCookies };
     if (!verifyCsrf(c, form.csrf, { ...cookieOpts, publicUrl: s.config.publicUrl })) {
       return c.html(<ErrorPage t={t} lang={c.get('locale')} message={t('error.csrf')} />, 403);
     }
+    const { workspace, owner } = await connectTarget(c, user, (key) => form[key] || undefined);
+    const connector = await s.connectors.get(workspace.id, c.req.param('connectorId'));
+    if (!connector) throw badRequest(`Unknown service "${c.req.param('connectorId')}"`);
 
     const fields = connectFormFields(connector, c.get('locale'));
     const values = readConnectForm(fields, form);
     // The "sign in with the provider instead" link only when the provider's sign-in works here.
     const oauthReady =
       Boolean(connector.oauth) && (await s.admin.connectVia(workspace.id, connector)) === 'oauth';
-    const reconnect = form.account
-      ? await s.accounts.get(workspace.id, form.account).catch(() => undefined)
-      : undefined;
-    if (form.account && reconnect?.connectorId !== connector.id) throw notFound('Account');
+    const reconnect = await reconnectTarget(c, user, workspace, connector, form.account);
     const retry = ({ message, invalid }: FormProblem) =>
       renderForm(
         c,
@@ -194,18 +193,22 @@ export function connectRoutes() {
             config: values.config,
             credentials: values.credentials,
           })
-        : await s.accounts.create(workspace.id, {
-            connectorId: connector.id,
-            // A blank name becomes the mailbox address when there is one, so two mailboxes differ.
-            label:
-              form.label?.trim() ||
-              (typeof values.config.email === 'string' ? values.config.email : undefined) ||
-              (typeof form.email === 'string' && form.email.trim() ? form.email.trim() : undefined) ||
-              connector.name,
-            ...(form.name ? { name: form.name } : {}),
-            config: values.config,
-            credentials: values.credentials,
-          });
+        : await s.accounts.create(
+            workspace.id,
+            {
+              connectorId: connector.id,
+              // A blank name becomes the mailbox address when there is one, so two mailboxes differ.
+              label:
+                form.label?.trim() ||
+                (typeof values.config.email === 'string' ? values.config.email : undefined) ||
+                (typeof form.email === 'string' && form.email.trim() ? form.email.trim() : undefined) ||
+                connector.name,
+              ...(form.name ? { name: form.name } : {}),
+              config: values.config,
+              credentials: values.credentials,
+            },
+            owner,
+          );
     } catch (error) {
       if (error instanceof AppError && error.status < 500) return retry(formError(t, fields, error));
       throw error;
@@ -245,10 +248,49 @@ export function connectRoutes() {
   return app;
 }
 
+/**
+ * The workspace a connect link puts the account in: a team (`team=<slug>`, as the user's own
+ * account or with `owner=team` the team's) or the user's personal workspace.
+ */
+async function connectTarget(
+  c: AppContext,
+  user: SessionUser,
+  get: (key: string) => string | undefined,
+): Promise<{ workspace: Workspace; owner?: AccountOwnerInput }> {
+  const s = c.get('services');
+  const slug = get('team');
+  if (!slug) {
+    const workspace = await getDefaultWorkspace(s.db, user.id);
+    if (!workspace) throw badRequest('No workspace');
+    return { workspace };
+  }
+  const team = await s.teams.bySlug(slug);
+  if (!team) throw notFound('Team');
+  const owner: AccountOwnerInput = { userId: get('owner') === 'team' ? null : user.id };
+  await s.teams.assertCanConnect(team.id, user.id, owner);
+  return { workspace: team, owner };
+}
+
+/** The account a link reconnects, if any: of this service, and one the user manages. */
+async function reconnectTarget(
+  c: AppContext,
+  user: SessionUser,
+  workspace: Workspace,
+  connector: ConnectorDefinition,
+  accountId: string | undefined,
+): Promise<AccountRow | undefined> {
+  if (!accountId) return undefined;
+  const s = c.get('services');
+  const account = await s.accounts.get(workspace.id, accountId).catch(() => undefined);
+  if (account?.connectorId !== connector.id) throw notFound('Account');
+  await s.teams.assertCanManage(workspace.id, user.id, account);
+  return account;
+}
+
 /** Query or form values carried through the connect form. */
 function hiddenFrom(get: (key: string) => string | undefined): Record<string, string> {
   const hidden: Record<string, string> = {};
-  for (const key of ['name', 'account', 'returnTo', 'description'] as const) {
+  for (const key of ['name', 'account', 'returnTo', 'team', 'owner'] as const) {
     const value = get(key);
     if (value) hidden[key] = key === 'returnTo' ? safeNextPath(value) : value;
   }

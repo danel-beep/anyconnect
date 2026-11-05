@@ -8,6 +8,7 @@ import { type ExternalProfile, SignInRefused } from '../core/users.js';
 import {
   clearCookie,
   clientIp,
+  clientRateKey,
   csrfToken,
   readCookie,
   safeNextPath,
@@ -17,6 +18,7 @@ import {
 import { ErrorPage, type LoginMode, LoginPage } from '../web/pages.js';
 import { PENDING_LOGIN_TTL_SECONDS } from '../web/pending-logins.js';
 import { VerifyPage } from '../web/security-pages.js';
+import { analyticsRequest } from './analytics.js';
 import {
   type AppContext,
   type AppEnv,
@@ -27,19 +29,20 @@ import {
   SESSION_COOKIE,
 } from './context.js';
 import { cookieOpts, saveLocale } from './page-helpers.js';
+import { attachReferral } from './referral.js';
 
 /** Second-factor code attempts: per user (the pending login's owner) and per client IP. */
 function consumeCodeAttempt(c: AppContext, userId: string): boolean {
   const s = c.get('services');
   const byUser = s.rateLimiter.consume(`mfa:user:${userId}`, 5, 5 * 60_000);
-  const byIp = s.rateLimiter.consume(`mfa:ip:${clientIp(c, s.config.trustProxy)}`, 30, 15 * 60_000);
+  const byIp = s.rateLimiter.consume(`mfa:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 15 * 60_000);
   return byUser.allowed && byIp.allowed;
 }
 
 /** Passkey ceremonies (options + verification) per client IP. */
 function consumePasskeyAttempt(c: AppContext): boolean {
   const s = c.get('services');
-  return s.rateLimiter.consume(`passkey:ip:${clientIp(c, s.config.trustProxy)}`, 30, 5 * 60_000).allowed;
+  return s.rateLimiter.consume(`passkey:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 5 * 60_000).allowed;
 }
 
 /**
@@ -54,7 +57,7 @@ async function finishSignIn(c: AppContext, userId: string, amr: AuthMethod[]): P
   // Admin emails are promoted in `signInExternal` (where the address is proven), not here.
   if (user.role === 'admin') {
     // Administrators run the hub: their own workspace is not limited by visitor plans.
-    const owned = (await s.users.ownedWorkspaces(user.id))[0];
+    const owned = await s.users.personalWorkspace(user.id);
     if (owned) await s.entitlements.ensurePlan(owned.id, 'unlimited');
   }
   const opts = cookieOpts(c);
@@ -158,8 +161,10 @@ export function loginRoutes() {
     const providerId = c.req.param('provider');
     const next = nextOf(c.req.query('next'));
     if (!s.externalLogin.get(providerId)) return c.notFound();
-    const ip = clientIp(c, s.config.trustProxy);
-    if (!s.rateLimiter.consume(`external-login:ip:${ip}`, 30, 15 * 60_000).allowed)
+    if (
+      !s.rateLimiter.consume(`external-login:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 15 * 60_000)
+        .allowed
+    )
       return renderLogin(c, { mode: 'login', next, error: c.get('t')('login.rateLimited'), status: 429 });
     const { url, state } = await s.externalLogin.start(providerId, next);
     setSecureCookie(c, EXTERNAL_STATE_COOKIE, state, { ...cookieOpts(c), maxAge: 10 * 60 });
@@ -195,7 +200,13 @@ export function loginRoutes() {
     const next = nextOf(result.next);
     try {
       const { user, created } = await s.users.signInExternal(result.profile);
-      if (created) s.logger.info({ userId: user.id, provider: providerId }, 'user signed up');
+      if (created) {
+        s.logger.info({ userId: user.id, provider: providerId }, 'user signed up');
+        await attachReferral(c, user.id);
+        s.analytics.track('signup', providerId);
+        // Where they came from: the visit of the same browser today or yesterday (docs/ANALYTICS.md).
+        await s.analytics.attributeSignup(user.id, analyticsRequest(c));
+      }
       if (await s.secondFactors.hasAny(user.id)) {
         const pending = await s.pendingLogins.create(user.id, ['fed']);
         setSecureCookie(c, PENDING_LOGIN_COOKIE, pending, { ...opts, maxAge: PENDING_LOGIN_TTL_SECONDS });
@@ -229,9 +240,11 @@ export function loginRoutes() {
       return render(t('error.csrf'), 403);
     const ip = clientIp(c, s.config.trustProxy);
     const email = (form.email ?? '').trim().toLowerCase();
-    const byIp = s.rateLimiter.consume(`login:ip:${ip}`, 20, 15 * 60_000);
-    const byEmail = s.rateLimiter.consume(`login:email:${email}`, 10, 15 * 60_000);
-    if (!byIp.allowed || !byEmail.allowed) return render(t('login.rateLimited'), 429);
+    // The address first: a client over its limit does not use up the account's attempts too.
+    if (!s.rateLimiter.consume(`login:ip:${clientRateKey(c, s.config.trustProxy)}`, 20, 15 * 60_000).allowed)
+      return render(t('login.rateLimited'), 429);
+    if (!s.rateLimiter.consume(`login:email:${email}`, 10, 15 * 60_000).allowed)
+      return render(t('login.rateLimited'), 429);
 
     const user = await authenticate(s.db, email, form.password ?? '');
     if (!user) {

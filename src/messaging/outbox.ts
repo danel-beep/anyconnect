@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
-import type { OutboundJob } from '../connectors/messaging.js';
+import type { OutboundFile, OutboundJob, TemplateMessage } from '../connectors/messaging.js';
 import type { Db } from '../db/client.js';
 import { messengerChats, messengerOutbox, type OutboxStatus } from '../db/schema.js';
 import { newId } from '../lib/ids.js';
@@ -13,6 +13,8 @@ export interface OutboxPayload {
   text?: string;
   replyToExternalId?: string;
   upToExternalId?: string;
+  template?: TemplateMessage;
+  file?: OutboundFile;
 }
 
 /** Identical requests (same chat, same text) within this window are merged into one job. */
@@ -57,6 +59,8 @@ export class Outbox {
         input.chatId,
         input.payload.text ?? '',
         input.payload.replyToExternalId ?? '',
+        ...(input.payload.template ? [input.payload.template] : []),
+        ...(input.payload.file ? [input.payload.file] : []),
       ]),
     );
     return this.db.transaction(async (tx) => {
@@ -175,6 +179,8 @@ export class Outbox {
       ...(payload.text !== undefined ? { text: payload.text } : {}),
       ...(payload.replyToExternalId ? { replyToExternalId: payload.replyToExternalId } : {}),
       ...(payload.upToExternalId ? { upToExternalId: payload.upToExternalId } : {}),
+      ...(payload.template ? { template: payload.template } : {}),
+      ...(payload.file ? { file: payload.file } : {}),
     };
   }
 

@@ -33,7 +33,8 @@ export const Layout: FC<{
         {children}
       </main>
       <footer class="auth-foot">
-        <a href="/privacy">{t('site.footer.privacy')}</a> · <a href="/terms">{t('site.footer.terms')}</a>
+        <a href="/privacy">{t('site.footer.privacy')}</a> · <a href="/terms">{t('site.footer.terms')}</a> ·{' '}
+        <a href="/refunds">{t('site.footer.refunds')}</a>
       </footer>
     </Doc>
   );
@@ -235,6 +236,8 @@ export interface ConsentView {
   activeAccounts: number;
   /** Set when the app connects to a persona's MCP URL. */
   persona?: { name: string; slug: string };
+  /** Set when the app connects to a team's MCP URL: it acts as this member of the team. */
+  team?: { name: string };
   /** Which AI client entity the app will be linked to (policies apply to it). */
   clientChoice: { selected: string; options: { value: string; label: string }[] };
   email: string;
@@ -271,13 +274,20 @@ export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> 
         ) : null}
         <p class="consent-can">{t('consent.access')}</p>
         <ul class="bullets consent-list">
-          <li>{t('consent.access.mcp', { count: view.activeAccounts })}</li>
+          <li>
+            {t(view.team ? 'consent.access.team' : 'consent.access.mcp', { count: view.activeAccounts })}
+          </li>
           <li>{t('consent.access.offline')}</li>
         </ul>
         {view.persona ? (
           <p class="small">
             {t('consent.persona')}: <strong>{view.persona.name}</strong> ({view.persona.slug}) ·{' '}
             {t('consent.personaHint')}
+          </p>
+        ) : null}
+        {view.team ? (
+          <p class="small">
+            {t('consent.team')}: <strong>{view.team.name}</strong> · {t('consent.teamHint')}
           </p>
         ) : null}
         <form method="post" action="/oauth/authorize">

@@ -1,11 +1,11 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { billingEvents, subscriptions, workspaces } from '../db/schema.js';
+import { billingEvents, subscriptions, workspaceMembers, workspaces } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 import type { Logger } from '../logger.js';
 import { type BillingConfig, PAID_PLANS, priceKey } from './config.js';
 import type { EntitlementService, SubscriptionRow } from './entitlements.js';
-import { findPlan } from './plans.js';
+import { findPlan, type Plan, planFits } from './plans.js';
 import {
   type BillingInterval,
   type BillingProvider,
@@ -19,14 +19,23 @@ export type BillingEventRow = typeof billingEvents.$inferSelect;
 export type CheckoutOutcome =
   /** Send the user to the provider's hosted checkout. */
   | { kind: 'redirect'; url: string }
-  /** The workspace already pays at the provider: its subscription was moved to the new plan. */
-  | { kind: 'changed'; planId: string };
+  /** The workspace already pays at the provider: its subscription was moved to the new plan or seats. */
+  | { kind: 'changed'; planId: string; seats?: number };
 
 /** Why buying is not possible right now (shown on the billing page and to the AI). */
 export class BillingError extends AppError {
   constructor(code: string, message: string, status = 400) {
     super(status, code, message);
   }
+}
+
+/** A webhook changed a workspace's subscription (notices and referrals subscribe). */
+export interface BillingListener {
+  subscriptionChanged(change: {
+    workspaceId: string;
+    before: SubscriptionRow | undefined;
+    after: SubscriptionRow;
+  }): Promise<void>;
 }
 
 /** Statuses in which the provider still charges the customer (and the plan is in force). */
@@ -39,6 +48,8 @@ const LIVE: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
  * so retries and duplicates change nothing, and an older event never overwrites a newer state.
  */
 export class BillingService {
+  private readonly listeners: BillingListener[] = [];
+
   constructor(
     private readonly deps: {
       db: Db;
@@ -49,6 +60,10 @@ export class BillingService {
       logger: Logger;
     },
   ) {}
+
+  listen(listener: BillingListener): void {
+    this.listeners.push(listener);
+  }
 
   get provider(): BillingProvider | undefined {
     return this.deps.provider;
@@ -96,12 +111,24 @@ export class BillingService {
     interval: BillingInterval;
     successUrl: string;
     cancelUrl: string;
+    /** Seats on a per-seat plan (default: one for each member); ignored for other plans. */
+    seats?: number;
   }): Promise<CheckoutOutcome> {
     const provider = this.requireProvider();
     const plan = findPlan(input.planId);
     if (!plan || !PAID_PLANS.includes(plan)) {
       throw new BillingError('unknown_plan', `"${input.planId}" is not a plan that can be bought`);
     }
+    const { workspaceKind } = await this.deps.entitlements.entitlements(input.workspaceId);
+    if (!planFits(plan, workspaceKind)) {
+      throw new BillingError(
+        'plan_mismatch',
+        workspaceKind === 'team'
+          ? `A team buys the team plan, not ${plan.id}`
+          : `The ${plan.id} plan is for teams: create a team first`,
+      );
+    }
+    const quantity = await this.quantityFor(plan, input.workspaceId, input.seats);
     const priceId = this.deps.config.prices.get(priceKey(plan.id, input.interval));
     if (!priceId) {
       throw new BillingError(
@@ -117,15 +144,21 @@ export class BillingService {
     }
     const live = this.liveSubscription(sub);
     if (live) {
-      if (live.planId === plan.id && live.interval === input.interval) {
+      if (live.planId === plan.id && live.interval === input.interval && live.quantity === quantity) {
         throw new BillingError('same_plan', `The workspace is already on the ${plan.id} plan`, 409);
       }
-      await this.call(() => provider.changePrice(this.ref(live), priceId));
+      await this.call(() => provider.changeSubscription(this.ref(live), { priceId, quantity }));
       this.deps.logger.info(
-        { workspaceId: input.workspaceId, from: live.planId, to: plan.id, provider: provider.id },
+        {
+          workspaceId: input.workspaceId,
+          from: live.planId,
+          to: plan.id,
+          quantity,
+          provider: provider.id,
+        },
         'billing: plan change requested',
       );
-      return { kind: 'changed', planId: plan.id };
+      return { kind: 'changed', planId: plan.id, ...(plan.perSeat ? { seats: quantity } : {}) };
     }
     if (BillingService.isPaidByProvider(sub)) {
       // Paid through a provider that is no longer active (e.g. moved from Paddle to Stripe).
@@ -137,9 +170,31 @@ export class BillingService {
     }
     const customerId = sub?.provider === provider.id ? sub.customerId : null;
     const { url } = await this.call(() =>
-      provider.checkout({ ...input, planId: plan.id, priceId, customerId }),
+      provider.checkout({ ...input, planId: plan.id, priceId, quantity, customerId }),
     );
     return { kind: 'redirect', url };
+  }
+
+  /** How many of the plan's price to buy: seats for a per-seat plan (at least one per member), else 1. */
+  private async quantityFor(plan: Plan, workspaceId: string, seats: number | undefined): Promise<number> {
+    if (!plan.perSeat) return 1;
+    const [row] = await this.deps.db
+      .select({ n: count() })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId));
+    const members = row?.n ?? 1;
+    const { min, max } = plan.perSeat;
+    const wanted = seats ?? Math.max(min, members);
+    if (!Number.isInteger(wanted) || wanted < min || wanted > max) {
+      throw new BillingError('bad_seats', `The ${plan.id} plan is bought for ${min} to ${max} people`);
+    }
+    if (wanted < members) {
+      throw new BillingError(
+        'too_few_seats',
+        `The team has ${members} members: buy at least ${members} seats or remove someone first`,
+      );
+    }
+    return wanted;
   }
 
   /** The provider's page to update the card, download invoices or cancel. */
@@ -223,7 +278,8 @@ export class BillingService {
         outcome = 'ignored';
         detail = decision.ignore;
       } else {
-        await this.deps.entitlements.setPlan(decision.workspaceId!, decision.planId!, {
+        const before = await this.deps.entitlements.subscription(decision.workspaceId!);
+        const after = await this.deps.entitlements.setPlan(decision.workspaceId!, decision.planId!, {
           provider: providerId,
           externalId: change.externalId,
           customerId: change.customerId,
@@ -232,8 +288,10 @@ export class BillingService {
           interval: decision.interval ?? null,
           cancelAtPeriodEnd: change.cancelAtPeriodEnd,
           providerUpdatedAt: change.occurredAt,
+          quantity: decision.quantity ?? 1,
         });
         outcome = 'applied';
+        await this.notify({ workspaceId: decision.workspaceId!, before, after });
       }
     } catch (error) {
       outcome = 'failed';
@@ -264,6 +322,22 @@ export class BillingService {
     return outcome;
   }
 
+  /** Listeners never fail the event: the plan change is already applied. */
+  private async notify(change: Parameters<BillingListener['subscriptionChanged']>[0]): Promise<void> {
+    for (const listener of this.listeners) {
+      try {
+        await listener.subscriptionChanged(change);
+      } catch (err) {
+        this.deps.logger.warn({ workspaceId: change.workspaceId, err }, 'billing: listener failed');
+      }
+    }
+  }
+
+  /** True when the provider charges this subscription (active, trialing or past due). */
+  static isLive(sub: SubscriptionRow | undefined): boolean {
+    return Boolean(sub && LIVE.has(sub.status));
+  }
+
   private async decide(
     providerId: string,
     change: SubscriptionChange,
@@ -271,12 +345,15 @@ export class BillingService {
     workspaceId?: string;
     planId?: string;
     interval?: BillingInterval;
+    quantity?: number;
     ignore?: string;
   }> {
     const workspaceId = await this.resolveWorkspace(providerId, change);
     if (!workspaceId) return { ignore: 'unknown workspace' };
     const sub = await this.deps.entitlements.subscription(workspaceId);
     const sameSubscription = sub?.provider === providerId && sub.externalId === change.externalId;
+    // An event without a quantity keeps the seats the subscription had.
+    const quantity = change.quantity ?? (sameSubscription ? sub.quantity : 1);
     if (sameSubscription && sub.providerUpdatedAt && change.occurredAt < sub.providerUpdatedAt) {
       return { workspaceId, ignore: 'older than the current state' };
     }
@@ -288,10 +365,15 @@ export class BillingService {
       return { workspaceId, ignore: `workspace is on the special ${sub.planId} plan` };
     }
     const priced = this.planForPrice(change.priceId);
-    if (priced) return { workspaceId, planId: priced.planId, interval: priced.interval };
+    if (priced) return { workspaceId, planId: priced.planId, interval: priced.interval, quantity };
     // An ended subscription keeps its last plan in the row (it no longer applies).
     if (!LIVE.has(change.status) && sameSubscription) {
-      return { workspaceId, planId: sub.planId, ...(sub.interval ? { interval: sub.interval } : {}) };
+      return {
+        workspaceId,
+        planId: sub.planId,
+        quantity,
+        ...(sub.interval ? { interval: sub.interval } : {}),
+      };
     }
     return { workspaceId, ignore: `unknown price ${change.priceId ?? '(none)'}` };
   }

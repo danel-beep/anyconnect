@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gt, isNull, or, sql, sum } from 'drizzle-orm';
 import type { AccountLimits } from '../core/accounts.js';
 import { type Principal, usageCaller } from '../core/principal.js';
+import type { TeamLimits } from '../core/teams.js';
 import type { Db } from '../db/client.js';
 import {
   accounts,
@@ -9,6 +10,8 @@ import {
   type SubscriptionStatus,
   subscriptions,
   usageCounters,
+  type WorkspaceKind,
+  workspaceMembers,
   workspaces,
 } from '../db/schema.js';
 import type { QuotaDecision, QuotaGate } from '../hub/quota.js';
@@ -23,6 +26,7 @@ import {
   getPlan,
   isMetric,
   type Limits,
+  limitsFor,
   METRICS,
   type Metric,
   type Plan,
@@ -36,6 +40,8 @@ export type LimitGrantRow = typeof limitGrants.$inferSelect;
 export interface Entitlements {
   plan: Plan;
   subscription: SubscriptionRow | undefined;
+  /** A person's own workspace or a team's. */
+  workspaceKind: WorkspaceKind;
   limits: Limits;
   /** The trial or step of the plan's start in force now (see `Plan.start`). */
   phase: StartPhase | undefined;
@@ -67,15 +73,29 @@ export class PlanLimitError extends AppError {
 
 const CACHE_MS = 10_000;
 
+/** Shares of the monthly action limit at which the AI is told, once, that the limit is getting close. */
+const NEAR_LIMIT_LEVELS = [0.8, 0.95] as const;
+
+/** Things that happen while limits are enforced (notices subscribe; see `src/notices/`). */
+export interface EntitlementListener {
+  /** A call was refused because the monthly action limit is used up. */
+  limitReached?(workspaceId: string, ent: Entitlements, limit: number): Promise<void>;
+}
+
 /**
- * Plans, limits and grants of workspaces. Implements the hub's `QuotaGate` (actions per month) and
- * the account service's `AccountLimits`. Payment providers and admins change plans through
- * `setPlan`; admins add limits with `grant`.
+ * Plans, limits and grants of workspaces. Implements the hub's `QuotaGate` (actions per month, and
+ * seats in a team), the account service's `AccountLimits` and the team service's `TeamLimits`.
+ * Payment providers and admins change plans through `setPlan`; admins add limits with `grant`.
  */
-export class EntitlementService implements QuotaGate, AccountLimits {
+export class EntitlementService implements QuotaGate, AccountLimits, TeamLimits {
   /** Short-lived snapshot of usage per workspace, bumped locally between refreshes. */
   private readonly usageCache = new Map<string, { at: number; period: string; actions: number }>();
   private readonly callerCache = new Map<string, { at: number; period: string; actions: number }>();
+  /** `workspace:countFrom:level` already hinted to the AI or notified (per process; notices dedupe in the DB). */
+  private readonly told = new Set<string>();
+  private readonly listeners: EntitlementListener[] = [];
+  /** Who holds a team's seats, per workspace and seat count. */
+  private readonly seatCache = new Map<string, { at: number; holders: Set<string> }>();
 
   constructor(
     private readonly deps: {
@@ -83,12 +103,22 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       usage: UsageMeter;
       /** Absolute URL of the pricing page, quoted to the AI when a limit is reached. */
       pricingUrl: string;
+      /** Absolute URL of the teams page, where a team's owner buys seats. */
+      teamsUrl?: string;
       now?: () => Date;
     },
   ) {}
 
+  private get teamsUrl(): string {
+    return this.deps.teamsUrl ?? this.deps.pricingUrl;
+  }
+
   private now(): Date {
     return this.deps.now?.() ?? new Date();
+  }
+
+  listen(listener: EntitlementListener): void {
+    this.listeners.push(listener);
   }
 
   // --- Reading -----------------------------------------------------------------
@@ -127,7 +157,7 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   async entitlements(workspaceId: string): Promise<Entitlements> {
     const now = this.now();
     const [workspace] = await this.deps.db
-      .select({ createdAt: workspaces.createdAt })
+      .select({ createdAt: workspaces.createdAt, kind: workspaces.kind })
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
       .limit(1);
@@ -138,7 +168,7 @@ export class EntitlementService implements QuotaGate, AccountLimits {
     ]);
     const plan = this.planFor(subscription, now);
     const { phase, schedule, trialEnd } = startNow(plan, workspace.createdAt, now);
-    const limits = { ...(phase?.limits ?? plan.limits) };
+    const limits = { ...(phase?.limits ?? limitsFor(plan, subscription?.quantity)) };
     for (const grant of grants) {
       if (isMetric(grant.metric)) limits[grant.metric] = addLimit(limits[grant.metric], grant.amount);
     }
@@ -147,7 +177,17 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       trialEnd && trialEnd.getTime() <= now.getTime() ? trialEnd.toISOString().slice(0, 10) : '';
     // Trial usage does not eat into the first post-trial month (ISO days compare as strings).
     const countFrom = [period.start, trialEndDay].sort().at(-1) ?? period.start;
-    return { plan, subscription, limits, phase, schedule, grants, period, countFrom };
+    return {
+      plan,
+      subscription,
+      workspaceKind: workspace.kind,
+      limits,
+      phase,
+      schedule,
+      grants,
+      period,
+      countFrom,
+    };
   }
 
   /** Actions since `from` (`YYYY-MM-DD`, see `Entitlements.countFrom`). */
@@ -181,12 +221,17 @@ export class EntitlementService implements QuotaGate, AccountLimits {
 
   async checkAction(principal: Principal): Promise<QuotaDecision> {
     const ent = await this.entitlements(principal.workspaceId);
+    const seats = await this.seatCheck(principal, ent);
+    if (!seats.allowed) return seats;
     const limit = ent.limits.actions;
     if (limit === null) return { allowed: true };
     const used = await this.cachedUsage(this.usageCache, principal.workspaceId, ent.countFrom, () =>
       this.actionsUsed(principal.workspaceId, ent.countFrom),
     );
-    if (used >= limit) return { allowed: false, message: this.actionsMessage(ent, limit) };
+    if (used >= limit) {
+      this.limitReached(principal.workspaceId, ent, limit);
+      return { allowed: false, message: this.actionsMessage(ent, limit) };
+    }
     // The free allowance belongs to the person at the AI provider, not to a sign-up: several hub
     // accounts used from one ChatGPT account share it.
     if (ent.plan.priceMonthly === 0 && principal.aiSubject) {
@@ -198,7 +243,98 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       this.bump(this.callerCache, caller);
     }
     this.bump(this.usageCache, principal.workspaceId);
-    return { allowed: true };
+    const notice = this.nearLimitNotice(principal.workspaceId, ent, limit, used + 1);
+    return notice ? { allowed: true, notice } : { allowed: true };
+  }
+
+  /**
+   * A gentle line for the AI when this call crosses 80% or 95% of the monthly actions: said once
+   * per level and month, so the assistant can mention it in passing instead of the user hitting
+   * the wall unannounced.
+   */
+  private nearLimitNotice(
+    workspaceId: string,
+    ent: Entitlements,
+    limit: number,
+    used: number,
+  ): string | undefined {
+    const level = [...NEAR_LIMIT_LEVELS].reverse().find((l) => used >= Math.ceil(limit * l));
+    if (!level || used >= limit) return undefined;
+    const key = `${workspaceId}:${ent.countFrom}:${level}`;
+    if (this.told.has(key)) return undefined;
+    this.remember(key);
+    const reset = ent.period.resetsAt.toISOString().slice(0, 10);
+    return (
+      `Manyplug note (not from the service): the user has used ${used} of ${limit} actions this month ` +
+      `on the ${ent.plan.id} plan; the count resets on ${reset}. Finish the task, then mention this ` +
+      `once, briefly and without pressure; a bigger plan is at ${this.deps.pricingUrl}.`
+    );
+  }
+
+  private limitReached(workspaceId: string, ent: Entitlements, limit: number): void {
+    const key = `${workspaceId}:${ent.countFrom}:reached`;
+    if (this.told.has(key) || !this.listeners.length) return;
+    this.remember(key);
+    for (const listener of this.listeners) {
+      // Never delays or fails the refused call; the notice service logs its own failures.
+      listener.limitReached?.(workspaceId, ent, limit).catch(() => this.told.delete(key));
+    }
+  }
+
+  private remember(key: string): void {
+    this.told.add(key);
+    if (this.told.size > 20_000) this.told.delete(this.told.values().next().value!);
+  }
+
+  /**
+   * In a team, as many people as the plan has seats use it: the owner and those who joined first.
+   * More members than seats happen when a trial ends or seats are removed; the others are told to
+   * ask for seats instead of being removed. The team's shared connection is nobody's seat.
+   */
+  private async seatCheck(principal: Principal, ent: Entitlements): Promise<QuotaDecision> {
+    const seats = ent.limits.seats;
+    if (ent.workspaceKind !== 'team' || seats === null || principal.shared) return { allowed: true };
+    let holders = await this.seatHolders(principal.workspaceId, seats);
+    // A free seat means the cached list may predate someone who just joined: look again.
+    if (!holders.has(principal.userId) && holders.size < seats)
+      holders = await this.seatHolders(principal.workspaceId, seats, true);
+    if (holders.has(principal.userId)) return { allowed: true };
+    return {
+      allowed: false,
+      message:
+        `This team’s ${ent.plan.id} plan has ${seats} seat${seats === 1 ? '' : 's'}, all taken by members ` +
+        `who joined earlier, so this user cannot use the team’s services right now. Tell the user to ask ` +
+        `the team’s owner to add seats at ${this.teamsUrl}. Do not retry.`,
+    };
+  }
+
+  private async seatHolders(workspaceId: string, seats: number, fresh = false): Promise<Set<string>> {
+    const key = `${workspaceId}:${seats}`;
+    const hit = this.seatCache.get(key);
+    if (!fresh && hit && Date.now() - hit.at < CACHE_MS) return hit.holders;
+    const rows = await this.deps.db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId))
+      .orderBy(sql`(${workspaceMembers.role} = 'owner') desc`, workspaceMembers.createdAt)
+      .limit(seats);
+    const holders = new Set(rows.map((r) => r.userId));
+    this.seatCache.set(key, { at: Date.now(), holders });
+    if (this.seatCache.size > 10_000) this.seatCache.delete(this.seatCache.keys().next().value!);
+    return holders;
+  }
+
+  /** Throws `PlanLimitError` when `taken` seats (members and open invitations) fill the team's plan. */
+  async assertCanAddMember(workspaceId: string, taken: number): Promise<void> {
+    const ent = await this.entitlements(workspaceId);
+    const limit = ent.limits.seats;
+    if (limit === null || taken < limit) return;
+    throw new PlanLimitError(
+      'seats',
+      limit,
+      `The team’s ${ent.plan.id} plan has ${limit} seat${limit === 1 ? '' : 's'} and members and open ` +
+        `invitations take all of them. Add seats at ${this.teamsUrl} or take back an invitation.`,
+    );
   }
 
   private actionsMessage(ent: Entitlements, limit: number): string {
@@ -262,11 +398,17 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       interval?: 'month' | 'year' | null;
       cancelAtPeriodEnd?: boolean;
       providerUpdatedAt?: Date | null;
+      /** Seats bought on a per-seat plan (1 for other plans). */
+      quantity?: number | null;
     } = {},
   ): Promise<SubscriptionRow> {
     if (!findPlan(planId)) throw new AppError(400, 'unknown_plan', `Unknown plan "${planId}"`);
+    const quantity = opts.quantity ?? 1;
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10_000)
+      throw new AppError(400, 'bad_quantity', 'The number of seats must be a whole number from 1');
     const values = {
       planId,
+      quantity,
       status: opts.status ?? ('active' as const),
       provider: opts.provider ?? 'manual',
       externalId: opts.externalId ?? null,
@@ -283,6 +425,8 @@ export class EntitlementService implements QuotaGate, AccountLimits {
       .onConflictDoUpdate({ target: subscriptions.workspaceId, set: { ...values, updatedAt: new Date() } })
       .returning();
     this.usageCache.delete(workspaceId);
+    for (const key of this.seatCache.keys())
+      if (key.startsWith(`${workspaceId}:`)) this.seatCache.delete(key);
     await this.closeRequests(workspaceId);
     return row!;
   }

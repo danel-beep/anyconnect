@@ -19,19 +19,26 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
     private readonly oauth: OAuthServer,
     private readonly apiTokens: ApiTokenService,
     private readonly resource: string,
-    /** MCP URL of a persona; personal tokens bound to a persona only work there. */
-    private readonly personaResource: (workspaceId: string, personaId: string) => Promise<string | undefined>,
     /**
-     * Whether the token's user may still act (not suspended). Suspending revokes tokens already;
-     * this keeps a token issued in a race with the suspension from working.
+     * The MCP URL a personal token works on: its persona's or its team's (undefined when that is
+     * gone). Tokens of a personal workspace without a persona work on `resource`.
      */
-    private readonly userActive: (userId: string) => Promise<boolean> = async () => true,
+    private readonly tokenResource: (token: {
+      workspaceId: string;
+      personaId: string | null;
+    }) => Promise<string | undefined> = async () => this.resource,
+    /**
+     * Whether the caller may still act: not suspended, still a member of the token's workspace.
+     * Suspending a user or removing them from a team revokes their tokens already; this keeps a
+     * token issued in a race with that from working.
+     */
+    private readonly active: (principal: Principal) => Promise<boolean> = async () => true,
   ) {}
 
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const info = await this.verify(token);
     const principal = info.extra?.[PRINCIPAL] as Principal;
-    if (!(await this.userActive(principal.userId)))
+    if (!(await this.active(principal)))
       throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired access token');
     return info;
   }
@@ -68,10 +75,9 @@ export class HubTokenVerifier implements OAuthTokenVerifier {
         credentialId: pat.id,
         ...(pat.aiClientId ? { aiClientId: pat.aiClientId } : {}),
         ...(pat.personaId ? { personaId: pat.personaId } : {}),
+        ...(pat.shared ? { shared: true } : {}),
       };
-      const resource = pat.personaId
-        ? await this.personaResource(pat.workspaceId, pat.personaId)
-        : this.resource;
+      const resource = await this.tokenResource(pat);
       if (!resource) throw new OAuthError(OAuthErrorCode.InvalidToken, 'Invalid or expired access token');
       return {
         token,

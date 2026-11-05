@@ -87,6 +87,8 @@ export function callReason(t: Translate, outcome: string | null, message: string
       return t('problem.busy');
     case 'timeout':
       return t('problem.call.timeout');
+    case 'circuit_open':
+      return t('problem.call.circuit');
     case 'auth':
       return t('problem.signin');
     case 'permission':

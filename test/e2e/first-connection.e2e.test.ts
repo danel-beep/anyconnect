@@ -195,7 +195,7 @@ describe('first connection: Claude, Google sign-up and Gmail', () => {
     const failed = await claude.call('gmail_search', { account: 'work', query: 'PO-77' });
     expect(failed.isError).toBe(true);
     // The AI gets a link that repairs this account, to hand to the user.
-    const link = /give them this link (\S+)/.exec(textOf(failed))?.[1];
+    const link = /sign in again, here: (\S+?)\.? /.exec(textOf(failed))?.[1];
     expect(link, textOf(failed)).toMatch(new RegExp(`^${hub.baseUrl}/connect/gmail\\?account=acc_`));
     expect(textOf(failed)).not.toContain('..');
 

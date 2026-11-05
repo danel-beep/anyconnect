@@ -7,10 +7,8 @@ import type { Logger } from '../logger.js';
  * The token is never logged; errors carry the method name only.
  */
 
-export interface InlineButton {
-  text: string;
-  callback_data: string;
-}
+/** An inline keyboard button: a callback the webhook receives, or a link Telegram opens. */
+export type InlineButton = { text: string; callback_data: string } | { text: string; url: string };
 
 const Message = z.object({
   message_id: z.number(),
@@ -46,6 +44,18 @@ export const TelegramUpdate = z.object({
     .optional(),
 });
 export type TelegramUpdate = z.infer<typeof TelegramUpdate>;
+
+/** A `/start` the confirmations bot did not take as a link code (for example from an ad). */
+export interface BotStart {
+  chatId: string;
+  /** The text after `/start`, trimmed; empty when the bot was opened without one. */
+  payload: string;
+  /** The language the person's Telegram app is set to, if sent. */
+  languageCode: string | undefined;
+}
+
+/** Handles a `/start`; returns false when it is not for this handler. */
+export type BotStartHandler = (start: BotStart) => Promise<boolean>;
 
 export class TelegramApiError extends Error {
   override name = 'TelegramApiError';

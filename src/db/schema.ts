@@ -1,9 +1,9 @@
 /**
  * Database schema (Drizzle ORM, PostgreSQL).
  *
- * Ownership model: everything a person connects lives in a *workspace*. Today every user has one
- * personal workspace; teams/commercial plans can later add members to the same workspace without
- * changing the data model.
+ * Ownership model: everything a person connects lives in a *workspace*. Every user has one
+ * personal workspace; a *team* is a workspace with several members, where each connected account
+ * belongs to one member (or to the whole team) and is shared explicitly (see `docs/TEAMS.md`).
  *
  * Migrations are generated from this file with `npm run db:generate` and committed in /drizzle.
  * Keep this file free of runtime imports from the app (drizzle-kit loads it standalone).
@@ -48,6 +48,8 @@ export const users = pgTable('users', {
   statusReason: text(),
   /** Preferred interface language (`ru`, `en`); null = from the browser. */
   locale: text(),
+  /** The user's invite code (`/?ref=<code>`), created on first use; see `ReferralService`. */
+  referralCode: text().unique(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   lastLoginAt: timestamp({ withTimezone: true }),
@@ -126,9 +128,16 @@ export interface SecuritySettings {
   undoWindowSeconds?: number;
 }
 
+export type WorkspaceKind = 'personal' | 'team';
+export type MemberRole = 'owner' | 'admin' | 'member';
+
 export const workspaces = pgTable('workspaces', {
   id: text().primaryKey(),
   name: text().notNull(),
+  /** `personal`: one person's own space; `team`: several members, each with their own accounts. */
+  kind: text().$type<WorkspaceKind>().notNull().default('personal'),
+  /** Teams: the address part of the team's MCP URL (`/mcp/team/<slug>`); never changes. */
+  slug: text().unique(),
   settings: jsonb().$type<WorkspaceSettings>().notNull().default({}),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -143,10 +152,41 @@ export const workspaceMembers = pgTable(
     userId: text()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    role: text().$type<'owner' | 'admin' | 'member'>().notNull().default('owner'),
+    role: text().$type<MemberRole>().notNull().default('owner'),
+    /**
+     * Teams: the member's short name, unique in the team. Their accounts are named after it
+     * (`ann`, `ann_work`), so "Ann's mail" is easy to say and to pick.
+     */
+    handle: text(),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.workspaceId, t.userId] }), index().on(t.userId)],
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index().on(t.userId),
+    uniqueIndex().on(t.workspaceId, t.handle),
+  ],
+);
+
+/** Invitations to a team, bound to an email address; the link carries a token stored as a hash. */
+export const workspaceInvitations = pgTable(
+  'workspace_invitations',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Normalized (lowercase); only a user signed in with this address can accept. */
+    email: text().notNull(),
+    role: text().$type<Exclude<MemberRole, 'owner'>>().notNull().default('member'),
+    tokenHash: text().notNull().unique(),
+    invitedBy: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    acceptedAt: timestamp({ withTimezone: true }),
+    acceptedBy: text().references(() => users.id, { onDelete: 'set null' }),
+    revokedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.workspaceId), index().on(t.email)],
 );
 
 /** Browser sessions for the hub's own pages (login, consent, panel). */
@@ -296,6 +336,11 @@ export const apiTokens = pgTable(
     aiClientId: text().references(() => aiClients.id, { onDelete: 'set null' }),
     /** Restricts the token to one persona's MCP URL. */
     personaId: text().references(() => personas.id, { onDelete: 'cascade' }),
+    /**
+     * Teams: the team's shared connection, not tied to one person. It only sees what the whole
+     * team may use (team accounts and accounts shared with everyone) and cannot change the setup.
+     */
+    shared: boolean().notNull().default(false),
     createdAt: createdAt(),
     lastUsedAt: timestamp({ withTimezone: true }),
     expiresAt: timestamp({ withTimezone: true }),
@@ -332,6 +377,11 @@ export const accounts = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     /** Connector type, e.g. `gmail`, `telegram`, `demo`. */
     connectorId: text().notNull(),
+    /**
+     * The member it belongs to: only they (and whoever they share it with) can use it. Null: the
+     * team's own account, which every member can use and the team admins manage.
+     */
+    ownerUserId: text().references(() => users.id, { onDelete: 'cascade' }),
     /** Short machine name shown to the AI, unique per connector in a workspace (e.g. `work`). */
     name: text().notNull(),
     /** Human label, e.g. "Рабочая почта". */
@@ -357,8 +407,45 @@ export const accounts = pgTable(
     lastUsedAt: timestamp({ withTimezone: true }),
     /** Last connection test (on creation, on demand, by the periodic health check). */
     checkedAt: timestamp({ withTimezone: true }),
+    /** When the owners were told this account needs a new sign-in; cleared once it works again. */
+    reauthNotifiedAt: timestamp({ withTimezone: true }),
   },
-  (t) => [uniqueIndex().on(t.workspaceId, t.connectorId, t.name), index().on(t.workspaceId)],
+  (t) => [
+    uniqueIndex().on(t.workspaceId, t.connectorId, t.name),
+    index().on(t.workspaceId),
+    index().on(t.ownerUserId),
+  ],
+);
+
+export type ShareLevel = 'read' | 'write' | 'full';
+
+/**
+ * Who else in a team may use an account, and how much: one row per member, or `userId` null for the
+ * whole team. A member's account without rows is private to them; a team account without a
+ * whole-team row is fully usable by every member.
+ */
+export const accountShares = pgTable(
+  'account_shares',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** The member it is shared with; null: everyone in the team. */
+    userId: text().references(() => users.id, { onDelete: 'cascade' }),
+    access: text().$type<ShareLevel>().notNull(),
+    createdBy: text().references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index().on(t.workspaceId),
+    uniqueIndex().on(t.accountId, t.userId),
+    uniqueIndex('account_shares_team_unique').on(t.accountId).where(sql`${t.userId} is null`),
+  ],
 );
 
 /** Audit trail of every tool call made by an AI client. Arguments are not stored. */
@@ -391,7 +478,12 @@ export const toolCalls = pgTable(
     createdAt: createdAt(),
   },
   // The second index serves an account's own log (the account page, the activity filter).
-  (t) => [index().on(t.workspaceId, t.createdAt), index().on(t.accountId, t.createdAt)],
+  // The third serves hub-wide windows (status page, retention clean-up).
+  (t) => [
+    index().on(t.workspaceId, t.createdAt),
+    index().on(t.accountId, t.createdAt),
+    index().on(t.createdAt),
+  ],
 );
 
 /**
@@ -519,6 +611,8 @@ export interface PendingCallPrincipal {
   credentialId?: string;
   aiClientId?: string;
   personaId?: string;
+  /** A team's shared connection (see `Principal.shared`). */
+  shared?: boolean;
 }
 
 /**
@@ -743,6 +837,8 @@ export interface ConnectDraft {
   label?: string;
   description?: string;
   config?: Record<string, unknown>;
+  /** In a team: whose the new account is (a member's user id, or null for the team's). */
+  owner?: { userId: string | null };
 }
 
 /** A pending "connect account" OAuth flow, single use, short-lived. */
@@ -1016,6 +1112,8 @@ export const subscriptions = pgTable(
     customerId: text(),
     /** Billing interval of a paid subscription. */
     interval: text().$type<'month' | 'year'>(),
+    /** Units bought: seats on plans priced per person (`Plan.perSeat`), otherwise 1. */
+    quantity: integer().notNull().default(1),
     /**
      * When the provider last changed the subscription (its event time). Webhooks can arrive out of
      * order; an older event never overwrites a newer state.
@@ -1057,6 +1155,48 @@ export const billingEvents = pgTable(
     index().on(t.workspaceId),
     index().on(t.createdAt),
   ],
+);
+
+/**
+ * Emails and other one-off notices already sent to a workspace, so each goes out once per
+ * occasion (`key`: the trial end day, the counting period, the subscription and period...).
+ */
+export const sentNotices = pgTable(
+  'sent_notices',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** `trial_ending`, `limit_reached`, `payment_failed`, `referral_reward`. */
+    kind: text().notNull(),
+    key: text().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.kind, t.key] })],
+);
+
+export type ReferralStatus = 'signed_up' | 'rewarded' | 'no_reward';
+
+/**
+ * Who invited whom (one row per invited user). The inviter gets a month of Pro once the invited
+ * user starts paying; see `ReferralService`.
+ */
+export const referrals = pgTable(
+  'referrals',
+  {
+    referredUserId: text()
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    referrerUserId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text().$type<ReferralStatus>().notNull().default('signed_up'),
+    /** What the inviter got: `pro_plan` (a month of Pro), `pro_limits` (Pro limits on a paid plan) or why not. */
+    reward: text(),
+    rewardedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.referrerUserId)],
 );
 
 /**
@@ -1119,4 +1259,211 @@ export const adminAuditLog = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index().on(t.createdAt), index().on(t.targetUserId)],
+);
+
+// ---------------------------------------------------------------------------
+// Operations: error tracking, background job runs
+// ---------------------------------------------------------------------------
+
+/**
+ * Unexpected errors grouped by fingerprint (the hub's own error tracker, see `src/ops/errors.ts`).
+ * Only scrubbed text is stored: messages and stacks pass through `scrubSecrets`, and contexts never
+ * hold tool arguments, tokens or credentials.
+ */
+export const errorGroups = pgTable(
+  'error_groups',
+  {
+    id: text().primaryKey(),
+    /** Hash of source, error type, normalized message and the first own stack frame. */
+    fingerprint: text().notNull().unique(),
+    /** Where it happened: `http`, `tool`, `job`, `process`, `maintenance`... */
+    source: text().notNull(),
+    /** Error class name (`TypeError`). */
+    type: text().notNull(),
+    message: text().notNull(),
+    stack: text(),
+    /** The latest occurrence's context: path, method, tool, connector, job (no arguments). */
+    context: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    count: integer().notNull().default(1),
+    /** Reference of the latest occurrence, as shown to users ("ref …") and in the logs. */
+    lastRef: text(),
+    lastRequestId: text(),
+    release: text(),
+    firstSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    /** Set when an admin marks it fixed; a new occurrence reopens the group. */
+    resolvedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.lastSeenAt), index().on(t.resolvedAt)],
+);
+
+/** The latest run of each background job, so a job that silently stopped is visible. */
+export const jobRuns = pgTable('job_runs', {
+  name: text().primaryKey(),
+  lastStartedAt: timestamp({ withTimezone: true }),
+  lastSucceededAt: timestamp({ withTimezone: true }),
+  lastFailedAt: timestamp({ withTimezone: true }),
+  /** Scrubbed message of the latest failure. */
+  lastError: text(),
+  lastDurationMs: integer(),
+  /** Failures since the last success. */
+  consecutiveFailures: integer().notNull().default(0),
+  runs: bigint({ mode: 'number' }).notNull().default(0),
+  failures: bigint({ mode: 'number' }).notNull().default(0),
+});
+
+// ---------------------------------------------------------------------------
+// Status page: component states, daily uptime, incidents
+// ---------------------------------------------------------------------------
+
+/** Current state of each public component (see `src/ops/status.ts`), updated every minute. */
+export const statusComponents = pgTable('status_components', {
+  /** `web`, `mcp`, `database`, `jobs`, `connections`. */
+  component: text().primaryKey(),
+  status: text().$type<'ok' | 'degraded' | 'down'>().notNull(),
+  /** Internal detail for the admin panel (never shown on the public page). */
+  detail: text(),
+  /** When the component entered its current status. */
+  since: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  lastSampleAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Minutes per status, per component and UTC day: the 90-day bars and uptime percentages. */
+export const statusDays = pgTable(
+  'status_days',
+  {
+    component: text().notNull(),
+    day: date({ mode: 'string' }).notNull(),
+    okMinutes: integer().notNull().default(0),
+    degradedMinutes: integer().notNull().default(0),
+    downMinutes: integer().notNull().default(0),
+    /** Minutes without a sample: the hub (or its jobs) was not running. */
+    missingMinutes: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.component, t.day] })],
+);
+
+/** A period when a component was degraded or down (or not sampled at all). */
+export const statusIncidents = pgTable(
+  'status_incidents',
+  {
+    id: text().primaryKey(),
+    component: text().notNull(),
+    /** Worst status during the incident; `missing` = no samples (the hub was not running). */
+    status: text().$type<'degraded' | 'down' | 'missing'>().notNull(),
+    detail: text(),
+    startedAt: timestamp({ withTimezone: true }).notNull(),
+    /** Null while ongoing. */
+    endedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [index().on(t.startedAt), index().on(t.component, t.endedAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Product analytics (first party, cookieless; see `docs/ANALYTICS.md`)
+// ---------------------------------------------------------------------------
+
+/**
+ * The secret of each UTC day that visitor ids are hashed with. Random, shared by every instance,
+ * deleted after two days: from then on nobody (us included) can tie a visit back to an address.
+ */
+export const analyticsSalts = pgTable('analytics_salts', {
+  day: date({ mode: 'string' }).primaryKey(),
+  salt: text().notNull(),
+  createdAt: createdAt(),
+});
+
+/**
+ * One row per visitor and UTC day on the public site: a daily aggregate, not a click log. The
+ * visitor is `hash(day salt, IP, browser)`, so the same person is a new visitor the next day and no
+ * IP address or cookie is stored. The traffic source is the first non-direct one seen that day.
+ */
+export const analyticsVisits = pgTable(
+  'analytics_visits',
+  {
+    day: date({ mode: 'string' }).notNull(),
+    /** Daily visitor id (truncated SHA-256, base64url). */
+    visitor: text().notNull(),
+    /** `direct`, a search engine, a site, or `utm_source` (`telegram`). */
+    source: text().notNull(),
+    /** `none`, `organic`, `referral`, `social`, `ai`, `paid`, `email`, `invite` or `utm_medium`. */
+    medium: text().notNull(),
+    campaign: text(),
+    term: text(),
+    content: text(),
+    /** The referring site's host, without `www.`. */
+    referrerHost: text(),
+    /** The first page of the visit (ids replaced by `:id`). */
+    landingPath: text().notNull(),
+    /** ISO 3166 country code from the IP (looked up, never stored). */
+    country: text(),
+    /** The browser's preferred language (`en`, `ru`, `de`). */
+    language: text(),
+    /** `desktop`, `mobile`, `tablet`. */
+    device: text().notNull(),
+    browser: text().notNull(),
+    os: text().notNull(),
+    /** The browser carried a sign-in session: a returning user, kept out of acquisition numbers. */
+    known: boolean().notNull().default(false),
+    pageviews: integer().notNull().default(0),
+    firstAt: timestamp({ withTimezone: true }).notNull(),
+    lastAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.visitor] }), index().on(t.source, t.day)],
+);
+
+/** Page views per UTC day and page (site and dashboard; ids in paths replaced by `:id`). */
+export const analyticsPages = pgTable(
+  'analytics_pages',
+  {
+    day: date({ mode: 'string' }).notNull(),
+    path: text().notNull(),
+    views: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.path] })],
+);
+
+/**
+ * Counters of product events per UTC day: `name` says what happened (`signup`, `connect.start`,
+ * `checkout.start`, `crawler`, `bot.start`), `key` what it happened to (a service, plan, campaign).
+ */
+export const analyticsEvents = pgTable(
+  'analytics_events',
+  {
+    day: date({ mode: 'string' }).notNull(),
+    name: text().notNull(),
+    key: text().notNull().default(''),
+    count: integer().notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.day, t.name, t.key] })],
+);
+
+/**
+ * Where a user came from, written once at sign-up from that day's (or the day before's) visit by
+ * the same visitor. `matched = false`: no visit was seen (an earlier visit, or before analytics).
+ */
+export const userAttribution = pgTable(
+  'user_attribution',
+  {
+    userId: text()
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    source: text().notNull(),
+    medium: text().notNull(),
+    campaign: text(),
+    term: text(),
+    content: text(),
+    referrerHost: text(),
+    landingPath: text(),
+    country: text(),
+    language: text(),
+    device: text(),
+    browser: text(),
+    os: text(),
+    matched: boolean().notNull(),
+    /** When the matched visit started. */
+    firstSeenAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.createdAt), index().on(t.source)],
 );

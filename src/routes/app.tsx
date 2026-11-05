@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { isMetric, type Metric, PLANS } from '../billing/plans.js';
+import { isMetric, type Metric, PLANS, planFits } from '../billing/plans.js';
+import { REFERRAL_PROVIDER } from '../billing/referrals.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
-import type { toolCalls } from '../db/schema.js';
 import { isSetupConnector } from '../hub/setup-tools.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
@@ -17,14 +17,13 @@ import {
   AppsPage,
   type AppsView,
   BillingPage,
-  type CallView,
   groupByService,
   OverviewPage,
   ServicesAppPage,
   SettingsPage,
   type UsageView,
 } from '../web/app.js';
-import { serviceAlternative } from '../web/catalog.js';
+import { SAMPLE_SERVICES, serviceAlternative } from '../web/catalog.js';
 import { clearCookie } from '../web/http.js';
 import { RulesPage } from '../web/rules.js';
 import { fmtAgo, fmtDate } from '../web/ui.js';
@@ -33,6 +32,8 @@ import {
   type AppAuth,
   appAction,
   appPage,
+  callViews,
+  connectionBack,
   cookieOpts,
   pageCtx,
   saveLocale,
@@ -40,13 +41,10 @@ import {
   shellInfo,
   takeFlash,
 } from './page-helpers.js';
-import { profileBack } from './profiles.js';
 
 const DAY = 86_400_000;
 /** Ids of AI apps and accounts, as rule rows name them (and the rules page links to them). */
 const RULE_ID = /^[\w-]{1,64}$/;
-
-type ToolCallRow = typeof toolCalls.$inferSelect;
 
 function accountView(a: AccountRow, serviceName: string, oauth: boolean): AccountView {
   return {
@@ -117,50 +115,6 @@ export function appRoutes() {
       );
   };
 
-  const callViews = async (c: AppContext, workspaceId: string, rows: ToolCallRow[]): Promise<CallView[]> => {
-    const s = c.get('services');
-    const clients = new Map((await s.aiClients.list(workspaceId)).map((x) => [x.id, x.name]));
-    const grants = new Map(
-      (await s.oauth.listGrants(workspaceId)).map((g) => [g.clientId, g.clientName ?? g.clientId]),
-    );
-    const tokens = new Map((await s.apiTokens.list(workspaceId)).map((x) => [x.id, x.name]));
-    const t = c.get('t');
-    const clientOf = (r: ToolCallRow): string | null => {
-      if (r.principalType === 'session') return t('app.call.dashboard');
-      if (r.clientId) return grants.get(r.clientId) ?? clients.get(r.clientId) ?? null;
-      if (r.principalType === 'api_token' && r.principalId) return tokens.get(r.principalId) ?? null;
-      return null;
-    };
-    const [connectors, accounts] = await Promise.all([
-      s.connectors.list(workspaceId),
-      s.accounts.list(workspaceId),
-    ]);
-    const connectorById = new Map(connectors.map((x) => [x.id, x]));
-    const labels = new Map(accounts.map((a) => [a.id, a.label]));
-    const titleOf = (r: ToolCallRow): string => {
-      const connector = r.connectorId ? connectorById.get(r.connectorId) : undefined;
-      const action = connector?.actions.find((a) => a.name === r.action);
-      if (connector && action) return actionText(connector, action, c.get('locale')).title;
-      // An action the service no longer has (or a custom server's tool): its name, readable.
-      const prefix = `${r.connectorId ?? ''}_`;
-      const name = r.action ?? (r.toolName.startsWith(prefix) ? r.toolName.slice(prefix.length) : r.toolName);
-      const words = name.replace(/[_-]+/g, ' ').trim();
-      return words ? words[0]!.toUpperCase() + words.slice(1) : r.toolName;
-    };
-    return rows.map((r) => ({
-      toolName: r.toolName,
-      connectorId: r.connectorId ?? '',
-      status: r.status,
-      outcome: r.outcome,
-      createdAt: r.createdAt,
-      durationMs: r.durationMs,
-      client: clientOf(r),
-      title: titleOf(r),
-      account: r.accountId ? (labels.get(r.accountId) ?? null) : null,
-      error: r.status === 'error' ? r.errorMessage : null,
-    }));
-  };
-
   // --- Overview ---------------------------------------------------------------
   app.get(
     '/app',
@@ -174,7 +128,7 @@ export function appRoutes() {
         s.apiTokens.list(ws),
         s.activity.recent(ws, { limit: 6 }),
         s.activity.countSince(ws, new Date(Date.now() - 7 * DAY)),
-        s.pendingCalls.listOpen(ws),
+        s.pendingCalls.listOpenFor(auth.user.id),
         shellInfo(c, ws),
       ]);
       const asking = open.filter((row) => row.status === 'awaiting_confirmation');
@@ -346,11 +300,14 @@ export function appRoutes() {
   ) =>
     app.post(
       `/app/accounts/:id/${name}`,
-      action(accountBack, async (c, auth, form) => {
-        const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
-        await run(c, auth, account, form);
-        return undefined;
-      }),
+      action(
+        (form) => accountBack(form),
+        async (c, auth, form) => {
+          const account = await c.get('services').accounts.get(auth.workspace.id, c.req.param('id')!);
+          await run(c, auth, account, form);
+          return undefined;
+        },
+      ),
     );
 
   /** Turns the account's actions on and off: a checked box keeps the action available to the AI. */
@@ -438,6 +395,19 @@ export function appRoutes() {
     }),
   );
 
+  /** Removes the sample accounts a new hub starts with (the Demo service), all at once. */
+  app.post(
+    '/app/samples/remove',
+    action('/app/services', async (c, auth) => {
+      const s = c.get('services');
+      const samples = (await s.accounts.list(auth.workspace.id)).filter((a) =>
+        SAMPLE_SERVICES.has(a.connectorId),
+      );
+      for (const account of samples) await s.accounts.delete(auth.workspace.id, account.id);
+      setFlash(c, 'ok', 'app.flash.samplesRemoved', { n: String(samples.length) });
+    }),
+  );
+
   app.post(
     '/app/custom/:id/delete',
     action('/app/services', async (c, auth) => {
@@ -472,14 +442,18 @@ export function appRoutes() {
             id: g.id,
             name: g.clientName ?? g.clientId,
             client: g.aiClientId ? (clientNames.get(g.aiClientId) ?? null) : null,
+            appId: g.aiClientId,
             profile: profileOf(g.personaId),
             createdAt: g.createdAt,
             lastUsedAt: g.lastUsedAt,
           })),
           tokens: tokens.map((tok) => ({
             id: tok.id,
-            name: tok.name,
+            // Renaming the app (here or from the chat) renames its token too.
+            name: (tok.aiClientId && clientNames.get(tok.aiClientId)) || tok.name,
+            appId: tok.aiClientId,
             profile: profileOf(tok.personaId),
+            api: tok.scopes.includes('api'),
             createdAt: tok.createdAt,
             lastUsedAt: tok.lastUsedAt,
             expiresAt: tok.expiresAt,
@@ -508,8 +482,12 @@ export function appRoutes() {
     action('/app/apps', async (c, auth, form) => {
       const s = c.get('services');
       const input = z
-        .object({ name: z.string().trim().min(1).max(80), days: z.coerce.number().int().min(0).max(3650) })
-        .parse({ name: form.name, days: form.days ?? '0' });
+        .object({
+          name: z.string().trim().min(1).max(80),
+          days: z.coerce.number().int().min(0).max(3650),
+          api: z.boolean(),
+        })
+        .parse({ name: form.name, days: form.days ?? '0', api: form.api === '1' });
       // A token for an access profile works only with that profile's address.
       const persona = form.profile ? await s.personas.get(auth.workspace.id, form.profile) : undefined;
       const client = await s.aiClients.createUnique(auth.workspace.id, input.name, 'api_token');
@@ -518,6 +496,8 @@ export function appRoutes() {
         userId: auth.user.id,
         name: input.name,
         ...(input.days > 0 ? { expiresInDays: input.days } : {}),
+        // MCP only unless the user ticks "management API" on purpose (never for a profile).
+        scopes: input.api && !persona ? ['mcp', 'api'] : ['mcp'],
         aiClientId: client.id,
         ...(persona ? { personaId: persona.id } : {}),
       });
@@ -528,7 +508,7 @@ export function appRoutes() {
 
   app.post(
     '/app/tokens/:id/revoke',
-    action(profileBack, async (c, auth) => {
+    action(connectionBack, async (c, auth) => {
       await c.get('services').apiTokens.revoke(auth.workspace.id, c.req.param('id')!);
       setFlash(c, 'ok', 'app.flash.tokenRevoked');
     }),
@@ -634,11 +614,12 @@ export function appRoutes() {
     page('/app/billing', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, entitlements, request, shell] = await Promise.all([
+      const [usage, entitlements, request, shell, invite] = await Promise.all([
         usageOf(c, ws),
         s.entitlements.entitlements(ws),
         s.entitlements.openRequest(ws),
         shellInfo(c, ws),
+        s.referrals.stats(auth.user.id),
       ]);
       const sub = entitlements.subscription;
       const paid = s.billing.liveSubscription(sub);
@@ -647,7 +628,9 @@ export function appRoutes() {
         .safeParse({ plan: c.req.query('plan'), interval: c.req.query('interval') });
       const focus =
         query.success && query.data.plan && query.data.plan !== entitlements.plan.id
-          ? PLANS.find((p) => p.id === query.data.plan && p.public && p.priceMonthly > 0)
+          ? PLANS.find(
+              (p) => p.id === query.data.plan && p.public && p.priceMonthly > 0 && planFits(p, 'personal'),
+            )
           : undefined;
       const buyable = PLANS.flatMap((p) =>
         (['month', 'year'] as const).filter((i) => s.billing.canBuy(p.id, i)).map((i) => `${p.id}:${i}`),
@@ -688,6 +671,15 @@ export function appRoutes() {
               })),
             requested: request ? { planId: request.planId, at: request.createdAt } : undefined,
             flash: takeFlash(c),
+            gift: sub?.provider === REFERRAL_PROVIDER && !paid,
+            invite: entitlements.plan.public
+              ? {
+                  link: invite.link,
+                  invited: invite.invited,
+                  rewarded: invite.rewarded,
+                  days: invite.rewardDays,
+                }
+              : undefined,
           }}
         />,
       );
@@ -711,6 +703,7 @@ export function appRoutes() {
         successUrl: `${s.config.publicUrl}/app/billing?paid=1`,
         cancelUrl: `${s.config.publicUrl}/app/billing`,
       });
+      s.analytics.track('checkout.start', `${input.plan}_${input.interval}`);
       if (outcome.kind === 'redirect') return c.redirect(outcome.url, 303);
       setFlash(c, 'ok', 'app.flash.planChanging', {
         plan: c.get('t')(`plan.${outcome.planId}.name` as 'plan.free.name'),
@@ -763,19 +756,16 @@ export function appRoutes() {
     page('/app/rules', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [security, rules, allClients, grants, tokens, accounts, shell] = await Promise.all([
+      const [security, rules, allApps, accounts, shell] = await Promise.all([
         s.admin.security(ws),
         s.policies.listRules(ws),
-        s.aiClients.list(ws),
-        s.oauth.listGrants(ws),
-        s.apiTokens.list(ws),
+        s.aiApps.list(ws),
         accountsOf(c, ws),
         shellInfo(c, ws),
       ]);
       // Apps with live access (as on the AI apps page), plus any that already have a rule here.
-      const live = new Set([...grants, ...tokens].map((x) => x.aiClientId).filter(Boolean));
       const ruled = new Set(rules.map((r) => r.aiClientId).filter(Boolean));
-      const clients = allClients.filter((x) => live.has(x.id) || ruled.has(x.id));
+      const clients = allApps.filter((x) => x.connections.length > 0 || ruled.has(x.id));
       const simple = (r: (typeof rules)[number]) => r.personaId === null && r.connectorId === null;
       const appRule = (id: string) =>
         rules.find((r) => simple(r) && r.aiClientId === id && r.accountId === null);
@@ -803,6 +793,7 @@ export function appRoutes() {
                 c.get('t')('app.rules.added', { date: fmtDate(c.get('locale'), x.createdAt) }),
                 `${c.get('t')('home.lastUsed')}: ${x.lastUsedAt ? fmtAgo(c.get('locale'), x.lastUsedAt) : c.get('t')('home.never')}`,
               ].join(' · '),
+              href: `/app/apps/${encodeURIComponent(x.id)}`,
               access: appRule(x.id)?.access ?? null,
               confirm: appRule(x.id)?.confirm ?? null,
             })),

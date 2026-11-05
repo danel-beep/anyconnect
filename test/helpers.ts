@@ -10,7 +10,9 @@ import type { OidcLoginProvider } from '../src/core/external-login.js';
 import { runMigrations } from '../src/db/migrate.js';
 import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
+import { base32Decode, totp } from '../src/lib/totp.js';
 import { createLogger } from '../src/logger.js';
+import type { Mailer } from '../src/mail/mailer.js';
 import { createServices, type Services } from '../src/services.js';
 import type { FakeInternet } from './e2e/fake-internet.js';
 
@@ -54,11 +56,14 @@ export async function truncateAll(services: Services): Promise<void> {
              api_tokens, oauth_tokens, oauth_authorization_codes, oauth_grants, oauth_clients, web_sessions,
              pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
              login_states, admin_audit_log, limit_grants, subscriptions, user_identities,
-             workspace_members, workspaces, users RESTART IDENTITY CASCADE`);
+             error_groups, job_runs, workspace_members, workspaces, users, analytics_visits,
+             analytics_pages, analytics_events, analytics_salts, user_attribution RESTART IDENTITY CASCADE`);
 }
 
 export interface TestHub {
   services: Services;
+  /** The app itself, so a test can add routes (e.g. one that throws). */
+  app: ReturnType<typeof createApp>;
   baseUrl: string;
   mcpUrl: string;
   close(): Promise<void>;
@@ -82,6 +87,10 @@ export async function startTestHub(
      * goes to these fake services instead of the network.
      */
     internet?: FakeInternet;
+    /** Captures the hub's emails (`MemoryMailer`). */
+    mailer?: Mailer;
+    /** A fake Sentry (set SENTRY_DSN in `env` too). */
+    sentryFetch?: typeof fetch;
   } = {},
 ): Promise<TestHub> {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
@@ -119,6 +128,8 @@ export async function startTestHub(
     ...(options.stages ? { stages: options.stages } : {}),
     ...(options.telegramFetch ? { telegramFetch: options.telegramFetch } : {}),
     ...(options.loginProviders ? { loginProviders: options.loginProviders } : {}),
+    ...(options.mailer ? { mailer: options.mailer } : {}),
+    ...(options.sentryFetch ? { sentryFetch: options.sentryFetch } : {}),
   });
   await truncateAll(services);
   await bootstrap(services);
@@ -126,6 +137,7 @@ export async function startTestHub(
   handler = (req) => app.fetch(req);
   return {
     services,
+    app,
     baseUrl,
     mcpUrl: `${baseUrl}/mcp`,
     async close() {
@@ -140,6 +152,9 @@ export class TestBrowser {
   /** Starts as a visitor who picked Russian with the language switch (tests assert Russian texts). */
   private readonly cookies = new Map<string, string>([['ac_lang', 'ru']]);
 
+  /** Headers sent with every request (User-Agent, Accept-Language: analytics tests). */
+  readonly headers: Record<string, string> = {};
+
   /**
    * @param external answers pages on other sites (a provider's sign-in page in the fake internet);
    *   without it they are fetched for real.
@@ -151,9 +166,14 @@ export class TestBrowser {
 
   async request(
     url: string,
-    init: { method?: string; form?: Record<string, string>; json?: unknown } = {},
+    init: {
+      method?: string;
+      form?: Record<string, string>;
+      json?: unknown;
+      headers?: Record<string, string>;
+    } = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...this.headers, ...init.headers };
     if (this.cookies.size) headers.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ');
     let body: string | undefined;
     if (init.form) {
@@ -265,4 +285,21 @@ function decodeEntities(value: string): string {
 /** Tool results with third-party content arrive wrapped in ⟦untrusted⟧ markers; returns the inside. */
 export function unwrapUntrusted(text: string): string {
   return text.replace(/^⟦untrusted (\w+) source="[^"]*"⟧\n([\s\S]*)\n⟦\/untrusted \1⟧$/, '$2');
+}
+
+/**
+ * Turns on TOTP for the signed-in user of `browser`; confirming it upgrades the current session
+ * (pwd + otp), which the admin panel requires. Returns the TOTP secret.
+ */
+export async function enableTotp(browser: TestBrowser): Promise<string> {
+  const page = await browser.request('/security');
+  const { csrf } = TestBrowser.hiddenInputs(await page.text());
+  await browser.request('/security/totp/setup', { form: { csrf: csrf! } });
+  const setup = await (await browser.request('/security')).text();
+  const secret = setup.match(/id="totp-secret"[^>]*value="([A-Z2-7]+)"/)![1]!;
+  const confirm = await browser.request('/security/totp/confirm', {
+    form: { csrf: csrf!, code: totp(base32Decode(secret), Date.now()) },
+  });
+  if (confirm.status !== 200) throw new Error(`TOTP confirmation failed with ${confirm.status}`);
+  return secret;
 }

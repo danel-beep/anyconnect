@@ -85,6 +85,55 @@
       "when": 1793827115052,
       "tag": "0011_messengers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793828213812,
+      "tag": "0012_ops_errors_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793828487750,
+      "tag": "0013_status_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793829169709,
+      "tag": "0014_account_reauth_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793846765270,
+      "tag": "0015_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793864196410,
+      "tag": "0016_tokens_mcp_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793876749134,
+      "tag": "0017_monetization_notices_referrals",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793879254973,
+      "tag": "0018_analytics",
+      "breakpoints": true
     }
   ]
 }

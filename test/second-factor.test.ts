@@ -180,6 +180,11 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     expect(await sessionAmr(hub)).toEqual([['pwd', 'rec']]);
     const security = await (await browser.request('/security')).text();
     expect(security).toContain('Неиспользованных: 9 из 10');
+    // The page points to the other places that keep the account safe.
+    expect(security).toContain('href="/app/settings#sessions"');
+    expect(security).toContain('Сейчас: 1.');
+    // No Telegram bot on this server: no Telegram row.
+    expect(security).not.toContain('href="/confirm#telegram"');
     await logout(browser);
 
     const again = await signInWith(codes[0]!);
