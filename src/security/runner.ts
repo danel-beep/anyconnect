@@ -1,3 +1,4 @@
+import { DueLoop } from '../lib/due-loop.js';
 import type { Logger } from '../logger.js';
 import type { ConfirmationCenter } from './confirmations.js';
 import type { PendingCallRow, PendingCallService, StoredResult } from './pending-calls.js';
@@ -8,10 +9,15 @@ export type RunPendingCall = (row: PendingCallRow, args: Record<string, unknown>
 /**
  * Runs approved calls whose undo window has ended. Every hub instance runs one; claiming is
  * atomic (`FOR UPDATE SKIP LOCKED`), so a call runs exactly once.
+ *
+ * It does not poll: a call scheduled in this process wakes it exactly when the call is due, and
+ * an idle runner looks at the database once per `backstopMs` (calls scheduled by another instance
+ * that stopped before running them).
  */
 export class PendingCallRunner {
-  private timer: NodeJS.Timeout | undefined;
+  private readonly loop: DueLoop;
   private maintenance: NodeJS.Timeout | undefined;
+  private unsubscribe: (() => void) | undefined;
   private running: Promise<void> | undefined;
 
   constructor(
@@ -20,13 +26,24 @@ export class PendingCallRunner {
       center: ConfirmationCenter;
       run: RunPendingCall;
       logger: Logger;
-      intervalMs: number;
+      /** Longest sleep of an idle runner. */
+      backstopMs: number;
     },
-  ) {}
+  ) {
+    this.loop = new DueLoop({
+      work: async () => {
+        await this.tick();
+        return this.deps.pending.nextDue();
+      },
+      idleMs: () => this.deps.backstopMs,
+      onError: (error) => this.deps.logger.warn({ err: error }, 'pending call runner failed'),
+    });
+  }
 
   start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.tick(), this.deps.intervalMs);
+    if (this.maintenance) return;
+    this.unsubscribe = this.deps.pending.onScheduled((at) => this.loop.wakeAt(at));
+    this.loop.start();
     this.maintenance = setInterval(
       () =>
         void this.deps.pending
@@ -34,14 +51,14 @@ export class PendingCallRunner {
           .catch((err) => this.deps.logger.warn({ err }, 'pending maintenance')),
       60_000,
     );
-    this.timer.unref();
     this.maintenance.unref();
   }
 
   async stop(): Promise<void> {
-    clearInterval(this.timer);
+    this.unsubscribe?.();
     clearInterval(this.maintenance);
-    this.timer = undefined;
+    this.maintenance = undefined;
+    await this.loop.stop();
     await this.running;
   }
 

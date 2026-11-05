@@ -430,11 +430,16 @@ describe('data protection in the running hub', () => {
     await s.policies.createRule(workspaceId, { aiClientId, connectorId: 'inbox', undoWindowSeconds: 60 });
     const args = { account: 'work', to: 'boss@example.com', text: 'Quarterly report' };
 
+    const announced: Date[] = [];
+    const stopListening = s.pendingCalls.onScheduled((at) => announced.push(at));
     const first = resultText(await call('inbox_send', args));
     expect(first).toContain('will run in 60 s');
     expect(sent).toBe(0);
     const [scheduled] = await s.pendingCalls.listOpen(workspaceId);
     expect(scheduled!.status).toBe('scheduled');
+    // The runner of this process hears when the call is due, so it never has to poll for it.
+    expect(announced.map((at) => at.getTime())).toEqual([scheduled!.executeAt!.getTime()]);
+    stopListening();
 
     const browser = await signIn();
     const cancelled = await browser.request(`/api/v1/pending-calls/${scheduled!.id}/cancel`, { json: {} });

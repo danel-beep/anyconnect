@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lt, min, sql } from 'drizzle-orm';
 import type { Principal } from '../core/principal.js';
 import type { Db } from '../db/client.js';
 import {
@@ -84,6 +84,7 @@ export function principalOf(row: PendingCallRow): Principal {
  * page, the chat) and several hub instances cannot run a call twice.
  */
 export class PendingCallService {
+  private readonly scheduledListeners = new Set<(executeAt: Date) => void>();
   constructor(
     private readonly db: Db,
     private readonly secrets: SecretBox,
@@ -140,8 +141,33 @@ export class PendingCallService {
   }
 
   /** An allowed call that runs after its undo window unless cancelled. */
-  schedule(input: PendingCallInput): Promise<PendingCallRow> {
-    return this.insert(input, 'scheduled', new Date(Date.now() + input.undoWindowSeconds * 1000));
+  async schedule(input: PendingCallInput): Promise<PendingCallRow> {
+    const row = await this.insert(input, 'scheduled', new Date(Date.now() + input.undoWindowSeconds * 1000));
+    this.scheduled(row);
+    return row;
+  }
+
+  /**
+   * Tells `listener` when a call is scheduled in this process (the runner then wakes exactly when
+   * it is due instead of polling). Returns a function that removes the listener.
+   */
+  onScheduled(listener: (executeAt: Date) => void): () => void {
+    this.scheduledListeners.add(listener);
+    return () => this.scheduledListeners.delete(listener);
+  }
+
+  private scheduled(row: PendingCallRow | undefined): void {
+    if (row?.status !== 'scheduled' || !row.executeAt) return;
+    for (const listener of this.scheduledListeners) listener(row.executeAt);
+  }
+
+  /** When the next scheduled call is due (undefined: none is scheduled). */
+  async nextDue(): Promise<Date | undefined> {
+    const [row] = await this.db
+      .select({ at: min(pendingCalls.executeAt) })
+      .from(pendingCalls)
+      .where(eq(pendingCalls.status, 'scheduled'));
+    return row?.at ?? undefined;
   }
 
   /** The hash a call with this input is stored under (to match a retry to its held-back call). */
@@ -267,6 +293,7 @@ export class PendingCallService {
         ),
       )
       .returning();
+    this.scheduled(row);
     return row;
   }
 

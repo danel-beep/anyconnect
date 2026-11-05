@@ -561,7 +561,7 @@ export function createServices(
     run: (row, args) =>
       vaultScopes.runHeld(row.id, async () => toStored(await hub.runApproved(principalOf(row), row, args))),
     logger,
-    intervalMs: config.confirmations.runnerIntervalMs,
+    backstopMs: config.confirmations.runnerBackstopMs,
   });
   const clients = new ClientRegistry(db, {
     dynamicRegistration: config.oauth.dynamicRegistration,
