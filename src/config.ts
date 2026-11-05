@@ -427,12 +427,15 @@ function gatewayConfig(url: string | undefined, token: string | undefined): AppC
   if (!url && !token) return undefined;
   if (!url || !token) throw new ConfigError('GATEWAY_URL and GATEWAY_TOKEN must be set together');
   if (token.length < 32) throw new ConfigError('GATEWAY_TOKEN must be at least 32 characters');
+  // Render's private network hands out `host:port` (fromService hostport): the gateway speaks plain HTTP there.
+  const full = url.includes('://') ? url : `http://${url}`;
   try {
-    new URL(url);
+    const parsed = new URL(full);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('scheme');
   } catch {
     throw new ConfigError(`GATEWAY_URL is not a valid URL: ${url}`);
   }
-  return { url: url.replace(/\/+$/, ''), token };
+  return { url: full.replace(/\/+$/, ''), token };
 }
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {

@@ -33,7 +33,10 @@ async function main() {
     service: 'gateway',
   });
   step = 'setting up';
-  const runtime = createGatewayRuntime(config, { logger, drivers: createDrivers() });
+  const runtime = createGatewayRuntime(config, {
+    logger,
+    drivers: createDrivers({ telegram: config.telegram }),
+  });
   // The hub applies migrations too; both take the same advisory lock, so whoever starts first wins.
   step = 'applying database migrations';
   await runMigrations(runtime.database.pool);

@@ -113,8 +113,15 @@ export async function renderInApp(
   if (!workspace) return c.html(<PageFrame.Provider value={null}>{page}</PageFrame.Provider>, status);
   const ctx = pageCtx(c, user);
   const shell = await shellInfo(c, workspace.id);
-  const frame: Frame = ({ title, passkeys, children }) => (
-    <AppShell ctx={ctx} shell={shell} section={section} title={title} passkeys={passkeys}>
+  const frame: Frame = ({ title, passkeys, refreshSeconds, children }) => (
+    <AppShell
+      ctx={ctx}
+      shell={shell}
+      section={section}
+      title={title}
+      passkeys={passkeys}
+      {...(refreshSeconds ? { refreshSeconds } : {})}
+    >
       {children}
     </AppShell>
   );

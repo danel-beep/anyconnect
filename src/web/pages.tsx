@@ -18,13 +18,27 @@ export const Layout: FC<{
   lang: string;
   /** Adds /assets/webauthn.js (passkeys); pages work without it. */
   script?: boolean;
+  /** Reloads the page every this many seconds. */
+  refreshSeconds?: number;
   children?: Child;
-}> = ({ title, narrow, lang, script, children }) => {
+}> = ({ title, narrow, lang, script, refreshSeconds, children }) => {
   const frame = useContext(PageFrame);
-  if (frame) return <>{frame({ title, passkeys: Boolean(script), children })}</>;
+  if (frame)
+    return (
+      <>
+        {frame({ title, passkeys: Boolean(script), ...(refreshSeconds ? { refreshSeconds } : {}), children })}
+      </>
+    );
   const t = translator(lang === 'ru' ? 'ru' : 'en');
   return (
-    <Doc title={`${title} · ${BRAND.name}`} lang={lang} noindex passkeys={script} bodyClass="auth">
+    <Doc
+      title={`${title} · ${BRAND.name}`}
+      lang={lang}
+      noindex
+      passkeys={script}
+      bodyClass="auth"
+      {...(refreshSeconds ? { refreshSeconds } : {})}
+    >
       <div class="auth-top">
         <Brand />
         <Prefs t={t} lang={lang} />

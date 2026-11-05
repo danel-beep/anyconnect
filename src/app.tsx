@@ -16,6 +16,7 @@ import { directoryRoutes } from './routes/directories.js';
 import { hookRoutes } from './routes/hooks.js';
 import { loginRoutes } from './routes/login.js';
 import { mcpRoutes } from './routes/mcp.js';
+import { messengerLoginRoutes } from './routes/messenger-login.js';
 import { oauthRoutes } from './routes/oauth.js';
 import { savedLocale } from './routes/page-helpers.js';
 import { profileRoutes } from './routes/profiles.js';
@@ -92,6 +93,7 @@ export function createApp(services: Services) {
   app.route('/api/v1', apiRoutes());
   app.route('/', confirmRoutes());
   app.route('/', connectRoutes());
+  app.route('/', messengerLoginRoutes());
   app.route('/', appRoutes());
   app.route('/', teamRoutes());
   app.route('/', profileRoutes());
