@@ -732,7 +732,6 @@ const Plans: FC<{ ctx: PageCtx; report: PlansReport }> = ({ ctx, report }) => {
                 <th>{t('an.col.kind')}</th>
                 <th>{t('an.col.interval')}</th>
                 <th class="right">{t('an.col.spaces')}</th>
-                <th class="right">{t('an.col.seats')}</th>
                 <th class="right">{t('an.col.activeWs')}</th>
                 <th class="right">{t('an.col.calls')}</th>
                 <th class="right">{t('an.col.mrr')}</th>
@@ -741,7 +740,7 @@ const Plans: FC<{ ctx: PageCtx; report: PlansReport }> = ({ ctx, report }) => {
             <tbody>
               {report.plans.length === 0 ? (
                 <tr>
-                  <td colspan={8} class="muted">
+                  <td colspan={7} class="muted">
                     {t('an.noData')}
                   </td>
                 </tr>
@@ -752,7 +751,6 @@ const Plans: FC<{ ctx: PageCtx; report: PlansReport }> = ({ ctx, report }) => {
                     <td>{t(KIND_KEY[p.kind])}</td>
                     <td>{p.interval ? t(`an.interval.${p.interval}` as Key) || p.interval : '—'}</td>
                     <td class="right num">{fmtNumber(lang, p.workspaces)}</td>
-                    <td class="right num">{fmtNumber(lang, p.seats)}</td>
                     <td class="right num">{cell(lang, p.active, p.workspaces)}</td>
                     <td class="right num">{fmtNumber(lang, p.calls)}</td>
                     <td class="right num">{p.kind === 'paid' ? money(lang, p.mrr) : '—'}</td>

@@ -40,7 +40,8 @@ describe('billing config', () => {
     expect(config.provider).toBe('paddle');
     expect(config.paddle?.sandbox).toBe(true);
     expect(config.prices.get('pro:year')).toBe('pri_pro_y');
-    expect(missingPrices(config)).toEqual(expect.arrayContaining(['personal:month', 'team:year']));
+    expect(missingPrices(config)).toEqual(expect.arrayContaining(['personal:month', 'personal:year']));
+    expect(missingPrices(config)).not.toContain('team:year');
     expect(missingPrices(config)).not.toContain('business:year');
     expect(missingPrices(config)).not.toContain('pro:month');
   });
@@ -53,7 +54,8 @@ describe('billing config', () => {
       /development only/,
     );
     expect(() => readBillingConfig({ BILLING_PROVIDER: 'paypal' }, { isProduction: false })).toThrow();
-    expect(readBillingConfig({ BILLING_PROVIDER: 'test' }, { isProduction: false }).prices.size).toBe(6);
+    // Personal and Pro, monthly and yearly: no plan is sold to teams.
+    expect(readBillingConfig({ BILLING_PROVIDER: 'test' }, { isProduction: false }).prices.size).toBe(4);
   });
 });
 

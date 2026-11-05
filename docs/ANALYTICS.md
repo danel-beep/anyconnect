@@ -110,7 +110,7 @@ https://manyplug.com/?utm_source=telegram&utm_medium=ads&utm_campaign=tg_ai_1
 | Подключили сервис | есть `accounts` в пространстве, которым он владеет |
 | Сделали вызов | есть `usage_counters.calls > 0` в его пространстве |
 | Платят | подписка платёжного провайдера (не `manual`, не `referral`, есть `external_id`, не `free`) в статусе active / trialing / past_due, так же как на странице «Выручка» (`src/admin/revenue.ts`) |
-| MRR | цена тарифа × места (годовая цена / 12) по `src/billing/plans.ts` |
+| MRR | цена тарифа × купленное количество (сейчас всегда 1; годовая цена / 12) по `src/billing/plans.ts`, только по личным пространствам: у команды своего тарифа нет |
 
 ## Остальные вкладки
 

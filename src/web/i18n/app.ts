@@ -579,7 +579,18 @@ export const appEn = {
   'app.billing.focusSwitch': 'Switch to the {plan} plan',
   'app.billing.focusMonth': '{price} a month, cancel any time.',
   'app.billing.focusYear': '{price} a year, cancel any time.',
-  'app.billing.forTeams': 'Create a team',
+  'app.billing.teamsTitle': 'Your plan also pays for',
+  'app.billing.teamsText':
+    'The limits of your plan cover your own space and these teams together. Actions this month:',
+  'app.billing.teamsOwn': 'Your own space',
+  'app.billing.teamsActions': '{n} {n|action|actions}',
+  'app.billing.covers.everyone': 'everyone in the team',
+  'app.billing.covers.team': 'the team’s own accounts and your use',
+  'app.billing.covers.self': 'your own use (everyone pays for themselves)',
+  'app.billing.backToTeam':
+    'You came from the team {team}. Once your new plan is active, go back and press “Pay for the team”.',
+  'app.billing.backToTeamPays': 'Your plan pays for the team {team}, so a new plan applies there too.',
+  'app.billing.backLink': 'Back to {team}',
   'app.billing.prorated': 'You pay only the difference for the rest of the current period.',
   'app.billing.freeByCancel': 'Cancel the subscription to move to Free',
   'app.billing.taxHint':
@@ -1200,7 +1211,18 @@ export const appRu: Record<AppKey, string> = {
   'app.billing.focusSwitch': 'Перейти на тариф «{plan}»',
   'app.billing.focusMonth': '{price} в месяц, отменить можно в любой момент.',
   'app.billing.focusYear': '{price} в год, отменить можно в любой момент.',
-  'app.billing.forTeams': 'Создать команду',
+  'app.billing.teamsTitle': 'Ваш тариф оплачивает и команды',
+  'app.billing.teamsText':
+    'Лимиты вашего тарифа общие на ваше пространство и эти команды. Действий в этом месяце:',
+  'app.billing.teamsOwn': 'Ваше пространство',
+  'app.billing.teamsActions': '{n} {n|действие|действия|действий}',
+  'app.billing.covers.everyone': 'вся команда',
+  'app.billing.covers.team': 'аккаунты команды и ваша работа',
+  'app.billing.covers.self': 'только ваша работа (каждый платит сам)',
+  'app.billing.backToTeam':
+    'Вы пришли из команды «{team}». Когда новый тариф заработает, вернитесь в неё и нажмите «Оплачивать команду».',
+  'app.billing.backToTeamPays': 'Ваш тариф оплачивает команду «{team}», поэтому новый тариф будет и у неё.',
+  'app.billing.backLink': 'Вернуться в «{team}»',
   'app.billing.prorated': 'Вы доплачиваете только разницу за остаток текущего периода.',
   'app.billing.freeByCancel': 'Отмените подписку, чтобы перейти на бесплатный',
   'app.billing.taxHint':

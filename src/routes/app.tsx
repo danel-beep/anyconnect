@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { isMetric, type Metric, PLANS, planFits } from '../billing/plans.js';
+import { isMetric, type Metric, PLANS } from '../billing/plans.js';
 import { REFERRAL_PROVIDER } from '../billing/referrals.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import type { AccountRow } from '../core/accounts.js';
@@ -36,6 +36,7 @@ import {
   connectionBack,
   cookieOpts,
   pageCtx,
+  phaseView,
   saveLocale,
   setFlash,
   shellInfo,
@@ -81,9 +82,7 @@ export function appRoutes() {
       actions: { used: summary.used.actions, limit: summary.limits.actions },
       accounts: { used: summary.used.accounts, limit: summary.limits.accounts },
       resetsAt: summary.period.resetsAt,
-      phase: summary.phase
-        ? { kind: summary.phase.kind, asPlan: summary.phase.asPlan, until: summary.phase.until }
-        : undefined,
+      phase: phaseView(summary.phase),
       schedule: summary.schedule.map((p) => ({
         kind: p.kind,
         from: p.from,
@@ -614,23 +613,36 @@ export function appRoutes() {
     page('/app/billing', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, entitlements, request, shell, invite] = await Promise.all([
+      const query = z
+        .object({
+          plan: z.string().max(40).optional(),
+          interval: z.enum(['month', 'year']).optional(),
+          team: z.string().max(80).optional(),
+        })
+        .safeParse({
+          plan: c.req.query('plan'),
+          interval: c.req.query('interval'),
+          team: c.req.query('team'),
+        });
+      const [usage, entitlements, request, shell, invite, uses, from] = await Promise.all([
         usageOf(c, ws),
         s.entitlements.entitlements(ws),
         s.entitlements.openRequest(ws),
         shellInfo(c, ws),
         s.referrals.stats(auth.user.id),
+        s.entitlements.planUses(auth.user.id),
+        // Sent here from a team (to buy a plan to pay for it with): the way back, for its members only.
+        query.success && query.data.team
+          ? s.teams
+              .bySlug(query.data.team)
+              .then((team) => (team ? s.entitlements.payers.team(team.id) : undefined))
+          : undefined,
       ]);
       const sub = entitlements.subscription;
       const paid = s.billing.liveSubscription(sub);
-      const query = z
-        .object({ plan: z.string().max(40).optional(), interval: z.enum(['month', 'year']).optional() })
-        .safeParse({ plan: c.req.query('plan'), interval: c.req.query('interval') });
       const focus =
         query.success && query.data.plan && query.data.plan !== entitlements.plan.id
-          ? PLANS.find(
-              (p) => p.id === query.data.plan && p.public && p.priceMonthly > 0 && planFits(p, 'personal'),
-            )
+          ? PLANS.find((p) => p.id === query.data.plan && p.public && p.priceMonthly > 0)
           : undefined;
       const buyable = PLANS.flatMap((p) =>
         (['month', 'year'] as const).filter((i) => s.billing.canBuy(p.id, i)).map((i) => `${p.id}:${i}`),
@@ -672,6 +684,16 @@ export function appRoutes() {
             requested: request ? { planId: request.planId, at: request.createdAt } : undefined,
             flash: takeFlash(c),
             gift: sub?.provider === REFERRAL_PROVIDER && !paid,
+            ownActions: uses.own,
+            teams: uses.teams.map((u) => ({
+              name: u.team.name,
+              slug: u.team.slug,
+              covers: u.covers,
+              actions: u.actions,
+            })),
+            backTo: from?.members.has(auth.user.id)
+              ? { name: from.name, slug: from.slug, pays: from.payerUserId === auth.user.id }
+              : undefined,
             invite: entitlements.plan.public
               ? {
                   link: invite.link,

@@ -13,9 +13,9 @@ import {
   Hidden,
   Icon,
   initials,
-  Meter,
   pctClass,
   ServiceLogo,
+  UsageStat,
 } from './ui.js';
 
 type Flashing = { flash?: { kind: 'ok' | 'bad'; text: string } | undefined };
@@ -476,31 +476,19 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
       ) : null}
       {view.usage ? (
         <div class="stats">
-          <div class="stat">
-            <span class="label">{t('app.usage.actions')}</span>
-            <div class="value">
-              {fmtNumber(lang, view.usage.actions)}{' '}
-              <span class="muted small">
-                / {view.usage.actionsLimit === null ? '∞' : fmtNumber(lang, view.usage.actionsLimit)}
-              </span>
-            </div>
-            <Meter used={view.usage.actions} limit={view.usage.actionsLimit} label={t('app.usage.actions')} />
-            <div class="sub">{t('app.usage.resets', { date: fmtDate(lang, view.usage.resetsAt) })}</div>
-          </div>
-          <div class="stat">
-            <span class="label">{t('app.usage.accounts')}</span>
-            <div class="value">
-              {view.usage.accounts}{' '}
-              <span class="muted small">
-                / {view.usage.accountsLimit === null ? '∞' : view.usage.accountsLimit}
-              </span>
-            </div>
-            <Meter
-              used={view.usage.accounts}
-              limit={view.usage.accountsLimit}
-              label={t('app.usage.accounts')}
-            />
-          </div>
+          <UsageStat
+            lang={lang}
+            label={t('app.usage.actions')}
+            used={view.usage.actions}
+            limit={view.usage.actionsLimit}
+            lines={[t('app.usage.resets', { date: fmtDate(lang, view.usage.resetsAt) })]}
+          />
+          <UsageStat
+            lang={lang}
+            label={t('app.usage.accounts')}
+            used={view.usage.accounts}
+            limit={view.usage.accountsLimit}
+          />
           <div class="stat">
             <span class="label">{t('admin.users.plan')}</span>
             <div class="value small-value">{planName(ctx, view.plan.id)}</div>

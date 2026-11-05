@@ -54,7 +54,9 @@ export class RevenueReport {
     const since30 = new Date(now.getTime() - 30 * DAY);
     const trialStart = new Date(now.getTime() - TRIAL_DAYS * DAY);
     const cohortFrom = new Date(trialStart.getTime() - 30 * DAY);
-    /** Paying workspaces among those created in `[from, to)`. */
+    // Plans and trials are people's (their own workspaces); a team runs on its payer's plan.
+    const personal = eq(workspaces.kind, 'personal');
+    /** Paying people among those whose workspace was created in `[from, to)`. */
     const cohort = (from: Date, to: Date) =>
       db
         .select({
@@ -63,7 +65,7 @@ export class RevenueReport {
         })
         .from(workspaces)
         .leftJoin(subscriptions, and(eq(subscriptions.workspaceId, workspaces.id), paidSub))
-        .where(and(gte(workspaces.createdAt, from), lte(workspaces.createdAt, to)));
+        .where(and(personal, gte(workspaces.createdAt, from), lte(workspaces.createdAt, to)));
 
     const [groups, [trial], [trialCohort], [recent], [userTotal], [canceled], [refs], [gifted]] =
       await Promise.all([
@@ -89,6 +91,7 @@ export class RevenueReport {
           .leftJoin(subscriptions, eq(subscriptions.workspaceId, workspaces.id))
           .where(
             and(
+              personal,
               gt(workspaces.createdAt, trialStart),
               sql`(${subscriptions.workspaceId} is null or ${subscriptions.planId} = ${DEFAULT_PLAN_ID})`,
             ),

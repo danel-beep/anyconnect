@@ -122,7 +122,8 @@ export class ConnectService {
       if (input.name && (await this.deps.accounts.findByName(who.workspaceId, connector.id, input.name))) {
         throw badRequest(`An account named "${input.name}" already exists for ${connector.name}`);
       }
-      await this.deps.accounts.assertCanCreate(who.workspaceId);
+      // A team account (owner null) counts against the team's payer, a member's own maybe theirs.
+      await this.deps.accounts.assertCanCreate(who.workspaceId, who.owner ? who.owner.userId : who.userId);
     }
 
     const app = await this.deps.apps.pick(who.workspaceId, connector, input.appId);
