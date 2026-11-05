@@ -204,7 +204,9 @@ export function createServices(
   const network = createNetworkPolicy({
     allowPrivateNetwork: overrides.allowPrivateNetwork ?? config.allowPrivateNetwork,
   });
-  const oauthApps = new OAuthAppService(db, secrets, config.oauthApps);
+  const oauthApps = new OAuthAppService(db, secrets, config.oauthApps, (connector) =>
+    connectors.builtin.includes(connector),
+  );
   const keyring = new AccountKeyring(secrets, secrets);
   const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
   const usage = new PgUsageMeter(db);
