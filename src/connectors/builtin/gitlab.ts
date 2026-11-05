@@ -271,7 +271,10 @@ const ui: ConnectorUi = {
         form: {
           summary: 'Вы создаёте персональный токен доступа в GitLab и вставляете его сюда.',
           minutes: 2,
-          needs: ['Аккаунт на gitlab.com или на сервере GitLab вашей компании'],
+          needs: [
+            'Аккаунт на gitlab.com или на сервере GitLab вашей компании',
+            'Если GitLab на сервере компании: его адрес, например gitlab.acme.com. Все шаги делайте на нём, а не на gitlab.com',
+          ],
           steps: [
             {
               text: 'Откройте в GitLab **аватар → Edit profile → Access tokens** и нажмите **Add new token**.',
@@ -284,11 +287,11 @@ const ui: ConnectorUi = {
               text: 'Назовите токен Manyplug, задайте срок действия и в разделе **Select scopes** отметьте **api**.',
             },
             {
-              text: 'Нажмите кнопку создания токена внизу формы, скопируйте токен (начинается с glpat-) и вставьте его в форму.',
+              text: 'Нажмите **Create token** внизу (в старых версиях **Create personal access token**) и скопируйте токен, он начинается с glpat-.',
               fills: ['token'],
             },
             {
-              text: 'Если GitLab стоит на сервере вашей компании, укажите его адрес без https://, например gitlab.acme.com, и создайте токен на этом сервере.',
+              text: 'Если GitLab на сервере компании, впишите его адрес в форму без https://, например gitlab.acme.com. Для gitlab.com поле не меняйте.',
               fills: ['host'],
             },
           ],
@@ -354,7 +357,10 @@ const ui: ConnectorUi = {
         form: {
           summary: 'You create a personal access token in GitLab and paste it here.',
           minutes: 2,
-          needs: ['An account on gitlab.com or on your company’s GitLab server'],
+          needs: [
+            'An account on gitlab.com or on your company’s GitLab server',
+            'For a company server: its address, for example gitlab.acme.com. Do every step there, not on gitlab.com',
+          ],
           steps: [
             {
               text: 'In GitLab, open **your avatar → Edit profile → Access tokens** and click **Add new token**.',
@@ -367,11 +373,11 @@ const ui: ConnectorUi = {
               text: 'Name it Manyplug, set an expiry date and, under **Select scopes**, tick **api**.',
             },
             {
-              text: 'Click the create button at the bottom of the form, copy the token (it starts with glpat-) and paste it into the form.',
+              text: 'Click **Create token** at the bottom (**Create personal access token** in older versions) and copy the token, it starts with glpat-.',
               fills: ['token'],
             },
             {
-              text: 'If GitLab runs on your company’s server, enter its address without https://, for example gitlab.acme.com, and create the token on that server.',
+              text: 'On a company GitLab server, enter its address in the form without https://, for example gitlab.acme.com. For gitlab.com, leave the field as it is.',
               fills: ['host'],
             },
           ],

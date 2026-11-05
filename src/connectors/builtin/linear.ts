@@ -192,9 +192,12 @@ export default defineConnector({
                 },
               },
               {
-                text: 'Назовите ключ Manyplug и оставьте **Full access** или выберите команды, с которыми ИИ может работать.',
+                text: 'Назовите ключ Manyplug, оставьте **Full access** и **All teams you have access to**, затем нажмите **Create**.',
               },
-              { text: 'Скопируйте ключ (начинается с lin_api_) и вставьте его в форму.', fills: ['apiKey'] },
+              {
+                text: 'Скопируйте ключ (начинается с lin_api_): Linear показывает его только один раз.',
+                fills: ['apiKey'],
+              },
             ],
             tips: [
               'Ключ действует от вашего имени. Отозвать его можно на той же странице.',
@@ -207,7 +210,7 @@ export default defineConnector({
               },
               {
                 problem: 'Нет кнопки **New API key**',
-                fix: 'Администратор рабочего пространства мог запретить участникам создавать ключи. Попросите его разрешить это в настройках безопасности пространства.',
+                fix: 'Администратор мог запретить участникам создавать ключи. Попросите его включить **Settings → Administration → API → Member API keys**.',
               },
               {
                 problem: 'ИИ видит задачи, но не может их создавать или менять',
@@ -252,9 +255,11 @@ export default defineConnector({
                 text: 'In Linear, open **Settings → Security & access** and, under **Personal API keys**, click **New API key**.',
                 link: { label: 'Open Linear settings', url: 'https://linear.app/settings/account/security' },
               },
-              { text: 'Name it Manyplug and keep **Full access**, or pick the teams the AI may work with.' },
               {
-                text: 'Copy the key (it starts with lin_api_) and paste it into the form.',
+                text: 'Name it Manyplug, keep **Full access** and **All teams you have access to**, then click **Create**.',
+              },
+              {
+                text: 'Copy the key (it starts with lin_api_): Linear shows it only once.',
                 fills: ['apiKey'],
               },
             ],
@@ -269,7 +274,7 @@ export default defineConnector({
               },
               {
                 problem: 'There is no **New API key** button',
-                fix: 'A workspace admin may have stopped members from creating keys. Ask them to allow it in the workspace security settings.',
+                fix: 'A workspace admin may have stopped members from creating keys. Ask them to turn on **Settings → Administration → API → Member API keys**.',
               },
               {
                 problem: 'The AI sees issues but cannot create or change them',

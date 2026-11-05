@@ -128,7 +128,9 @@ export default defineConnector({
               {
                 text: 'Google попросит разрешить Manyplug смотреть и менять файлы на Диске. Оставьте галочку и нажмите **Продолжить**.',
               },
-              { text: 'Готово: ИИ находит файлы и читает Документы, Таблицы и PDF на этом Диске.' },
+              {
+                text: 'Готово: ИИ находит файлы и читает Документы, Таблицы, Презентации и текстовые файлы на этом Диске.',
+              },
             ],
             tips: [
               'Чтобы закрыть доступ, удалите аккаунт здесь или уберите Manyplug в аккаунте Google: **Безопасность → Ваши подключения к сторонним приложениям и сервисам**.',
@@ -136,7 +138,7 @@ export default defineConnector({
             problems: [
               {
                 problem: 'Рабочий аккаунт Google Workspace пишет «Доступ заблокирован» или «Access blocked»',
-                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → API controls**.',
+                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → Access and data control → API controls**.',
               },
               {
                 problem: 'ИИ пишет, что у него нет доступа к Диску',
@@ -187,7 +189,9 @@ export default defineConnector({
               {
                 text: 'Google asks to let Manyplug see and edit your Drive files. Leave the box ticked and click **Continue**.',
               },
-              { text: 'Done: the AI can find files and read Docs, Sheets and PDFs on that Drive.' },
+              {
+                text: 'Done: the AI can find files and read Docs, Sheets, Slides and text files on that Drive.',
+              },
             ],
             tips: [
               'To cut access, delete the account here or remove Manyplug in your Google Account under **Security → Your connections to third-party apps & services**.',
@@ -195,7 +199,7 @@ export default defineConnector({
             problems: [
               {
                 problem: 'A Google Workspace work account says “Access blocked”',
-                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → API controls**.',
+                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → Access and data control → API controls**.',
               },
               {
                 problem: 'The AI says it has no access to your Drive',

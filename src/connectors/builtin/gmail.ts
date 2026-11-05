@@ -163,7 +163,7 @@ export default defineConnector({
             problems: [
               {
                 problem: 'Рабочий аккаунт Google Workspace пишет «Доступ заблокирован» или «Access blocked»',
-                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → API controls**.',
+                fix: 'Подключение запретил администратор вашей компании. Попросите его разрешить Manyplug в консоли администратора: **Security → Access and data control → API controls**.',
               },
               {
                 problem: 'ИИ пишет, что у него нет доступа к почте',
@@ -244,7 +244,7 @@ export default defineConnector({
             problems: [
               {
                 problem: 'A Google Workspace work account says “Access blocked”',
-                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → API controls**.',
+                fix: 'Your company admin has not allowed the app. Ask them to allow Manyplug in the Admin console under **Security → Access and data control → API controls**.',
               },
               {
                 problem: 'The AI says it has no access to your mail',

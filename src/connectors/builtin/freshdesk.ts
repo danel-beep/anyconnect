@@ -251,12 +251,12 @@ const ui: ConnectorUi = {
           ],
           tips: [
             'Ответы клиентам уходят только после вашего подтверждения.',
-            'Ключ меняется при смене пароля Freshdesk: вставьте новый через **Переподключить**.',
+            'Если сбросить ключ в Freshdesk (**Reset API key**), старый перестанет работать: вставьте новый через **Переподключить**.',
           ],
           problems: [
             {
               problem: 'Форма пишет, что ключ не подходит',
-              fix: 'Скопируйте ключ ещё раз в **Profile settings → View API key**. Он меняется, когда вы меняете пароль Freshdesk.',
+              fix: 'Скопируйте ключ ещё раз в **Profile settings → View API key**. Если ключ сбрасывали, вставьте новый.',
             },
             {
               problem: 'Форма не может связаться со службой поддержки',
@@ -322,12 +322,12 @@ const ui: ConnectorUi = {
           ],
           tips: [
             'Replies to customers go out only after you confirm.',
-            'The key changes when you change your Freshdesk password: paste the new one with **Reconnect**.',
+            'If you reset the key in Freshdesk (**Reset API key**), the old one stops working: paste the new one with **Reconnect**.',
           ],
           problems: [
             {
               problem: 'The form says the key is not valid',
-              fix: 'Copy the key again from **Profile settings → View API key**. It changes when you change your Freshdesk password.',
+              fix: 'Copy the key again from **Profile settings → View API key**. If it was reset, paste the new one.',
             },
             {
               problem: 'The form cannot reach the helpdesk',

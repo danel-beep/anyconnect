@@ -197,10 +197,10 @@ const ui: ConnectorUi = {
               },
             },
             {
-              text: 'Назовите ключ Manyplug, выберите срок действия (или **Never expires**) и нажмите **Save**.',
+              text: 'Назовите ключ Manyplug, выберите срок действия (или включите **Never expires**) и нажмите **Create**.',
             },
             {
-              text: 'Скопируйте ключ (начинается с cal_). Cal.com показывает его только один раз.',
+              text: 'Нажмите **Copy to clipboard** (ключ начинается с cal_). Cal.com показывает его только один раз.',
               fills: ['apiKey'],
             },
           ],
@@ -245,8 +245,11 @@ const ui: ConnectorUi = {
                 url: 'https://app.cal.com/settings/developer/api-keys',
               },
             },
-            { text: 'Name it Manyplug, choose when it expires (or **Never expires**) and click **Save**.' },
-            { text: 'Copy the key (it starts with cal_). Cal.com shows it only once.', fills: ['apiKey'] },
+            { text: 'Name it Manyplug, pick an expiry or turn on **Never expires**, and click **Create**.' },
+            {
+              text: 'Click **Copy to clipboard** (the key starts with cal_). Cal.com shows it only once.',
+              fills: ['apiKey'],
+            },
           ],
           tips: ['The AI cancels a meeting only after you confirm: attendees get an email.'],
           problems: [

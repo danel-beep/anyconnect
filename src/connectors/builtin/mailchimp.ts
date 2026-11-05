@@ -263,7 +263,7 @@ const ui: ConnectorUi = {
         form: {
           summary: 'Вы создаёте ключ API в Mailchimp и вставляете его сюда вместе с дата-центром.',
           minutes: 2,
-          needs: ['Аккаунт Mailchimp, где вы владелец или администратор'],
+          needs: ['Аккаунт Mailchimp с ролью Manager, Admin или Owner'],
           steps: [
             {
               text: 'В Mailchimp нажмите на аватар → **Profile** → **Extras** → **API keys**.',
@@ -294,7 +294,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'В **Extras** нет пункта **API keys**',
-              fix: 'Ваша роль в аккаунте не даёт создавать ключи. Попросите владельца аккаунта создать ключ или выдать вам права администратора.',
+              fix: 'Ваша роль не даёт создавать ключи. Попросите владельца аккаунта выдать вам роль Manager или выше либо создать ключ самому.',
             },
           ],
         },
@@ -325,7 +325,7 @@ const ui: ConnectorUi = {
         form: {
           summary: 'You create an API key in Mailchimp and paste it here together with its data center.',
           minutes: 2,
-          needs: ['A Mailchimp account where you are the owner or an admin'],
+          needs: ['A Mailchimp account where you are a Manager, Admin or Owner'],
           steps: [
             {
               text: 'In Mailchimp, click your avatar → **Profile** → **Extras** → **API keys**.',
@@ -353,7 +353,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'There is no **API keys** item under **Extras**',
-              fix: 'Your role in the account cannot create keys. Ask the account owner to create the key or to make you an admin.',
+              fix: 'Your role cannot create keys. Ask the account owner for the Manager role or higher, or to create the key.',
             },
           ],
         },

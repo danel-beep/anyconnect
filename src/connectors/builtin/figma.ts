@@ -193,7 +193,7 @@ const ui: ConnectorUi = {
               text: 'В разделе **Personal access tokens** нажмите **Generate new token**, назовите токен Manyplug и выберите срок действия.',
             },
             {
-              text: 'Для **File content** выберите **Read-only**, для **Comments** — **Read and write**, затем нажмите **Generate token**.',
+              text: 'Дайте чтение для **Current user**, **Projects** и **File content**, чтение и запись для **Comments**, затем нажмите **Generate token**.',
             },
             {
               text: 'Скопируйте токен (начинается с figd_). Figma показывает его только один раз.',
@@ -207,11 +207,11 @@ const ui: ConnectorUi = {
           problems: [
             {
               problem: 'Форма пишет, что токен не подходит',
-              fix: 'Скопируйте токен целиком ещё раз, начиная с figd_. Если окно закрыто, создайте новый.',
+              fix: 'Скопируйте токен целиком, начиная с figd_. Если он всё равно не подходит, создайте новый с чтением **Current user**: без него Figma не говорит, чей это токен.',
             },
             {
               problem: 'ИИ не может прочитать файл',
-              fix: 'Токен видит те файлы, которые можете открыть вы. Откройте ссылку на файл в Figma под этим аккаунтом и проверьте доступ.',
+              fix: 'Проверьте, что у токена есть чтение **File content** и **Projects**, а файл открывается в Figma под этим аккаунтом.',
             },
             {
               problem: 'ИИ не может оставить комментарий',
@@ -256,7 +256,7 @@ const ui: ConnectorUi = {
               text: 'Under **Personal access tokens**, click **Generate new token**, name it Manyplug and pick an expiry.',
             },
             {
-              text: 'Set **File content** to **Read-only** and **Comments** to **Read and write**, then click **Generate token**.',
+              text: 'Give read access to **Current user**, **Projects** and **File content**, and read and write access to **Comments**, then click **Generate token**.',
             },
             { text: 'Copy the token (it starts with figd_). Figma shows it only once.', fills: ['token'] },
           ],
@@ -267,11 +267,11 @@ const ui: ConnectorUi = {
           problems: [
             {
               problem: 'The form says the token is not valid',
-              fix: 'Copy the whole token again, starting with figd_. If the window is closed, generate a new one.',
+              fix: 'Copy the whole token, starting with figd_. If it still fails, generate a new one with read access to **Current user**: without it Figma does not say whose token it is.',
             },
             {
               problem: 'The AI cannot read a file',
-              fix: 'The token sees the files you can open. Open the file link in Figma under this account to check access.',
+              fix: 'Check that the token has read access to **File content** and **Projects**, and that the file opens in Figma under this account.',
             },
             {
               problem: 'The AI cannot leave a comment',

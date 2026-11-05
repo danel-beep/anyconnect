@@ -226,10 +226,9 @@ const ui: ConnectorUi = {
               text: 'Назовите приложение Manyplug и в **Permissions** отметьте **boards:read** и **boards:write**.',
             },
             {
-              text: 'Нажмите **Install app and get OAuth token**, выберите команду с нужными досками и скопируйте токен.',
-              fills: ['token'],
+              text: 'Нажмите **Install app and get OAuth token**, выберите команду с нужными досками и нажмите **Install & authorize**.',
             },
-            { text: 'Вставьте токен в форму и нажмите **Подключить**.' },
+            { text: 'Скопируйте показанный токен.', fills: ['token'] },
           ],
           tips: [
             'Токен действует от вашего имени. Чтобы отозвать доступ, удалите приложение в **Your apps**.',
@@ -288,10 +287,9 @@ const ui: ConnectorUi = {
               text: 'Name the app Manyplug and tick **boards:read** and **boards:write** under **Permissions**.',
             },
             {
-              text: 'Click **Install app and get OAuth token**, pick the team with your boards and copy the token.',
-              fills: ['token'],
+              text: 'Click **Install app and get OAuth token**, pick the team with your boards and click **Install & authorize**.',
             },
-            { text: 'Paste the token into the form and click **Connect**.' },
+            { text: 'Copy the token Miro shows.', fills: ['token'] },
           ],
           tips: ['The token acts as you. To cut access, delete the app under **Your apps**.'],
           problems: [

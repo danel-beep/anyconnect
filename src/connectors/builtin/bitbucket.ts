@@ -289,7 +289,7 @@ const ui: ConnectorUi = {
             },
             { text: 'Назовите токен Manyplug, выберите срок действия и приложение **Bitbucket**.' },
             {
-              text: 'Отметьте права **read:repository**, **read:pullrequest**, **write:pullrequest** и **read:pipeline**, нажмите **Create token** и скопируйте токен.',
+              text: 'Отметьте права **read:repository:bitbucket**, **read:pullrequest:bitbucket**, **write:pullrequest:bitbucket** и **read:pipeline:bitbucket**, нажмите **Create token** и скопируйте токен.',
               fills: ['apiToken'],
             },
             {
@@ -312,7 +312,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'ИИ не может комментировать или одобрять пул-реквесты',
-              fix: 'Создайте новый токен с правом **write:pullrequest** и вставьте его через **Переподключить**.',
+              fix: 'Создайте новый токен с правом **write:pullrequest:bitbucket** и вставьте его через **Переподключить**.',
             },
           ],
         },
@@ -363,7 +363,7 @@ const ui: ConnectorUi = {
             },
             { text: 'Name it Manyplug, pick an expiry date and choose the app **Bitbucket**.' },
             {
-              text: 'Tick the scopes **read:repository**, **read:pullrequest**, **write:pullrequest** and **read:pipeline**, then click **Create token** and copy it.',
+              text: 'Tick the scopes **read:repository:bitbucket**, **read:pullrequest:bitbucket**, **write:pullrequest:bitbucket** and **read:pipeline:bitbucket**, then click **Create token** and copy it.',
               fills: ['apiToken'],
             },
             {
@@ -386,7 +386,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'The AI cannot comment on or approve a pull request',
-              fix: 'Create a new token with the **write:pullrequest** scope and paste it with **Reconnect**.',
+              fix: 'Create a new token with the **write:pullrequest:bitbucket** scope and paste it with **Reconnect**.',
             },
           ],
         },

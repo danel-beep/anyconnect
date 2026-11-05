@@ -148,7 +148,7 @@ export default defineConnector({
                 },
               },
               {
-                text: 'Откройте **Authentication**, нажмите **Edit scopes** и разрешите чтение и запись разговоров, чтение контактов и админов. Сохраните.',
+                text: 'В разделе **Authentication** нажмите **Edit scopes**, отметьте чтение и запись разговоров, чтение контактов и админов, затем нажмите **Save**.',
               },
               {
                 text: 'Скопируйте **Access token** на той же странице и вставьте его в форму.',
@@ -209,14 +209,14 @@ export default defineConnector({
             needs: ['An Intercom workspace where you are an admin'],
             steps: [
               {
-                text: 'Open Intercom’s developer page, click **New app**, name it Manyplug and pick your workspace.',
+                text: 'Open the Intercom **Developer Hub**, click **New app**, name it Manyplug and pick your workspace.',
                 link: {
                   label: 'Open the Developer Hub',
                   url: 'https://app.intercom.com/a/apps/_/developer-hub',
                 },
               },
               {
-                text: 'Open **Authentication**, click **Edit scopes** and allow reading and writing conversations and reading contacts and admins. Save.',
+                text: 'Under **Authentication**, click **Edit scopes**, tick read and write for conversations and read for contacts and admins, then click **Save**.',
               },
               {
                 text: 'Copy the **Access token** on the same page and paste it into the form.',

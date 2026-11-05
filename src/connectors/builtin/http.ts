@@ -176,6 +176,7 @@ export default defineConnector({
             needs: [
               'Документация API сервиса: в ней указан адрес и способ передачи ключа',
               'Ключ API или токен, если API его требует',
+              'Лучше, если настраивает тот, кто умеет читать документацию API',
             ],
             steps: [
               {
@@ -270,6 +271,7 @@ export default defineConnector({
             needs: [
               'The service’s API docs: they give the address and how to send the key',
               'An API key or token, if the API needs one',
+              'Best set up by someone comfortable reading API docs',
             ],
             steps: [
               {

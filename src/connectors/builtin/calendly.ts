@@ -113,7 +113,7 @@ export default defineConnector({
             needs: ['Аккаунт Calendly'],
             steps: [
               {
-                text: 'В Calendly откройте **Integrations → API & Webhooks**.',
+                text: 'В Calendly откройте **Integrations & apps** и нажмите на карточку **API and webhooks**.',
                 link: {
                   label: 'Открыть API & Webhooks',
                   url: 'https://calendly.com/integrations/api_webhooks',
@@ -123,7 +123,7 @@ export default defineConnector({
                 text: 'В разделе **Personal Access Tokens** нажмите **Generate New Token**, назовите токен Manyplug и нажмите **Create Token**.',
               },
               {
-                text: 'Нажмите **Copy Token**. Calendly показывает токен только один раз.',
+                text: 'Сразу скопируйте токен: Calendly показывает его только один раз.',
                 fills: ['token'],
               },
             ],
@@ -131,7 +131,7 @@ export default defineConnector({
             problems: [
               {
                 problem: 'Форма пишет, что токен не подходит',
-                fix: 'Создайте новый токен и скопируйте его кнопкой **Copy Token**: токен длинный, его легко обрезать.',
+                fix: 'Создайте новый токен и скопируйте его целиком: токен длинный, его легко обрезать.',
               },
               {
                 problem: 'ИИ не видит встречи коллег',
@@ -171,19 +171,19 @@ export default defineConnector({
             needs: ['A Calendly account'],
             steps: [
               {
-                text: 'In Calendly, open **Integrations → API & Webhooks**.',
+                text: 'In Calendly, open **Integrations & apps** and click the **API and webhooks** card.',
                 link: { label: 'Open API & Webhooks', url: 'https://calendly.com/integrations/api_webhooks' },
               },
               {
                 text: 'Under **Personal Access Tokens**, click **Generate New Token**, name it Manyplug and click **Create Token**.',
               },
-              { text: 'Click **Copy Token**. Calendly shows it only once.', fills: ['token'] },
+              { text: 'Copy the token right away: Calendly shows it only once.', fills: ['token'] },
             ],
             tips: ['You can revoke the token on the same page.'],
             problems: [
               {
                 problem: 'The form says the token is not valid',
-                fix: 'Generate a new token and copy it with the **Copy Token** button: a long token is often cut short when selected by hand.',
+                fix: 'Generate a new token and copy it in full: a long token often gets cut short.',
               },
               {
                 problem: 'The AI does not see events of your teammates',

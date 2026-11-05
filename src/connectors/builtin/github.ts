@@ -270,7 +270,7 @@ const ui: ConnectorUi = {
           problems: [
             {
               problem: 'Нет репозиториев организации',
-              fix: 'Владелец организации должен одобрить Manyplug: попросите его открыть **Settings → Third-party access** в организации и одобрить приложение.',
+              fix: 'Владелец организации должен одобрить Manyplug: в настройках организации **Settings → Third-party access → OAuth app policy** нажать **Review** рядом с Manyplug, затем **Grant access**.',
             },
           ],
         },
@@ -280,14 +280,14 @@ const ui: ConnectorUi = {
           needs: ['Аккаунт GitHub', 'Одобрение владельца, если токену нужны репозитории организации'],
           steps: [
             {
-              text: 'Откройте GitHub → **Settings → Developer settings → Fine-grained tokens** и нажмите **Generate new token**.',
+              text: 'Откройте GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens** и нажмите **Generate new token**.',
               link: {
                 label: 'Создать токен на GitHub',
                 url: 'https://github.com/settings/personal-access-tokens/new',
               },
             },
             {
-              text: 'Назовите токен Manyplug и выберите срок действия. В **Repository access** выберите репозитории, с которыми будет работать ИИ.',
+              text: 'Назовите токен Manyplug, выберите срок действия и в **Resource owner** — себя или организацию. В **Repository access** выберите репозитории, с которыми будет работать ИИ.',
             },
             {
               text: 'В **Permissions** для **Issues** и **Pull requests** выберите **Read and write**, для **Contents** — **Read-only**.',
@@ -299,6 +299,7 @@ const ui: ConnectorUi = {
           ],
           tips: [
             'Когда срок токена истечёт, у аккаунта появится «Нужно войти заново»: создайте новый токен и вставьте его через **Переподключить**.',
+            'Уведомления GitHub с токеном не работают. Если они нужны, подключайтесь через вход в GitHub.',
           ],
           problems: [
             {
@@ -307,7 +308,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'Нет репозиториев организации',
-              fix: 'При создании токена выберите организацию в **Resource owner**. Организации, возможно, тоже нужно его одобрить.',
+              fix: 'Создайте токен заново и выберите организацию в **Resource owner** (шаг 2). Организации, возможно, тоже нужно его одобрить.',
             },
             {
               problem: 'ИИ не может комментировать или открыть пул-реквест',
@@ -384,7 +385,7 @@ const ui: ConnectorUi = {
           problems: [
             {
               problem: 'Repositories of an organisation are missing',
-              fix: 'An organisation owner has to approve Manyplug: ask them to open **Settings → Third-party access** in the organisation and approve it.',
+              fix: 'An organisation owner has to approve Manyplug: in the organisation’s **Settings → Third-party access → OAuth app policy**, click **Review** next to Manyplug, then **Grant access**.',
             },
           ],
         },
@@ -397,14 +398,14 @@ const ui: ConnectorUi = {
           ],
           steps: [
             {
-              text: 'Open GitHub → **Settings → Developer settings → Fine-grained tokens** and click **Generate new token**.',
+              text: 'Open GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens** and click **Generate new token**.',
               link: {
                 label: 'Create a token on GitHub',
                 url: 'https://github.com/settings/personal-access-tokens/new',
               },
             },
             {
-              text: 'Name it Manyplug and choose an expiry. Under **Repository access**, pick the repositories the AI may use.',
+              text: 'Name it Manyplug, choose an expiry and, under **Resource owner**, pick yourself or the organisation. Under **Repository access**, pick the repositories the AI may use.',
             },
             {
               text: 'Under **Permissions**, set **Issues** and **Pull requests** to **Read and write**, and **Contents** to **Read-only**.',
@@ -413,6 +414,7 @@ const ui: ConnectorUi = {
           ],
           tips: [
             'When the token expires, the account shows “Sign in again”: create a new token and paste it with **Reconnect**.',
+            'GitHub notifications do not work with a token. If you need them, connect with GitHub sign-in instead.',
           ],
           problems: [
             {
@@ -421,7 +423,7 @@ const ui: ConnectorUi = {
             },
             {
               problem: 'Repositories of an organisation are missing',
-              fix: 'Pick the organisation under **Resource owner** when you create the token. The organisation may also need to approve it.',
+              fix: 'Create the token again and pick the organisation under **Resource owner** (step 2). The organisation may also need to approve it.',
             },
             {
               problem: 'The AI cannot comment or open a pull request',
