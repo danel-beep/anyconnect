@@ -994,6 +994,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
                 aria-label={t('services.search')}
                 data-filter="#svc-all-list"
                 data-filter-empty="#catalog-none"
+                data-filter-empty-chip="#catalog-none-chip"
                 data-filter-expand="#all-services"
                 data-filter-hide="#popular"
                 data-filter-count="#svc-count"
@@ -1020,25 +1021,31 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
               title={t('app.services.showFewer')}
               hidden
             >
-              <span class="btn-label">{t('app.services.showFewer')}</span> <Icon name="chevron" class="up" />
+              <span class="label-long">{t('app.services.showFewer')}</span>
+              <span class="label-short">{t('app.services.less')}</span> <Icon name="chevron" class="up" />
             </button>
           </div>
-          <fieldset class="svc-chips" data-chips="#svc-all-list" hidden>
-            <legend class="sr-only">{t('app.services.categories')}</legend>
-            <button type="button" data-chip="" aria-pressed="true">
-              {t('app.services.allCategories')}
+          <div class="svc-chips-wrap">
+            <fieldset class="svc-chips" data-chips="#svc-all-list" hidden>
+              <legend class="sr-only">{t('app.services.categories')}</legend>
+              <button type="button" data-chip="" aria-pressed="true">
+                {t('app.services.allCategories')}
+              </button>
+              {layout.groups.map(([category]) => (
+                <button type="button" data-chip={category} aria-pressed="false">
+                  {t(`category.${category}`)}
+                </button>
+              ))}
+              {layout.unavailable.length ? (
+                <button type="button" data-chip="unavailable" aria-pressed="false">
+                  {t('app.services.notReady')}
+                </button>
+              ) : null}
+            </fieldset>
+            <button type="button" class="chips-more" data-chips-more tabindex={-1} aria-hidden="true" hidden>
+              <Icon name="chevron" />
             </button>
-            {layout.groups.map(([category]) => (
-              <button type="button" data-chip={category} aria-pressed="false">
-                {t(`category.${category}`)}
-              </button>
-            ))}
-            {layout.unavailable.length ? (
-              <button type="button" data-chip="unavailable" aria-pressed="false">
-                {t('app.services.notReady')}
-              </button>
-            ) : null}
-          </fieldset>
+          </div>
         </div>
         <p class="sr-only" id="svc-count" aria-live="polite" data-template={t('app.services.found')} />
         <section id="popular" aria-labelledby="popular-title">
@@ -1053,6 +1060,12 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
         </section>
         <p class="muted svc-none" id="catalog-none" hidden>
           {t('app.services.noMatch')} <a href="#custom">{t('app.services.noMatchCustom')}</a>
+        </p>
+        <p class="muted svc-none" id="catalog-none-chip" hidden>
+          {t('app.services.noMatchInCategory')}{' '}
+          <button type="button" class="link-btn" data-chips-reset="#svc-all-list">
+            {t('app.services.searchAll')}
+          </button>
         </p>
         <details class="svc-all" id="all-services" data-focus-on-open="#svc-q">
           <summary>

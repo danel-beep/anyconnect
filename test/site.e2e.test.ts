@@ -654,7 +654,7 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const page = await (await browser.request('/app/services')).text();
     // A short popular row first, the full list folded under it, the search box opens it.
     expect(page).toContain('id="popular"');
-    expect(page).toMatch(/<details class="svc-all" id="all-services">/);
+    expect(page).toMatch(/<details class="svc-all" id="all-services"/);
     expect(page).toContain('data-filter-expand="#all-services"');
     expect(page).toContain('id="add-slack"');
     // Demo accounts are one folded row, not a group of real accounts; the own-server form is folded too.

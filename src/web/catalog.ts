@@ -295,7 +295,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   twilio: {
     icon: 'twilio',
     category: 'messengers',
-    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'SMS, numbers and the call log.' },
+    blurb: { ru: 'SMS (СМС), номера и журнал звонков.', en: 'SMS, numbers and the call log.' },
   },
   postmark: {
     icon: 'postmark',

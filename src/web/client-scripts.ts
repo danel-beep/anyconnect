@@ -76,9 +76,10 @@ if(hide)hide.hidden=q!=='';if(clear)clear.hidden=input.value==='';
 if(expand){if(q!==''){if(wasOpen===null)wasOpen=expand.open;expand.open=true;expand.setAttribute('data-searching','')}else{expand.removeAttribute('data-searching');if(wasOpen!==null)expand.open=wasOpen;wasOpen=null}}
 var n=$$('[data-search]',box).filter(shown).length;
 var narrowed=q!==''||$$('[data-chip-off]',box).length>0;if(count)count.textContent=narrowed?(count.getAttribute('data-template')||'{n}').replace('{n}',String(n)):'';
-var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=n>0}
+var none=sel('data-filter-empty'),noneChip=sel('data-filter-empty-chip'),byChip=$$('[data-chip-off]',box).length>0;
+if(none)none.hidden=n>0||(byChip&&!!noneChip);if(noneChip)noneChip.hidden=n>0||!byChip}
 /* Typing searches every category again (a chip picked afterwards narrows the results) */
-input.addEventListener('input',function(){if(input.value.trim())box.dispatchEvent(new Event('filtering'));run()});box.addEventListener('chips',run);
+input.addEventListener('input',function(){box.dispatchEvent(new Event('filtering'));run()});box.addEventListener('chips',run);
 if(clear)clear.addEventListener('click',function(){input.value='';run();input.focus()});
 input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';run()}
 if(e.key==='Enter'&&input.hasAttribute('data-filter-enter')){e.preventDefault();var first=$$('[data-search]',box).filter(shown).map(function(el){return el.querySelector('a.stretch')}).filter(Boolean)[0];if(first)first.click()}})});
@@ -87,8 +88,17 @@ if(e.key==='Enter'&&input.hasAttribute('data-filter-enter')){e.preventDefault();
 $$('[data-chips]').forEach(function(bar){var box=d.querySelector(bar.getAttribute('data-chips'));if(!box)return;bar.hidden=false;var chips=$$('[data-chip]',bar);
 function pick(v){chips.forEach(function(x){x.setAttribute('aria-pressed',x.getAttribute('data-chip')===v?'true':'false')});
 $$('[data-group]',box).forEach(function(g){if(v&&g.getAttribute('data-group')!==v)g.setAttribute('data-chip-off','');else g.removeAttribute('data-chip-off')})}
-/* Typing a search looks through every category */
+function reset(){if($$('[data-chip-off]',box).length){pick('');bar.scrollLeft=0;box.dispatchEvent(new Event('chips'))}}
+/* A new search, closing the list or "Search all categories" (data-chips-reset) go back to every category */
 box.addEventListener('filtering',function(){if($$('[data-chip-off]',box).length){pick('');bar.scrollLeft=0}});
+var det=box.closest('details');if(det)det.addEventListener('toggle',function(){if(!det.open)reset();edge()});
+$$('[data-chips-reset]').forEach(function(b){if(d.querySelector(b.getAttribute('data-chips-reset'))===box)b.addEventListener('click',reset)});
+/* A row wider than the bar scrolls sideways: the mouse wheel scrolls it, a button at the edge shows more */
+var more=bar.parentElement&&bar.parentElement.querySelector('[data-chips-more]');
+function edge(){var end=bar.scrollWidth-bar.clientWidth-bar.scrollLeft<=4;bar.classList.toggle('at-end',end);bar.classList.toggle('scrolled',bar.scrollLeft>4);if(more)more.hidden=end}
+bar.addEventListener('scroll',edge,{passive:true});window.addEventListener('resize',edge);edge();
+bar.addEventListener('wheel',function(e){if(Math.abs(e.deltaY)<=Math.abs(e.deltaX)||bar.scrollWidth<=bar.clientWidth)return;var before=bar.scrollLeft;bar.scrollLeft+=e.deltaY;if(bar.scrollLeft!==before)e.preventDefault()},{passive:false});
+if(more)more.addEventListener('click',function(){bar.scrollBy({left:Math.max(120,bar.clientWidth*0.6),behavior:'smooth'})});
 chips.forEach(function(c){c.addEventListener('click',function(){pick(c.getAttribute('data-chip'));box.dispatchEvent(new Event('chips'));
 /* Keep the start of the list right under the (sticky) bar instead of leaving the page scrolled into nothing */
 var stick=bar.closest('[data-sticky-bar]')||bar.parentElement,r=box.getBoundingClientRect(),under=stick.getBoundingClientRect().bottom;if(r.top<under)window.scrollBy(0,r.top-under-8)})})});

@@ -113,7 +113,16 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .add-card:has(details.svc-all[open]) .svc-chips:not([hidden]){display:flex}
 .add-card:has(details.svc-all[open]) .svc-bar{position:sticky;top:0;z-index:6;background:var(--card);margin:0 -24px;padding:12px 24px;border-bottom:1px solid var(--border);box-shadow:0 10px 18px -16px rgba(0,0,0,.45)}
 .add-card:has(details.svc-all[open]) #popular{display:none}
-.svc-chips{border:0;min-width:0;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -24px;padding:0 24px;mask-image:linear-gradient(to right,#000 88%,transparent);-webkit-mask-image:linear-gradient(to right,#000 88%,transparent)}
+.svc-chips-wrap{position:relative;margin:0 -24px}
+.svc-chips{border:0;min-width:0;gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0;padding:0 24px}
+.svc-chips:not(.at-end){mask-image:linear-gradient(to right,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,#000 85%,transparent)}
+.svc-chips.scrolled.at-end{mask-image:linear-gradient(to right,transparent,#000 8%);-webkit-mask-image:linear-gradient(to right,transparent,#000 8%)}
+.svc-chips.scrolled:not(.at-end){mask-image:linear-gradient(to right,transparent,#000 8%,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 85%,transparent)}
+.chips-more{display:none;position:absolute;right:14px;top:50%;transform:translateY(-50%);width:30px;height:30px;min-height:0;padding:0;border-radius:50%;border:1px solid var(--border-strong);background:var(--card);color:var(--text);place-items:center;box-shadow:0 2px 8px -3px rgba(0,0,0,.3)}
+.chips-more svg{width:16px;height:16px;transform:rotate(-90deg)}
+@media (hover:hover){.add-card:has(details.svc-all[open]) .chips-more:not([hidden]){display:grid}}
+.label-short{display:none}
+.link-btn{border:0;background:none;padding:0;min-height:0;font:inherit;color:var(--accent-ink);text-decoration:underline;cursor:pointer}
 .svc-chips::-webkit-scrollbar{display:none}
 .svc-chips button{flex:none;min-height:32px;padding:0 12px;font-size:13px;font-weight:540;border-radius:99px;border:1px solid var(--border);background:var(--card);color:var(--muted)}
 .svc-chips button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
@@ -171,7 +180,8 @@ details.svc-all>div{padding:0;color:inherit;max-width:none}
   .svc-grid{grid-template-columns:1fr;gap:6px}
   .svc-grid.popular .svc-tile:nth-child(n+7){display:none}
   .svc-tile{padding:9px 10px;gap:10px}
-  .svc-all .svc-tile p{-webkit-line-clamp:1}
+  .label-long{display:none}
+  .label-short{display:inline}
   .add-jump .btn-label{display:none}
   .add-jump{padding-inline:10px}
 }
