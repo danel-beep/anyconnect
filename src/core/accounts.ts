@@ -8,7 +8,7 @@ import {
   type ConnectorLogger,
   type TestResult,
 } from '../connectors/sdk.js';
-import type { Db } from '../db/client.js';
+import type { Db, DbExecutor } from '../db/client.js';
 import {
   type AccountSettings,
   accessRules,
@@ -270,10 +270,17 @@ export class AccountService {
     };
   }
 
+  /**
+   * `opts.secrets` stores more of the new account's secrets (e.g. OAuth tokens) in the same
+   * transaction, encrypted with the fresh data key it is handed. A sealed account needs only its
+   * owner's public key to be created, so this works in a request that cannot open the vault (a
+   * browser not yet approved); without it, opening the key again would fail there.
+   */
   async create(
     workspaceId: string,
     rawInput: CreateAccountInput,
     owner?: AccountOwnerInput,
+    opts: { secrets?: (account: AccountRow, key: DataKey, tx: DbExecutor) => Promise<void> } = {},
   ): Promise<AccountRow> {
     const input = parseWith(CreateAccountInput, rawInput, 'account');
     const connector = await this.connector(workspaceId, input.connectorId);
@@ -294,30 +301,33 @@ export class AccountService {
         : undefined;
     const { key, wrapped } = this.keys.createKey(id, sealTo);
     try {
-      const [row] = await this.db
-        .insert(accounts)
-        .values({
-          id,
-          workspaceId,
-          connectorId: connector.id,
-          ownerUserId: placed.ownerUserId,
-          name,
-          label: input.label,
-          description: input.description ?? null,
-          config,
-          dataKeyEncrypted: wrapped,
-          credentialsEncrypted: hasCredentials
-            ? this.keys.encryptCredentials({ id }, key, credentials)
-            : null,
-          enabled: input.enabled ?? true,
-          settings: disabledActions ? { disabledActions } : {},
-          // OAuth services get their tokens from the connect flow; until then the account is unusable.
-          ...(connector.oauth && !(connector.oauth.optional && hasAnyValue(credentials))
-            ? { status: 'needs_reauth' as const, statusMessage: 'Not connected yet: connect the account' }
-            : {}),
-        })
-        .returning();
-      return row!;
+      return await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(accounts)
+          .values({
+            id,
+            workspaceId,
+            connectorId: connector.id,
+            ownerUserId: placed.ownerUserId,
+            name,
+            label: input.label,
+            description: input.description ?? null,
+            config,
+            dataKeyEncrypted: wrapped,
+            credentialsEncrypted: hasCredentials
+              ? this.keys.encryptCredentials({ id }, key, credentials)
+              : null,
+            enabled: input.enabled ?? true,
+            settings: disabledActions ? { disabledActions } : {},
+            // OAuth services get their tokens from the connect flow; until then the account is unusable.
+            ...(connector.oauth && !(connector.oauth.optional && hasAnyValue(credentials))
+              ? { status: 'needs_reauth' as const, statusMessage: 'Not connected yet: connect the account' }
+              : {}),
+          })
+          .returning();
+        await opts.secrets?.(row!, key, tx);
+        return row!;
+      });
     } catch (error) {
       if (isUniqueViolation(error))
         throw conflict(`An account named "${name}" already exists for ${connector.name}`);
@@ -464,6 +474,14 @@ export class AccountService {
       .where(eq(accounts.id, accountId))
       .limit(1);
     return row !== undefined && this.keys.isSealed(row);
+  }
+
+  /**
+   * Throws a user-safe 423 when the account is sealed and this request cannot open its vault, e.g.
+   * before sending the user to a provider to reconnect it from a browser that is not approved yet.
+   */
+  async assertCanOpen(row: AccountRow): Promise<void> {
+    await this.prepareKeys(row);
   }
 
   /** Opens the caller's vault when the account is sealed; a locked vault is a user-safe error. */

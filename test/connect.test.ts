@@ -308,6 +308,35 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     expect((await callMe()).isError).toBeUndefined();
   });
 
+  it('connects from a browser the vault does not open yet, and refuses to reconnect there with a 423', async () => {
+    // Regression (ref 0a783f20ea): the vault was created on a laptop; on a phone not yet approved
+    // the callback sealed the new account, then failed to store its tokens with a 500.
+    await browser.request('/app'); // the laptop: creates the vault
+    const phone = new TestBrowser(hub.baseUrl);
+    expect((await phone.login()).status).toBe(303);
+    const start = await phone.request('/connect/fake?label=Phone');
+    expect(start.status).toBe(302);
+    const { code, state } = provider.approve(start.headers.get('location')!);
+    const callback = await phone.request(`/connect/callback?code=${code}&state=${state}`);
+    expect(callback.status).toBe(200);
+    expect(await callback.text()).toContain('Аккаунт подключён');
+
+    const [account] = await hub.services.accounts.list(principal.workspaceId);
+    expect(account).toMatchObject({ label: 'Phone', status: 'active' });
+    expect(await hub.services.accounts.isSealed(account!.id)).toBe(true);
+    const stored = await hub.services.database.pool.query('select tokens_encrypted from account_oauth');
+    expect(stored.rows[0].tokens_encrypted).not.toContain(provider.accessToken);
+    // Where the vault is open (the AI app, the laptop) the account works with those tokens.
+    const result = await callMe();
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ email: 'user@fake.example', name: 'User' });
+
+    // Reconnecting needs the account's key: refused before the provider's consent screen.
+    const again = await phone.request(`/connect/fake?account=${account!.id}`);
+    expect(again.status).toBe(423);
+    expect(await again.text()).toContain('personal vault');
+  });
+
   it('background jobs leave sealed accounts alone: the hub cannot open them outside a call', async () => {
     provider.accessExpiresIn = 600;
     await connect('?label=Work');

@@ -9,6 +9,7 @@ import {
 } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { accountOauth, accounts } from '../db/schema.js';
+import type { DataKey } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
 import {
   type AccountKeyMaterial,
@@ -45,16 +46,24 @@ export class TokenManager {
     },
   ) {}
 
+  /**
+   * `key`: the account's data key when the caller already holds it (a brand-new account, see
+   * `AccountService.create`), so a sealed account's tokens are stored without opening the vault.
+   */
   async store(
     accountId: string,
     input: { providerId: string; appRef: string; tokens: TokenSet },
     tx: Db | Tx = this.deps.db,
+    key?: DataKey,
   ): Promise<void> {
-    const account = await this.keyMaterial(accountId, tx);
+    const context = oauthTokensContext(accountId);
+    const tokensEncrypted = key
+      ? key.encryptJson(input.tokens, context)
+      : this.deps.keys.encryptSecret(await this.keyMaterial(accountId, tx), input.tokens, context);
     const values = {
       providerId: input.providerId,
       appRef: input.appRef,
-      tokensEncrypted: this.deps.keys.encryptSecret(account, input.tokens, oauthTokensContext(accountId)),
+      tokensEncrypted,
       expiresAt: input.tokens.expiresAt ? new Date(input.tokens.expiresAt) : null,
       scopes: input.tokens.scopes,
       refreshedAt: new Date(),

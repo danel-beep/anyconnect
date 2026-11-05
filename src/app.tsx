@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { compress } from 'hono/compress';
+import { VaultLockedError } from './core/vaults.js';
 import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
 import { adminRoutes } from './routes/admin.js';
@@ -126,7 +127,11 @@ export function createApp(services: Services) {
     );
   });
 
-  app.onError((error, c) => {
+  app.onError((thrown, c) => {
+    // A sealed account this request cannot open is the user's situation, not a server fault: any
+    // path that misses its own check still answers 423 with the actionable message.
+    const error =
+      thrown instanceof VaultLockedError ? new AppError(423, 'vault_locked', thrown.message) : thrown;
     if (error instanceof AppError) {
       if (c.req.path.startsWith('/api/')) {
         return c.json(
