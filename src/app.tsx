@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { compress } from 'hono/compress';
 import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
 import { adminRoutes } from './routes/admin.js';
@@ -24,6 +25,9 @@ import { pageSecurityHeaders } from './web/http.js';
 import { DEFAULT_LOCALE, translator } from './web/i18n.js';
 import { ErrorPage } from './web/pages.js';
 import { LANG_PARAM, parseLocale } from './web/seo/urls.js';
+
+const COMPRESSIBLE =
+  /^(?:text\/(?:html|css|plain|javascript)|application\/(?:javascript|xml|rss\+xml))(?:[;\s]|$)/i;
 
 export function createApp(services: Services) {
   const app = new Hono<AppEnv>();
@@ -53,6 +57,9 @@ export function createApp(services: Services) {
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
   app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
+  // Pages, styles, scripts, feeds and llms.txt go out gzipped (a page shrinks to about a fifth).
+  // MCP, API and OAuth responses are JSON or event streams and stay as they are.
+  app.use('*', compress({ encoding: 'gzip', contentTypeFilter: COMPRESSIBLE }));
 
   // Liveness: the process answers. Cheap on purpose (the platform restarts the instance when it
   // fails, which does not help when the database is down).

@@ -18,3 +18,16 @@ export const ASSET_URLS = {
   webauthn: versioned('/assets/webauthn.js', WEBAUTHN_JS),
   paddleCheckout: versioned('/assets/paddle-checkout.js', PADDLE_CHECKOUT_JS),
 } as const;
+
+const ONE_YEAR = 'public, max-age=31536000, immutable';
+const ONE_HOUR = 'public, max-age=3600';
+
+/**
+ * `Cache-Control` for one of the files above: a request for the current version (`?v=` matches)
+ * may be kept for a year, since a new deploy changes the address; anything else (an old or no
+ * version) only for an hour.
+ */
+export function assetCacheControl(url: string, requestedVersion: string | undefined): string {
+  const current = new URL(url, 'https://local.invalid').searchParams.get('v');
+  return current && requestedVersion === current ? ONE_YEAR : ONE_HOUR;
+}

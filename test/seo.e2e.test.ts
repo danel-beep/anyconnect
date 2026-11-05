@@ -233,3 +233,39 @@ describe('what crawlers read', () => {
     expect([...bytes.slice(1, 4)].map((b) => String.fromCharCode(b)).join('')).toBe('PNG');
   });
 });
+
+describe('page speed', () => {
+  it('gzips pages and feeds but leaves MCP responses alone', async () => {
+    const res = await get('/', { 'Accept-Encoding': 'gzip' });
+    expect(res.headers.get('content-encoding')).toBe('gzip');
+    expect(res.headers.get('vary')).toContain('Accept-Encoding');
+    expect(await res.text()).toContain('<html');
+    expect((await get('/llms.txt', { 'Accept-Encoding': 'gzip' })).headers.get('content-encoding')).toBe(
+      'gzip',
+    );
+
+    const mcp = await fetch(`${hub.baseUrl}/mcp`, {
+      method: 'POST',
+      headers: { 'Accept-Encoding': 'gzip', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(mcp.headers.get('content-encoding')).toBeNull();
+  });
+
+  it('keeps the current styles and scripts for a year and older versions for an hour', async () => {
+    const html = await page('/');
+    const css = attr(html, /href="(\/assets\/app\.css\?v=[a-f0-9]+)"/)!;
+    const js = attr(html, /src="(\/assets\/site\.js\?v=[a-f0-9]+)"/)!;
+    for (const url of [css, js])
+      expect((await get(url)).headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect((await get('/assets/app.css?v=000000000000')).headers.get('cache-control')).toBe(
+      'public, max-age=3600',
+    );
+    expect((await get('/assets/app.css')).headers.get('cache-control')).toBe('public, max-age=3600');
+  });
+
+  it('preloads the text font of the page language', async () => {
+    expect(await page('/')).not.toContain('onest-cyrillic.woff2" as="font"');
+    expect(await page('/?lang=ru')).toContain('href="/assets/fonts/onest-cyrillic.woff2" as="font"');
+  });
+});

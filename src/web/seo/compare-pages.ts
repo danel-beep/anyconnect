@@ -348,6 +348,239 @@ export const COMPARE_PAGES: ComparePage[] = [
       },
     },
   },
+  {
+    slug: 'claude-built-in-connectors',
+    other: 'Claude’s built-in Google connectors',
+    checked: '2026-11-04',
+    sources: [
+      {
+        label: 'Claude: Google Workspace connectors',
+        url: 'https://support.claude.com/en/articles/10166901',
+      },
+    ],
+    body: {
+      en: {
+        title: 'Manyplug vs Claude’s built-in Gmail, Calendar and Drive connectors',
+        description:
+          'Claude has its own Gmail, Google Calendar and Google Drive connectors. When they are enough, and when one Manyplug connector for every service and AI app is the better fit.',
+        h1: 'Manyplug vs Claude’s built-in Google connectors',
+        summary:
+          'If you only use Claude and one Google account, Claude’s own Gmail, Calendar and Drive connectors are the simplest choice: they are built in and go deeper into Google files. Manyplug fits when you want several accounts, services beyond Google, or the same setup in ChatGPT, Cursor and other apps; it connects {count} services through one custom connector.',
+        rows: [
+          {
+            feature: 'Services',
+            manyplug: '{count} built-in services, plus any IMAP mailbox, remote MCP server or REST API',
+            other: 'Gmail, Google Calendar and Google Drive, plus Docs, Sheets and Slides editing',
+          },
+          {
+            feature: 'AI apps',
+            manyplug: 'Claude, ChatGPT, Claude Code, Cursor, VS Code, Codex, Gemini CLI and any MCP client',
+            other: 'Claude and Claude Desktop',
+          },
+          {
+            feature: 'Google accounts',
+            manyplug: 'Several per service, each with a name; reads search all of them at once',
+            other: 'Claude’s help page describes “the Google account you’ve connected”',
+          },
+          {
+            feature: 'Sending and deleting',
+            manyplug: 'Risky actions wait for your approval by default, with rules per account and AI app',
+            other: 'Sending email and sharing or trashing Drive files ask for approval by default',
+          },
+          {
+            feature: 'Google files',
+            manyplug: 'Docs and Slides as text, Sheets as a table, text files',
+            other: 'Also reads PDFs, images and Office files, and edits Docs, Sheets and Slides live',
+          },
+          {
+            feature: 'Setup',
+            manyplug: 'One custom connector in Claude (the free plan allows one) and a sign-in per service',
+            other:
+              'Toggle the connectors in the chat and sign in with Google; on Team and Enterprise an owner enables them first',
+          },
+        ],
+        chooseManyplug: [
+          'You have more than one Google account, or mail outside Google (iCloud, Fastmail, company IMAP).',
+          'You also want Slack, Notion, GitHub, Stripe or a help desk in the same chat.',
+          'You use ChatGPT, Cursor or Claude Code too and want one setup for all of them.',
+        ],
+        chooseOther: [
+          'You only use Claude and one Google account.',
+          'You need Claude to read PDFs and images on Drive or edit Google Docs live.',
+          'Your company already manages Claude connectors centrally on a Team or Enterprise plan.',
+        ],
+        together:
+          'They work side by side: keep Claude’s Drive connector for deep file work and add Manyplug for your other accounts and services. Tell Claude which one to use if both can do a job.',
+      },
+      ru: {
+        title: 'Manyplug и встроенные коннекторы Claude для Gmail, Календаря и Drive',
+        description:
+          'У Claude есть свои коннекторы Gmail, Google Календаря и Google Drive. Когда их достаточно, а когда лучше один коннектор Manyplug для всех сервисов и приложений ИИ.',
+        h1: 'Manyplug и встроенные коннекторы Google в Claude',
+        summary:
+          'Если вы пользуетесь только Claude и одним аккаунтом Google, проще всего его собственные коннекторы Gmail, Календаря и Drive: они встроены и глубже работают с файлами Google. Manyplug подходит, когда нужны несколько аккаунтов, сервисы помимо Google или та же настройка в ChatGPT, Cursor и других приложениях; он подключает {count} сервисов через один свой коннектор.',
+        rows: [
+          {
+            feature: 'Сервисы',
+            manyplug: '{count} встроенных сервисов, плюс любой IMAP-ящик, удалённый MCP-сервер или REST API',
+            other: 'Gmail, Google Календарь и Google Drive, плюс редактирование Docs, Sheets и Slides',
+          },
+          {
+            feature: 'Приложения ИИ',
+            manyplug: 'Claude, ChatGPT, Claude Code, Cursor, VS Code, Codex, Gemini CLI и любой MCP-клиент',
+            other: 'Claude и Claude Desktop',
+          },
+          {
+            feature: 'Аккаунты Google',
+            manyplug: 'Несколько на сервис, у каждого имя; чтение ищет сразу во всех',
+            other: 'Справка Claude говорит об «аккаунте Google, который вы подключили»',
+          },
+          {
+            feature: 'Отправка и удаление',
+            manyplug:
+              'Рискованные действия по умолчанию ждут подтверждения, правила для аккаунта и приложения ИИ',
+            other: 'Отправка писем и доступ или удаление файлов в Drive по умолчанию требуют подтверждения',
+          },
+          {
+            feature: 'Файлы Google',
+            manyplug: 'Docs и Slides как текст, Sheets как таблица, текстовые файлы',
+            other: 'Ещё читает PDF, картинки и файлы Office, редактирует Docs, Sheets и Slides вживую',
+          },
+          {
+            feature: 'Настройка',
+            manyplug: 'Один свой коннектор в Claude (на бесплатном тарифе можно один) и вход в каждый сервис',
+            other:
+              'Включить коннекторы в чате и войти через Google; в Team и Enterprise их сначала включает владелец',
+          },
+        ],
+        chooseManyplug: [
+          'У вас больше одного аккаунта Google или почта вне Google (iCloud, Fastmail, корпоративный IMAP).',
+          'Нужны ещё Slack, Notion, GitHub, Stripe или хелпдеск в том же чате.',
+          'Вы пользуетесь ещё ChatGPT, Cursor или Claude Code и хотите одну настройку для всех.',
+        ],
+        chooseOther: [
+          'Вы пользуетесь только Claude и одним аккаунтом Google.',
+          'Нужно, чтобы Claude читал PDF и картинки в Drive или правил Google Docs вживую.',
+          'Компания уже централизованно управляет коннекторами Claude на тарифе Team или Enterprise.',
+        ],
+        together:
+          'Они работают рядом: оставьте коннектор Drive от Claude для глубокой работы с файлами и добавьте Manyplug для остальных аккаунтов и сервисов. Если сделать задачу могут оба, скажите Claude, какой использовать.',
+      },
+    },
+  },
+  {
+    slug: 'pipedream-mcp',
+    other: 'Pipedream MCP',
+    checked: '2026-11-04',
+    sources: [{ label: 'Pipedream MCP docs', url: 'https://pipedream.com/docs/connect/mcp' }],
+    body: {
+      en: {
+        title: 'Manyplug vs Pipedream MCP',
+        description:
+          'Pipedream MCP offers MCP servers for 3,000+ apps, built mainly for developers adding tools to their own agents. How it compares with Manyplug’s one hub for your own accounts.',
+        h1: 'Manyplug vs Pipedream MCP',
+        summary:
+          'Pipedream MCP gives each of 3,000+ apps its own MCP server and is aimed mostly at developers who add tools to their agents for their users. Manyplug is one MCP server for your own accounts: {count} services behind one address, several accounts per service, and approvals for risky actions. Pick Pipedream for breadth or to build a product; pick Manyplug to give your own AI apps your own accounts.',
+        rows: [
+          {
+            feature: 'Apps',
+            manyplug: '{count} built-in services, plus any IMAP mailbox, remote MCP server or REST API',
+            other: '3,000+ apps and APIs, 10,000+ pre-built tools (Pipedream’s figures)',
+          },
+          {
+            feature: 'Who it is for',
+            manyplug: 'People and teams connecting their own accounts',
+            other: 'Developers adding tools to their apps and agents; individuals can connect accounts too',
+          },
+          {
+            feature: 'Servers',
+            manyplug: 'One address for every service and account',
+            other: 'A dedicated MCP server per app',
+          },
+          {
+            feature: 'Several accounts of one app',
+            manyplug: 'Yes, each with a name; reads can search all of them at once',
+            other: 'Not stated in the MCP docs',
+          },
+          {
+            feature: 'Credentials',
+            manyplug: 'Encrypted with a separate key per account, never shown to the AI',
+            other: 'Managed OAuth, encrypted at rest, not exposed to AI models',
+          },
+          {
+            feature: 'Approvals',
+            manyplug: 'Risky actions such as sending and refunds wait for your OK by default',
+            other: 'Not described in the MCP docs',
+          },
+        ],
+        chooseManyplug: [
+          'You want one address in Claude or ChatGPT for all your accounts, not a server per app.',
+          'You have several accounts of the same service.',
+          'You want approvals for sending, deleting and payments, set per account and AI app.',
+        ],
+        chooseOther: [
+          'You need an app Manyplug does not have yet; Pipedream covers far more.',
+          'You are building a product and want to give your own users tools in their accounts.',
+          'You already use Pipedream workflows.',
+        ],
+        together:
+          'Manyplug can add a remote MCP server as a custom service, so a Pipedream app server can sit next to your built-in services behind the same address.',
+      },
+      ru: {
+        title: 'Manyplug и Pipedream MCP',
+        description:
+          'Pipedream MCP даёт MCP-серверы для 3000+ приложений и рассчитан в основном на разработчиков, которые добавляют инструменты в своих агентов. Чем он отличается от единого хаба Manyplug для ваших аккаунтов.',
+        h1: 'Manyplug и Pipedream MCP',
+        summary:
+          'Pipedream MCP даёт каждому из 3000+ приложений свой MCP-сервер и рассчитан в основном на разработчиков, которые добавляют инструменты в агентов для своих пользователей. Manyplug — один MCP-сервер для ваших собственных аккаунтов: {count} сервисов за одним адресом, несколько аккаунтов на сервис и подтверждение рискованных действий. Pipedream — ради широты или для своего продукта; Manyplug — чтобы дать своим приложениям ИИ свои аккаунты.',
+        rows: [
+          {
+            feature: 'Приложения',
+            manyplug: '{count} встроенных сервисов, плюс любой IMAP-ящик, удалённый MCP-сервер или REST API',
+            other: '3000+ приложений и API, 10 000+ готовых инструментов (по данным Pipedream)',
+          },
+          {
+            feature: 'Для кого',
+            manyplug: 'Люди и команды, которые подключают свои аккаунты',
+            other:
+              'Разработчики, добавляющие инструменты в свои приложения и агенты; подключать аккаунты могут и частные лица',
+          },
+          {
+            feature: 'Серверы',
+            manyplug: 'Один адрес для всех сервисов и аккаунтов',
+            other: 'Отдельный MCP-сервер на каждое приложение',
+          },
+          {
+            feature: 'Несколько аккаунтов одного приложения',
+            manyplug: 'Да, у каждого имя; чтение может искать сразу во всех',
+            other: 'В документации по MCP не указано',
+          },
+          {
+            feature: 'Ключи',
+            manyplug: 'Шифруются отдельным ключом для каждого аккаунта, ИИ их не видит',
+            other: 'Управляемый OAuth, шифрование при хранении, ИИ-моделям не показываются',
+          },
+          {
+            feature: 'Подтверждения',
+            manyplug: 'Рискованные действия вроде отправки и возвратов по умолчанию ждут вашего OK',
+            other: 'В документации по MCP не описаны',
+          },
+        ],
+        chooseManyplug: [
+          'Нужен один адрес в Claude или ChatGPT для всех аккаунтов, а не сервер на каждое приложение.',
+          'У вас несколько аккаунтов одного сервиса.',
+          'Нужны подтверждения отправки, удаления и платежей с настройкой по аккаунту и приложению ИИ.',
+        ],
+        chooseOther: [
+          'Нужно приложение, которого в Manyplug пока нет: у Pipedream их гораздо больше.',
+          'Вы делаете продукт и хотите дать своим пользователям инструменты в их аккаунтах.',
+          'Вы уже пользуетесь сценариями Pipedream.',
+        ],
+        together:
+          'Manyplug умеет добавить удалённый MCP-сервер как свой сервис, так что сервер приложения Pipedream может стоять рядом со встроенными сервисами за тем же адресом.',
+      },
+    },
+  },
 ];
 
 export const comparePage = (slug: string) => COMPARE_PAGES.find((p) => p.slug === slug);
