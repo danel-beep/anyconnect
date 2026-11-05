@@ -4,9 +4,12 @@ import type { ClientGuide } from '../clients.js';
 import type { Translate } from '../i18n.js';
 import type { PublicService, ServiceDetail } from '../site.js';
 import type { Article } from './articles.js';
+import type { BlogPost } from './blog.js';
 import type { ComparePage } from './compare-pages.js';
 import { fill } from './facts.js';
+import type { Persona } from './personas.js';
 import type { QA } from './types.js';
+import type { UseCase } from './use-cases.js';
 
 /**
  * `/llms.txt` and `/llms-full.txt` (https://llmstxt.org): what Manyplug is, in plain Markdown for
@@ -26,6 +29,10 @@ export interface LlmsInput {
   plans: readonly Plan[];
   faq: QA[];
   articles: Article[];
+  posts: BlogPost[];
+  /** Workflows that work on this server. */
+  useCases: UseCase[];
+  personas: Persona[];
   compare: ComparePage[];
   /** Placeholders of article and comparison texts (`{count}`, `{freeAccounts}`). */
   vars: Record<string, string | number>;
@@ -99,9 +106,20 @@ export function llmsTxt(input: LlmsInput): string {
     ),
     `- [FAQ](${u}/faq)`,
     '',
+    '## Use cases',
+    '',
+    ...input.useCases.map(
+      (x) => `- [${x.body.en.h1}](${u}/use-cases/${x.slug}): ${md(x.body.en.description)}`,
+    ),
+    ...input.personas.map((p) => `- [${p.body.en.h1}](${u}/for/${p.slug}): ${md(p.body.en.description)}`),
+    '',
     '## Comparisons',
     '',
     ...input.compare.map((p) => `- [${p.body.en.h1}](${u}/compare/${p.slug}): ${md(p.body.en.description)}`),
+    '',
+    '## Blog',
+    '',
+    ...input.posts.map((p) => `- [${p.body.en.h1}](${u}/blog/${p.slug}): ${md(p.body.en.description)}`),
     '',
     '## Pricing',
     '',
@@ -180,7 +198,15 @@ export function llmsFullTxt(input: LlmsInput): string {
   }
   lines.push('## FAQ', '');
   for (const item of input.faq) lines.push(`### ${item.q}`, '', md(item.a), '');
-  for (const a of input.articles) {
+  for (const x of input.useCases) {
+    const b = x.body.en;
+    lines.push(`## ${b.h1}`, '', md(fill(b.answer, input.vars)), '', 'Example requests:');
+    lines.push(...b.prompts.map((p) => `- “${p}”`), '', 'What happens:');
+    lines.push(...b.how.map((h, i) => `${i + 1}. ${md(fill(h, input.vars))}`), '');
+    for (const q of b.faq) lines.push(`**${q.q}** ${md(q.a)}`, '');
+    lines.push(`Page: ${u}/use-cases/${x.slug}`, '');
+  }
+  for (const a of [...input.articles, ...input.posts]) {
     const b = a.body.en;
     lines.push(`## ${b.h1}`, '', md(fill(b.answer, input.vars)), '');
     for (const s of b.sections) {

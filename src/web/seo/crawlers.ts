@@ -71,7 +71,8 @@ export interface SitemapEntry {
   priority?: number;
 }
 
-const escapeXml = (s: string) =>
+/** Text and attribute values inside XML (sitemap, RSS). */
+export const escapeXml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** Every page in every language, each with its `hreflang` alternates (Google's sitemap format). */

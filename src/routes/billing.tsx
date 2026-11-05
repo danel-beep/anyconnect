@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { PaddleProvider } from '../billing/providers/paddle.js';
 import { TestBillingProvider } from '../billing/providers/test.js';
+import { ASSET_URLS, assetCacheControl } from '../web/asset-urls.js';
 import { PaddleCheckoutPage, TestCheckoutPage, TestPortalPage } from '../web/billing-pages.js';
 import { PADDLE_CHECKOUT_JS } from '../web/client-scripts.js';
 import { checkoutCsp, csrfToken } from '../web/http.js';
@@ -35,7 +36,7 @@ export function billingRoutes() {
   app.get('/assets/paddle-checkout.js', (c) =>
     c.body(PADDLE_CHECKOUT_JS, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': assetCacheControl(ASSET_URLS.paddleCheckout, c.req.query('v')),
       'X-Content-Type-Options': 'nosniff',
     }),
   );

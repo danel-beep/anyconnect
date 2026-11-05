@@ -19,6 +19,8 @@ export interface PageMeta {
   jsonLd?: JsonLd[];
   /** Search console ownership tokens (`google-site-verification`, `msvalidate.01`). */
   verification?: { google?: string | undefined; bing?: string | undefined };
+  /** RSS feed of the site's posts, for feed readers and crawlers. */
+  feed?: { href: string; title: string };
 }
 
 /**
@@ -90,6 +92,9 @@ export const Doc: FC<{
         <meta name="google-site-verification" content={meta.verification.google} />
       ) : null}
       {meta?.verification?.bing ? <meta name="msvalidate.01" content={meta.verification.bing} /> : null}
+      {meta?.feed ? (
+        <link rel="alternate" type="application/rss+xml" title={meta.feed.title} href={meta.feed.href} />
+      ) : null}
       {meta?.jsonLd?.length ? (
         // A data block, not a script: the CSP does not apply and nothing runs.
         <script
@@ -102,13 +107,16 @@ export const Doc: FC<{
       <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#232326" media="(prefers-color-scheme: dark)" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      <link
-        rel="preload"
-        href="/assets/fonts/onest-latin.woff2"
-        as="font"
-        type="font/woff2"
-        crossorigin="anonymous"
-      />
+      {(lang === 'ru' ? ['onest-latin.woff2', 'onest-cyrillic.woff2'] : ['onest-latin.woff2']).map((file) => (
+        // The text font of the page's language, so the first paint does not wait for it.
+        <link
+          rel="preload"
+          href={`/assets/fonts/${file}`}
+          as="font"
+          type="font/woff2"
+          crossorigin="anonymous"
+        />
+      ))}
       <link rel="stylesheet" href={ASSET_URLS.css} />
       <script src={ASSET_URLS.theme} />
       <script src={ASSET_URLS.site} defer />

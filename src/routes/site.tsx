@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { ASSET_URLS, assetCacheControl } from '../web/asset-urls.js';
 import { fontFile } from '../web/assets.js';
 import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
 import { FAVICON_SVG } from '../web/favicon.js';
@@ -43,14 +44,14 @@ export function siteRoutes() {
     });
   });
 
-  const script = (body: string) => (c: AppContext) =>
+  const script = (body: string, url: string) => (c: AppContext) =>
     c.body(body, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': HOURLY,
+      'Cache-Control': assetCacheControl(url, c.req.query('v')),
       'X-Content-Type-Options': 'nosniff',
     });
-  app.get('/assets/theme.js', script(THEME_JS));
-  app.get('/assets/site.js', script(SITE_JS));
+  app.get('/assets/theme.js', script(THEME_JS, ASSET_URLS.theme));
+  app.get('/assets/site.js', script(SITE_JS, ASSET_URLS.site));
 
   app.get('/favicon.svg', (c) =>
     c.body(FAVICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': HOURLY }),
@@ -135,7 +136,11 @@ export function siteRoutes() {
       <ServiceDetailPage
         ctx={ctx}
         service={service}
-        useWith={service.ready ? <UseWith ctx={ctx} service={service} /> : undefined}
+        useWith={
+          service.ready ? (
+            <UseWith ctx={ctx} service={service} services={await publicServices(c)} />
+          ) : undefined
+        }
       />,
     );
   });

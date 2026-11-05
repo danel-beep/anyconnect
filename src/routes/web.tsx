@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { ASSET_URLS, assetCacheControl } from '../web/asset-urls.js';
 import { APP_CSS } from '../web/styles.js';
 import { WEBAUTHN_JS } from '../web/webauthn-client.js';
 import type { AppEnv } from './context.js';
@@ -12,14 +13,14 @@ export function webRoutes() {
   app.get('/assets/app.css', (c) =>
     c.body(APP_CSS, 200, {
       'Content-Type': 'text/css; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': assetCacheControl(ASSET_URLS.css, c.req.query('v')),
     }),
   );
 
   app.get('/assets/webauthn.js', (c) =>
     c.body(WEBAUTHN_JS, 200, {
       'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': assetCacheControl(ASSET_URLS.webauthn, c.req.query('v')),
       'X-Content-Type-Options': 'nosniff',
     }),
   );

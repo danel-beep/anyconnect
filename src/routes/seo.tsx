@@ -2,28 +2,40 @@ import { Hono } from 'hono';
 import { PLANS } from '../billing/plans.js';
 import { serviceMeta } from '../web/catalog.js';
 import { clientName } from '../web/clients.js';
+import { PersonaView, UseCaseIndexPage, UseCaseView } from '../web/content-pages.js';
 import { translator } from '../web/i18n.js';
 import { ARTICLES, article } from '../web/seo/articles.js';
+import { BLOG_POSTS, blogPost } from '../web/seo/blog.js';
 import { clientIdBySlug } from '../web/seo/client-pages.js';
 import { COMPARE_PAGES, comparePage } from '../web/seo/compare-pages.js';
 import { robotsTxt, type SitemapEntry, sitemapXml } from '../web/seo/crawlers.js';
-import { planVars } from '../web/seo/facts.js';
+import { rssFeed } from '../web/seo/feed.js';
 import { type LlmsInput, llmsFullTxt, llmsTxt } from '../web/seo/llms.js';
 import { OG_IMAGE_PNG } from '../web/seo/og-image.js';
+import { PERSONAS, persona } from '../web/seo/personas.js';
+import { useCase } from '../web/seo/use-cases.js';
 import {
   ArticleView,
+  BlogIndexPage,
   ClientGuidePage,
-  COMBO_CLIENTS,
   CompareIndexPage,
   CompareView,
+  FaqPageView,
+  faqGroups,
+  ServiceClientPage,
+} from '../web/seo-pages.js';
+import {
+  blogPath,
+  COMBO_CLIENTS,
   clientPage,
   clientPath,
   comboPath,
-  FaqPageView,
-  faqGroups,
+  contentVars,
   PAGE_CLIENTS,
-  ServiceClientPage,
-} from '../web/seo-pages.js';
+  personaPath,
+  readyUseCases,
+  useCasePath,
+} from '../web/seo-parts.js';
 import type { AppContext, AppEnv } from './context.js';
 import { currentUser } from './context.js';
 import { pageCtx } from './page-helpers.js';
@@ -39,6 +51,8 @@ const STATIC_PAGES: SitemapEntry[] = [
   { path: '/docs', priority: 0.8 },
   { path: '/faq', priority: 0.6 },
   { path: '/compare', priority: 0.5 },
+  { path: '/use-cases', priority: 0.7 },
+  { path: '/blog', priority: 0.6 },
   { path: '/support', priority: 0.3 },
   { path: '/status', priority: 0.3 },
   { path: '/privacy', priority: 0.2 },
@@ -50,7 +64,6 @@ async function llmsInput(c: AppContext, full: boolean): Promise<LlmsInput> {
   const s = c.get('services');
   const t = translator('en');
   const services = await publicServices(c, 'en');
-  const free = PLANS.find((p) => p.id === 'free');
   return {
     publicUrl: s.config.publicUrl,
     mcpUrl: s.config.mcpUrl,
@@ -66,12 +79,11 @@ async function llmsInput(c: AppContext, full: boolean): Promise<LlmsInput> {
     plans: PLANS,
     faq: faqGroups(t, 'en', services).flatMap((g) => g.items),
     articles: ARTICLES,
+    posts: BLOG_POSTS,
+    useCases: readyUseCases(services),
+    personas: PERSONAS,
     compare: COMPARE_PAGES,
-    vars: {
-      count: services.filter((x) => x.ready && serviceMeta(x.id)?.category !== 'custom').length,
-      freeAccounts: free?.limits.accounts ?? 0,
-      ...planVars(),
-    },
+    vars: contentVars(services),
     serviceBlurb: (service) => serviceMeta(service.id)?.blurb.en ?? service.description,
     comboPath,
   };
@@ -98,6 +110,10 @@ export function seoRoutes() {
       ...PAGE_CLIENTS.map((g) => ({ path: clientPath(g), priority: 0.7 })),
       ...ARTICLES.map((a) => ({ path: `/guides/${a.slug}`, priority: 0.6 })),
       ...COMPARE_PAGES.map((p) => ({ path: `/compare/${p.slug}`, priority: 0.5 })),
+      // Only workflows whose services connect here: the others are marked noindex.
+      ...readyUseCases(services).map((u) => ({ path: useCasePath(u), priority: 0.7 })),
+      ...PERSONAS.map((p) => ({ path: personaPath(p.slug), priority: 0.6 })),
+      ...BLOG_POSTS.map((p) => ({ path: blogPath(p.slug), priority: 0.6 })),
       ...services.map((s) => ({ path: `/services/${s.id}`, priority: 0.7 })),
       // Only combinations that work here: the others are marked noindex.
       ...ready.flatMap((s) => COMBO_CLIENTS.map((g) => ({ path: comboPath(s.id, g), priority: 0.5 }))),
@@ -174,6 +190,69 @@ export function seoRoutes() {
 
   app.get('/guides/:slug', async (c) => {
     const found = article(c.req.param('slug'));
+    if (!found) return c.notFound();
+    return c.html(
+      <ArticleView
+        ctx={pageCtx(c, await currentUser(c))}
+        article={found}
+        services={await publicServices(c)}
+      />,
+    );
+  });
+
+  app.get('/use-cases', async (c) =>
+    c.html(<UseCaseIndexPage ctx={pageCtx(c, await currentUser(c))} services={await publicServices(c)} />),
+  );
+
+  app.get('/use-cases/:slug', async (c) => {
+    const found = useCase(c.req.param('slug'));
+    if (!found) return c.notFound();
+    return c.html(
+      <UseCaseView
+        ctx={pageCtx(c, await currentUser(c))}
+        useCase={found}
+        services={await publicServices(c)}
+      />,
+    );
+  });
+
+  app.get('/for/:slug', async (c) => {
+    const found = persona(c.req.param('slug'));
+    if (!found) return c.notFound();
+    return c.html(
+      <PersonaView
+        ctx={pageCtx(c, await currentUser(c))}
+        persona={found}
+        services={await publicServices(c)}
+      />,
+    );
+  });
+
+  app.get('/blog', async (c) => c.html(<BlogIndexPage ctx={pageCtx(c, await currentUser(c))} />));
+
+  app.get('/blog/feed.xml', (c) => {
+    const u = c.get('services').config.publicUrl;
+    const t = translator('en');
+    const xml = rssFeed({
+      title: t('blog.title'),
+      link: `${u}/blog`,
+      selfUrl: `${u}/blog/feed.xml`,
+      description: t('blog.description'),
+      items: BLOG_POSTS.map((p) => ({
+        title: p.body.en.h1,
+        url: `${u}${blogPath(p.slug)}`,
+        description: p.body.en.description,
+        published: p.published,
+      })),
+    });
+    return c.body(xml, 200, {
+      'Content-Type': 'application/rss+xml; charset=utf-8',
+      'Cache-Control': HOURLY,
+    });
+  });
+
+  app.get('/blog/:slug', async (c) => {
+    const found = blogPost(c.req.param('slug'));
     if (!found) return c.notFound();
     return c.html(
       <ArticleView
