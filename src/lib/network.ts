@@ -73,6 +73,14 @@ export function createNetworkPolicy(options: { allowPrivateNetwork: boolean }): 
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       throw new ConnectorError('invalid_input', `Unsupported URL scheme ${parsed.protocol}`);
     }
+    if (requestInit.body instanceof FormData) {
+      // undici's own fetch does not recognise the global FormData (it would send "[object
+      // FormData]"): encode the multipart body here, with its boundary header.
+      const encoded = new Response(requestInit.body);
+      const headers = new Headers(requestInit.headers);
+      headers.set('content-type', encoded.headers.get('content-type')!);
+      requestInit = { ...requestInit, headers, body: new Uint8Array(await encoded.arrayBuffer()) };
+    }
     const response = await undiciFetch(url, { ...requestInit, dispatcher: agent } as never);
     return response as unknown as Response;
   };

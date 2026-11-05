@@ -145,6 +145,21 @@ export class Dispatcher {
               sentAt: receipt.sentAt,
               text: job.text ?? '',
               ...(job.replyToExternalId ? { replyToExternalId: job.replyToExternalId } : {}),
+              ...(receipt.attachments?.length
+                ? { attachments: receipt.attachments }
+                : job.file
+                  ? {
+                      attachments: [
+                        {
+                          externalId: `${receipt.externalId}:file`,
+                          kind: job.file.kind,
+                          ...(job.file.name ? { name: job.file.name } : {}),
+                          // Not kept by the messenger in a form the hub can fetch: get_attachment says so.
+                          locator: { sentLink: job.file.url },
+                        },
+                      ],
+                    }
+                  : {}),
             },
           ]);
           messageId =

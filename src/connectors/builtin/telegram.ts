@@ -6,9 +6,16 @@ import {
   type InboundAttachment,
   type InboundMessage,
   type MessagingPort,
+  type OutboundFile,
 } from '../messaging.js';
 import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
-import { deliveryFetch, readJson, secretsEqual } from '../messaging-http.js';
+import {
+  deliveryFetch,
+  downloadForUpload,
+  fileNameFromUrl,
+  readJson,
+  secretsEqual,
+} from '../messaging-http.js';
 import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js';
 
 const config = z.object({
@@ -59,11 +66,12 @@ interface BotApiResult<T> {
 }
 
 /** Calls a Bot API method; failures become {@link DeliveryError}s the dispatcher understands. */
-async function callBot<T>(ctx: Ctx, method: string, params: Record<string, unknown>): Promise<T> {
+async function callBot<T>(ctx: Ctx, method: string, params: Record<string, unknown> | FormData): Promise<T> {
   const response = await deliveryFetch(ctx.fetch, botUrl(ctx, method), {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(params),
+    ...(params instanceof FormData
+      ? { body: params }
+      : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }),
     signal: ctx.signal,
   });
   const body = (await readJson(response)) as BotApiResult<T>;
@@ -283,10 +291,69 @@ export function botUpdateToMessages(update: TgUpdate, botId: string): InboundMes
   ];
 }
 
+/** The biggest file the hub downloads to upload it to Telegram itself. */
+const MAX_UPLOAD_BYTES = 20 * 1_048_576;
+
+/**
+ * How a file goes to Telegram. Telegram fetches links itself only for some formats (documents:
+ * PDF, ZIP, GIF; audio: MP3, M4A; video: MP4); anything else, or a file that should get its own
+ * name, is downloaded by the hub and uploaded.
+ */
+export function telegramFileRoute(file: OutboundFile): { method: string; field: string; byLink: boolean } {
+  const ext = /\.([a-z0-9]{1,5})$/i.exec(safePath(file.url))?.[1]?.toLowerCase() ?? '';
+  const renamed = file.name !== undefined && file.name !== fileNameFromUrl(file.url);
+  const route = (method: string, field: string, linkable: string[] | true) => ({
+    method,
+    field,
+    byLink: !renamed && (linkable === true || linkable.includes(ext)),
+  });
+  switch (file.kind) {
+    case 'photo':
+      return route('sendPhoto', 'photo', true);
+    case 'video':
+      return route('sendVideo', 'video', ['mp4']);
+    case 'audio':
+      return ext === 'ogg' || ext === 'opus'
+        ? route('sendVoice', 'voice', true)
+        : route('sendAudio', 'audio', ['mp3', 'm4a']);
+    default:
+      return route('sendDocument', 'document', ['pdf', 'zip', 'gif']);
+  }
+}
+
+function safePath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
+/** Sends a file message, by link or as an upload (see {@link telegramFileRoute}). */
+async function sendFile(ctx: Ctx, file: OutboundFile, params: Record<string, unknown>): Promise<TgMessage> {
+  const route = telegramFileRoute(file);
+  if (route.byLink) return callBot<TgMessage>(ctx, route.method, { ...params, [route.field]: file.url });
+  const downloaded = await downloadForUpload(ctx.fetch, file.url, {
+    maxBytes: MAX_UPLOAD_BYTES,
+    ...(ctx.signal ? { signal: ctx.signal } : {}),
+  });
+  const form = new FormData();
+  for (const [key, value] of Object.entries(params)) {
+    form.append(key, typeof value === 'string' ? value : JSON.stringify(value));
+  }
+  form.append(
+    route.field,
+    new Blob([downloaded.data as Uint8Array<ArrayBuffer>], { type: downloaded.mimeType }),
+    file.name ?? downloaded.name,
+  );
+  return callBot<TgMessage>(ctx, route.method, form);
+}
+
 const botTransport: DirectTransport<Config, Credentials> = {
   kind: 'direct',
   // The Bot API has no idempotency key: an interrupted send is reported as uncertain, never repeated.
   idempotentSend: false,
+  files: true,
 
   async send(job, ctx) {
     const { chatId, businessConnectionId } = parseChatId(job.chat.externalId);
@@ -302,10 +369,9 @@ const botTransport: DirectTransport<Config, Credentials> = {
       });
       return undefined;
     }
-    const result = await callBot<{ message_id: number; date: number }>(ctx, 'sendMessage', {
+    const params = {
       chat_id: chatId,
       ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
-      text: job.text,
       ...(job.replyToExternalId
         ? {
             reply_parameters: {
@@ -314,8 +380,16 @@ const botTransport: DirectTransport<Config, Credentials> = {
             },
           }
         : {}),
-    });
-    return { externalId: String(result.message_id), sentAt: new Date(result.date * 1000) };
+    };
+    const result = job.file
+      ? await sendFile(ctx, job.file, { ...params, ...(job.text ? { caption: job.text } : {}) })
+      : await callBot<TgMessage>(ctx, 'sendMessage', { ...params, text: job.text });
+    return {
+      externalId: String(result.message_id),
+      sentAt: new Date(result.date * 1000),
+      // Telegram returns the stored file: the hub's copy can then download it like a received one.
+      ...(job.file ? { attachments: attachments(result) } : {}),
+    };
   },
 
   async download(attachment, ctx) {
