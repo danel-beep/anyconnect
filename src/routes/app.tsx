@@ -120,13 +120,12 @@ export function appRoutes() {
     page('/app', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, accounts, grants, tokens, recentRows, calls7d, open, shell] = await Promise.all([
+      const [usage, accounts, grants, tokens, recentRows, open, shell] = await Promise.all([
         usageOf(c, ws),
         accountsOf(c, ws),
         s.oauth.listGrants(ws),
         s.apiTokens.list(ws),
         s.activity.recent(ws, { limit: 6 }),
-        s.activity.countSince(ws, new Date(Date.now() - 7 * DAY)),
         s.pendingCalls.listOpenFor(auth.user.id),
         shellInfo(c, ws),
       ]);
@@ -147,7 +146,6 @@ export function appRoutes() {
             },
             usage,
             apps: grants.length,
-            calls7d,
             waiting: {
               count: asking.length,
               soonest: asking.reduce<Date | null>(

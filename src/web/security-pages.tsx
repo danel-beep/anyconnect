@@ -366,9 +366,10 @@ const ProtectionCard: FC<{ t: Translate; view: SecurityView }> = ({ t, view }) =
               <span class="step-mark">
                 <Icon name={s.done ? 'check' : s.icon} />
               </span>
+              {/* A done step is just its name and a tick: the reason only matters while it is to do. */}
               <span class="grow">
                 <strong>{s.title}</strong>
-                <span class="small muted">{s.why}</span>
+                {s.done ? null : <span class="small muted">{s.why}</span>}
               </span>
               {s.done ? (
                 <span class="badge ok">{t('security.step.done')}</span>

@@ -42,10 +42,9 @@ ul.plain>li:has(>.row-icon){justify-content:flex-start}
 @media (max-width:700px){.step-list{grid-template-columns:1fr}}
 
 /* Requests to copy into the AI app */
-.ask-ai{margin-top:20px;padding:16px;border-radius:12px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
-.ask-ai .sec-icon{background:var(--accent);color:var(--accent-text)}
-.ask-ai-head{display:flex;gap:12px;align-items:flex-start;margin:0}
-.ask-ai-head .grow{display:flex;flex-direction:column;gap:2px}
+.ask-ai{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.ask-ai-head{margin:0;font-size:14.5px;line-height:1.5}
+.ask-ai-head .i{color:var(--accent);margin-right:2px;vertical-align:-2px}
 
 /* Option cards in Settings */
 .grid-2.top{align-items:start}

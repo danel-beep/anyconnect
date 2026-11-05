@@ -234,23 +234,19 @@ export const CopyText: FC<{ t: Translate; id: string; text: string; label?: stri
  * Ready-made requests to paste into the user's AI app: tapping one copies it. Everything the
  * dashboard sets up can also be asked in the chat, and this is the shortest way to show it.
  */
-export const AskAi: FC<{ t: Translate; id: string; title: string; hint: string; prompts: string[] }> = ({
+export const AskAi: FC<{ t: Translate; id: string; title: string; hint?: string; prompts: string[] }> = ({
   t,
   id,
   title,
   hint,
   prompts,
 }) => (
+  // A quiet section, not a callout: it sits under the page's own controls and must not outshout them.
   <div class="ask-ai" id={id}>
-    <div class="ask-ai-head">
-      <span class="sec-icon">
-        <Icon name="chat" />
-      </span>
-      <span class="grow">
-        <strong>{title}</strong>
-        <span class="small muted">{hint}</span>
-      </span>
-    </div>
+    <p class="ask-ai-head">
+      <Icon name="chat" /> <strong>{title}</strong>
+      {hint ? <span class="muted"> {hint}</span> : null}
+    </p>
     <div class="prompt-list">
       {prompts.map((prompt, i) => (
         <CopyText t={t} id={`${id}-${i}`} text={prompt} prompt />

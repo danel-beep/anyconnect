@@ -611,7 +611,6 @@ export interface OverviewView {
   steps: { ai: boolean; service: boolean; call: boolean };
   usage: UsageView;
   apps: number;
-  calls7d: number;
   /** Actions waiting for the user's OK, and when the first of them expires. */
   waiting: { count: number; soonest: Date | null };
   accounts: AccountView[];
@@ -677,22 +676,13 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
         ctx={ctx}
         usage={view.usage}
         extra={
-          <>
-            <div class="stat">
-              <span class="label">{t('app.nav.apps')}</span>
-              <div class="value">{view.apps}</div>
-              <div class="sub">
-                <a href="/app/apps">{t('app.apps.manage')}</a>
-              </div>
+          <div class="stat">
+            <span class="label">{t('app.nav.apps')}</span>
+            <div class="value">{view.apps}</div>
+            <div class="sub">
+              <a href="/app/apps">{t('app.apps.manage')}</a>
             </div>
-            <div class="stat">
-              <span class="label">{t('app.usage.calls7d')}</span>
-              <div class="value">{fmtNumber(ctx.lang, view.calls7d)}</div>
-              <div class="sub">
-                <a href="/app/activity">{t('app.activity.open')}</a>
-              </div>
-            </div>
-          </>
+          </div>
         }
       />
       {view.steps.ai ? <ConnectAiCard ctx={ctx} compact /> : null}
@@ -868,7 +858,8 @@ export const ConnectAiCard: FC<{
   const address = (
     <>
       <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} quiet={!compact} />
-      <p class="hint">{profile ? profile.hint : t('app.ai.hint')}</p>
+      {/* The full card's steps already say that the app opens Manyplug to sign in. */}
+      {profile ? <p class="hint">{profile.hint}</p> : compact ? <p class="hint">{t('app.ai.hint')}</p> : null}
     </>
   );
   // A profile's own address and the compact card lead with the address; the full card leads with
@@ -1540,9 +1531,6 @@ const AppTile: FC<{ ctx: PageCtx; g: AppsView['grants'][number] }> = ({ ctx, g }
   );
 };
 
-/** Logos of the AI apps the hub has guides for, shown while none is connected. */
-const APP_LOGOS = CLIENT_GUIDES.filter((g) => g.id !== 'other').slice(0, 6);
-
 export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = ({ ctx, shell, view }) => {
   const { t, lang } = ctx;
   const apps = view.grants.length > 0;
@@ -1570,14 +1558,6 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
       <ConnectAiCard ctx={ctx} />
       {apps ? null : (
         <section class="card apps-empty" id="connected-apps">
-          <div class="apps-empty-logos">
-            {APP_LOGOS.map((g) => (
-              <span class="apps-empty-logo">
-                <ServiceLogo icon={g.icon} glyph={g.glyph} name={clientName(g, lang)} />
-                <span class="apps-empty-name">{clientName(g, lang)}</span>
-              </span>
-            ))}
-          </div>
           <h2>{t('app.apps.emptyTitle')}</h2>
           <p class="muted">{t(view.tokens.length ? 'aiapp.noSignIns' : 'app.apps.emptyText')}</p>
         </section>
@@ -2533,56 +2513,73 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
           </a>
         </div>
       </div>
-      <div class="card" id="ai-tools">
-        <SectionHead icon="layers" title={t('app.settings.ai')} hint={t('app.settings.aiText')} />
-        <form method="post" action="/app/settings/tools">
-          <input type="hidden" name="csrf" value={ctx.csrf} />
-          <div class="choice-cols">
-            <fieldset class="choice-list">
-              <legend>{t('app.settings.listing')}</legend>
-              {(['auto', 'direct', 'discovery'] as const).map((v) => (
-                <label class="choice">
-                  <input type="radio" name="toolListing" value={v} checked={view.toolListing === v} />
-                  <span>
-                    <strong>
-                      {t(`app.settings.listing.${v}`)}
-                      {v === 'auto' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
-                    </strong>
-                    <span class="small muted">{t(`app.settings.listingHint.${v}`)}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <fieldset class="choice-list">
-              <legend>{t('app.settings.exposure')}</legend>
-              {(['grouped', 'per_account'] as const).map((v) => (
-                <label class="choice">
-                  <input type="radio" name="toolExposure" value={v} checked={view.toolExposure === v} />
-                  <span>
-                    <strong>
-                      {t(`app.settings.exposure.${v}`)}
-                      {v === 'grouped' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
-                    </strong>
-                    <span class="small muted">{t(`app.settings.exposureHint.${v}`)}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          </div>
-          <div class="actions start">
-            <button type="submit" class="primary">
-              {t('app.settings.save')}
-            </button>
-          </div>
-        </form>
-        <AskAi
-          t={t}
-          id="ask-settings"
-          title={t('app.settings.ask.title')}
-          hint={t('app.settings.ask.hint')}
-          prompts={[t('app.settings.ask.1'), t('app.settings.ask.2')]}
-        />
-      </div>
+      {/* Advanced and rarely changed: folded unless the user has already moved off the defaults. */}
+      <details
+        class="card fold"
+        id="ai-tools"
+        open={view.toolListing !== 'auto' || view.toolExposure !== 'grouped'}
+      >
+        <summary>
+          <span class="fold-icon" aria-hidden="true">
+            <Icon name="layers" />
+          </span>
+          <span class="grow">
+            <span class="fold-title">{t('app.settings.ai')}</span>
+            <span class="muted small fold-sub">{t('app.settings.aiText')}</span>
+          </span>
+        </summary>
+        <div class="fold-body">
+          <form method="post" action="/app/settings/tools">
+            <input type="hidden" name="csrf" value={ctx.csrf} />
+            <div class="choice-cols">
+              <fieldset class="choice-list">
+                <legend>{t('app.settings.listing')}</legend>
+                {(['auto', 'direct', 'discovery'] as const).map((v) => (
+                  <label class="choice">
+                    <input type="radio" name="toolListing" value={v} checked={view.toolListing === v} />
+                    <span>
+                      <strong>
+                        {t(`app.settings.listing.${v}`)}
+                        {v === 'auto' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
+                      </strong>
+                      <span class="small muted">{t(`app.settings.listingHint.${v}`)}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset class="choice-list">
+                <legend>{t('app.settings.exposure')}</legend>
+                {(['grouped', 'per_account'] as const).map((v) => (
+                  <label class="choice">
+                    <input type="radio" name="toolExposure" value={v} checked={view.toolExposure === v} />
+                    <span>
+                      <strong>
+                        {t(`app.settings.exposure.${v}`)}
+                        {v === 'grouped' ? (
+                          <span class="badge ok">{t('app.settings.recommended')}</span>
+                        ) : null}
+                      </strong>
+                      <span class="small muted">{t(`app.settings.exposureHint.${v}`)}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            </div>
+            <div class="actions start">
+              <button type="submit" class="primary">
+                {t('app.settings.save')}
+              </button>
+            </div>
+          </form>
+          <AskAi
+            t={t}
+            id="ask-settings"
+            title={t('app.settings.ask.title')}
+            hint={t('app.settings.ask.hint')}
+            prompts={[t('app.settings.ask.1'), t('app.settings.ask.2')]}
+          />
+        </div>
+      </details>
       <div class="card" id="sessions">
         <SectionHead
           icon="globe"

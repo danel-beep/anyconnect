@@ -237,12 +237,9 @@ details.fold .fold-icon svg{width:18px;height:18px}
 .app-tile-actions{display:flex;align-items:center;gap:4px;flex:none;position:relative;z-index:1}
 .app-tile-revoke{color:var(--muted)}
 .app-tile-revoke:hover{color:var(--danger)}
-.apps-empty{text-align:center;padding:28px 24px}
-.apps-empty h2{margin:12px 0 4px}
-.apps-empty p{max-width:52ch;margin:0 auto}
-.apps-empty-logos{display:flex;justify-content:center;flex-wrap:wrap;gap:14px 18px}
-.apps-empty-logo{display:flex;flex-direction:column;align-items:center;gap:6px;width:72px}
-.apps-empty-name{font-size:12px;color:var(--muted);text-align:center;line-height:1.25}
+.apps-empty{padding:18px 24px}
+.apps-empty h2{margin:0 0 4px;font-size:16px}
+.apps-empty p{margin:0}
 .apps-head{display:flex;align-items:center;gap:8px}
 .apps-head .tiny-badge{margin-left:0}
 h3.fold-sub-h{margin:18px 0 10px;padding-top:16px;border-top:1px solid var(--border);font-size:15px}

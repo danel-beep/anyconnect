@@ -38,8 +38,7 @@ export const teamEn = {
     'Join our team “{team}” on Manyplug, so your AI app can work with your own mail and apps.\n1. Open the invitation link I send you and join (sign in with the email it was sent to).\n2. Add this address to your AI app as a connector: {url}\n3. When the app asks, sign in to Manyplug as yourself.\nSteps for ChatGPT, Claude and other apps: {page}',
   'team.share.copy': 'Copy message',
   'team.chat.title': 'Run the team from the chat',
-  'team.chat.text':
-    'Once your AI is connected to the team, it runs the team for you. Copy a request and paste it into the chat.',
+  'team.chat.text': 'Once your AI is connected to the team, it runs the team for you.',
   'team.chat.who': 'Who is in the “{team}” team in Manyplug, and which accounts can I use there?',
   'team.chat.share': 'Share one of my accounts with everyone in the team, read only. Ask me which one.',
   'team.chat.connect': 'Connect my work email to this team.',
@@ -54,7 +53,7 @@ export const teamEn = {
   'team.you': 'you',
   'team.connector.title': 'Connect your AI to the team',
   'team.connector.hint':
-    'Everyone in the team uses this address and signs in to Manyplug as themselves. The AI then sees that person’s own accounts, the team’s accounts and what teammates shared with them, nothing else. On ChatGPT Business or Claude Team an admin can add it once for the whole workspace.',
+    'Everyone uses this address and signs in as themselves: the AI sees only their own accounts, the team’s accounts and what was shared with them. On ChatGPT Business or Claude Team an admin can add it once for everyone.',
   'team.members.title': 'People',
   'team.members.joined': 'joined {date}',
   'team.members.pays': 'pays for the team',
@@ -235,8 +234,7 @@ export const teamRu: Record<keyof typeof teamEn, string> = {
     'Присоединяйтесь к нашей команде «{team}» в Manyplug — так ваш ИИ сможет работать с вашей почтой и приложениями.\n1. Откройте ссылку-приглашение, которую я пришлю, и вступите (войдите с той почтой, на которую она пришла).\n2. Добавьте этот адрес в своё ИИ-приложение как коннектор: {url}\n3. Когда приложение попросит, войдите в Manyplug под собой.\nИнструкции для ChatGPT, Claude и других приложений: {page}',
   'team.share.copy': 'Скопировать сообщение',
   'team.chat.title': 'Управляйте командой из чата',
-  'team.chat.text':
-    'Когда ваш ИИ подключён к команде, он сам управляет ею. Скопируйте запрос и вставьте в чат.',
+  'team.chat.text': 'Когда ваш ИИ подключён к команде, он сам управляет ею.',
   'team.chat.who': 'Кто состоит в команде «{team}» в Manyplug и какими аккаунтами я могу там пользоваться?',
   'team.chat.share': 'Дай всем в команде доступ к одному из моих аккаунтов, только чтение. Спроси, к какому.',
   'team.chat.connect': 'Подключи мою рабочую почту к этой команде.',
@@ -251,7 +249,7 @@ export const teamRu: Record<keyof typeof teamEn, string> = {
   'team.you': 'вы',
   'team.connector.title': 'Подключите ИИ к команде',
   'team.connector.hint':
-    'Все в команде используют этот адрес и входят в Manyplug под собой. ИИ видит собственные аккаунты этого человека, аккаунты команды и то, чем с ним поделились коллеги, — и ничего больше. В ChatGPT Business или Claude Team администратор может добавить его один раз для всего рабочего пространства.',
+    'Все используют этот адрес и входят под собой: ИИ видит только свои аккаунты человека, аккаунты команды и то, чем с ним поделились. В ChatGPT Business или Claude Team администратор может добавить его один раз для всех.',
   'team.members.title': 'Люди',
   'team.members.joined': 'с {date}',
   'team.members.pays': 'оплачивает команду',
