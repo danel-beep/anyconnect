@@ -338,6 +338,7 @@ npm run check        # lint + типы + тесты
 npm run check:fast   # lint + типы + только тесты, затронутые изменениями (во время работы)
 npm test             # нужен Postgres: TEST_DATABASE_URL (по умолчанию postgres://postgres@localhost:5432/manyplug_test)
 npm run db:generate  # после изменения src/db/schema.ts — создать миграцию
+npm run test:visual  # вёрстка всех страниц в Chromium (тема, телефон, язык); нужен Postgres
 npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 

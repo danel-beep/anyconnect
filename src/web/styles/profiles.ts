@@ -2,7 +2,7 @@ import { MONO, SANS } from '../assets.js';
 
 /** Access profiles (`/app/profiles`): the account picker and the address field. */
 export const PROFILES_CSS = `
-.profile-form .grid-2.tight{gap:0 16px;margin:0}
+.profile-form .grid-2.tight{gap:14px 16px;margin:0}
 .profile-form .grid-2.tight label{margin-top:0}
 .prefixed{display:flex;align-items:stretch;border:1px solid var(--border-strong);border-radius:10px;background:var(--card);overflow:hidden}
 .prefixed:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}

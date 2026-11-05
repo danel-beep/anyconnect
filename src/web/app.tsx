@@ -395,11 +395,13 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child }> = ({ ctx
             <span class="muted small">/ {limitText(usage.actions.limit)}</span>
           </div>
           <Meter used={usage.actions.used} limit={usage.actions.limit} label={t('app.usage.actions')} />
+          {/* Two short lines rather than one joined by "·", which breaks badly in a narrow card. */}
           <div class="sub">
             <a href="/app/billing">
               {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
             </a>
-            {' · '}
+          </div>
+          <div class="sub">
             {usage.actions.limit === null
               ? t('app.usage.noLimit')
               : t('app.usage.resets', { date: fmtDate(lang, usage.resetsAt) })}
@@ -1436,14 +1438,15 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <option value="0">{t('app.tokens.never')}</option>
             </select>
           </div>
-          <div class="wide-2">
+          {/* The API switch and its explanation get their own line under the fields. */}
+          <div class="wide">
             <label class="check">
               <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
             </label>
             <p class="hint">{t('app.tokens.apiHint')}</p>
           </div>
-          <div>
-            <button type="submit" class="block">
+          <div class="wide">
+            <button type="submit" class="primary">
               {t('app.tokens.create')}
             </button>
           </div>
@@ -2107,6 +2110,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
             <li>
               <span>
                 {agentName(s.userAgent) ?? t('app.settings.unknownDevice')}
+                {s.current ? ' ' : null}
                 {s.current ? <span class="badge ok">{t('app.settings.thisDevice')}</span> : null}
               </span>
               <span class="small muted">

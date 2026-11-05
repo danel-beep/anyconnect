@@ -4,6 +4,8 @@ import { WEBAUTHN_JS } from '../src/web/webauthn-client.js';
 import { resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 import { SoftwareAuthenticator } from './webauthn-authenticator.js';
 
+/** Origin of the fake page; the script only compares it with the URLs it is sent to. */
+const ORIGIN = 'http://127.0.0.1';
 const toB64url = (buffer: ArrayBuffer) => Buffer.from(buffer).toString('base64url');
 const toBuffer = (value: string) => new Uint8Array(Buffer.from(value, 'base64url')).buffer;
 
@@ -33,6 +35,8 @@ function runScript(
   browser: TestBrowser,
   authenticator: SoftwareAuthenticator,
   form: { mode: string; options: string; action: string; fields: Record<string, string> },
+  /** The page the script runs on (path + query). */
+  at = '/login',
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let submit: ((event: { preventDefault(): void }) => void) | undefined;
@@ -80,11 +84,16 @@ function runScript(
         for (const [key, value] of Object.entries(form.fields)) callback(value, key);
       }
     }
-    const window = {
-      PublicKeyCredential: () => {},
-      fetch: fetchToHub,
-      location: { assign: resolve },
+    // A navigation resolves with the URL; a reload of the same page resolves with "reload:<hash>".
+    const location = {
+      pathname: at.split('?')[0],
+      search: at.includes('?') ? `?${at.split('?')[1]}` : '',
+      href: `${ORIGIN}${at}`,
+      hash: '',
+      assign: resolve,
+      reload: () => resolve(`reload:${location.hash}`),
     };
+    const window = { PublicKeyCredential: () => {}, fetch: fetchToHub, location };
     runInNewContext(WEBAUTHN_JS, {
       window,
       navigator: { credentials },
@@ -119,13 +128,20 @@ describe('/assets/webauthn.js against the hub', () => {
     await browser.login();
     const { csrf } = TestBrowser.hiddenInputs(await (await browser.request('/security')).text());
 
-    const afterRegistration = await runScript(browser, authenticator, {
-      mode: 'register',
-      options: '/security/passkeys/options',
-      action: '/security/passkeys',
-      fields: { csrf: csrf!, name: 'Script key' },
-    });
-    expect(afterRegistration).toBe('/security#passkeys');
+    // Added on /security, the answer points back at /security: only the anchor differs, so the
+    // script must reload the page (assigning the URL would just scroll and keep the old list).
+    const afterRegistration = await runScript(
+      browser,
+      authenticator,
+      {
+        mode: 'register',
+        options: '/security/passkeys/options',
+        action: '/security/passkeys',
+        fields: { csrf: csrf!, name: 'Script key' },
+      },
+      '/security',
+    );
+    expect(afterRegistration).toMatch(/^reload:#pk-pky_/);
     expect(await (await browser.request('/security')).text()).toContain('Script key');
 
     const signedOut = new TestBrowser(hub.baseUrl);

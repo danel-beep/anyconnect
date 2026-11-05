@@ -28,10 +28,9 @@ export const TeamsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamsView }> 
     <AppShell ctx={ctx} shell={shell} section="teams" title={t('app.nav.teams')}>
       <PageHead title={t('app.nav.teams')} sub={t('team.list.sub')} />
       <Flash flash={view.flash} />
-      <div class="card flush">
-        {view.teams.length === 0 ? (
-          <p class="muted pad">{t('team.list.none')}</p>
-        ) : (
+      {/* With no team yet the page is just the "create" card, which says so itself. */}
+      {view.teams.length > 0 ? (
+        <div class="card flush">
           <ul class="plain pad-x">
             {view.teams.map((team) => (
               <li>
@@ -49,10 +48,11 @@ export const TeamsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamsView }> 
               </li>
             ))}
           </ul>
-        )}
-      </div>
+        </div>
+      ) : null}
       <div class="card">
         <h2>{t('team.list.create')}</h2>
+        {view.teams.length === 0 ? <p class="muted">{t('team.list.none')}</p> : null}
         {view.owned >= view.maxOwned ? (
           <p class="muted">{t('team.list.limit', { n: view.maxOwned })}</p>
         ) : (

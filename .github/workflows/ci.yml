@@ -43,6 +43,39 @@ jobs:
           git diff --exit-code -- drizzle || (echo "Run 'npm run db:generate' and commit the migration" && exit 1)
           test -z "$(git status --porcelain -- drizzle)" || (git status -- drizzle && echo "Uncommitted migration generated" && exit 1)
 
+  # Every page in a real browser (light/dark, desktop/phone, EN/RU): nothing wider than the screen,
+  # no text glued to a card's edge, nothing sticking out of its card. See test/visual/.
+  visual:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: manyplug_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/manyplug_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual
+      - name: Screenshots of the pages that failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-failures
+          path: visual-failures
+          if-no-files-found: ignore
+          retention-days: 7
+
   docker:
     runs-on: ubuntu-latest
     services:
