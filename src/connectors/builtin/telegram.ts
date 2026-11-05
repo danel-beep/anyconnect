@@ -20,9 +20,11 @@ import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js'
 
 const config = z.object({
   mode: z
-    .enum(['bot'])
+    .enum(['bot', 'user'])
     .default('bot')
-    .describe('How the account is connected: bot = your own bot through the official Bot API'),
+    .describe(
+      'How the account is connected: user = your own Telegram account (log in with a QR code), bot = your bot through the official Bot API',
+    ),
   botApiUrl: z
     .url({ protocol: /^https?$/ })
     .default('https://api.telegram.org')
@@ -454,19 +456,26 @@ export function createTelegramConnector(port: MessagingPort) {
     config,
     credentials,
     messenger: {
-      transport: () => botTransport,
-      // Bots are official API clients: Telegram limits them (about 1 message/s per chat, 20/min per
-      // group), but there is no reason to imitate a person.
-      pacing: () => ({
-        perMinute: 20,
-        perHour: 1_000,
-        perDay: 20_000,
-        minGapMs: 100,
-        maxGapMs: 400,
-        typing: false,
-      }),
+      // A personal account is a long-lived MTProto session in the gateway (src/gateway/drivers/telegram).
+      transport: (cfg) => (cfg.mode === 'user' ? { kind: 'session' } : botTransport),
+      // Personal accounts send at a person's pace (the hub's defaults). Bots are official API
+      // clients: Telegram limits them (about 1 message/s per chat, 20/min per group), but there is
+      // no reason to imitate a person.
+      pacing: (cfg) =>
+        cfg.mode === 'user'
+          ? {}
+          : {
+              perMinute: 20,
+              perHour: 1_000,
+              perDay: 20_000,
+              minGapMs: 100,
+              maxGapMs: 400,
+              typing: false,
+            },
     },
     async test(ctx) {
+      // A personal account is checked by logging in on the next page, through the gateway.
+      if (ctx.config.mode === 'user') return { ok: true };
       const me = await callBotForAction<TgUser>(ctx, 'getMe', {});
       const hook = port.forAccount(ctx.account.id).webhook();
       await callBotForAction<boolean>(ctx, 'setWebhook', {
@@ -477,45 +486,80 @@ export function createTelegramConnector(port: MessagingPort) {
       return { ok: true, identity: me.username ? `@${me.username}` : String(me.id) };
     },
     ui: {
-      primaryFields: ['botToken'],
+      primaryFields: ['mode', 'botToken'],
+      setupVariants: { field: 'mode' },
       locales: {
         ru: {
           description:
-            'Ваш бот Telegram: чаты, поиск по переписке, ответы. Официальный Bot API, без риска для личного аккаунта.',
+            'Ваш Telegram: личный аккаунт со всеми чатами и группами или бот. Чаты, поиск по переписке, ответы.',
           setup: {
             form: {
-              summary: 'Вы создаёте бота Telegram через @BotFather и вставляете его токен сюда.',
+              summary:
+                'Вы входите в свой аккаунт Telegram по QR-коду или создаёте бота через @BotFather и вставляете его токен.',
               minutes: 3,
-              needs: ['Telegram на телефоне или компьютере'],
-              notice:
-                'Так подключается **бот**, которого вы создаёте, а не ваш личный аккаунт Telegram: ИИ видит только чаты, где люди пишут боту, и отвечает от имени бота.',
+              needs: ['Telegram на телефоне'],
               steps: [
                 {
-                  text: 'Откройте @BotFather в Telegram и отправьте **/newbot** (или **/mybots**, чтобы выбрать уже созданного бота).',
-                  link: { label: 'Открыть @BotFather', url: 'https://t.me/BotFather' },
+                  text: 'Выберите в поле **Как подключить**: **личный аккаунт** (все ваши чаты) или **бот**.',
+                  fills: ['mode'],
                 },
-                {
-                  text: 'Отправьте имя бота, затем адрес, который заканчивается на bot, например acme_support_bot.',
-                },
-                {
-                  text: 'Скопируйте токен из ответа BotFather: он выглядит как 123456789:AA…',
-                  fills: ['botToken'],
-                },
-                {
-                  text: 'Вставьте его в форму и нажмите **Подключить**. Manyplug проверит токен и начнёт принимать сообщения.',
-                },
+                { text: 'Выполните шаги для выбранного способа ниже.' },
               ],
+              variantsTitle: 'Шаги для выбранного способа',
+              variants: {
+                user: {
+                  title: 'Личный аккаунт',
+                  steps: [
+                    { text: 'Оставьте поле **Токен бота** пустым и нажмите **Подключить**.' },
+                    {
+                      text: 'На следующей странице появится QR-код. В Telegram на телефоне откройте **Настройки → Устройства → Подключить устройство** и наведите камеру на код.',
+                    },
+                    {
+                      text: 'Если у вас стоит облачный пароль, введите его на той же странице. Вместо QR-кода можно войти по коду из Telegram.',
+                    },
+                  ],
+                },
+                bot: {
+                  title: 'Бот',
+                  steps: [
+                    {
+                      text: 'Откройте @BotFather в Telegram и отправьте **/newbot** (или **/mybots**, чтобы выбрать уже созданного бота).',
+                      link: { label: 'Открыть @BotFather', url: 'https://t.me/BotFather' },
+                    },
+                    {
+                      text: 'Отправьте имя бота, затем адрес, который заканчивается на bot, например acme_support_bot.',
+                    },
+                    {
+                      text: 'Скопируйте токен из ответа BotFather: он выглядит как 123456789:AA…',
+                      fills: ['botToken'],
+                    },
+                    {
+                      text: 'Вставьте его в форму и нажмите **Подключить**. Manyplug проверит токен и начнёт принимать сообщения.',
+                    },
+                  ],
+                },
+              },
               tips: [
-                'Бот не может начать разговор первым: человек должен сначала написать ему.',
+                'Личный аккаунт видит все ваши чаты и группы, сообщения уходят от вашего имени. Сессию «Manyplug» можно завершить в Telegram: **Настройки → Устройства**.',
+                'Код входа и облачный пароль вводите только на странице сайта. Никогда не пишите их в чат с ИИ.',
+                'Бот видит только чаты, где ему написали, и не может начать разговор первым.',
                 'С Telegram Premium бот может вести и ваши личные чаты: **Настройки → Telegram для бизнеса → Чат-боты**. Ответы уходят от вашего имени.',
               ],
               problems: [
                 {
-                  problem: 'Проверка пишет, что токен неверный (Unauthorized)',
+                  problem: 'Телефон не распознаёт QR-код или пишет, что он устарел',
+                  fix: 'Подождите несколько секунд: страница обновляет код сама. Если пишет «Время на вход истекло», начните вход заново.',
+                },
+                {
+                  problem: 'Облачный пароль не подходит',
+                  fix: 'Введите пароль двухэтапной проверки Telegram, а не код из сообщения. Подсказка к паролю показана над полем.',
+                },
+                {
+                  problem: 'Проверка пишет, что токен бота неверный (Unauthorized)',
                   fix: 'Скопируйте токен заново: отправьте @BotFather **/mybots**, выберите бота и нажмите **API Token**. Если вы нажимали **Revoke current token**, возьмите новый токен.',
                 },
                 {
-                  problem: 'Не приходят сообщения из группы',
+                  problem: 'Бот не получает сообщения из группы',
                   fix: 'Отправьте @BotFather **/setprivacy**, выберите бота и нажмите **Disable**. Затем удалите бота из группы и добавьте снова.',
                 },
                 {
@@ -526,54 +570,92 @@ export function createTelegramConnector(port: MessagingPort) {
             },
           },
           prompts: [
-            'Что нового написали боту за сегодня?',
+            'Что нового в моих чатах Telegram за сегодня?',
             'Найди сообщения про доставку за эту неделю.',
             'Ответь Анне, что счёт будет вечером.',
           ],
           fields: {
-            mode: { label: 'Как подключить', options: { bot: 'Бот (Bot API)' } },
+            mode: {
+              label: 'Как подключить',
+              options: { user: 'Личный аккаунт (вход по QR-коду)', bot: 'Бот (Bot API)' },
+            },
             botApiUrl: { label: 'Сервер Bot API', hint: 'Свой сервер нужен только для файлов больше 20 МБ.' },
-            botToken: { label: 'Токен бота', placeholder: '123456789:AA…' },
+            botToken: { label: 'Токен бота', placeholder: '123456789:AA…', hint: 'Только для бота.' },
             pacing: texts.ru.pacing,
           },
           actions: texts.ru.actions,
         },
         en: {
-          description: 'Your Telegram bot: chats, message search, replies. The official Bot API.',
+          description:
+            'Your Telegram: your personal account with all chats and groups, or a bot. Chats, message search, replies.',
           setup: {
             form: {
-              summary: 'You create a Telegram bot with @BotFather and paste its token here.',
+              summary:
+                'You log in to your own Telegram account with a QR code, or create a bot with @BotFather and paste its token.',
               minutes: 3,
-              needs: ['Telegram on your phone or computer'],
-              notice:
-                'This connects a **bot** that you create, not your personal Telegram account: the AI sees only the chats where people write to the bot, and it answers as the bot.',
+              needs: ['Telegram on your phone'],
               steps: [
                 {
-                  text: 'Open @BotFather in Telegram and send **/newbot** (or **/mybots** to pick a bot you already have).',
-                  link: { label: 'Open @BotFather', url: 'https://t.me/BotFather' },
+                  text: 'In **How to connect**, choose **Personal account** (all your chats) or **Bot**.',
+                  fills: ['mode'],
                 },
-                {
-                  text: 'Send a name for the bot, then a username that ends in bot, for example acme_support_bot.',
-                },
-                {
-                  text: 'Copy the token from BotFather’s reply: it looks like 123456789:AA…',
-                  fills: ['botToken'],
-                },
-                {
-                  text: 'Paste it into the form and click **Connect**. Manyplug checks the token and starts receiving messages.',
-                },
+                { text: 'Follow the steps for the chosen way below.' },
               ],
+              variantsTitle: 'Steps for the chosen way',
+              variants: {
+                user: {
+                  title: 'Personal account',
+                  steps: [
+                    { text: 'Leave **Bot token** empty and click **Connect**.' },
+                    {
+                      text: 'The next page shows a QR code. In Telegram on your phone open **Settings → Devices → Link Desktop Device** and point the camera at the code.',
+                    },
+                    {
+                      text: 'If you have a cloud password, enter it on the same page. You can also log in with a code from Telegram instead of the QR code.',
+                    },
+                  ],
+                },
+                bot: {
+                  title: 'Bot',
+                  steps: [
+                    {
+                      text: 'Open @BotFather in Telegram and send **/newbot** (or **/mybots** to pick a bot you already have).',
+                      link: { label: 'Open @BotFather', url: 'https://t.me/BotFather' },
+                    },
+                    {
+                      text: 'Send a name for the bot, then a username that ends in bot, for example acme_support_bot.',
+                    },
+                    {
+                      text: 'Copy the token from BotFather’s reply: it looks like 123456789:AA…',
+                      fills: ['botToken'],
+                    },
+                    {
+                      text: 'Paste it into the form and click **Connect**. Manyplug checks the token and starts receiving messages.',
+                    },
+                  ],
+                },
+              },
               tips: [
-                'A bot cannot start a conversation: a person has to write to it first.',
+                'A personal account sees all your chats and groups, and messages are sent as you. You can end the "Manyplug" session in Telegram under **Settings → Devices**.',
+                'Type the login code and cloud password only on the website page. Never write them in the AI chat.',
+                'A bot only sees chats where people wrote to it and cannot start a conversation.',
                 'With Telegram Premium the bot can also handle your personal chats: **Settings → Telegram Business → Chatbots**. Replies are sent as you.',
               ],
               problems: [
                 {
-                  problem: 'The check says the token is wrong (Unauthorized)',
+                  problem: 'The phone does not read the QR code or says it has expired',
+                  fix: 'Wait a few seconds: the page refreshes the code by itself. If it says "This login has expired", start the login again.',
+                },
+                {
+                  problem: 'The cloud password is not accepted',
+                  fix: 'Enter your Telegram two-step verification password, not the code from a message. The password hint is shown above the field.',
+                },
+                {
+                  problem: 'The check says the bot token is wrong (Unauthorized)',
                   fix: 'Copy the token again: send **/mybots** to @BotFather, pick the bot and tap **API Token**. If you tapped **Revoke current token**, use the new token.',
                 },
                 {
-                  problem: 'Messages from a group do not show up',
+                  problem: 'The bot gets no messages from a group',
                   fix: 'Send **/setprivacy** to @BotFather, pick the bot and choose **Disable**. Then remove the bot from the group and add it again.',
                 },
                 {
@@ -584,17 +666,20 @@ export function createTelegramConnector(port: MessagingPort) {
             },
           },
           prompts: [
-            'What did people write to the bot today?',
+            'What is new in my Telegram chats today?',
             'Find messages about delivery from this week.',
             'Tell Anna the invoice comes tonight.',
           ],
           fields: {
-            mode: { label: 'How to connect', options: { bot: 'Bot (Bot API)' } },
+            mode: {
+              label: 'How to connect',
+              options: { user: 'Personal account (QR code login)', bot: 'Bot (Bot API)' },
+            },
             botApiUrl: {
               label: 'Bot API server',
               hint: 'Your own server is only needed for files over 20 MB.',
             },
-            botToken: { label: 'Bot token', placeholder: '123456789:AA…' },
+            botToken: { label: 'Bot token', placeholder: '123456789:AA…', hint: 'Bots only.' },
             pacing: texts.en.pacing,
           },
           actions: texts.en.actions,

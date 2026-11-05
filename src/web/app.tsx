@@ -97,8 +97,9 @@ export const AppShell: FC<{
   section: AppSection;
   title: string;
   passkeys?: boolean;
+  refreshSeconds?: number;
   children?: Child;
-}> = ({ ctx, shell, section, title, passkeys, children }) => {
+}> = ({ ctx, shell, section, title, passkeys, refreshSeconds, children }) => {
   const { t } = ctx;
   const user = ctx.user!;
   const groups: ['main' | 'account' | 'admin', string | null][] = [
@@ -107,7 +108,13 @@ export const AppShell: FC<{
     ...(user.isAdmin ? ([['admin', t('admin.nav.group')]] as ['admin', string][]) : []),
   ];
   return (
-    <Doc title={`${title} · ${BRAND.name}`} lang={ctx.lang} noindex passkeys={passkeys}>
+    <Doc
+      title={`${title} · ${BRAND.name}`}
+      lang={ctx.lang}
+      noindex
+      passkeys={passkeys}
+      {...(refreshSeconds ? { refreshSeconds } : {})}
+    >
       <a class="skip" href="#main">
         {t('ui.skip')}
       </a>

@@ -66,7 +66,7 @@ export const VerifyPage: FC<{
 );
 
 /** QR code drawn as an SVG path; colors come from the stylesheet (`.qr`). */
-const QrCode: FC<{ text: string; label: string }> = ({ text, label }) => {
+export const QrCode: FC<{ text: string; label: string }> = ({ text, label }) => {
   const { size, path } = qrMatrix(text);
   const quiet = 4;
   const box = size + quiet * 2;

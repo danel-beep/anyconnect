@@ -21,6 +21,9 @@ const EnvSchema = z.object({
   /** Public origin of the hub (for webhook URLs in shared code); not used for serving. */
   PUBLIC_URL: optionalString,
   GATEWAY_MAX_SESSIONS: z.coerce.number().int().min(1).max(10_000).default(200),
+  /** Telegram app (my.telegram.org → API development tools), needed for personal Telegram accounts. */
+  TELEGRAM_API_ID: z.coerce.number().int().positive().optional(),
+  TELEGRAM_API_HASH: optionalString,
   ALLOW_PRIVATE_NETWORK: z
     .string()
     .optional()
@@ -38,6 +41,7 @@ export interface GatewayConfig {
   advertiseUrl: string;
   publicUrl: string;
   maxSessions: number;
+  telegram: { apiId: number; apiHash: string } | undefined;
   allowPrivateNetwork: boolean;
   logLevel: z.output<typeof EnvSchema>['LOG_LEVEL'];
 }
@@ -52,6 +56,12 @@ export function loadGatewayConfig(source: NodeJS.ProcessEnv = process.env): Gate
   const isProduction = env.NODE_ENV === 'production';
   if (!env.GATEWAY_TOKEN || env.GATEWAY_TOKEN.length < 32) {
     throw new ConfigError('GATEWAY_TOKEN (at least 32 characters, shared with the hub) is required');
+  }
+  if (Boolean(env.TELEGRAM_API_ID) !== Boolean(env.TELEGRAM_API_HASH)) {
+    throw new ConfigError('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set together');
+  }
+  if (env.TELEGRAM_API_HASH && !/^[0-9a-f]{32}$/i.test(env.TELEGRAM_API_HASH)) {
+    throw new ConfigError('TELEGRAM_API_HASH must be the 32-character hash from my.telegram.org');
   }
   if (isProduction && !env.ENCRYPTION_KEY) throw new ConfigError('ENCRYPTION_KEY is required in production');
   return {
@@ -70,6 +80,10 @@ export function loadGatewayConfig(source: NodeJS.ProcessEnv = process.env): Gate
     advertiseUrl: (env.GATEWAY_ADVERTISE_URL ?? `http://${hostname()}:${env.PORT}`).replace(/\/+$/, ''),
     publicUrl: (env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/+$/, ''),
     maxSessions: env.GATEWAY_MAX_SESSIONS,
+    telegram:
+      env.TELEGRAM_API_ID && env.TELEGRAM_API_HASH
+        ? { apiId: env.TELEGRAM_API_ID, apiHash: env.TELEGRAM_API_HASH }
+        : undefined,
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
     logLevel: env.LOG_LEVEL,
   };

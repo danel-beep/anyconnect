@@ -3,13 +3,19 @@ import { createApp } from './app.js';
 import { bootstrap } from './bootstrap.js';
 import { ConfigError, loadConfig } from './config.js';
 import { scheduleMaintenance } from './core/maintenance.js';
+import { type EmbeddedGateway, planEmbeddedGateway, startEmbeddedGateway } from './gateway/embedded.js';
 import { installProcessHandlers } from './ops/process.js';
 import { createServices } from './services.js';
 
 async function main() {
   let config: ReturnType<typeof loadConfig>;
+  let embedded: ReturnType<typeof planEmbeddedGateway>;
   try {
-    config = loadConfig();
+    // GATEWAY_EMBEDDED runs the messenger gateway in this process; the hub reaches it on localhost.
+    embedded = planEmbeddedGateway(process.env);
+    config = loadConfig(
+      embedded ? { ...process.env, GATEWAY_URL: embedded.url, GATEWAY_TOKEN: embedded.token } : process.env,
+    );
   } catch (error) {
     if (error instanceof ConfigError) {
       console.error(error.message);
@@ -27,6 +33,8 @@ async function main() {
   services.analytics.start();
   if (config.jobs.enabled) await services.jobs.start();
   services.messaging.start();
+  let gateway: EmbeddedGateway | undefined;
+  if (embedded) gateway = await startEmbeddedGateway(embedded, logger);
 
   const app = createApp(services);
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
@@ -45,6 +53,7 @@ async function main() {
     const force = setTimeout(() => process.exit(1), 10_000);
     force.unref();
     server.close();
+    await gateway?.stop().catch((err) => logger.error({ err }, 'error stopping the embedded gateway'));
     await services.close().catch((err) => logger.error({ err }, 'error during shutdown'));
     process.exit(0);
   };

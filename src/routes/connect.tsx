@@ -236,6 +236,9 @@ export function connectRoutes() {
       );
     }
     s.logger.info({ accountId: account.id, connectorId: connector.id }, 'account connected with the form');
+    // A messenger with a session in the gateway is not usable until the user logs in to it.
+    const login = messengerLoginPath(connector, account, form.team || undefined);
+    if (login) return c.redirect(login, 303);
     return renderConnected(c, user, connector, {
       account,
       created: !reconnect,
@@ -249,10 +252,26 @@ export function connectRoutes() {
 }
 
 /**
+ * Where to log in to an account whose messenger keeps a session in the gateway (Telegram as a
+ * personal account), or undefined for every other account. The connect form sends the user here
+ * right after creating such an account.
+ */
+export function messengerLoginPath(
+  connector: ConnectorDefinition,
+  account: AccountRow,
+  team?: string,
+): string | undefined {
+  if (!connector.messenger) return undefined;
+  const config = connector.config.safeParse(account.config ?? {});
+  if (!config.success || connector.messenger.transport(config.data).kind !== 'session') return undefined;
+  return `/connect/messenger/${encodeURIComponent(account.id)}${team ? `?team=${encodeURIComponent(team)}` : ''}`;
+}
+
+/**
  * The workspace a connect link puts the account in: a team (`team=<slug>`, as the user's own
  * account or with `owner=team` the team's) or the user's personal workspace.
  */
-async function connectTarget(
+export async function connectTarget(
   c: AppContext,
   user: SessionUser,
   get: (key: string) => string | undefined,

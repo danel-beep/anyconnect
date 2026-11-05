@@ -243,13 +243,15 @@ export class MessageStore {
         .update(messengerChats)
         .set({
           lastMessageAt: sql`greatest(${messengerChats.lastMessageAt}, ${message.sentAt.toISOString()}::timestamptz)`,
+          // A messenger-reported counter (set by upsertChat) wins over our own counting.
           ...(message.direction === 'in'
             ? {
                 hasInbound: true,
-                // A messenger-reported counter (set by upsertChat) wins over our own counting.
                 ...(message.chat.unread === undefined ? { unread: sql`${messengerChats.unread} + 1` } : {}),
               }
-            : { unread: 0 }),
+            : message.chat.unread === undefined
+              ? { unread: 0 }
+              : {}),
         })
         .where(eq(messengerChats.id, chat.id));
     }

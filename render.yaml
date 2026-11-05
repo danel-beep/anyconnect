@@ -45,6 +45,15 @@ services:
         sync: false
       - key: SIGNUPS
         value: open
+      # Messenger gateway inside this service (personal Telegram accounts), see docs/MESSENGERS.md.
+      # A separate gateway service is deferred until there are users; switching is configuration only.
+      - key: GATEWAY_EMBEDDED
+        value: "true"
+      # Telegram app from my.telegram.org → API development tools (for personal accounts).
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
       # Optional: also send errors to Sentry (docs/OPERATIONS.md)
       - key: SENTRY_DSN
         sync: false
