@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type Browser, type BrowserContext, chromium } from 'playwright';
+import { type Browser, type BrowserContext, chromium, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FakeOidc } from '../fake-oidc.js';
 import { enableTotp, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
@@ -16,9 +16,17 @@ import { BOXES, checkLayout, type LayoutProblem } from './layout-checks.js';
  * `npm run test:visual`. A page that breaks a rule is saved as a screenshot in `visual-failures/`
  * (or `VISUAL_FAILURES`); with `VISUAL_SCREENSHOTS=<dir>` every page and variant is saved there, to
  * look at by eye.
+ *
+ * Two knobs keep a check of one change small (see docs/TESTING.md):
+ * - `VISUAL_PAGES=<regex>` checks only the pages whose path matches (crawling still finds them all);
+ * - `VISUAL_BASELINE=<dir>` (with `VISUAL_SCREENSHOTS`) keeps only the screenshots that differ from
+ *   the same file in that folder, e.g. one saved before the change, and lists them in `changed.txt`.
+ *   Screenshots show the hub as `manyplug.test`, not its random port, so unchanged pages match.
  */
 
 const SHOTS = process.env.VISUAL_SCREENSHOTS;
+const ONLY = process.env.VISUAL_PAGES ? new RegExp(process.env.VISUAL_PAGES) : undefined;
+const BASELINE = process.env.VISUAL_BASELINE;
 /** Pages that break a rule are always saved here (CI uploads the folder). */
 const FAILED_SHOTS = process.env.VISUAL_FAILURES ?? 'visual-failures';
 const VIEWPORTS = { desktop: { width: 1366, height: 900 }, phone: { width: 390, height: 844 } } as const;
@@ -43,6 +51,48 @@ function shape(url: string): string {
   return `/${parts.map((p, i) => (i < fixed ? p : '*')).join('/')}${tab ? `?tab=${tab}` : ''}`;
 }
 
+/**
+ * The test hub listens on a random port that pages show (the MCP address and the like). Shown as a
+ * fixed host in screenshots, so an unchanged page matches its baseline. Runs after the layout checks.
+ */
+const STABLE_HOST = `(() => {
+  const host = location.host;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.nodeValue.includes(host)) node.nodeValue = node.nodeValue.replaceAll(host, 'manyplug.test');
+  }
+  for (const field of document.querySelectorAll('input, textarea')) {
+    if (field.value.includes(host)) field.value = field.value.replaceAll(host, 'manyplug.test');
+  }
+})()`;
+
+/**
+ * Whether two screenshots show the same thing. Chromium anti-aliases some edges a level or two
+ * differently from run to run, so pixels count as different only past a small tolerance. PNGs are
+ * decoded by a blank browser page, which saves an image library.
+ */
+const SAME_PIXELS = `async (a, b) => {
+  const pixels = async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    return context.getImageData(0, 0, bitmap.width, bitmap.height);
+  };
+  const [x, y] = [await pixels(a), await pixels(b)];
+  if (x.width !== y.width || x.height !== y.height) return false;
+  for (let i = 0; i < x.data.length; i++) if (Math.abs(x.data[i] - y.data[i]) > 16) return false;
+  return true;
+}`;
+
+async function samePicture(a: Buffer, b: Buffer): Promise<boolean> {
+  if (a.equals(b)) return true;
+  decoder ??= await browser.newPage();
+  return (await decoder.evaluate(
+    `(${SAME_PIXELS})(${JSON.stringify(a.toString('base64'))}, ${JSON.stringify(b.toString('base64'))})`,
+  )) as boolean;
+}
+
 interface Persona {
   name: string;
   cookies: [string, string][];
@@ -55,6 +105,7 @@ interface Persona {
 let hub: TestHub;
 const google = new FakeOidc();
 let browser: Browser;
+let decoder: Page | undefined;
 const personas: Persona[] = [];
 
 async function seed(): Promise<void> {
@@ -176,11 +227,16 @@ describe('every page keeps its layout', () => {
   it('in light and dark theme, on a desktop and a phone, in English and Russian', async () => {
     /** One entry per problem, with every variant it shows up in. */
     const failures = new Map<string, { detail: string; variants: string[] }>();
+    /** Screenshots that differ from the baseline (all of them when there is none). */
+    const changed: string[] = [];
+    let checked = 0;
     for (const persona of personas) {
       const crawlContext = await contextFor(persona, 'en', 'light', 'desktop');
-      const pages = await crawl(crawlContext, persona);
+      const found = await crawl(crawlContext, persona);
       await crawlContext.close();
-      expect(pages.length, `${persona.name}: no pages found`).toBeGreaterThan(0);
+      expect(found.length, `${persona.name}: no pages found`).toBeGreaterThan(0);
+      const pages = ONLY ? found.filter((path) => ONLY.test(path)) : found;
+      checked += pages.length;
       for (const lang of LANGS) {
         for (const theme of THEMES) {
           for (const viewport of Object.keys(VIEWPORTS) as (keyof typeof VIEWPORTS)[]) {
@@ -200,10 +256,19 @@ describe('every page keeps its layout', () => {
               }
               const folder = SHOTS ?? (problems.length > 0 ? FAILED_SHOTS : undefined);
               if (folder) {
-                const dir = join(folder, persona.name.replace(/\W+/g, '-'));
-                mkdirSync(dir, { recursive: true });
-                const file = `${path.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'home'}.${lang}.${theme}.${viewport}.png`;
-                await page.screenshot({ path: join(dir, file), fullPage: true });
+                const sub = persona.name.replace(/\W+/g, '-');
+                const file = join(
+                  sub,
+                  `${path.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'home'}.${lang}.${theme}.${viewport}.png`,
+                );
+                await page.evaluate(STABLE_HOST);
+                const shot = await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide' });
+                const before = BASELINE && folder === SHOTS ? join(BASELINE, file) : undefined;
+                if (!before || !existsSync(before) || !(await samePicture(shot, readFileSync(before)))) {
+                  mkdirSync(join(folder, sub), { recursive: true });
+                  writeFileSync(join(folder, file), shot);
+                  if (folder === SHOTS) changed.push(file);
+                }
               }
             }
             await context.close();
@@ -212,7 +277,12 @@ describe('every page keeps its layout', () => {
       }
     }
     const report = [...failures].map(([key, f]) => `${key} — ${f.detail} [${f.variants.join(', ')}]`);
-    if (SHOTS) writeFileSync(join(SHOTS, 'problems.txt'), `${report.join('\n')}\n`);
+    if (ONLY) expect(checked, `VISUAL_PAGES=${ONLY.source} matches no page`).toBeGreaterThan(0);
+    if (SHOTS) {
+      mkdirSync(SHOTS, { recursive: true });
+      writeFileSync(join(SHOTS, 'problems.txt'), `${report.join('\n')}\n`);
+      writeFileSync(join(SHOTS, 'changed.txt'), `${changed.join('\n')}\n`);
+    }
     expect(report, report.join('\n')).toEqual([]);
   }, 900_000);
 });
