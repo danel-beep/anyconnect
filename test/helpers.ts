@@ -1,4 +1,4 @@
-import type { AddressInfo } from 'node:net';
+import { type AddressInfo, createServer } from 'node:net';
 import { serve } from '@hono/node-server';
 import pg from 'pg';
 import { createApp } from '../src/app.js';
@@ -15,26 +15,30 @@ import { createLogger } from '../src/logger.js';
 import type { Mailer } from '../src/mail/mailer.js';
 import { createServices, type Services } from '../src/services.js';
 import type { FakeInternet } from './e2e/fake-internet.js';
+import { createDatabaseIfMissing, DEFAULT_TEST_DATABASE_URL, siblingDatabaseUrl } from './setup/databases.js';
 
-export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://postgres@localhost:5432/manyplug_test';
+export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL ?? DEFAULT_TEST_DATABASE_URL;
 
 export const ADMIN = { email: 'owner@example.com', password: 'correct-horse-battery-staple' };
 export const TEST_KEY = Buffer.alloc(32, 7).toString('base64');
 
 /** A second test database next to TEST_DATABASE_URL (e.g. for a second hub), created if missing. */
 export async function ensureTestDatabase(suffix: string): Promise<string> {
-  const url = new URL(TEST_DATABASE_URL);
-  const name = `${url.pathname.slice(1)}_${suffix}`;
-  const admin = new pg.Pool({ connectionString: TEST_DATABASE_URL, max: 1 });
-  try {
-    const exists = await admin.query('select 1 from pg_database where datname = $1', [name]);
-    if (exists.rowCount === 0) await admin.query(`CREATE DATABASE "${name}"`);
-  } finally {
-    await admin.end();
-  }
-  url.pathname = `/${name}`;
-  return url.toString();
+  const url = siblingDatabaseUrl(TEST_DATABASE_URL, suffix);
+  await createDatabaseIfMissing(url, [TEST_DATABASE_URL]);
+  return url;
+}
+
+/**
+ * A free TCP port on localhost, for code that must be given a port number up front. Tests never
+ * use fixed ports: two test runs on one machine would collide on them.
+ */
+export async function freePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
 }
 
 /** Recreates the schema from migrations. Call once per test file. */

@@ -18,6 +18,7 @@ import {
   pgDumpTools,
 } from '../src/ops/backups.js';
 import { TEST_DATABASE_URL } from './helpers.js';
+import { databaseName, quoteIdent, siblingDatabaseUrl } from './setup/databases.js';
 
 const logger = createLogger({ level: 'silent' });
 const KEY = Buffer.alloc(32, 7);
@@ -257,20 +258,21 @@ function pgToolsMatchServer(): boolean {
 }
 
 describe.skipIf(!pgToolsMatchServer())('pg_dump and pg_restore', () => {
-  const target = new URL(TEST_DATABASE_URL);
-  target.pathname = '/manyplug_backup_restore_test';
+  // Next to this worker's own test database, so parallel workers never share it.
+  const target = siblingDatabaseUrl(TEST_DATABASE_URL, 'restore');
+  const restoreDb = quoteIdent(databaseName(target));
 
   it('restores a dump into another database', async () => {
     const admin = new pg.Client({ connectionString: TEST_DATABASE_URL });
     await admin.connect();
     const dir = await mkdtemp(join(tmpdir(), 'pgdump-'));
     try {
-      await admin.query('DROP DATABASE IF EXISTS manyplug_backup_restore_test');
-      await admin.query('CREATE DATABASE manyplug_backup_restore_test');
+      await admin.query(`DROP DATABASE IF EXISTS ${restoreDb}`);
+      await admin.query(`CREATE DATABASE ${restoreDb}`);
       const file = join(dir, 'db.dump');
       await pgDumpTools.dump(TEST_DATABASE_URL, file);
-      await pgDumpTools.restore(target.toString(), file);
-      const restored = new pg.Client({ connectionString: target.toString() });
+      await pgDumpTools.restore(target, file);
+      const restored = new pg.Client({ connectionString: target });
       await restored.connect();
       const tables = (src: pg.Client) =>
         src
@@ -279,7 +281,7 @@ describe.skipIf(!pgToolsMatchServer())('pg_dump and pg_restore', () => {
       expect(await tables(restored)).toBe(await tables(admin));
       await restored.end();
     } finally {
-      await admin.query('DROP DATABASE IF EXISTS manyplug_backup_restore_test WITH (FORCE)').catch(() => {});
+      await admin.query(`DROP DATABASE IF EXISTS ${restoreDb} WITH (FORCE)`).catch(() => {});
       await admin.end();
       await rm(dir, { recursive: true, force: true });
     }
