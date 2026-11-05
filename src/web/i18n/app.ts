@@ -57,8 +57,7 @@ export const appEn = {
   'app.rules.connectApp': 'Connect an AI app',
   'app.rules.connectAccount': 'Connect an account',
   'app.rules.chatTitle': 'Or just ask your AI',
-  'app.rules.chatText':
-    'Everything on this page can be changed from the chat: copy a request into your AI. Making the AI ask more often works at once; asking less often waits for your OK here.',
+  'app.rules.chatText': 'Asking more often works at once; asking less often waits for your OK here.',
   'app.rules.chat.show': 'Use Manyplug: show my rules. What can you do without asking me?',
   'app.rules.chat.ask': 'Use Manyplug: ask me before any change in my accounts.',
   'app.rules.chat.readOnly': 'Use Manyplug: make my personal email read-only.',
@@ -101,7 +100,6 @@ export const appEn = {
   'app.usage.accountsHint': 'Across all services',
   'app.usage.trial': '{plan} trial until {date}, no card needed',
   'app.usage.step': 'Starter limit until {date}',
-  'app.usage.calls7d': 'Actions in 7 days',
   'app.apps.manage': 'Manage',
   'app.activity.open': 'All activity',
   'app.activity.recent': 'Recent actions',
@@ -169,11 +167,9 @@ export const appEn = {
   'app.activity.more': 'Show older',
   'app.activity.newest': 'Back to the newest',
   'app.activity.emptyTitle': 'Your AI has not done anything yet',
-  'app.activity.emptyText':
-    'Every time your AI reads or does something in a connected account, it appears here: what it did, in which account, from which AI app and whether it worked.',
+  'app.activity.emptyText': 'Everything your AI reads or does in your accounts shows up here.',
   'app.activity.tryTitle': 'Try it now',
-  'app.activity.tryText':
-    'Copy a request, paste it into your AI chat and send it. The action shows up here in a few seconds.',
+  'app.activity.tryText': 'Paste a request into your AI chat: the action shows up here in seconds.',
   'app.activity.emptyNoAi': 'Is your AI not connected to Manyplug yet?',
   'app.activity.emptyConnect': 'Connect it in a minute',
   'app.activity.statTotal': 'Actions, {n} days',
@@ -760,8 +756,7 @@ export const appRu: Record<AppKey, string> = {
   'app.rules.connectApp': 'Подключить ИИ',
   'app.rules.connectAccount': 'Подключить аккаунт',
   'app.rules.chatTitle': 'Или просто попросите ИИ',
-  'app.rules.chatText':
-    'Всё на этой странице можно поменять из чата: скопируйте запрос в свой ИИ. Если ИИ должен спрашивать чаще, это включится сразу. Если реже — сначала подтвердите здесь.',
+  'app.rules.chatText': 'Спрашивать чаще — сработает сразу; реже — только после вашего OK здесь.',
   'app.rules.chat.show': 'Используй Manyplug: покажи мои правила. Что ты можешь делать, не спрашивая меня?',
   'app.rules.chat.ask': 'Используй Manyplug: спрашивай меня перед любым изменением в моих аккаунтах.',
   'app.rules.chat.readOnly': 'Используй Manyplug: сделай мою личную почту только для чтения.',
@@ -805,7 +800,6 @@ export const appRu: Record<AppKey, string> = {
   'app.usage.accountsHint': 'Во всех сервисах',
   'app.usage.trial': 'Пробный «{plan}» до {date}, без карты',
   'app.usage.step': 'Стартовый лимит до {date}',
-  'app.usage.calls7d': 'Действий за 7 дней',
   'app.apps.manage': 'Управлять',
   'app.activity.open': 'Вся активность',
   'app.activity.recent': 'Последние действия',
@@ -873,11 +867,9 @@ export const appRu: Record<AppKey, string> = {
   'app.activity.more': 'Показать раньше',
   'app.activity.newest': 'К последним',
   'app.activity.emptyTitle': 'Ваш ИИ пока ничего не делал',
-  'app.activity.emptyText':
-    'Каждый раз, когда ИИ что-то читает или делает в подключённом аккаунте, это появляется здесь: что сделал, в каком аккаунте, из какого ИИ-приложения и получилось ли.',
+  'app.activity.emptyText': 'Всё, что ИИ читает или делает в ваших аккаунтах, появится здесь.',
   'app.activity.tryTitle': 'Попробуйте прямо сейчас',
-  'app.activity.tryText':
-    'Скопируйте запрос, вставьте в чат с ИИ и отправьте. Действие появится здесь через пару секунд.',
+  'app.activity.tryText': 'Вставьте запрос в чат с ИИ — действие появится здесь через пару секунд.',
   'app.activity.emptyNoAi': 'ИИ ещё не подключён к Manyplug?',
   'app.activity.emptyConnect': 'Подключите за минуту',
   'app.activity.statTotal': 'Действий за {n} {n|день|дня|дней}',

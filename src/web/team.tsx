@@ -362,7 +362,6 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
               </div>
             </form>
             <p class="hint">{t('team.invite.hint')}</p>
-            <hr />
             <TeamMessage ctx={ctx} view={view} />
           </>
         ) : null}
@@ -615,13 +614,16 @@ const TeamSetup: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = ({ c
   return <SetupSteps ctx={ctx} steps={steps} />;
 };
 
-/** The message that brings a teammate in: the address and what to do, ready to send with the invitation. */
+/**
+ * The message that brings a teammate in: the address and what to do, ready to send with the
+ * invitation. Folded until an invitation has just been made, when it is the next thing to send.
+ */
 const TeamMessage: FC<{ ctx: PageCtx; view: TeamPageView }> = ({ ctx, view }) => {
   const { t } = ctx;
   const page = new URL(`/app/team/${view.team.slug}`, view.team.url).href;
   return (
-    <>
-      <h3>{t('team.share.title')}</h3>
+    <details class="ai-manual" id="team-message-fold" open={Boolean(view.newInvite)}>
+      <summary>{t('team.share.title')}</summary>
       <p class="muted">{t('team.share.text')}</p>
       <CopyText
         t={t}
@@ -629,7 +631,7 @@ const TeamMessage: FC<{ ctx: PageCtx; view: TeamPageView }> = ({ ctx, view }) =>
         text={t('team.share.message', { team: view.team.name, url: view.team.url, page })}
         label={t('team.share.copy')}
       />
-    </>
+    </details>
   );
 };
 

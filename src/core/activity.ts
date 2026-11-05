@@ -131,12 +131,4 @@ export class ActivityService {
       );
     return { calls: row?.calls ?? 0, errors: row?.errors ?? 0 };
   }
-
-  async countSince(workspaceId: string, since: Date): Promise<number> {
-    const [row] = await this.db
-      .select({ n: count() })
-      .from(toolCalls)
-      .where(and(eq(toolCalls.workspaceId, workspaceId), gte(toolCalls.createdAt, since)));
-    return row?.n ?? 0;
-  }
 }

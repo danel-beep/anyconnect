@@ -24,8 +24,7 @@ export const accountPagesEn = {
   'security.step.done': 'Done',
   'security.step.next': 'Start here',
   'security.ask.title': 'Ask your AI',
-  'security.ask.hint':
-    'Tap a request to copy it, then paste it into Claude, ChatGPT or any AI app connected to Manyplug. The AI can check these settings; only you can change them, here.',
+  'security.ask.hint': 'The AI can check these settings; only you can change them, here.',
   'security.ask.1': 'Check my Manyplug security and tell me what to set up next.',
   'security.ask.2': 'Which browsers are signed in to my Manyplug account?',
 
@@ -40,8 +39,7 @@ export const accountPagesEn = {
   'app.settings.exposureHint.grouped': 'The AI names the account in each request: “search my Work mail”.',
   'app.settings.exposureHint.per_account': 'Every account gets its own tools. The list gets longer.',
   'app.settings.ask.title': 'Or change it from the chat',
-  'app.settings.ask.hint':
-    'Tap a request to copy it, then paste it into your AI app. It takes effect the next time the app loads its tools.',
+  'app.settings.ask.hint': 'Takes effect the next time the AI app loads its tools.',
   'app.settings.ask.1': 'In Manyplug, give each of my accounts its own set of tools.',
   'app.settings.ask.2': 'In Manyplug, go back to automatic tool listing with one set of tools per service.',
   'app.settings.recommended': 'Recommended',
@@ -74,8 +72,7 @@ export const accountPagesRu: Record<AccountPagesKey, string> = {
   'security.step.done': 'Готово',
   'security.step.next': 'Начните здесь',
   'security.ask.title': 'Спросите свой ИИ',
-  'security.ask.hint':
-    'Нажмите на запрос, чтобы скопировать его, и вставьте в Claude, ChatGPT или другое ИИ-приложение, подключённое к Manyplug. ИИ может проверить эти настройки, а менять их можете только вы, здесь.',
+  'security.ask.hint': 'ИИ может проверить эти настройки, а менять их можете только вы, здесь.',
   'security.ask.1': 'Проверь защиту моего Manyplug и подскажи, что настроить дальше.',
   'security.ask.2': 'В каких браузерах выполнен вход в мой Manyplug?',
 
@@ -90,8 +87,7 @@ export const accountPagesRu: Record<AccountPagesKey, string> = {
   'app.settings.exposureHint.grouped': 'ИИ называет аккаунт в каждом запросе: «найди в рабочей почте».',
   'app.settings.exposureHint.per_account': 'У каждого аккаунта свои инструменты. Список становится длиннее.',
   'app.settings.ask.title': 'Или измените это из чата',
-  'app.settings.ask.hint':
-    'Нажмите на запрос, чтобы скопировать его, и вставьте в своё ИИ-приложение. Изменение сработает, когда приложение снова загрузит инструменты.',
+  'app.settings.ask.hint': 'Сработает, когда ИИ-приложение снова загрузит инструменты.',
   'app.settings.ask.1': 'В Manyplug дай каждому моему аккаунту свой набор инструментов.',
   'app.settings.ask.2':
     'В Manyplug верни автоматический список инструментов и один набор инструментов на сервис.',
