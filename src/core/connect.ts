@@ -113,6 +113,8 @@ export class ConnectService {
       const account = await this.deps.accounts.get(who.workspaceId, input.accountId);
       if (account.connectorId !== connector.id) throw badRequest('The account belongs to another service');
       await this.deps.permissions?.assertCanManage(who.workspaceId, who.userId, account);
+      // A sealed account's new tokens need its key: fail before the provider's consent screen.
+      await this.deps.accounts.assertCanOpen(account);
     } else {
       await this.deps.permissions?.assertCanConnect(who.workspaceId, who.userId, who.owner);
       // Fail now rather than after the user went through the provider's consent screen.
@@ -205,6 +207,14 @@ export class ConnectService {
     if (!params.code) throw badRequest(`${provider.name} did not return an authorization code`);
     const app = await this.deps.apps.resolve(row.workspaceId, row.appRef, connector);
     if (!app) throw badRequest('The OAuth app used for this connection was removed. Start again.');
+    // Checked again: the user may have left the team or lost a role while at the provider.
+    const existing = row.accountId ? await this.deps.accounts.get(row.workspaceId, row.accountId) : undefined;
+    if (existing) {
+      await this.deps.permissions?.assertCanManage(row.workspaceId, userId, existing);
+      await this.deps.accounts.assertCanOpen(existing);
+    } else {
+      await this.deps.permissions?.assertCanConnect(row.workspaceId, userId, row.draft.owner);
+    }
 
     let tokens: Awaited<ReturnType<typeof exchangeCode>>;
     try {
@@ -230,15 +240,14 @@ export class ConnectService {
       );
     }
 
+    const stored = { providerId: provider.id, appRef: app.ref, tokens };
     let account: AccountRow;
-    let created = false;
-    // Checked again: the user may have left the team or lost a role while at the provider.
-    if (row.accountId) {
-      account = await this.deps.accounts.get(row.workspaceId, row.accountId);
-      await this.deps.permissions?.assertCanManage(row.workspaceId, userId, account);
-      await this.deps.tokens.store(account.id, { providerId: provider.id, appRef: app.ref, tokens });
+    if (existing) {
+      account = existing;
+      await this.deps.tokens.store(account.id, stored);
     } else {
-      await this.deps.permissions?.assertCanConnect(row.workspaceId, userId, row.draft.owner);
+      // The tokens are stored with the new account's own key in the same transaction, so a sealed
+      // account is connected even from a browser that cannot open the vault yet.
       account = await this.deps.accounts.create(
         row.workspaceId,
         {
@@ -249,15 +258,10 @@ export class ConnectService {
           ...(row.draft.config ? { config: row.draft.config } : {}),
         },
         row.draft.owner,
+        { secrets: (created, key, tx) => this.deps.tokens.store(created.id, stored, tx, key) },
       );
-      created = true;
-      try {
-        await this.deps.tokens.store(account.id, { providerId: provider.id, appRef: app.ref, tokens });
-      } catch (error) {
-        await this.deps.accounts.delete(row.workspaceId, account.id).catch(() => {});
-        throw error;
-      }
     }
+    const created = !existing;
     await this.deps.accounts.markStatus(account.id, 'active', null);
     await this.deps.onConnected?.(account);
     const test = await this.deps.accounts.test(row.workspaceId, account.id, this.deps.logger);
