@@ -163,7 +163,8 @@ export class PendingCallService {
   private async scheduled(row: PendingCallRow | undefined): Promise<void> {
     if (row?.status !== 'scheduled' || !row.executeAt) return;
     for (const listener of this.scheduledListeners) listener(row.executeAt);
-    await this.db.execute(sql`select pg_notify(${PENDING_CALLS_CHANNEL}, '')`);
+    // Best effort: the call is saved either way, and other instances find it by their backstop.
+    await this.db.execute(sql`select pg_notify(${PENDING_CALLS_CHANNEL}, '')`).catch(() => {});
   }
 
   /** When the next scheduled call is due (undefined: none is scheduled). */

@@ -18,6 +18,7 @@ describe('background job queue (pg-boss)', () => {
     connectionString: TEST_DATABASE_URL,
     logger: createLogger({ level: 'silent' }),
     pollingIntervalSeconds: 60,
+    retryDelaySeconds: 1,
   });
   const received: unknown[] = [];
   let flakyRuns = 0;
@@ -68,7 +69,7 @@ describe('background job queue (pg-boss)', () => {
     );
   });
 
-  it('retries a failed job at once, not after the polling backstop (a retry sends no NOTIFY)', async () => {
+  it('retries a failed job when its retry delay ends, not after the polling backstop (no NOTIFY)', async () => {
     await queue.send('test.flaky');
     await within(10_000, retriedOnce);
     expect(flakyRuns).toBe(2);

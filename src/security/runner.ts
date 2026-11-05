@@ -80,7 +80,8 @@ export class PendingCallRunner {
     clearInterval(this.maintenance);
     this.maintenance = undefined;
     await this.loop.stop();
-    await this.running;
+    // A failed claim is already reported by the loop; it must not abort shutdown.
+    await this.running?.catch(() => {});
   }
 
   /** Runs everything that is due now. Overlapping ticks are skipped. */

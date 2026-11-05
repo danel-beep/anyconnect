@@ -242,8 +242,10 @@ export class Outbox {
   }
 
   /**
-   * The user lifted a sending pause: jobs held until its end are due now (pacing still applies
-   * when they are sent), and the dispatchers of every process hear about it.
+   * The user lifted a sending pause: jobs held until its end are due now, and the dispatchers of
+   * every process hear about it. This also clears shorter holds (pacing, a short flood wait):
+   * pacing is checked again before each send, and a flood limit that still holds only costs one
+   * more rate-limit answer, after which the job is held again.
    */
   async releaseHold(accountId: string): Promise<void> {
     await this.db.transaction(async (tx) => {

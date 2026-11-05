@@ -43,6 +43,8 @@ export interface JobQueueOptions {
   pollingIntervalSeconds?: number;
   /** Backstop poll while NOTIFY wakes the workers (default 300 s); only covers a lost notification. */
   backstopSeconds?: number;
+  /** Pause before a failed job is tried again (default 30 s; pg-boss retries twice). */
+  retryDelaySeconds?: number;
   /**
    * How often due occurrences of recurring jobs are handed to their queues (default 30 s, pg-boss's
    * own default is 5 s). Adds at most this much delay to a cron job, which runs on minutes anyway.
@@ -83,6 +85,7 @@ export class JobQueue {
 
   async start(): Promise<void> {
     const pollingIntervalSeconds = this.options.pollingIntervalSeconds ?? 5;
+    const retryDelay = this.options.retryDelaySeconds ?? 30;
     const boss = new PgBoss({
       connectionString: this.options.connectionString,
       schema: this.options.schema ?? 'pgboss',
@@ -110,9 +113,10 @@ export class JobQueue {
       await boss.createQueue(definition.name, {
         policy: definition.cron ? 'singleton' : 'standard',
         notify: true,
+        retryDelay,
       });
-      // createQueue leaves an existing queue as it is: turn NOTIFY on for queues made by older releases.
-      await boss.updateQueue(definition.name, { notify: true });
+      // createQueue leaves an existing queue as it is: update queues made by older releases.
+      await boss.updateQueue(definition.name, { notify: true, retryDelay });
       if (definition.cron) await boss.schedule(definition.name, definition.cron, {}, { tz: 'UTC' });
       let workerId: string | undefined;
       workerId = await boss.work<object>(
@@ -129,9 +133,10 @@ export class JobQueue {
               );
             }
           } catch (err) {
-            // A failed job goes back to the queue for a retry without a NOTIFY: look again at once
-            // instead of after the backstop.
-            if (workerId) boss.notifyWorker(workerId);
+            // A failed job goes back to the queue for a retry without a NOTIFY: look again when the
+            // retry is due instead of after the backstop.
+            const timer = setTimeout(() => workerId && boss.notifyWorker(workerId), retryDelay * 1000 + 500);
+            timer.unref();
             throw err;
           }
         },
