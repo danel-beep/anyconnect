@@ -21,6 +21,8 @@ export interface OutboxPayload {
 export const DEDUPE_WINDOW_MS = 10 * 60_000;
 /** A claimed job not finished within this time is considered interrupted. */
 export const CLAIM_TTL_MS = 2 * 60_000;
+/** Finished jobs are deleted this many days after they finished (the privacy policy states it). */
+export const OUTBOX_RETENTION_DAYS = 30;
 const DAY = 86_400_000;
 
 const payloadContext = (id: string) => `messenger:outbox:${id}`;
@@ -284,7 +286,7 @@ export class Outbox {
   }
 
   /** Deletes finished jobs after `days` (payloads are encrypted, but there is no reason to keep them). */
-  async prune(days = 30): Promise<void> {
+  async prune(days = OUTBOX_RETENTION_DAYS): Promise<void> {
     await this.db
       .delete(messengerOutbox)
       .where(

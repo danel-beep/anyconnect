@@ -2,6 +2,7 @@ import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registr
 import type { AccountKeyring } from '../core/account-keys.js';
 import type { AccountService } from '../core/accounts.js';
 import type { Db } from '../db/client.js';
+import type { JobDefinition } from '../jobs/queue.js';
 import type { SecretBox } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
 import { MessengerAccounts } from './accounts.js';
@@ -27,6 +28,8 @@ export interface Messaging {
   /** Delivers jobs of direct-API accounts (Bot API, Cloud API) from this process. */
   dispatcher: Dispatcher;
   directExecutor: DirectDeliveryExecutor;
+  /** Recurring housekeeping of the subsystem, registered with the hub's job queue. */
+  jobs: JobDefinition[];
   /** Loads the data keys; call after migrations. */
   init(): Promise<void>;
   start(): void;
@@ -110,6 +113,17 @@ export function createMessaging(deps: {
     gateway,
     dispatcher: ready,
     directExecutor: directExecutor,
+    jobs: [
+      {
+        name: 'messaging.prune_outbox',
+        description: 'Delete finished outgoing messenger jobs past their retention',
+        cron: '37 2 * * *',
+        expectEveryMs: 26 * 3_600_000,
+        run: async () => {
+          await outbox.prune();
+        },
+      },
+    ],
     init: () => keys.init(),
     start: () => ready.start(),
     stop: () => ready.stop(),
