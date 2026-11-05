@@ -3,6 +3,8 @@ import type {
   AttachmentView,
   ChatKind,
   ChatView,
+  DeliveryState,
+  DeliveryUpdate,
   InboundAttachment,
   InboundChat,
   InboundMessage,
@@ -40,6 +42,8 @@ export interface MessageBody {
   sender?: { externalId?: string; name?: string };
   replyToExternalId?: string;
   attachments: StoredAttachment[];
+  delivery?: DeliveryState;
+  deliveryError?: string;
 }
 
 export interface StoredChat extends ChatInfo {
@@ -198,6 +202,10 @@ export class MessageStore {
         (message.deleted ?? false) !== existing.deleted ||
         (message.editedAt && message.editedAt.getTime() !== existing.editedAt?.getTime());
       if (!changed) return undefined;
+      // An edit or deletion keeps what is known about delivery.
+      const previous = cipher.decryptJson<MessageBody>(existing.bodyEncrypted, messageContext(existing.id));
+      if (previous.delivery) body.delivery = previous.delivery;
+      if (previous.deliveryError) body.deliveryError = previous.deliveryError;
       [row] = await this.db
         .update(messengerMessages)
         .set({
@@ -246,6 +254,36 @@ export class MessageStore {
         .where(eq(messengerChats.id, chat.id));
     }
     return { ...this.toStoredMessage(row), body };
+  }
+
+  /**
+   * Moves one of the user's own messages forward (sent → delivered → read) or marks it failed.
+   * Statuses arrive out of order and concurrently, so the row is locked and never moved back.
+   * A status for a message not stored yet (it raced the outbox) is dropped: the next one fixes it.
+   */
+  async recordDelivery(accountId: string, update: DeliveryUpdate): Promise<boolean> {
+    const chat = await this.findChatByExternalId(accountId, update.chatExternalId);
+    if (!chat) return false;
+    const externalKey = this.keys.lookupKey(accountId, `msg:${chat.id}`, update.messageExternalId);
+    const cipher = await this.ciphers.forAccount(accountId);
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(messengerMessages)
+        .where(and(eq(messengerMessages.chatId, chat.id), eq(messengerMessages.externalKey, externalKey)))
+        .limit(1)
+        .for('update');
+      if (row?.direction !== 'out') return false;
+      const body = cipher.decryptJson<MessageBody>(row.bodyEncrypted, messageContext(row.id));
+      if (!deliveryAdvances(body.delivery, update.state)) return false;
+      body.delivery = update.state;
+      if (update.state === 'failed' && update.error) body.deliveryError = update.error.slice(0, 300);
+      await tx
+        .update(messengerMessages)
+        .set({ bodyEncrypted: cipher.encryptJson(body, messageContext(row.id)) })
+        .where(eq(messengerMessages.seq, row.seq));
+      return true;
+    });
   }
 
   async markChatRead(chatId: string): Promise<void> {
@@ -579,8 +617,19 @@ export class MessageStore {
       ...(replyTo ? { replyTo } : {}),
       attachments: message.body.attachments.map(toAttachmentView),
       ...(message.deleted ? { deleted: true } : {}),
+      ...(message.body.delivery ? { delivery: message.body.delivery } : {}),
+      ...(message.body.deliveryError ? { deliveryError: message.body.deliveryError } : {}),
     };
   }
+}
+
+const DELIVERY_RANK: Record<DeliveryState, number> = { sent: 1, delivered: 2, read: 3, failed: 4 };
+
+/** Delivery only moves forward; a failure is final, and nothing reverts a read message. */
+function deliveryAdvances(current: DeliveryState | undefined, next: DeliveryState): boolean {
+  if (!current) return true;
+  if (current === 'failed' || current === 'read') return false;
+  return DELIVERY_RANK[next] > DELIVERY_RANK[current];
 }
 
 function senderText(body: MessageBody): string {
