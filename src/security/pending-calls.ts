@@ -66,6 +66,7 @@ function snapshot(principal: Principal): PendingCallPrincipal {
     ...(principal.credentialId ? { credentialId: principal.credentialId } : {}),
     ...(principal.aiClientId ? { aiClientId: principal.aiClientId } : {}),
     ...(principal.personaId ? { personaId: principal.personaId } : {}),
+    ...(principal.shared ? { shared: true } : {}),
   };
 }
 
@@ -165,6 +166,8 @@ export class PendingCallService {
    */
   belongsTo(row: PendingCallRow, principal: Principal): boolean {
     if (row.workspaceId !== principal.workspaceId) return false;
+    // In a team several people use the same AI app: a call is only ever its own caller's.
+    if (row.principal.userId !== principal.userId) return false;
     if (principal.kind === 'session') return true;
     if (row.principal.aiClientId || principal.aiClientId)
       return row.principal.aiClientId === principal.aiClientId;
@@ -202,6 +205,27 @@ export class PendingCallService {
 
   isFinal(row: PendingCallRow): boolean {
     return FINAL.includes(row.status);
+  }
+
+  /** A user's own held-back calls in every workspace (personal and teams), oldest first. */
+  async listOpenFor(userId: string): Promise<PendingCallRow[]> {
+    return this.db
+      .select()
+      .from(pendingCalls)
+      .where(
+        and(
+          sql`${pendingCalls.principal}->>'userId' = ${userId}`,
+          inArray(pendingCalls.status, ['awaiting_confirmation', 'scheduled']),
+        ),
+      )
+      .orderBy(pendingCalls.createdAt);
+  }
+
+  /** One of the user's own held-back calls (an action someone else asked for is not theirs to decide). */
+  async getForUser(userId: string, id: string): Promise<PendingCallRow> {
+    const row = await this.get(id);
+    if (!row || row.principal.userId !== userId) throw notFound('Pending call');
+    return row;
   }
 
   async listOpen(workspaceId: string): Promise<PendingCallRow[]> {

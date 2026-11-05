@@ -1,5 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
-import { type Limits, type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { type Metric, PLANS, type Plan } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import type { RiskLevel, SetupGuide } from '../connectors/sdk.js';
 import {
@@ -13,6 +13,18 @@ import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
+import { ARTICLES } from './seo/articles.js';
+import { clientGuidePath } from './seo/client-pages.js';
+import { OG_IMAGE_PATH } from './seo/og-image.js';
+import {
+  breadcrumbs,
+  faqPage,
+  type JsonLd,
+  organization,
+  softwareApplication,
+  website,
+} from './seo/structured-data.js';
+import { alternates, localizedPath, OG_LOCALE, SITE_LOCALES } from './seo/urls.js';
 import { PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
 import {
   Brand,
@@ -30,7 +42,7 @@ import {
 // Layout
 // ---------------------------------------------------------------------------
 
-type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal';
+export type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal' | 'status';
 
 const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) => {
   const { t } = ctx;
@@ -46,7 +58,7 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
         <Brand />
         <nav class="site-nav" id="site-nav" aria-label={t('site.nav.label')}>
           {nav.map(([id, href, label]) => (
-            <a href={href} aria-current={id === current ? 'page' : undefined}>
+            <a href={localizedPath(href, ctx.lang)} aria-current={id === current ? 'page' : undefined}>
               {label}
             </a>
           ))}
@@ -112,10 +124,18 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </div>
           <div>
             <h4>{t('site.footer.product')}</h4>
-            <a href="/#features">{t('site.nav.features')}</a>
-            <a href="/services">{t('site.nav.services')}</a>
-            <a href="/pricing">{t('site.nav.pricing')}</a>
-            <a href="/docs">{t('site.nav.docs')}</a>
+            <a href={localizedPath('/#features', ctx.lang)}>{t('site.nav.features')}</a>
+            <a href={localizedPath('/services', ctx.lang)}>{t('site.nav.services')}</a>
+            <a href={localizedPath('/pricing', ctx.lang)}>{t('site.nav.pricing')}</a>
+            <a href={localizedPath('/docs', ctx.lang)}>{t('site.nav.docs')}</a>
+          </div>
+          <div>
+            <h4>{t('site.footer.resources')}</h4>
+            <a href={localizedPath('/guides/what-is-mcp', ctx.lang)}>{t('site.nav.whatIsMcp')}</a>
+            <a href={localizedPath('/faq', ctx.lang)}>{t('site.nav.faq')}</a>
+            <a href={localizedPath('/use-cases', ctx.lang)}>{t('site.nav.useCases')}</a>
+            <a href={localizedPath('/blog', ctx.lang)}>{t('site.nav.blog')}</a>
+            <a href={localizedPath('/compare', ctx.lang)}>{t('site.nav.compare')}</a>
           </div>
           <div>
             <h4>{t('site.footer.account')}</h4>
@@ -131,9 +151,12 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           </div>
           <div>
             <h4>{t('site.footer.company')}</h4>
+            <a href="/support">{t('site.footer.support')}</a>
             {ctx.supportEmail ? <a href={`mailto:${ctx.supportEmail}`}>{t('site.footer.contact')}</a> : null}
+            <a href="/status">{t('site.footer.status')}</a>
             <a href="/privacy">{t('site.footer.privacy')}</a>
             <a href="/terms">{t('site.footer.terms')}</a>
+            <a href="/refunds">{t('site.footer.refunds')}</a>
           </div>
         </div>
         <div class="footer-bottom">
@@ -152,10 +175,47 @@ export const SiteLayout: FC<{
   title: string;
   description: string;
   current: Section;
+  /** The page's path without the language parameter; canonical and hreflang links derive from it. */
   canonicalPath: string;
+  /** schema.org data describing the page. */
+  jsonLd?: JsonLd[];
+  ogType?: 'website' | 'article';
+  /** Kept out of search results (e.g. a service that cannot be connected on this server). */
+  noindex?: boolean;
+  /** Reloads the page every this many seconds (the status page). */
+  refreshSeconds?: number;
   children?: Child;
-}> = ({ ctx, title, description, current, canonicalPath, children }) => (
-  <Doc title={title} lang={ctx.lang} description={description} canonical={`${ctx.publicUrl}${canonicalPath}`}>
+}> = ({
+  ctx,
+  title,
+  description,
+  current,
+  canonicalPath,
+  jsonLd,
+  ogType,
+  noindex,
+  refreshSeconds,
+  children,
+}) => (
+  <Doc
+    title={title}
+    lang={ctx.lang}
+    description={description}
+    canonical={`${ctx.publicUrl}${localizedPath(canonicalPath, ctx.lang)}`}
+    noindex={noindex}
+    meta={{
+      alternates: noindex ? [] : alternates(ctx.publicUrl, canonicalPath),
+      ogLocale: OG_LOCALE[ctx.lang],
+      ogLocaleAlternates: SITE_LOCALES.filter((l) => l !== ctx.lang).map((l) => OG_LOCALE[l]),
+      ogType: ogType ?? 'website',
+      image: `${ctx.publicUrl}${OG_IMAGE_PATH}`,
+      imageAlt: ctx.t('site.footer.tagline'),
+      jsonLd: jsonLd ?? [],
+      verification: ctx.verification,
+      feed: { href: `${ctx.publicUrl}/blog/feed.xml`, title: `${BRAND.name} ${ctx.t('site.nav.blog')}` },
+    }}
+    {...(refreshSeconds ? { refreshSeconds } : {})}
+  >
     <a class="skip" href="#main">
       {ctx.t('ui.skip')}
     </a>
@@ -316,8 +376,21 @@ export const PlanCard: FC<{
     ['actions', true],
     ['accounts', true],
     ['historyDays', true],
-    ['seats', (plan.limits.seats ?? 2) > 1],
+    ['seats', plan.perSeat !== undefined || (plan.limits.seats ?? 2) > 1],
   ];
+  const perSeat = plan.perSeat;
+  const featureText = (metric: Metric): string => {
+    if (metric === 'actions' && start)
+      return t('plan.metric.actionsSteps', {
+        n: fmtNumber(lang, plan.limits.actions ?? 0),
+        steps: start.steps,
+      });
+    if (perSeat && metric === 'actions' && plan.limits.actions !== null)
+      return t('plan.metric.actionsPerSeat', { n: fmtNumber(lang, plan.limits.actions) });
+    if (perSeat && metric === 'seats')
+      return t('plan.metric.seatsRange', { min: perSeat.min, max: perSeat.max });
+    return limitText(t, lang, metric, plan.limits[metric]);
+  };
   return (
     <div class={`plan${plan.featured ? ' featured' : ''}${current ? ' current' : ''}`}>
       {plan.featured ? <span class="tag">{t('pricing.popular')}</span> : null}
@@ -329,7 +402,7 @@ export const PlanCard: FC<{
         <div class="price">
           <span class="amount when-month">${plan.priceMonthly}</span>
           <span class="amount when-year">{usd(plan.priceYearly / 12)}</span>
-          <span class="per">{t('pricing.perMonth')}</span>
+          <span class="per">{t(perSeat ? 'pricing.perSeat' : 'pricing.perMonth')}</span>
         </div>
         <div class="price-year">
           {plan.priceMonthly === 0 ? (
@@ -357,14 +430,7 @@ export const PlanCard: FC<{
         {features.map(([metric, on]) => (
           <li class={on ? undefined : 'off'}>
             {on ? <Check /> : <Icon name="minus" />}
-            <span>
-              {metric === 'actions' && start
-                ? t('plan.metric.actionsSteps', {
-                    n: fmtNumber(lang, plan.limits.actions ?? 0),
-                    steps: start.steps,
-                  })
-                : limitText(t, lang, metric, plan.limits[metric])}
-            </span>
+            <span>{featureText(metric)}</span>
           </li>
         ))}
         <li>
@@ -406,15 +472,17 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
 );
 
 const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
-  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan.
+  // Paid plans: after signing up the user lands on the billing page to request (or buy) the plan;
+  // a team plan is bought on the team's page, so it starts with creating the team.
+  const target = plan.audience === 'team' ? '/app/teams' : '/app/billing';
   const href =
     plan.priceMonthly === 0
       ? ctx.user
         ? '/app'
         : '/signup'
       : ctx.user
-        ? '/app/billing'
-        : `/signup?next=${encodeURIComponent('/app/billing')}`;
+        ? target
+        : `/signup?next=${encodeURIComponent(target)}`;
   return (
     <a class={`btn block ${plan.featured ? 'primary' : ''}`} href={href}>
       {plan.priceMonthly === 0
@@ -490,6 +558,12 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
       description={t('landing.description')}
       current="home"
       canonicalPath="/"
+      jsonLd={[
+        organization(ctx.publicUrl, ctx.supportEmail),
+        website(ctx.publicUrl, t('landing.description'), ctx.lang),
+        productLd(ctx, t('landing.description')),
+        faqPage(faqItems(t, LANDING_FAQ)),
+      ]}
     >
       <section class="hero">
         <div class="wrap">
@@ -812,7 +886,7 @@ export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ c
           <div class="section-head">
             <h2>{t('landing.faq.title')}</h2>
           </div>
-          <Faq t={t} keys={['mcp', 'why', 'secrets', 'action', 'limit', 'custom', 'delete']} />
+          <Faq t={t} keys={LANDING_FAQ} />
         </div>
       </section>
 
@@ -846,6 +920,20 @@ type FaqKey =
   | 'many'
   | 'jobs';
 
+const LANDING_FAQ: FaqKey[] = ['mcp', 'why', 'secrets', 'action', 'limit', 'custom', 'delete'];
+const PRICING_FAQ: FaqKey[] = ['action', 'reset', 'limit', 'upgrade', 'many', 'jobs'];
+
+const faqItems = (t: Translate, keys: FaqKey[]) =>
+  keys.map((key) => ({ q: t(`faq.${key}.q`), a: t(`faq.${key}.a`) }));
+
+/** schema.org data of the product with its plans (landing and pricing pages). */
+const productLd = (ctx: PageCtx, description: string): JsonLd =>
+  softwareApplication(ctx.publicUrl, {
+    description,
+    plans: PLANS,
+    planName: (plan) => ctx.t(`plan.${plan.id}.name` as 'plan.free.name'),
+  });
+
 const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
   <div>
     {keys.map((key) => (
@@ -865,11 +953,13 @@ const COMPARE: Metric[] = ['actions', 'accounts', 'historyDays', 'seats'];
 /** Limits for features still being built: shown once, under their own heading. */
 const COMPARE_SOON: Metric[] = ['messengers', 'backgroundJobs'];
 
-const cell = (t: Translate, lang: string, metric: Metric, limits: Limits) => {
-  const v = limits[metric];
+const cell = (t: Translate, lang: string, metric: Metric, plan: Plan) => {
+  const v = plan.limits[metric];
+  if (plan.perSeat && metric === 'seats') return `${plan.perSeat.min}–${plan.perSeat.max}`;
   if (v === null) return t('pricing.unlimited');
   if (v === 0) return '—';
   if (metric === 'historyDays') return t('pricing.days', { n: v });
+  if (plan.perSeat?.scaled.includes(metric)) return t('pricing.perSeatCell', { n: fmtNumber(lang, v) });
   return fmtNumber(lang, v);
 };
 
@@ -883,6 +973,14 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
       description={t('pricing.description')}
       current="pricing"
       canonicalPath="/pricing"
+      jsonLd={[
+        breadcrumbs(ctx.publicUrl, [
+          { name: t('crumb.home'), path: localizedPath('/', ctx.lang) },
+          { name: t('site.nav.pricing'), path: localizedPath('/pricing', ctx.lang) },
+        ]),
+        productLd(ctx, t('pricing.description')),
+        faqPage(faqItems(t, PRICING_FAQ)),
+      ]}
     >
       <section class="section">
         <div class="wrap">
@@ -923,7 +1021,13 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 <tr>
                   <td>{t('pricing.price')}</td>
                   {plans.map((p) => (
-                    <td class="num">{p.priceMonthly === 0 ? t('pricing.free') : `$${p.priceMonthly}`}</td>
+                    <td class="num">
+                      {p.priceMonthly === 0
+                        ? t('pricing.free')
+                        : p.perSeat
+                          ? t('pricing.perSeatCell', { n: `$${p.priceMonthly}` })
+                          : `$${p.priceMonthly}`}
+                    </td>
                   ))}
                 </tr>
                 {COMPARE.map((metric) => (
@@ -931,7 +1035,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                     <td>{t(`pricing.row.${metric}`)}</td>
                     {plans.map((p) => (
                       <td class="num">
-                        {cell(t, lang, metric, p.limits)}
+                        {cell(t, lang, metric, p)}
                         {metric === 'actions' && p.start ? (
                           <div class="tiny muted">
                             {t('pricing.startCell', {
@@ -964,7 +1068,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                   <tr>
                     <td>{t(`pricing.row.${metric}`)}</td>
                     {plans.map((p) => (
-                      <td class="num">{cell(t, lang, metric, p.limits)}</td>
+                      <td class="num">{cell(t, lang, metric, p)}</td>
                     ))}
                   </tr>
                 ))}
@@ -978,7 +1082,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div class="section-head">
             <h2>{t('pricing.faq')}</h2>
           </div>
-          <Faq t={t} keys={['action', 'reset', 'limit', 'upgrade', 'many', 'jobs']} />
+          <Faq t={t} keys={PRICING_FAQ} />
         </div>
       </section>
     </SiteLayout>
@@ -1075,7 +1179,12 @@ export interface ServiceDetail extends PublicService {
 const connectHref = (ctx: PageCtx, path: string) =>
   ctx.user ? path : `/signup?next=${encodeURIComponent(path)}`;
 
-export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = ({ ctx, service }) => {
+export const ServiceDetailPage: FC<{
+  ctx: PageCtx;
+  service: ServiceDetail;
+  /** Links to the service's page per AI app ("Use Gmail with Claude, ChatGPT, …"). */
+  useWith?: Child;
+}> = ({ ctx, service, useWith }) => {
   const { t } = ctx;
   const meta = serviceMeta(service.id);
   const reads = service.actions.filter((a) => a.risk === 'read').length;
@@ -1097,6 +1206,13 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
       description={blurb(ctx.lang, service)}
       current="services"
       canonicalPath={`/services/${service.id}`}
+      jsonLd={[
+        breadcrumbs(ctx.publicUrl, [
+          { name: t('crumb.home'), path: localizedPath('/', ctx.lang) },
+          { name: t('site.nav.services'), path: localizedPath('/services', ctx.lang) },
+          { name: service.name, path: localizedPath(`/services/${service.id}`, ctx.lang) },
+        ]),
+      ]}
     >
       <section class="section svc-page">
         <div class="wrap">
@@ -1192,6 +1308,7 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
               </table>
             </div>
           </div>
+          {useWith}
         </div>
       </section>
     </SiteLayout>
@@ -1202,16 +1319,20 @@ export const ServiceDetailPage: FC<{ ctx: PageCtx; service: ServiceDetail }> = (
 // Docs: connecting AI clients
 // ---------------------------------------------------------------------------
 
-export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; headingLevel?: 2 | 3 }> = ({
-  ctx,
-  mcpUrl,
-  idPrefix,
-}) => {
+export const ClientGuides: FC<{
+  ctx: PageCtx;
+  mcpUrl: string;
+  idPrefix: string;
+  headingLevel?: 2 | 3;
+  /** Link each client to its own guide page (the public docs). */
+  guideLinks?: boolean;
+}> = ({ ctx, mcpUrl, idPrefix, guideLinks }) => {
   const { t, lang } = ctx;
   return (
     <>
       {CLIENT_GUIDES.map((g) => {
         const install = g.install?.(mcpUrl);
+        const guidePath = guideLinks ? clientGuidePath(g.id) : undefined;
         return (
           <section class="guide" id={g.id}>
             <h2>
@@ -1239,6 +1360,13 @@ export const ClientGuides: FC<{ ctx: PageCtx; mcpUrl: string; idPrefix: string; 
                 </li>
               ))}
             </ol>
+            {guidePath ? (
+              <p class="small">
+                <a href={localizedPath(guidePath, lang)}>
+                  {t('guide.full')}: {clientName(g, lang)} <Icon name="arrow" />
+                </a>
+              </p>
+            ) : null}
           </section>
         );
       })}
@@ -1287,6 +1415,12 @@ export const DocsPage: FC<{
             <a href="#custom">{t('docs.custom')}</a>
             <a href="#safety">{t('docs.safety')}</a>
             <a href="#api">{t('docs.api')}</a>
+            <span class="group">{t('site.nav.guides')}</span>
+            {ARTICLES.map((a) => (
+              <a href={localizedPath(`/guides/${a.slug}`, lang)}>{a.body[lang].h1}</a>
+            ))}
+            <a href={localizedPath('/faq', lang)}>{t('site.nav.faq')}</a>
+            <a href={localizedPath('/compare', lang)}>{t('site.nav.compare')}</a>
           </nav>
           <div>
             <section class="guide" id="url">
@@ -1296,7 +1430,7 @@ export const DocsPage: FC<{
               <CopyField t={t} id="docs-mcp-url" value={ctx.mcpUrl} label={t('home.mcpUrl')} />
               <p class="hint">{t('docs.urlHint')}</p>
             </section>
-            <ClientGuides ctx={ctx} mcpUrl={ctx.mcpUrl} idPrefix="docs" />
+            <ClientGuides ctx={ctx} mcpUrl={ctx.mcpUrl} idPrefix="docs" guideLinks />
             <section class="guide" id="check">
               <h2>{t('docs.check')}</h2>
               <p>{t('docs.check.text')}</p>

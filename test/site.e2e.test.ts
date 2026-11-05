@@ -248,12 +248,23 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const ws = await workspaceOf(bad.id);
     const me = (token: string) =>
       fetch(`${hub.baseUrl}/api/v1/me`, { headers: { authorization: `Bearer ${token}` } });
-    const before = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: bad.id, name: 'a' });
+    const scopes = ['mcp', 'api'] as const;
+    const before = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: bad.id,
+      name: 'a',
+      scopes: [...scopes],
+    });
     expect((await me(before.token)).status).toBe(200);
     await hub.services.users.setStatus(bad.id, 'suspended', 'spam');
     expect((await me(before.token)).status).toBe(401);
     // A token that slipped through (issued in a race with the suspension) does not work either.
-    const late = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: bad.id, name: 'b' });
+    const late = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: bad.id,
+      name: 'b',
+      scopes: [...scopes],
+    });
     expect((await me(late.token)).status).toBe(401);
 
     expect((await browser.request('/app')).status).toBe(302);
@@ -274,7 +285,12 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
       `UPDATE workspaces SET created_at = now() - interval '20 days' WHERE id = $1`,
       [ws.id],
     );
-    const { token } = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: user.id, name: 't' });
+    const { token } = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: user.id,
+      name: 't',
+      scopes: ['mcp', 'api'],
+    });
     const api = async (path: string, method = 'GET', body?: unknown) => {
       const response = await fetch(`${hub.baseUrl}/api/v1${path}`, {
         method,
@@ -641,6 +657,149 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(html).toContain('value="ftp://nope"');
     expect(html).toContain('class="notice bad"');
   });
+
+  it('creates, changes and deletes an access profile in the dashboard', async () => {
+    const foreign = (await hub.services.db.query.accounts.findFirst())!;
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-pr', email: 'profiles@example.com' });
+    const ws = await workspaceOf((await userByEmail('profiles@example.com')).id);
+    const create = (name: string, label: string) =>
+      hub.services.accounts.create(ws.id, { connectorId: 'demo', name, label, credentials: { secret: 's' } });
+    const work = await create('work', 'Work');
+    const home = await create('home', 'Home');
+
+    const list = await (await browser.request('/app/profiles')).text();
+    expect(list).toContain(`name="account.${work.id}"`);
+    expect(list).not.toContain(foreign.id);
+    const { csrf } = TestBrowser.hiddenInputs(list);
+
+    // Without an account the form comes back as filled in.
+    const empty = await browser.request('/app/profiles', {
+      form: { csrf: csrf!, name: 'Работа', maxAccess: 'read' },
+    });
+    expect(empty.status).toBe(400);
+    const again = await empty.text();
+    expect(again).toContain('class="notice bad"');
+    expect(again).toContain('value="Работа"');
+
+    // Another workspace's account is ignored; the address comes from the name.
+    const created = await browser.request('/app/profiles', {
+      form: {
+        csrf: csrf!,
+        name: 'Работа',
+        maxAccess: 'read',
+        [`account.${work.id}`]: 'on',
+        [`account.${foreign.id}`]: 'on',
+      },
+    });
+    expect(created.status).toBe(303);
+    const persona = (await hub.services.personas.bySlug(ws.id, 'rabota'))!;
+    expect(persona).toMatchObject({ name: 'Работа', accountIds: [work.id], maxAccess: 'read' });
+    const path = `/app/profiles/${persona.id}`;
+    expect(created.headers.get('location')).toBe(`${path}?created=1`);
+    const page = await (await browser.request(`${path}?created=1`)).text();
+    expect(page).toContain(`${hub.baseUrl}/mcp/rabota`);
+    // Its own server name in the clients' configs, so it never replaces the main connection.
+    expect(page).toContain('manyplug-rabota');
+    expect(page).toContain('class="notice ok"');
+
+    const taken = await browser.request('/app/profiles', {
+      form: { csrf: csrf!, name: 'Other', slug: 'rabota', [`account.${home.id}`]: 'on' },
+    });
+    expect(taken.status).toBe(400);
+    expect((await hub.services.personas.list(ws.id)).length).toBe(1);
+
+    const saved = await browser.request(path, {
+      form: {
+        csrf: csrf!,
+        name: 'Work AI',
+        note: 'office',
+        maxAccess: 'full',
+        [`account.${work.id}`]: 'on',
+        [`account.${home.id}`]: 'on',
+      },
+    });
+    expect(saved.headers.get('location')).toBe(path);
+    expect(await hub.services.personas.get(ws.id, persona.id)).toMatchObject({
+      name: 'Work AI',
+      description: 'office',
+      accountIds: [work.id, home.id],
+      maxAccess: 'full',
+    });
+
+    // A token for the profile is listed on its page, and revoking it comes back there.
+    await browser.request('/app/tokens', {
+      form: { csrf: csrf!, name: 'office script', days: '30', profile: persona.id },
+    });
+    const [token] = await hub.services.apiTokens.list(ws.id);
+    expect(token).toMatchObject({ name: 'office script', personaId: persona.id });
+    expect(await (await browser.request('/app/apps')).text()).toContain('/mcp/rabota');
+    expect(await (await browser.request(path)).text()).toContain('office script');
+    const revoked = await browser.request(`/app/tokens/${token!.id}/revoke`, {
+      form: { csrf: csrf!, back: path },
+    });
+    expect(revoked.headers.get('location')).toBe(path);
+
+    const deleted = await browser.request(`${path}/delete`, { form: { csrf: csrf! } });
+    expect(deleted.headers.get('location')).toBe('/app/profiles');
+    expect(await hub.services.personas.list(ws.id)).toEqual([]);
+    expect((await browser.request(path)).headers.get('location')).toBe('/app/profiles');
+  });
+
+  it("shows an AI app's own page: its tokens, rule and actions; renames, disconnects and removes it", async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-app', email: 'aiapp@example.com' });
+    const ws = await workspaceOf((await userByEmail('aiapp@example.com')).id);
+    const { csrf } = TestBrowser.hiddenInputs(await (await browser.request('/app/apps')).text());
+    await browser.request('/app/tokens', { form: { csrf: csrf!, name: 'Cursor', days: '0' } });
+    const [token] = await hub.services.apiTokens.list(ws.id);
+    const appId = token!.aiClientId!;
+    const base = `/app/apps/${appId}`;
+    // One call with this app's token, one with another credential.
+    await hub.services.database.pool.query(
+      `INSERT INTO tool_calls (workspace_id, connector_id, action, tool_name, principal_type, principal_id, status, duration_ms, created_at)
+       VALUES ($1, 'demo', 'echo', 'demo_echo', 'api_token', $2, 'ok', 5, now() - interval '2 minutes'),
+              ($1, 'demo', 'fail', 'demo_fail', 'api_token', 'tok_other', 'error', 5, now() - interval '1 minute')`,
+      [ws.id, token!.id],
+    );
+
+    expect(await (await browser.request('/app/apps')).text()).toContain(`href="${base}"`);
+    const page = await (await browser.request(base)).text();
+    expect(page).toContain('<h1>Cursor</h1>');
+    expect(page).toContain(`action="/app/tokens/${token!.id}/revoke"`);
+    expect(page).toContain('title="demo_echo"');
+    expect(page).not.toContain('title="demo_fail"');
+
+    // Its rule is set from its page and comes back there; the rules page links to it.
+    const rule = await browser.request('/app/rules/scoped', {
+      form: { csrf: csrf!, kind: 'app', id: appId, access: 'read', confirm: '', back: base },
+    });
+    expect(rule.headers.get('location')).toBe(base);
+    expect(await hub.services.policies.listRules(ws.id)).toContainEqual(
+      expect.objectContaining({ aiClientId: appId, access: 'read' }),
+    );
+    expect(await (await browser.request('/app/rules')).text()).toContain(`href="${base}"`);
+
+    const renamed = await browser.request(`${base}/rename`, {
+      form: { csrf: csrf!, name: 'Cursor at work' },
+    });
+    expect(renamed.headers.get('location')).toBe(base);
+    expect((await hub.services.aiClients.get(ws.id, appId)).name).toBe('Cursor at work');
+    // The token is listed under the app's new name.
+    expect(await (await browser.request('/app/apps')).text()).toContain('Cursor at work');
+
+    // Disconnecting ends the token and keeps the rule; then the app can be removed with it.
+    const disconnected = await browser.request(`${base}/disconnect`, { form: { csrf: csrf! } });
+    expect(disconnected.headers.get('location')).toBe(base);
+    expect(await hub.services.apiTokens.list(ws.id)).toEqual([]);
+    const after = await (await browser.request(base)).text();
+    expect(after).toContain(`action="${base}/forget"`);
+    expect(await hub.services.policies.listRules(ws.id)).toHaveLength(1);
+    const removed = await browser.request(`${base}/forget`, { form: { csrf: csrf! } });
+    expect(removed.headers.get('location')).toBe('/app/apps');
+    expect(await hub.services.policies.listRules(ws.id)).toEqual([]);
+    expect((await browser.request(base)).headers.get('location')).toBe('/app/apps');
+  });
 });
 
 describe('website: public pages', () => {
@@ -657,7 +816,16 @@ describe('website: public pages', () => {
 
   it('serves the landing, pricing, services, docs and legal pages in both languages', async () => {
     const browser = new TestBrowser(hub.baseUrl);
-    for (const path of ['/', '/pricing', '/services', '/services/github', '/docs', '/privacy', '/terms']) {
+    for (const path of [
+      '/',
+      '/pricing',
+      '/services',
+      '/services/github',
+      '/docs',
+      '/privacy',
+      '/terms',
+      '/refunds',
+    ]) {
       const page = await browser.request(path);
       expect(page.status, path).toBe(200);
       const html = await page.text();

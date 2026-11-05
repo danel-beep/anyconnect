@@ -2,6 +2,7 @@ import type { ActionDefinition, ConnectorDefinition, JsonSchema, RiskLevel } fro
 import type { AccountRow } from '../core/accounts.js';
 import type { WorkspaceSettings } from '../db/schema.js';
 import type { BuiltinToolId } from './builtin-tools.js';
+import type { ClientRestrictions } from './client-policies.js';
 
 /** How accounts become tools: one tool per action with an `account` argument, or one per account. */
 export type ExposureMode = NonNullable<WorkspaceSettings['toolExposure']>;
@@ -15,6 +16,25 @@ export interface CatalogAccount {
   label: string;
   description: string | null;
   identity: string | null;
+  /** Team workspaces: whose the account is, from the caller's point of view. */
+  owner?: AccountOwner;
+}
+
+/** Whose an account is, from the caller's point of view (team workspaces, see `core/teams.ts`). */
+export type AccountOwner =
+  | { kind: 'self' }
+  | { kind: 'team' }
+  | { kind: 'member'; name: string; access: 'read' | 'write' | 'full' };
+
+/** A team workspace as the caller sees it: who they are and whose each account is. */
+export interface CatalogTeam {
+  name: string;
+  /** The caller's name; absent for the team's shared connection. */
+  member?: string;
+  /** The caller runs the team (its owner or an admin). */
+  admin?: boolean;
+  /** By account id. */
+  owners: Readonly<Record<string, AccountOwner>>;
 }
 
 export interface ToolAnnotations {
@@ -96,6 +116,8 @@ export interface ClientProfile {
   tokenBudget: number;
   /** Some clients refuse or truncate long tool lists (e.g. Cursor). */
   maxTools?: number;
+  /** What the directory rules of the client's AI app exclude (see `client-policies.ts`). */
+  restrictions?: ClientRestrictions;
 }
 
 export interface CatalogStats {
@@ -111,6 +133,8 @@ export interface CatalogStats {
 export interface Catalog {
   mode: ExposureMode;
   listing: ListingMode;
+  /** Team workspaces: who is calling and whose each account is. */
+  team?: CatalogTeam;
   /** Every callable tool (by name, through MCP or `manyplug_call_tool`). */
   tools: CatalogTool[];
   /** What `tools/list` returns. In direct listing the same as `tools`. */

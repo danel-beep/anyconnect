@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -78,6 +79,7 @@ describe('REST API, personal tokens and account management', () => {
       workspaceId: workspace.id,
       userId: user.id,
       name: 'tests',
+      scopes: ['mcp', 'api'],
     }));
   });
 
@@ -175,7 +177,13 @@ describe('REST API, personal tokens and account management', () => {
     });
     const expired = await api('/tools/flaky_expired/call', { method: 'POST', body: { arguments: {} } });
     expect(expired.body.isError).toBe(true);
-    expect(expired.body.content[0].text).toContain('reconnect');
+    expect(expired.body.content[0].text).toContain(
+      'Sign-in to Flaky for account "ci" stopped working: token expired.',
+    );
+    // The AI gets the link that fixes it, not just "reconnect".
+    expect(expired.body.content[0].text).toContain(
+      `sign in again, here: ${hub.baseUrl}/connect/flaky?account=${created.body.account.id}`,
+    );
     expect((await api(`/accounts/${created.body.account.id}`)).body.status).toBe('needs_reauth');
 
     const slow = await api('/tools/flaky_slow/call', { method: 'POST', body: { arguments: {} } });
@@ -202,6 +210,101 @@ describe('REST API, personal tokens and account management', () => {
     expect(tokens.body[0].tokenPrefix).toMatch(/^ac_pat_/);
     expect((await api(`/tokens/${id}`, { method: 'DELETE' })).status).toBe(204);
     expect((await api('/me')).status).toBe(401);
+  });
+
+  it('makes tokens MCP-only unless the management API is asked for', async () => {
+    const workspace = (await hub.services.db.query.workspaces.findFirst())!;
+    const user = (await hub.services.db.query.users.findFirst())!;
+    // The default, from the service, the CLI and the REST API alike: MCP only.
+    const plain = await hub.services.apiTokens.create({
+      workspaceId: workspace.id,
+      userId: user.id,
+      name: 'cursor',
+    });
+    expect(plain.row.scopes).toEqual(['mcp']);
+    expect((await api('/me', { auth: plain.token })).status).toBe(401);
+    const mcp = await fetch(hub.mcpUrl, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${plain.token}` },
+    });
+    expect(mcp.status).not.toBe(401);
+
+    const created = await api('/tokens', { method: 'POST', body: { name: 'script' } });
+    expect(created.status).toBe(201);
+    expect(created.body.scopes).toEqual(['mcp']);
+    const withApi = await api('/tokens', { method: 'POST', body: { name: 'cli', scopes: ['mcp', 'api'] } });
+    expect(withApi.body.scopes).toEqual(['mcp', 'api']);
+    expect((await api('/me', { auth: withApi.body.token })).status).toBe(200);
+
+    // A token of an access profile stays on the profile's MCP address.
+    const persona = await hub.services.personas.create(workspace.id, { slug: 'kids', name: 'Kids' });
+    const refused = await api('/tokens', {
+      method: 'POST',
+      body: { name: 'kids', personaId: persona.id, scopes: ['mcp', 'api'] },
+    });
+    expect(refused.status).toBe(400);
+    const profile = await hub.services.apiTokens.create({
+      workspaceId: workspace.id,
+      userId: user.id,
+      name: 'kids',
+      personaId: persona.id,
+    });
+    // Even one stored with "api" (made before this rule) never reaches the REST API.
+    await hub.services.database.pool.query(`update api_tokens set scopes = '{mcp,api}' where id = $1`, [
+      profile.row.id,
+    ]);
+    expect((await api('/me', { auth: profile.token })).status).toBe(401);
+  });
+
+  it('takes the API from tokens issued before tokens were MCP-only (migration 0016)', async () => {
+    const workspace = (await hub.services.db.query.workspaces.findFirst())!;
+    const user = (await hub.services.db.query.users.findFirst())!;
+    const make = (name: string) =>
+      hub.services.apiTokens.create({
+        workspaceId: workspace.id,
+        userId: user.id,
+        name,
+        scopes: ['mcp', 'api'],
+      });
+    const before = await make('old script');
+    const after = await make('new script');
+    const pool = hub.services.database.pool;
+    await pool.query(`update api_tokens set created_at = '2026-11-01T10:00:00Z' where id = $1`, [
+      before.row.id,
+    ]);
+    await pool.query(readFileSync(new URL('../drizzle/0016_tokens_mcp_only.sql', import.meta.url), 'utf8'));
+
+    const { rows } = await pool.query<{ id: string; scopes: string[] }>(
+      'select id, scopes from api_tokens where id = any($1)',
+      [[before.row.id, after.row.id]],
+    );
+    const scopes = Object.fromEntries(rows.map((r) => [r.id, r.scopes]));
+    expect(scopes[before.row.id]).toEqual(['mcp']);
+    expect(scopes[after.row.id]).toEqual(['mcp', 'api']);
+    expect((await api('/me', { auth: before.token })).status).toBe(401);
+    expect((await api('/me', { auth: after.token })).status).toBe(200);
+  });
+
+  it('creates dashboard tokens for MCP, with the API only when ticked', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    expect((await browser.login()).status).toBe(303);
+    const page = await browser.request('/app/apps');
+    const csrf = TestBrowser.hiddenInputs(await page.text()).csrf!;
+    const create = async (form: Record<string, string>) => {
+      const response = await browser.request('/app/tokens', { form: { csrf, days: '30', ...form } });
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      return html.match(/ac_pat_[A-Za-z0-9_-]+/)![0];
+    };
+    const mcpOnly = await create({ name: 'Cursor' });
+    expect((await api('/me', { auth: mcpOnly })).status).toBe(401);
+    const full = await create({ name: 'Backup script', api: '1' });
+    expect((await api('/me', { auth: full })).status).toBe(200);
+    const tokens = (await api('/tokens')).body as { name: string; scopes: string[] }[];
+    expect(tokens.find((x) => x.name === 'Cursor')!.scopes).toEqual(['mcp']);
+    expect(tokens.find((x) => x.name === 'Backup script')!.scopes).toEqual(['mcp', 'api']);
+    const listing = await (await browser.request('/app/apps')).text();
+    expect(listing).toContain('MCP + API');
   });
 
   it('does not let AI apps manage the hub with their OAuth tokens', async () => {

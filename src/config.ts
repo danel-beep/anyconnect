@@ -1,8 +1,12 @@
 import { z } from 'zod';
 import { type BillingConfig, BillingConfigError, readBillingConfig } from './billing/config.js';
 import { BRAND } from './brand.js';
+import { CLIENT_POLICY_IDS } from './hub/client-policies.js';
+import { parseKey } from './lib/crypto.js';
 import { IpAllowlist } from './lib/ip-allowlist.js';
+import type { S3Config } from './lib/s3.js';
 import { type MailConfig, MailConfigError, readMailConfig } from './mail/mailer.js';
+import { parseSentryDsn } from './ops/sentry.js';
 
 /**
  * All runtime configuration comes from environment variables (12-factor).
@@ -66,6 +70,8 @@ const EnvSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(90),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).default(30),
   TOOL_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
+  /** Largest request body the hub reads (MCP calls, API, uploads); sign-in and OAuth forms take less. */
+  MAX_REQUEST_BODY_MB: z.coerce.number().min(0.1).max(100).default(10),
   /**
    * Let connectors reach private/loopback addresses (self-hosted services on a LAN, local tests).
    * Off by default: in the cloud it would expose internal services to anyone who can add an account.
@@ -90,6 +96,9 @@ const EnvSchema = z.object({
   ADMIN_SESSION_HOURS: z.coerce.number().int().min(1).max(720).default(8),
   /** Contact address shown on the website and in the legal pages. */
   SUPPORT_EMAIL: optionalString,
+  /** Ownership tokens of Google Search Console and Bing Webmaster Tools (meta tag method). */
+  GOOGLE_SITE_VERIFICATION: optionalString,
+  BING_SITE_VERIFICATION: optionalString,
   /** Requests per minute one IP address may make to /mcp without signing in. */
   MCP_ANONYMOUS_RATE_LIMIT: z.coerce.number().int().min(1).default(30),
   /** Default size budget of one tool result, in tokens (larger results are trimmed with a note). */
@@ -113,6 +122,47 @@ const EnvSchema = z.object({
   GATEWAY_URL: optionalString,
   /** Shared secret between the hub and the gateway. */
   GATEWAY_TOKEN: optionalString,
+  /**
+   * Also send unexpected errors to Sentry or a Sentry-compatible service (GlitchTip, Bugsink):
+   * the project's DSN. Errors are always kept in the built-in tracker (admin panel → Errors).
+   */
+  SENTRY_DSN: optionalString,
+  /** Environment name in Sentry (default: NODE_ENV). */
+  SENTRY_ENVIRONMENT: optionalString,
+  /** Days an error group is kept after it was last seen. */
+  ERROR_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /**
+   * Database backups to S3-compatible storage (Cloudflare R2, Backblaze B2, AWS S3, MinIO): set
+   * the endpoint, bucket and keys together. See docs/OPERATIONS.md.
+   */
+  BACKUP_S3_ENDPOINT: optionalString,
+  BACKUP_S3_BUCKET: optionalString,
+  /** `auto` for Cloudflare R2. */
+  BACKUP_S3_REGION: z.string().default('auto'),
+  BACKUP_S3_ACCESS_KEY_ID: optionalString,
+  BACKUP_S3_SECRET_ACCESS_KEY: optionalString,
+  /** Folder (key prefix) in the bucket. */
+  BACKUP_PREFIX: optionalString,
+  BACKUP_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+  /**
+   * Key backups are encrypted with (like ENCRYPTION_KEY: 32 bytes, base64 or hex). Default: derived
+   * from ENCRYPTION_KEY. A separate key lets backups be restored after ENCRYPTION_KEY rotation.
+   */
+  BACKUP_ENCRYPTION_KEY: optionalString,
+  /** Commit of the running build; set by Render. Shown in the admin panel and sent with errors. */
+  RENDER_GIT_COMMIT: optionalString,
+  RENDER_INSTANCE_ID: optionalString,
+  /**
+   * AI app directory rules the hub enforces for clients of those apps (comma separated ids from
+   * `src/hub/client-policies.ts`: `claude`, `chatgpt`; `none` for no rules). Default `claude`.
+   */
+  CLIENT_POLICIES: optionalString,
+  /**
+   * A sign-in for directory reviewers (Anthropic, OpenAI...): email + password, no second factor,
+   * demo accounts connected. Created on start; the password is re-synced if it changes.
+   */
+  REVIEW_ACCOUNT_EMAIL: optionalString,
+  REVIEW_ACCOUNT_PASSWORD: optionalString,
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -146,6 +196,8 @@ export interface AppConfig {
   };
   sessionTtlSeconds: number;
   toolTimeoutMs: number;
+  /** Largest request body read, in bytes (`MAX_REQUEST_BODY_MB`). */
+  maxRequestBodyBytes: number;
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
   tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
@@ -173,6 +225,8 @@ export interface AppConfig {
     adminAllowedIps: string[];
     adminSessionMaxAgeMs: number;
     supportEmail: string | undefined;
+    /** Search console ownership tokens, rendered as meta tags on public pages. */
+    verification: { google: string | undefined; bing: string | undefined };
     /** "Sign in with Google": absent when no Google OAuth client is configured. */
     google: { clientId: string; clientSecret: string | undefined } | undefined;
   };
@@ -192,6 +246,67 @@ export interface AppConfig {
   billing: BillingConfig;
   /** The hub's own email (billing notices): provider and sender (see `src/mail/mailer.ts`). */
   mail: MailConfig;
+  /** Database backups (see `src/ops/backups.ts`); undefined when no bucket is configured. */
+  backups: BackupConfig | undefined;
+  /** Error tracking and build identity (see `src/ops/`). */
+  ops: {
+    sentryDsn: string | undefined;
+    environment: string;
+    errorRetentionDays: number;
+    /** Short commit of the running build, when the platform tells us. */
+    commit: string | undefined;
+    /** Instance name for logs and Sentry (several instances behind one service). */
+    instance: string | undefined;
+  };
+  /** Listing in AI app directories (see `docs/DIRECTORIES.md`). */
+  directories: {
+    /** Enforced directory rules (ids of `CLIENT_POLICIES` in `src/hub/client-policies.ts`). */
+    clientPolicies: string[];
+    /** The reviewers' sign-in (REVIEW_ACCOUNT_EMAIL / REVIEW_ACCOUNT_PASSWORD). */
+    reviewAccount: { email: string; password: string } | undefined;
+    /**
+     * Ownership proofs served as plain text at `/.well-known/<name>`, from `WELL_KNOWN_<NAME>`
+     * variables (`WELL_KNOWN_MCP_REGISTRY_AUTH` → `/.well-known/mcp-registry-auth`).
+     */
+    wellKnown: Record<string, string>;
+  };
+}
+
+/** `/.well-known/` names the hub itself serves; a WELL_KNOWN_* variable cannot replace them. */
+const RESERVED_WELL_KNOWN = /^(oauth-|openid-|mcp$|security\.txt$)/;
+
+/** Reads `WELL_KNOWN_<NAME>` variables: `/.well-known/<name>` (lower case, `_` → `-`) serves the value. */
+export function readWellKnownFiles(source: NodeJS.ProcessEnv): Record<string, string> {
+  const files: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    const match = key.match(/^WELL_KNOWN_([A-Z0-9_]+)$/);
+    if (!match || !value?.trim()) continue;
+    const name = match[1]!.toLowerCase().replace(/_/g, '-');
+    if (RESERVED_WELL_KNOWN.test(name))
+      throw new ConfigError(`${key}: /.well-known/${name} is served by the hub`);
+    files[name] = value.trim();
+  }
+  return files;
+}
+
+function clientPolicies(value: string | undefined): string[] {
+  const raw = (value ?? 'claude').trim().toLowerCase();
+  if (raw === 'none' || raw === '') return [];
+  const ids = [
+    ...new Set(
+      raw
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean),
+    ),
+  ];
+  for (const id of ids) {
+    if (!CLIENT_POLICY_IDS.includes(id))
+      throw new ConfigError(
+        `CLIENT_POLICIES: unknown policy "${id}" (known: ${CLIENT_POLICY_IDS.join(', ')}, none)`,
+      );
+  }
+  return ids;
 }
 
 /** Reads `OAUTH_APP_<PROVIDER>_CLIENT_ID/_SECRET` pairs; the provider id is the lower-cased middle part. */
@@ -264,6 +379,53 @@ function normalizePublicUrl(raw: string): string {
   return url.origin;
 }
 
+export interface BackupConfig {
+  storage: S3Config;
+  prefix: string;
+  retentionDays: number;
+  encryptionKey: string | undefined;
+}
+
+function backupConfig(env: z.infer<typeof EnvSchema>): BackupConfig | undefined {
+  const parts = {
+    BACKUP_S3_ENDPOINT: env.BACKUP_S3_ENDPOINT,
+    BACKUP_S3_BUCKET: env.BACKUP_S3_BUCKET,
+    BACKUP_S3_ACCESS_KEY_ID: env.BACKUP_S3_ACCESS_KEY_ID,
+    BACKUP_S3_SECRET_ACCESS_KEY: env.BACKUP_S3_SECRET_ACCESS_KEY,
+  };
+  const missing = Object.entries(parts).filter(([, value]) => !value);
+  if (missing.length === Object.keys(parts).length) return undefined;
+  if (missing.length) {
+    throw new ConfigError(`Database backups need ${missing.map(([name]) => name).join(', ')} as well`);
+  }
+  let endpoint: URL;
+  try {
+    endpoint = new URL(env.BACKUP_S3_ENDPOINT!);
+  } catch {
+    throw new ConfigError(`BACKUP_S3_ENDPOINT is not a valid URL: ${env.BACKUP_S3_ENDPOINT}`);
+  }
+  if (env.BACKUP_ENCRYPTION_KEY) {
+    try {
+      parseKey(env.BACKUP_ENCRYPTION_KEY);
+    } catch {
+      throw new ConfigError('BACKUP_ENCRYPTION_KEY must be 32 bytes in base64 or hex');
+    }
+  }
+  const prefix = env.BACKUP_PREFIX ?? `${BRAND.slug}/`;
+  return {
+    storage: {
+      endpoint: endpoint.toString().replace(/\/+$/, ''),
+      bucket: env.BACKUP_S3_BUCKET!,
+      region: env.BACKUP_S3_REGION,
+      accessKeyId: env.BACKUP_S3_ACCESS_KEY_ID!,
+      secretAccessKey: env.BACKUP_S3_SECRET_ACCESS_KEY!,
+    },
+    prefix: prefix.endsWith('/') ? prefix : `${prefix}/`,
+    retentionDays: env.BACKUP_RETENTION_DAYS,
+    encryptionKey: env.BACKUP_ENCRYPTION_KEY,
+  };
+}
+
 function gatewayConfig(url: string | undefined, token: string | undefined): AppConfig['gateway'] {
   if (!url && !token) return undefined;
   if (!url || !token) throw new ConfigError('GATEWAY_URL and GATEWAY_TOKEN must be set together');
@@ -299,6 +461,16 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new ConfigError(
       'ENCRYPTION_KEY is required in production. Generate one with: npm run cli -- keys:generate',
     );
+  }
+
+  if (Boolean(env.REVIEW_ACCOUNT_EMAIL) !== Boolean(env.REVIEW_ACCOUNT_PASSWORD)) {
+    throw new ConfigError('REVIEW_ACCOUNT_EMAIL and REVIEW_ACCOUNT_PASSWORD must be set together');
+  }
+  if (env.REVIEW_ACCOUNT_PASSWORD && env.REVIEW_ACCOUNT_PASSWORD.length < 12) {
+    throw new ConfigError('REVIEW_ACCOUNT_PASSWORD must be at least 12 characters');
+  }
+  if (env.REVIEW_ACCOUNT_EMAIL && env.REVIEW_ACCOUNT_EMAIL.toLowerCase() === env.ADMIN_EMAIL?.toLowerCase()) {
+    throw new ConfigError('REVIEW_ACCOUNT_EMAIL must differ from ADMIN_EMAIL');
   }
 
   if ((env.ADMIN_EMAIL && !env.ADMIN_PASSWORD) || (!env.ADMIN_EMAIL && env.ADMIN_PASSWORD)) {
@@ -347,6 +519,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     sessionTtlSeconds: env.SESSION_TTL_DAYS * 86_400,
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
+    maxRequestBodyBytes: Math.round(env.MAX_REQUEST_BODY_MB * 1024 * 1024),
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
     anonymousMcp: { enabled: env.MCP_ANONYMOUS, perMinute: env.MCP_ANONYMOUS_RATE_LIMIT },
     site: {
@@ -361,6 +534,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       adminAllowedIps: adminAllowedIps(env.ADMIN_ALLOWED_IPS),
       adminSessionMaxAgeMs: env.ADMIN_SESSION_HOURS * 3_600_000,
       supportEmail: env.SUPPORT_EMAIL,
+      verification: { google: env.GOOGLE_SITE_VERIFICATION, bing: env.BING_SITE_VERIFICATION },
       google: googleLogin(env, source),
     },
     tools: {
@@ -385,7 +559,34 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     gateway: gatewayConfig(env.GATEWAY_URL, env.GATEWAY_TOKEN),
     billing: billingConfig(source, isProduction),
     mail: mailConfig(source, publicUrl),
+    backups: backupConfig(env),
+    ops: {
+      sentryDsn: sentryDsn(env.SENTRY_DSN),
+      environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
+      errorRetentionDays: env.ERROR_RETENTION_DAYS,
+      commit: env.RENDER_GIT_COMMIT?.slice(0, 7),
+      instance: env.RENDER_INSTANCE_ID,
+    },
+    directories: {
+      clientPolicies: clientPolicies(env.CLIENT_POLICIES),
+      reviewAccount:
+        env.REVIEW_ACCOUNT_EMAIL && env.REVIEW_ACCOUNT_PASSWORD
+          ? { email: env.REVIEW_ACCOUNT_EMAIL.toLowerCase(), password: env.REVIEW_ACCOUNT_PASSWORD }
+          : undefined,
+      wellKnown: readWellKnownFiles(source),
+    },
   };
+}
+
+/** SENTRY_DSN is checked at start, so a typo shows up in the deploy log instead of losing errors. */
+function sentryDsn(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    parseSentryDsn(value);
+  } catch (error) {
+    throw new ConfigError((error as Error).message);
+  }
+  return value;
 }
 
 function billingConfig(source: NodeJS.ProcessEnv, isProduction: boolean): BillingConfig {

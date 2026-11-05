@@ -40,7 +40,8 @@ describe('billing config', () => {
     expect(config.provider).toBe('paddle');
     expect(config.paddle?.sandbox).toBe(true);
     expect(config.prices.get('pro:year')).toBe('pri_pro_y');
-    expect(missingPrices(config)).toEqual(expect.arrayContaining(['personal:month', 'business:year']));
+    expect(missingPrices(config)).toEqual(expect.arrayContaining(['personal:month', 'team:year']));
+    expect(missingPrices(config)).not.toContain('business:year');
     expect(missingPrices(config)).not.toContain('pro:month');
   });
 
@@ -92,6 +93,7 @@ describe('Paddle provider', () => {
       planId: 'pro',
       interval: 'month',
       priceId: 'pri_pro_m',
+      quantity: 1,
       customerId: null,
       successUrl: 'https://hub.example/app/billing?paid=1',
       cancelUrl: 'https://hub.example/app/billing',
@@ -113,7 +115,7 @@ describe('Paddle provider', () => {
     );
     const paddle = make(api.fetch);
     const ref = { externalId: 'sub_01', customerId: 'ctm_01' };
-    await paddle.changePrice(ref, 'pri_biz_m');
+    await paddle.changeSubscription(ref, { priceId: 'pri_team_m', quantity: 5 });
     await paddle.setCancelAtPeriodEnd(ref, true);
     await paddle.setCancelAtPeriodEnd(ref, false);
     expect(await paddle.portal({ subscription: ref })).toEqual({
@@ -122,7 +124,7 @@ describe('Paddle provider', () => {
     expect(
       api.calls.map((c) => `${c.method} ${c.url.replace('https://sandbox-api.paddle.com', '')} ${c.body}`),
     ).toEqual([
-      'PATCH /subscriptions/sub_01 {"items":[{"price_id":"pri_biz_m","quantity":1}],"proration_billing_mode":"prorated_immediately"}',
+      'PATCH /subscriptions/sub_01 {"items":[{"price_id":"pri_team_m","quantity":5}],"proration_billing_mode":"prorated_immediately"}',
       'POST /subscriptions/sub_01/cancel {"effective_from":"next_billing_period"}',
       'PATCH /subscriptions/sub_01 {"scheduled_change":null}',
       'POST /customers/ctm_01/portal-sessions {"subscription_ids":["sub_01"]}',
@@ -144,6 +146,7 @@ describe('Paddle provider', () => {
           externalId: 'sub_01',
           customerId: 'ctm_01',
           priceId: 'pri_pro_m',
+          quantity: null,
           interval: 'month',
           status: 'active',
           periodEnd: new Date('2026-12-04T00:00:00Z'),
@@ -190,6 +193,7 @@ describe('Stripe provider', () => {
       planId: 'personal',
       interval: 'year',
       priceId: 'price_p_y',
+      quantity: 1,
       customerId: null,
       successUrl: 'https://hub.example/app/billing?paid=1',
       cancelUrl: 'https://hub.example/app/billing',
@@ -198,6 +202,7 @@ describe('Stripe provider', () => {
     const form = new URLSearchParams(api.calls[0]!.body);
     expect(form.get('mode')).toBe('subscription');
     expect(form.get('line_items[0][price]')).toBe('price_p_y');
+    expect(form.get('line_items[0][quantity]')).toBe('1');
     expect(form.get('subscription_data[metadata][workspace_id]')).toBe('wsp_1');
     expect(form.get('customer_email')).toBe('ann@example.com');
   });
@@ -220,6 +225,7 @@ describe('Stripe provider', () => {
               {
                 id: 'si_1',
                 current_period_end: ts + 86_400,
+                quantity: 4,
                 price: { id: 'price_p_y', recurring: { interval: 'year' } },
               },
             ],
@@ -237,6 +243,7 @@ describe('Stripe provider', () => {
           externalId: 'sub_s1',
           customerId: 'cus_1',
           priceId: 'price_p_y',
+          quantity: 4,
           interval: 'year',
           status: 'past_due',
           periodEnd: new Date((ts + 86_400) * 1000),

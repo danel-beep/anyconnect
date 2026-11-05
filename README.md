@@ -39,6 +39,10 @@ ChatGPT / Claude / Claude Code / Cursor
 - **Кто что может**: правила «ИИ-клиент × аккаунт × риск» (например, ChatGPT только читает
   почту, Claude может отправлять), персоны со своим адресом MCP (`/mcp/work` видит только рабочие
   аккаунты).
+- **Команды**: один адрес коннектора на команду (`/mcp/team/<имя>`), но каждый участник входит
+  в своём ChatGPT, Claude или Claude Code под собой, поэтому «моя почта» — это его почта. Свои
+  аккаунты видит только владелец, пока сам не поделится; аккаунты команды доступны всем. Тариф
+  Team — $10 в месяц за человека. Подробно: [docs/TEAMS.md](docs/TEAMS.md).
 - **Подтверждение опасных действий**: прямо в чате (MCP elicitation), кнопками в Telegram или
   по ссылке; окно отмены для отправки. Тексты писем и сообщений помечаются как данные, а не
   команды (защита от prompt injection).
@@ -134,11 +138,12 @@ Paddle или Stripe подключаются переменными `BILLING_PR
 
 ### Gmail, Календарь и Диск
 
-1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API** и **Google Drive
-   API** (APIs & Services → Library).
+1. В том же проекте Google Cloud включите **Gmail API**, **Google Calendar API**, **Google Drive
+   API** и **Google Sheets API** (APIs & Services → Library).
 2. Google Auth Platform → **Data Access** → добавьте доступы коннекторов:
    `https://www.googleapis.com/auth/gmail.modify`, `https://www.googleapis.com/auth/calendar`,
-   `https://www.googleapis.com/auth/drive`.
+   `https://www.googleapis.com/auth/drive`, `https://www.googleapis.com/auth/spreadsheets`,
+   `https://www.googleapis.com/auth/drive.metadata.readonly`.
 3. Пока приложение не прошло проверку Google, при подключении пользователи видят предупреждение
    «Google hasn't verified this app» (Advanced → Go to Manyplug), и подключиться могут не больше
    100 человек. Для себя и первых пользователей этого достаточно.
@@ -151,7 +156,9 @@ Paddle или Stripe подключаются переменными `BILLING_PR
      домен (`PUBLIC_URL`) и добавить новые адреса возврата в клиент.
 
 Остальные настройки сайта (`SIGNUPS`, `ADMIN_EMAILS`, `ADMIN_ALLOWED_IPS`, `ADMIN_SESSION_HOURS`,
-`TRUST_PROXY`) описаны в `.env.example`.
+`TRUST_PROXY`, `GOOGLE_SITE_VERIFICATION`, `BING_SITE_VERIFICATION`) описаны в `.env.example`.
+Инструкции для ИИ-клиентов, страницы «сервис × клиент», FAQ, сравнения, sitemap, robots.txt и
+llms.txt описаны в [docs/SEO.md](docs/SEO.md).
 
 ### Админка
 
@@ -187,8 +194,18 @@ Paddle или Stripe подключаются переменными `BILLING_PR
 приложений определяет, нужен ли вход, по первому ответу сервера: если он 200, такое приложение
 подключится без входа и не покажет кнопку входа.
 
+Каталоги ИИ-приложений (официальный MCP Registry, каталоги Claude и ChatGPT, Cursor, VS Code,
+Smithery, Glama): что уже подано, что подготовлено и что нужно сделать владельцу —
+[docs/DIRECTORIES.md](docs/DIRECTORIES.md). Файлы для них (`server.json`, плагины в `integrations/`)
+собираются из `src/distribution/listing.ts` командой `npm run distribution`.
+
 Персоны: если создать персону `work` (`POST /api/v1/personas`), у неё будет свой адрес
 `https://<хаб>/mcp/work` — подключённый к нему клиент видит только её аккаунты.
+
+Команды: у команды свой адрес `https://<хаб>/mcp/team/<имя>` (его видно на странице команды в
+кабинете). Каждый участник подключает его так же, как обычный адрес, и входит под своим
+аккаунтом; в ChatGPT Business и Claude Team администратор может добавить коннектор для всей
+организации, а вход всё равно проходит каждый сам. Как это устроено: [docs/TEAMS.md](docs/TEAMS.md).
 
 Подтверждения в Telegram: создайте бота у @BotFather, задайте `TELEGRAM_BOT_TOKEN` и откройте
 в хабе страницу «Подтверждения» → «Привязать Telegram».
@@ -204,11 +221,15 @@ npm run cli -- accounts:add --connector demo --label "Третий аккаун�
 npm run cli -- accounts:list
 npm run cli -- tools:list                      # что именно видит ИИ
 npm run cli -- exposure:set --mode per_account # отдельный инструмент на каждый аккаунт
-npm run cli -- tokens:create --name "laptop"   # личный токен для REST API / MCP
+npm run cli -- tokens:create --name "laptop" --api  # личный токен: MCP, с --api ещё и REST API
 npm run cli -- users:2fa:reset --email you@example.com  # потерян телефон: сбросить второй фактор
 ```
 
-REST API (`Authorization: Bearer ac_pat_...`):
+REST API (`Authorization: Bearer ac_pat_...`). Нужен токен со scope `api`: по умолчанию токены
+(в кабинете, CLI и `POST /api/v1/tokens`) работают только с MCP, а API управления включается
+явно (`--api`, галочка в кабинете, `"scopes": ["mcp", "api"]`). Токен с `api` может менять
+аккаунты, правила и настройки безопасности, поэтому его не отдают AI-приложению: иначе оно
+смогло бы ослабить свои же правила. Токен профиля доступа (`personaId`) работает только с MCP.
 
 | Метод | Путь | Что делает |
 | --- | --- | --- |
@@ -317,7 +338,8 @@ npm run db:generate  # после изменения src/db/schema.ts — соз
 npm run eval         # оценка эффективности: размер списка инструментов, поиск, задачи за 1–3 вызова
 ```
 
-Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Подробно об устройстве: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Мониторинг, логи, ошибки и
+фоновые задачи: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Безопасность
 

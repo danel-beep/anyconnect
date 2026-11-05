@@ -57,4 +57,8 @@ export type IdPrefix =
   | 'lgn' // messenger login flow
   | 'lim' // limit grant (extra limits on top of a plan)
   | 'adm' // admin audit log entry
-  | 'preq'; // plan request (manual upgrades before payments)
+  | 'inv' // team invitation
+  | 'shr' // account shared with a team member (or the whole team)
+  | 'preq' // plan request (manual upgrades before payments)
+  | 'err' // error group (the hub's own error tracker)
+  | 'inc'; // status page incident

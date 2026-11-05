@@ -61,6 +61,20 @@ export interface MessageView {
   replyTo?: string;
   attachments: AttachmentView[];
   deleted?: boolean;
+  /** For the user's own messages, where the messenger reports it. */
+  delivery?: DeliveryState;
+  deliveryError?: string;
+}
+
+/** How far one of the user's messages got, as the messenger reports it (sent < delivered < read). */
+export type DeliveryState = 'sent' | 'delivered' | 'read' | 'failed';
+
+export interface DeliveryUpdate {
+  chatExternalId: string;
+  messageExternalId: string;
+  state: DeliveryState;
+  /** Why it failed, in the messenger's words. */
+  error?: string;
 }
 
 export interface Page<T> {
@@ -112,6 +126,29 @@ export interface InboundMessage {
 // ---------------------------------------------------------------------------
 
 /** One unit of work taken from the outbox by a transport. */
+/**
+ * A pre-approved message template (WhatsApp Business): the only way such a number may write first
+ * or more than 24 hours after the person last wrote.
+ */
+export interface TemplateMessage {
+  name: string;
+  /** Template language code, e.g. en_US. */
+  language: string;
+  /** Body variables in order; `name` is set for templates with named variables. */
+  parameters?: { name?: string; value: string }[];
+}
+
+/** A file the messenger fetches itself from a public https URL (the hub never downloads it). */
+export interface OutboundFile {
+  url: string;
+  kind: 'photo' | 'video' | 'audio' | 'document';
+  /** File name shown to the recipient, where the messenger allows one. */
+  name?: string;
+}
+
+/** Longest text that can travel with a file (Telegram and WhatsApp caption limit). */
+export const MAX_CAPTION_LENGTH = 1024;
+
 export interface OutboundJob {
   /** Hub job id, stable across retries: transports derive their own idempotency ids from it. */
   id: string;
@@ -120,6 +157,10 @@ export interface OutboundJob {
   chat: { externalId: string; kind: ChatKind };
   text?: string;
   replyToExternalId?: string;
+  /** Send this template instead of free text; `text` then holds its rendered body for the hub's copy. */
+  template?: TemplateMessage;
+  /** Send this file, with `text` as its caption. */
+  file?: OutboundFile;
   /** For `mark_read`: read everything up to this message (absent = the whole chat). */
   upToExternalId?: string;
 }
@@ -128,6 +169,8 @@ export interface SentReceipt {
   /** The messenger's id of the message that was sent. */
   externalId: string;
   sentAt: Date;
+  /** The sent file as the messenger stored it, so it can be downloaded again later. */
+  attachments?: InboundAttachment[];
 }
 
 export type DeliveryErrorKind =
@@ -168,6 +211,12 @@ export interface DirectTransport<TConfig = unknown, TCredentials = unknown> {
    * the messenger deduplicates by an id the transport derives from `job.id`.
    */
   idempotentSend: boolean;
+  /** The transport can send {@link OutboundJob.template}. */
+  templates?: boolean;
+  /** The transport can send {@link OutboundJob.file}. */
+  files?: boolean;
+  /** File kinds this messenger sends without a caption (the text would be lost). */
+  captionless?: OutboundFile['kind'][];
   send(job: OutboundJob, ctx: AccountContext<TConfig, TCredentials>): Promise<SentReceipt | undefined>;
   download?(
     attachment: { externalId: string; locator?: unknown },
@@ -214,8 +263,10 @@ export interface WebhookHandler<TConfig = unknown, TCredentials = unknown> {
     hook: WebhookEndpoint & {
       /** Stores messages in the hub's message store (deduplicated, encrypted). */
       ingest(messages: InboundMessage[]): Promise<void>;
-      /** Records that the user's own messages were delivered/read, or that a chat was read elsewhere. */
+      /** Records that a chat was read elsewhere (on the phone). */
       markChatRead(chatExternalId: string): Promise<void>;
+      /** Records how far the user's own messages got (delivered, read, failed). */
+      delivery(updates: DeliveryUpdate[]): Promise<void>;
     },
   ): Promise<WebhookResponse>;
 }
@@ -290,6 +341,10 @@ export interface SendRequest {
   to?: string;
   text: string;
   replyTo?: string;
+  /** Send a pre-approved template; `text` is its rendered body, kept in the hub's copy of the chat. */
+  template?: TemplateMessage;
+  /** Send a file by URL; `text` becomes its caption (may be empty). */
+  file?: OutboundFile;
   /** How long to wait for delivery before returning `queued`. */
   waitMs?: number;
 }

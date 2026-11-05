@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import { eq } from 'drizzle-orm';
-import { METRICS, PLANS } from '../billing/plans.js';
+import { findPlan, METRICS, PLANS, planFits } from '../billing/plans.js';
 import { loadConfig } from '../config.js';
 import { toAccountView } from '../core/accounts.js';
 import { createUser, findUserByEmail, getDefaultWorkspace, setPassword } from '../core/identity.js';
@@ -8,6 +8,7 @@ import { runMigrations } from '../db/migrate.js';
 import { workspaces } from '../db/schema.js';
 import { generateKey } from '../lib/crypto.js';
 import { createLogger } from '../logger.js';
+import { migrationState } from '../ops/builtin-checks.js';
 import { createServices, type Services } from '../services.js';
 
 const HELP = `Manyplug admin CLI
@@ -18,6 +19,16 @@ Usage: npm run cli -- <command> [options]
   keys:rotate                            Re-wrap account data keys with the current ENCRYPTION_KEY
                                          (run after moving the old key to ENCRYPTION_KEYS_PREVIOUS)
   db:migrate                             Apply database migrations
+  db:status                              Migrations applied vs. shipped with this build
+  health                                 Run the health checks (exit code 1 when one is down)
+  jobs:list                              Background jobs and their latest runs
+  jobs:run --name JOB                    Run a background job now, in this process
+  errors:list [--q resolved]             Recent errors from the built-in error tracker
+  backup:run                             Back up the database to the bucket now
+  backup:list                            Backups in the bucket, newest first
+  backup:restore --key KEY --target-url URL --yes
+                                         Restore a backup into the database at URL (replaces its
+                                         tables; prefer a new, empty database)
   users:create --email E --password P    Create a user with a personal workspace
   users:password --email E --password P  Set a user's password
   users:2fa:reset --email E              Remove a user's second factors (lost authenticator):
@@ -27,8 +38,9 @@ Usage: npm run cli -- <command> [options]
   users:suspend --email E [--reason R]   Suspend a user (signs them out everywhere)
   users:reactivate --email E             Let a suspended user sign in again
   plans:list                             List plans and their limits
-  plans:set --email E --plan ID [--days N]
-                                         Put a user's workspace on a plan (optionally for N days)
+  plans:set (--email E | --team SLUG) --plan ID [--seats N] [--days N]
+                                         Put a user's workspace or a team on a plan (optionally
+                                         for N days); --seats for plans priced per person
   limits:grant --email E --metric M (--amount N | --unlimited) [--days N] [--reason R]
                                          Add an extra limit on top of the plan
   connectors:list                        List available services
@@ -36,8 +48,9 @@ Usage: npm run cli -- <command> [options]
   accounts:add --connector C --label L [--name N] [--description D]
                [--config JSON] [--credentials JSON] [--email E]
   accounts:remove --id ID [--email E]
-  tokens:create --name NAME [--days N] [--email E]
-                                         Create a personal access token (shown once)
+  tokens:create --name NAME [--days N] [--api] [--email E]
+                                         Create a personal access token (shown once); MCP only,
+                                         --api also allows the management REST API
   tools:list [--email E]                 Show the MCP tools the AI sees
   exposure:set --mode grouped|per_account [--email E]
   listing:set --mode auto|direct|discovery [--email E]
@@ -61,6 +74,13 @@ async function workspaceFor(services: Services, email: string | undefined) {
   const workspace = await getDefaultWorkspace(services.db, user.id);
   if (!workspace) throw new Error(`User ${address} has no workspace`);
   return { user, workspace };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 }
 
 async function main() {
@@ -94,7 +114,13 @@ async function main() {
       metric: { type: 'string' },
       amount: { type: 'string' },
       unlimited: { type: 'boolean' },
+      api: { type: 'boolean' },
       q: { type: 'string' },
+      team: { type: 'string' },
+      seats: { type: 'string' },
+      key: { type: 'string' },
+      'target-url': { type: 'string' },
+      yes: { type: 'boolean' },
     },
   });
 
@@ -106,6 +132,82 @@ async function main() {
         await runMigrations(services.database.pool);
         console.log('Migrations applied.');
         break;
+      case 'db:status': {
+        const m = await migrationState(services.database.pool);
+        console.log(`Migrations: ${m.applied} applied, ${m.expected} in this build (${m.state}).`);
+        if (m.state === 'pending') process.exitCode = 1;
+        break;
+      }
+      case 'health': {
+        const report = await services.ops.health.run({ timeoutMs: 10_000 });
+        for (const c of report.checks) {
+          console.log(`${c.status.padEnd(8)} ${c.name.padEnd(12)} ${c.detail ?? ''} (${c.ms} ms)`);
+        }
+        console.log(`overall: ${report.status}`);
+        if (report.status === 'down') process.exitCode = 1;
+        break;
+      }
+      case 'jobs:list': {
+        const runs = new Map((await services.ops.jobRuns.list()).map((r) => [r.name, r]));
+        for (const job of services.jobs.definitionsList) {
+          const run = runs.get(job.name);
+          console.log(
+            `${job.name.padEnd(28)} ${(job.cron ?? '').padEnd(14)} ok ${run?.lastSucceededAt?.toISOString() ?? '—'}  failed ${run?.lastFailedAt?.toISOString() ?? '—'}  runs ${run?.runs ?? 0}`,
+          );
+        }
+        break;
+      }
+      case 'jobs:run': {
+        if (!values.name) throw new Error('--name JOB (see jobs:list)');
+        await services.jobs.runNow(values.name);
+        console.log(`Job ${values.name} done.`);
+        break;
+      }
+      case 'errors:list': {
+        const groups = await services.ops.errorStore.list({
+          status: values.q === 'resolved' ? 'resolved' : 'open',
+          limit: 50,
+        });
+        for (const g of groups) {
+          console.log(
+            `${g.lastSeenAt.toISOString()}  ×${g.count}  ${g.source}  ${g.type}: ${g.message.slice(0, 120)}  (ref ${g.lastRef ?? '—'})`,
+          );
+        }
+        if (groups.length === 0) console.log('No errors.');
+        break;
+      }
+      case 'backup:run':
+      case 'backup:list':
+      case 'backup:restore': {
+        const backups = services.backups;
+        if (!backups) throw new Error('Backups are not configured: set BACKUP_S3_* (see docs/OPERATIONS.md)');
+        if (command === 'backup:run') {
+          const result = await backups.run();
+          console.log(
+            `Uploaded ${result.key} (${formatBytes(result.size)}); old backups deleted: ${result.pruned}.`,
+          );
+        } else if (command === 'backup:list') {
+          const list = await backups.list();
+          for (const b of list)
+            console.log(`${b.createdAt.toISOString()}  ${formatBytes(b.size).padStart(9)}  ${b.key}`);
+          if (list.length === 0) console.log('No backups yet.');
+        } else {
+          const key = values.key;
+          const target = values['target-url'];
+          if (!key || !target) throw new Error('Pass --key (from backup:list) and --target-url');
+          const where = new URL(target);
+          if (!values.yes) {
+            throw new Error(
+              `This replaces the tables of database "${where.pathname.slice(1)}" on ${where.host}. Run again with --yes to go ahead.`,
+            );
+          }
+          await backups.restore(key, target);
+          console.log(
+            `Restored ${key} into ${where.host}${where.pathname}. Run db:migrate if this build is newer.`,
+          );
+        }
+        break;
+      }
       case 'keys:rotate': {
         const result = await services.accounts.upgradeEncryption();
         console.log(
@@ -200,17 +302,31 @@ async function main() {
         break;
       }
       case 'plans:set': {
-        if (!values.plan) throw new Error('--plan is required (see plans:list)');
-        const { workspace } = await workspaceFor(services, values.email);
+        const plan = findPlan(values.plan);
+        if (!plan) throw new Error('--plan is required and must be a plan id (see plans:list)');
+        const workspace = values.team
+          ? await services.teams.bySlug(values.team)
+          : (await workspaceFor(services, values.email)).workspace;
+        if (!workspace) throw new Error(`No team with the address ${values.team}`);
+        if (!planFits(plan, workspace.kind))
+          throw new Error(
+            `The ${plan.id} plan is for ${plan.audience} workspaces, not this ${workspace.kind} one`,
+          );
         const days = values.days ? Number(values.days) : undefined;
         if (days !== undefined && !(Number.isInteger(days) && days > 0))
           throw new Error('--days must be a positive whole number');
-        await services.entitlements.setPlan(workspace.id, values.plan, {
+        const seats = values.seats ? Number(values.seats) : undefined;
+        if (seats !== undefined && !(plan.perSeat && Number.isInteger(seats) && seats > 0))
+          throw new Error('--seats is a positive whole number, for plans priced per person');
+        await services.entitlements.setPlan(workspace.id, plan.id, {
           provider: 'manual',
           periodEnd: days ? new Date(Date.now() + days * 86_400_000) : null,
           note: 'set with the CLI',
+          ...(seats ? { quantity: seats } : {}),
         });
-        console.log(`Workspace ${workspace.id} is on ${values.plan}${days ? ` for ${days} days` : ''}.`);
+        const limits = (await services.entitlements.entitlements(workspace.id)).limits;
+        const people = plan.perSeat ? `, ${limits.seats} seats` : '';
+        console.log(`Workspace ${workspace.id} is on ${plan.id}${people}${days ? ` for ${days} days` : ''}.`);
         break;
       }
       case 'limits:grant': {
@@ -278,6 +394,7 @@ async function main() {
           userId: user.id,
           name: values.name,
           ...(values.days ? { expiresInDays: Number(values.days) } : {}),
+          scopes: values.api ? ['mcp', 'api'] : ['mcp'],
         });
         console.log(token);
         console.error('Store it now: it cannot be shown again.');

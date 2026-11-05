@@ -15,6 +15,11 @@ export interface Principal {
   /** Set when the caller is bound to a persona's MCP URL: it only sees that persona's accounts. */
   personaId?: string;
   /**
+   * The team's shared connection (one key for everyone): the hub cannot tell which member is
+   * calling, so it sees only what the whole team may use and cannot change the setup.
+   */
+  shared?: boolean;
+  /**
    * The end user's account at the AI provider, when the client says who it is (ChatGPT sends
    * `_meta["openai/subject"]` with every call; Claude sends nothing). Stored only as a hash
    * (`openai:<sha256 prefix>`): usage is counted per AI account, not per email, so one person cannot

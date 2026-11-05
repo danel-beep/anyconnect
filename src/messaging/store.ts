@@ -3,6 +3,8 @@ import type {
   AttachmentView,
   ChatKind,
   ChatView,
+  DeliveryState,
+  DeliveryUpdate,
   InboundAttachment,
   InboundChat,
   InboundMessage,
@@ -11,8 +13,8 @@ import type {
 } from '../connectors/messaging.js';
 import type { Db } from '../db/client.js';
 import { messengerChats, messengerMessages } from '../db/schema.js';
-import type { SecretBox } from '../lib/crypto.js';
 import { newId } from '../lib/ids.js';
+import type { CipherSource, JsonCipher } from './ciphers.js';
 import type { MessengerKeys } from './keys.js';
 import { indexTerms, matchesQuery, queryTerms } from './search-index.js';
 
@@ -40,6 +42,8 @@ export interface MessageBody {
   sender?: { externalId?: string; name?: string };
   replyToExternalId?: string;
   attachments: StoredAttachment[];
+  delivery?: DeliveryState;
+  deliveryError?: string;
 }
 
 export interface StoredChat extends ChatInfo {
@@ -85,13 +89,14 @@ function decodeCursor(cursor: string | undefined): string[] | undefined {
 
 /**
  * The hub's own copy of messenger chats and messages. Everything identifying is encrypted:
- * chat and message ids are stored as keyed hashes for lookups, text and names as SecretBox
- * envelopes bound to the row id, and search goes through a blind index.
+ * chat and message ids are stored as keyed hashes for lookups, text and names as envelopes of the
+ * account's data key bound to the row id (see {@link AccountCiphers}), and search goes through a
+ * blind index.
  */
 export class MessageStore {
   constructor(
     private readonly db: Db,
-    private readonly secrets: SecretBox,
+    private readonly ciphers: CipherSource,
     private readonly keys: MessengerKeys,
   ) {}
 
@@ -101,6 +106,7 @@ export class MessageStore {
 
   /** Finds or creates the chat; updates its title when the messenger reports a new one. */
   async upsertChat(accountId: string, chat: InboundChat): Promise<StoredChat> {
+    const cipher = await this.ciphers.forAccount(accountId);
     const externalKey = this.keys.lookupKey(accountId, 'chat', chat.externalId);
     const [existing] = await this.db
       .select()
@@ -108,12 +114,12 @@ export class MessageStore {
       .where(and(eq(messengerChats.accountId, accountId), eq(messengerChats.externalKey, externalKey)))
       .limit(1);
     if (existing) {
-      const info = this.chatInfo(existing);
+      const info = this.chatInfo(cipher, existing);
       const title = chat.title?.trim() || info.title;
       const username = chat.username ?? info.username;
       const patch: Partial<typeof messengerChats.$inferInsert> = {};
       if (title !== info.title || username !== info.username) {
-        patch.infoEncrypted = this.encryptChatInfo(existing.id, {
+        patch.infoEncrypted = this.encryptChatInfo(cipher, existing.id, {
           externalId: chat.externalId,
           title,
           username,
@@ -128,7 +134,10 @@ export class MessageStore {
         .set(patch)
         .where(eq(messengerChats.id, existing.id))
         .returning();
-      return this.toStoredChat(row!);
+      return this.toStoredChat(
+        row!,
+        patch.infoEncrypted ? { externalId: chat.externalId, title, username } : info,
+      );
     }
     const id = newId('cht');
     const info: ChatInfo = {
@@ -142,7 +151,7 @@ export class MessageStore {
         id,
         accountId,
         externalKey,
-        infoEncrypted: this.encryptChatInfo(id, info),
+        infoEncrypted: this.encryptChatInfo(cipher, id, info),
         kind: chat.kind,
         titleIndex: this.titleIndex(accountId, info.title, info.username),
         unread: chat.unread ?? 0,
@@ -170,6 +179,7 @@ export class MessageStore {
 
   private async ingestOne(accountId: string, message: InboundMessage): Promise<StoredMessage | undefined> {
     const chat = await this.upsertChat(accountId, message.chat);
+    const cipher = await this.ciphers.forAccount(accountId);
     const externalKey = this.keys.lookupKey(accountId, `msg:${chat.id}`, message.externalId);
     const body: MessageBody = {
       externalId: message.externalId,
@@ -192,10 +202,14 @@ export class MessageStore {
         (message.deleted ?? false) !== existing.deleted ||
         (message.editedAt && message.editedAt.getTime() !== existing.editedAt?.getTime());
       if (!changed) return undefined;
+      // An edit or deletion keeps what is known about delivery.
+      const previous = cipher.decryptJson<MessageBody>(existing.bodyEncrypted, messageContext(existing.id));
+      if (previous.delivery) body.delivery = previous.delivery;
+      if (previous.deliveryError) body.deliveryError = previous.deliveryError;
       [row] = await this.db
         .update(messengerMessages)
         .set({
-          bodyEncrypted: this.secrets.encryptJson(body, messageContext(existing.id)),
+          bodyEncrypted: cipher.encryptJson(body, messageContext(existing.id)),
           searchIndex,
           editedAt: message.editedAt ?? existing.editedAt,
           deleted: message.deleted ?? false,
@@ -215,7 +229,7 @@ export class MessageStore {
           sentAt: message.sentAt,
           editedAt: message.editedAt ?? null,
           deleted: message.deleted ?? false,
-          bodyEncrypted: this.secrets.encryptJson(body, messageContext(id)),
+          bodyEncrypted: cipher.encryptJson(body, messageContext(id)),
           searchIndex,
         })
         .onConflictDoNothing()
@@ -242,6 +256,36 @@ export class MessageStore {
     return { ...this.toStoredMessage(row), body };
   }
 
+  /**
+   * Moves one of the user's own messages forward (sent → delivered → read) or marks it failed.
+   * Statuses arrive out of order and concurrently, so the row is locked and never moved back.
+   * A status for a message not stored yet (it raced the outbox) is dropped: the next one fixes it.
+   */
+  async recordDelivery(accountId: string, update: DeliveryUpdate): Promise<boolean> {
+    const chat = await this.findChatByExternalId(accountId, update.chatExternalId);
+    if (!chat) return false;
+    const externalKey = this.keys.lookupKey(accountId, `msg:${chat.id}`, update.messageExternalId);
+    const cipher = await this.ciphers.forAccount(accountId);
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(messengerMessages)
+        .where(and(eq(messengerMessages.chatId, chat.id), eq(messengerMessages.externalKey, externalKey)))
+        .limit(1)
+        .for('update');
+      if (row?.direction !== 'out') return false;
+      const body = cipher.decryptJson<MessageBody>(row.bodyEncrypted, messageContext(row.id));
+      if (!deliveryAdvances(body.delivery, update.state)) return false;
+      body.delivery = update.state;
+      if (update.state === 'failed' && update.error) body.deliveryError = update.error.slice(0, 300);
+      await tx
+        .update(messengerMessages)
+        .set({ bodyEncrypted: cipher.encryptJson(body, messageContext(row.id)) })
+        .where(eq(messengerMessages.seq, row.seq));
+      return true;
+    });
+  }
+
   async markChatRead(chatId: string): Promise<void> {
     await this.db.update(messengerChats).set({ unread: 0 }).where(eq(messengerChats.id, chatId));
   }
@@ -256,7 +300,7 @@ export class MessageStore {
       .from(messengerChats)
       .where(and(eq(messengerChats.accountId, accountId), eq(messengerChats.id, chatId)))
       .limit(1);
-    return row ? this.toStoredChat(row) : undefined;
+    return row ? this.readChatRow(row) : undefined;
   }
 
   async findChatByExternalId(accountId: string, externalId: string): Promise<StoredChat | undefined> {
@@ -266,7 +310,7 @@ export class MessageStore {
       .from(messengerChats)
       .where(and(eq(messengerChats.accountId, accountId), eq(messengerChats.externalKey, externalKey)))
       .limit(1);
-    return row ? this.toStoredChat(row) : undefined;
+    return row ? this.readChatRow(row) : undefined;
   }
 
   async getMessage(accountId: string, messageId: string): Promise<StoredMessage | undefined> {
@@ -275,7 +319,7 @@ export class MessageStore {
       .from(messengerMessages)
       .where(and(eq(messengerMessages.accountId, accountId), eq(messengerMessages.id, messageId)))
       .limit(1);
-    return row ? this.decryptMessage(row) : undefined;
+    return row ? this.readMessageRow(row) : undefined;
   }
 
   async findMessageByExternalId(
@@ -289,7 +333,7 @@ export class MessageStore {
       .from(messengerMessages)
       .where(and(eq(messengerMessages.chatId, chatId), eq(messengerMessages.externalKey, externalKey)))
       .limit(1);
-    return row ? this.decryptMessage(row) : undefined;
+    return row ? this.readMessageRow(row) : undefined;
   }
 
   /** The newest message the other side sent in a chat (read receipts point at it). */
@@ -300,7 +344,7 @@ export class MessageStore {
       .where(and(eq(messengerMessages.chatId, chatId), eq(messengerMessages.direction, 'in')))
       .orderBy(desc(messengerMessages.sentAt), desc(messengerMessages.seq))
       .limit(1);
-    return row ? this.decryptMessage(row) : undefined;
+    return row ? this.readMessageRow(row) : undefined;
   }
 
   async listChats(
@@ -329,7 +373,7 @@ export class MessageStore {
       let consumed = 0;
       for (const row of rows) {
         consumed++;
-        const chat = this.toStoredChat(row);
+        const chat = await this.readChatRow(row);
         if (query.query && !matchesQuery(`${chat.title} ${chat.username ?? ''}`, query.query)) continue;
         items.push(toChatView(chat));
         if (items.length >= query.limit) break;
@@ -381,7 +425,7 @@ export class MessageStore {
         .limit(batch);
       for (const row of rows) {
         position = [String(row.sentAt.getTime()), String(row.seq)];
-        const message = this.decryptMessage(row);
+        const message = await this.readMessageRow(row);
         if (query.query && !matchesQuery(message.body.text, query.query)) continue;
         if (query.from && !matchesQuery(senderText(message.body), query.from)) continue;
         items.push(await this.toMessageView(message, chats));
@@ -417,7 +461,7 @@ export class MessageStore {
     const chats = new Map<string, StoredChat | undefined>([[chat.id, chat]]);
     const messages: MessageView[] = [];
     for (const row of page.reverse())
-      messages.push(await this.toMessageView(this.decryptMessage(row), chats));
+      messages.push(await this.toMessageView(await this.readMessageRow(row), chats));
     const oldest = page[0];
     return {
       chat,
@@ -458,7 +502,7 @@ export class MessageStore {
     const page = rows.slice(0, query.limit);
     const chats = new Map<string, StoredChat | undefined>();
     const messages: MessageView[] = [];
-    for (const row of page) messages.push(await this.toMessageView(this.decryptMessage(row), chats));
+    for (const row of page) messages.push(await this.toMessageView(await this.readMessageRow(row), chats));
     let lastSeq = page.at(-1)?.seq;
     if (lastSeq === undefined) {
       if (Number.isFinite(after)) lastSeq = after;
@@ -483,12 +527,24 @@ export class MessageStore {
   // Helpers
   // -------------------------------------------------------------------------
 
-  private encryptChatInfo(chatId: string, info: ChatInfo): string {
-    return this.secrets.encryptJson(info, chatContext(chatId));
+  private encryptChatInfo(cipher: JsonCipher, chatId: string, info: ChatInfo): string {
+    return cipher.encryptJson(info, chatContext(chatId));
   }
 
-  private chatInfo(row: ChatRow): ChatInfo {
-    return this.secrets.decryptJson<ChatInfo>(row.infoEncrypted, chatContext(row.id));
+  private chatInfo(cipher: JsonCipher, row: ChatRow): ChatInfo {
+    return cipher.decryptJson<ChatInfo>(row.infoEncrypted, chatContext(row.id));
+  }
+
+  private async readChatRow(row: ChatRow): Promise<StoredChat> {
+    return this.toStoredChat(row, this.chatInfo(await this.ciphers.forAccount(row.accountId), row));
+  }
+
+  private async readMessageRow(row: MessageRow): Promise<StoredMessage> {
+    const cipher = await this.ciphers.forAccount(row.accountId);
+    return {
+      ...this.toStoredMessage(row),
+      body: cipher.decryptJson<MessageBody>(row.bodyEncrypted, messageContext(row.id)),
+    };
   }
 
   private titleIndex(accountId: string, title: string, username?: string): number[] {
@@ -503,7 +559,7 @@ export class MessageStore {
     return tokensOf(this.keys, accountId, terms);
   }
 
-  private toStoredChat(row: ChatRow, info: ChatInfo = this.chatInfo(row)): StoredChat {
+  private toStoredChat(row: ChatRow, info: ChatInfo): StoredChat {
     return {
       id: row.id,
       accountId: row.accountId,
@@ -525,13 +581,6 @@ export class MessageStore {
       sentAt: row.sentAt,
       editedAt: row.editedAt,
       deleted: row.deleted,
-    };
-  }
-
-  private decryptMessage(row: MessageRow): StoredMessage {
-    return {
-      ...this.toStoredMessage(row),
-      body: this.secrets.decryptJson<MessageBody>(row.bodyEncrypted, messageContext(row.id)),
     };
   }
 
@@ -568,8 +617,19 @@ export class MessageStore {
       ...(replyTo ? { replyTo } : {}),
       attachments: message.body.attachments.map(toAttachmentView),
       ...(message.deleted ? { deleted: true } : {}),
+      ...(message.body.delivery ? { delivery: message.body.delivery } : {}),
+      ...(message.body.deliveryError ? { deliveryError: message.body.deliveryError } : {}),
     };
   }
+}
+
+const DELIVERY_RANK: Record<DeliveryState, number> = { sent: 1, delivered: 2, read: 3, failed: 4 };
+
+/** Delivery only moves forward; a failure is final, and nothing reverts a read message. */
+function deliveryAdvances(current: DeliveryState | undefined, next: DeliveryState): boolean {
+  if (!current) return true;
+  if (current === 'failed' || current === 'read') return false;
+  return DELIVERY_RANK[next] > DELIVERY_RANK[current];
 }
 
 function senderText(body: MessageBody): string {

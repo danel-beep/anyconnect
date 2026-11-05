@@ -2,24 +2,25 @@ import type { Locale } from './i18n.js';
 import type { LegalDoc } from './site.js';
 
 /**
- * Privacy policy and terms of service. Plain data so the texts can be edited (or replaced by a
+ * Privacy policy, terms of service and refund policy. Plain data so the texts can be edited (or replaced by a
  * lawyer's version) without touching page code. The hub's address and support email are filled in.
  */
-export type LegalKind = 'privacy' | 'terms';
+export type LegalKind = 'privacy' | 'terms' | 'refunds';
+export const LEGAL_KINDS: readonly LegalKind[] = ['privacy', 'terms', 'refunds'];
 
 interface Facts {
   publicUrl: string;
   supportEmail?: string | undefined;
 }
 
-const UPDATED = { ru: 'Редакция от 4 ноября 2026 года', en: 'Last updated November 4, 2026' };
+const UPDATED = { ru: 'Редакция от 5 ноября 2026 года', en: 'Last updated November 5, 2026' };
 
 export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc {
   const contact =
     facts.supportEmail ??
     (lang === 'ru' ? 'адрес поддержки, указанный на сайте' : 'the support address listed on the website');
   const site = facts.publicUrl.replace(/^https?:\/\//, '');
-  const docs = kind === 'privacy' ? privacy : terms;
+  const docs = { privacy, terms, refunds }[kind];
   return docs[lang]({ contact, site });
 }
 
@@ -56,6 +57,13 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'ИИ-приложения и ваши переписки',
+        paragraphs: [
+          'Manyplug никогда не получает историю ваших чатов, память ИИ-приложения и файлы, которые вы дали ИИ-приложению. В каждом запросе ИИ-приложение передаёт только название инструмента и нужные ему аргументы, например поисковый запрос. Аргументы используются только для этого запроса и не хранятся; лишь действие, которое что-то меняет, запоминается на несколько минут, чтобы повторный запрос не выполнил его дважды.',
+          'Если ИИ-приложение передаёт с запросами анонимный идентификатор пользователя (так делает ChatGPT), мы храним только его необратимый хеш, чтобы считать расход по аккаунту ИИ.',
+        ],
+      },
+      {
         title: 'Данные из сервисов Google',
         paragraphs: [
           'Если вы подключаете Gmail, Google Календарь или Google Диск, Manyplug получает доступ только к тем данным, которые нужны для запроса вашего ИИ-ассистента: найти и прочитать письма, отправить ответ, посмотреть или создать событие, найти и прочитать файл. Данные передаются только выбранному вами ИИ-приложению и не сохраняются. Исключение: результат действия, например отправки письма, несколько минут хранится в памяти, чтобы повторный запрос не отправил письмо дважды.',
@@ -82,6 +90,14 @@ const privacy: Record<Locale, Builder> = {
         title: 'Cookie',
         paragraphs: [
           'Мы используем только необходимые cookie: сессия входа, защита форм от подделки, выбранный язык. Рекламных и аналитических cookie нет. Выбранная тема хранится в вашем браузере.',
+        ],
+      },
+      {
+        title: 'Ваши права',
+        paragraphs: [
+          'Подключения и журнал действий видны в личном кабинете. Вы можете запросить копию своих данных, их исправление или удаление, написав по адресу ниже. Мы отвечаем в течение 30 дней.',
+          'Manyplug не предназначен для детей младше 16 лет, и мы сознательно не собираем их данные.',
+          'При изменении политики новая редакция публикуется на этой странице с датой. О существенных изменениях мы сообщаем на сайте до того, как они вступят в силу.',
         ],
       },
       {
@@ -120,6 +136,13 @@ const privacy: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'AI apps and your conversations',
+        paragraphs: [
+          'Manyplug never receives your chat history, the AI app’s memory or files you gave the AI app. For each request the AI app sends only the name of a tool and the arguments it needs, for example a search query. The arguments are used for that one request and are not stored, except that a write action is remembered for a few minutes so that a repeated request does not run it twice.',
+          'If an AI app sends an anonymous user ID with requests (ChatGPT does), we keep only a one-way hash of it, to count usage per AI account.',
+        ],
+      },
+      {
         title: 'Data from Google services',
         paragraphs: [
           'If you connect Gmail, Google Calendar or Google Drive, Manyplug accesses only the data your AI assistant needs for a request: finding and reading emails, sending a reply, viewing or creating an event, finding and reading a file. The data goes only to the AI app you chose and is not stored, except that the result of a write action (for example, a sent email) is kept in memory for a few minutes so that a repeated request does not send it twice.',
@@ -146,6 +169,14 @@ const privacy: Record<Locale, Builder> = {
         title: 'Cookies',
         paragraphs: [
           'We only use necessary cookies: the sign-in session, form protection and your language. No advertising or analytics cookies. Your theme choice is kept in your browser.',
+        ],
+      },
+      {
+        title: 'Your rights',
+        paragraphs: [
+          'You can see your connections and activity in the dashboard, and ask us for a copy of your data, to correct it or to delete it: write to the contact below. We answer within 30 days.',
+          'Manyplug is not meant for children under 16, and we do not knowingly collect their data.',
+          'When this policy changes, the new version is published on this page with its date. Material changes are announced on the website before they take effect.',
         ],
       },
       {
@@ -186,6 +217,13 @@ const terms: Record<Locale, Builder> = {
         paragraphs: [
           'Бесплатный тариф предоставляется без срока, с лимитами, указанными на странице тарифов. Платные тарифы дают больше действий и аккаунтов. Лимиты на действия обнуляются каждый месяц.',
           'Мы можем менять тарифы и лимиты, заранее предупредив об изменениях, которые касаются уже оплаченного периода.',
+        ],
+      },
+      {
+        title: 'Оплата',
+        paragraphs: [
+          'Платежи принимает наш реселлер Paddle.com (Merchant of Record): он выставляет счёт, списывает оплату, начисляет налоги и обрабатывает возвраты. При оплате действуют также условия покупателя Paddle (paddle.com/legal/invoiced-consumer-terms).',
+          'Подписка продлевается автоматически в конце каждого периода, пока вы её не отмените. Отменить можно в любой момент в разделе «Тариф» или из чата; тариф остаётся до конца оплаченного периода. Возвраты описаны в политике возврата (/refunds).',
         ],
       },
       {
@@ -239,6 +277,13 @@ const terms: Record<Locale, Builder> = {
         ],
       },
       {
+        title: 'Payments',
+        paragraphs: [
+          'Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders: it invoices you, takes the payment, handles taxes and processes refunds. Paddle’s buyer terms (paddle.com/legal/invoiced-consumer-terms) also apply to your purchase.',
+          'Subscriptions renew automatically at the end of each period until you cancel. You can cancel at any time on the Plan page or from the chat; the plan stays until the end of the paid period. Refunds are covered by our refund policy (/refunds).',
+        ],
+      },
+      {
         title: 'Availability and liability',
         paragraphs: [
           'We work to keep the service running but cannot guarantee it: connected services and AI apps may change their APIs and rules. The service is provided “as is”.',
@@ -254,6 +299,71 @@ const terms: Record<Locale, Builder> = {
       {
         title: 'Contact',
         paragraphs: [`Send questions about these terms to ${contact}.`],
+      },
+    ],
+  }),
+};
+
+const refunds: Record<Locale, Builder> = {
+  ru: ({ contact, site }) => ({
+    title: 'Политика возврата',
+    updated: UPDATED.ru,
+    intro: `Здесь описано, когда и как можно вернуть деньги за платный тариф Manyplug (${site}). Коротко: в течение 14 дней после любой оплаты вернём деньги полностью, без объяснения причин.`,
+    sections: [
+      {
+        title: '14 дней на возврат',
+        paragraphs: [
+          'Если тариф не подошёл, напишите нам в течение 14 дней после оплаты (первой или очередного продления, месячной или годовой), и мы вернём всю сумму этого платежа. Объяснять причину не нужно.',
+          'После возврата подписка отменяется и аккаунт переходит на бесплатный тариф. Подключённые аккаунты и настройки сохраняются.',
+        ],
+      },
+      {
+        title: 'После 14 дней',
+        paragraphs: [
+          'Позже 14 дней оплаченный период не возвращается, но вы можете в любой момент отменить подписку: тариф останется до конца оплаченного периода, и новых списаний не будет.',
+          'Если сервис не работал по нашей вине или с вас списали деньги по ошибке, мы вернём деньги и позже — напишите нам.',
+        ],
+      },
+      {
+        title: 'Как запросить возврат',
+        paragraphs: [
+          `Напишите на ${contact} с адреса, с которого оформлена подписка, или ответьте на чек от Paddle. Возврат проводит наш реселлер Paddle.com на ту же карту или счёт; обычно деньги приходят за 5–10 рабочих дней в зависимости от банка.`,
+        ],
+      },
+      {
+        title: 'Пробный период',
+        paragraphs: ['Пробный период Pro бесплатный: деньги за него не списываются, и возвращать нечего.'],
+      },
+    ],
+  }),
+  en: ({ contact, site }) => ({
+    title: 'Refund policy',
+    updated: UPDATED.en,
+    intro: `This page explains when and how you can get your money back for a paid Manyplug plan (${site}). In short: within 14 days of any payment we refund it in full, no questions asked.`,
+    sections: [
+      {
+        title: '14-day money-back guarantee',
+        paragraphs: [
+          'If the plan is not right for you, contact us within 14 days of a payment (the first one or a renewal, monthly or yearly) and we refund that payment in full. You do not need to give a reason.',
+          'After a refund the subscription is canceled and the account moves to the free plan. Connected accounts and settings are kept.',
+        ],
+      },
+      {
+        title: 'After 14 days',
+        paragraphs: [
+          'After 14 days the paid period is not refunded, but you can cancel at any time: the plan stays until the end of the paid period and you are not charged again.',
+          'If the service did not work because of us, or you were charged by mistake, we refund later payments too. Just write to us.',
+        ],
+      },
+      {
+        title: 'How to request a refund',
+        paragraphs: [
+          `Write to ${contact} from the address you subscribed with, or reply to your Paddle receipt. Refunds are processed by our reseller Paddle.com to the original card or account and usually arrive within 5–10 business days, depending on your bank.`,
+        ],
+      },
+      {
+        title: 'Free trial',
+        paragraphs: ['The Pro trial is free: you are not charged for it, so there is nothing to refund.'],
       },
     ],
   }),

@@ -116,17 +116,22 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
 
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
-    // With one service everything fits the budget, setup tools included.
+    // With one service every service tool fits the budget, and the setup tools that still fit
+    // (renaming and disconnecting AI apps, the team overview and the sign-in security status come
+    // last and are found by search).
     expect(names).toEqual([
       'demo_account_info',
       'demo_echo',
       'demo_fail',
+      'manyplug_access_profiles',
       'manyplug_add_service',
+      'manyplug_apps',
       'manyplug_buy_plan',
       'manyplug_call_tools',
       'manyplug_cancel_plan',
       'manyplug_connect_account',
-      'manyplug_invite',
+      'manyplug_create_access_profile',
+      'manyplug_delete_access_profile',
       'manyplug_list_accounts',
       'manyplug_plan',
       'manyplug_remove_account',
@@ -135,6 +140,7 @@ describe('MCP over OAuth (end to end with the official MCP client)', () => {
       'manyplug_services',
       'manyplug_set_rule',
       'manyplug_test_account',
+      'manyplug_update_access_profile',
       'manyplug_update_account',
       'manyplug_update_settings',
     ]);

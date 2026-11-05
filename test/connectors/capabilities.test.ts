@@ -47,6 +47,15 @@ describe('built-in connectors and the core rules', () => {
       asana: ['tasks.create', 'tasks.list'],
       trello: ['tasks.list'],
       hubspot: ['contacts.search'],
+      confluence: ['files.read', 'files.search'],
+      clickup: ['tasks.create', 'tasks.list'],
+      calendly: ['calendar.list_events'],
+      zendesk: ['contacts.search'],
+      intercom: ['contacts.search'],
+      pipedrive: ['contacts.search'],
+      freshdesk: ['contacts.search'],
+      calcom: ['calendar.list_events'],
+      zoom: ['calendar.create_event', 'calendar.list_events'],
       slack: ['messages.list_chats', 'messages.read_chat', 'messages.search', 'messages.send'],
     });
   });

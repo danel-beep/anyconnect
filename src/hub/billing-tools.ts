@@ -10,11 +10,12 @@ import type { SetupActionSpec } from './setup-tools.js';
 export interface WorkspaceBilling {
   /** Plan, limits, usage, subscription and what can be bought: plain JSON for the AI. */
   status(workspaceId: string): Promise<Record<string, unknown>>;
-  /** A link to the billing page with the plan ready to buy or switch to. */
+  /** A link to the billing page with the plan ready to buy or switch to (`seats`: per-person plans). */
   buyLink(
     workspaceId: string,
     planId: string,
     interval: 'month' | 'year',
+    seats?: number,
   ): Promise<{ url: string; switching: boolean }>;
   /** Cancels the paid subscription at the end of its period (`false` takes that back). */
   setCancelAtPeriodEnd(
@@ -26,21 +27,22 @@ export interface WorkspaceBilling {
 }
 
 /**
- * The plan tools (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`, `manyplug_invite`): the user sees and
- * changes their plan from the chat. Paying always happens on the provider's secure page (the AI
+ * The plan tools (`manyplug_plan`, `manyplug_buy_plan`, `manyplug_cancel_plan`): the user sees and changes their plan from the chat. Paying always happens on the provider's secure page (the AI
  * only gets a link), so the AI can never spend money on its own; cancelling needs confirmation.
  */
+const billing = (ctx: { billing?: WorkspaceBilling }): WorkspaceBilling => {
+  // Every hub built by `createServices` has billing; a bare test hub may not.
+  if (!ctx.billing) throw new AppError(501, 'no_billing', 'Plans are not available on this server');
+  return ctx.billing;
+};
+
 export function billingActions(
   define: <T extends AnyObjectSchema>(spec: SetupActionSpec<T>) => ActionDefinition,
 ): ActionDefinition[] {
-  const billing = (ctx: { billing?: WorkspaceBilling }): WorkspaceBilling => {
-    // Every hub built by `createServices` has billing; a bare test hub may not.
-    if (!ctx.billing) throw new AppError(501, 'no_billing', 'Plans are not available on this server');
-    return ctx.billing;
-  };
   return [
     define({
       name: 'plan',
+      tags: ['commerce'],
       title: 'Plan and usage',
       description:
         'Shows the current plan, its limits, usage this month, the paid subscription (renewal, cancellation) and the plans with prices.',
@@ -53,17 +55,26 @@ export function billingActions(
     }),
     define({
       name: 'buy_plan',
+      tags: ['commerce'],
       title: 'Upgrade or change the plan',
       description:
         'Returns a link where the user buys a plan or switches the paid one (prices: manyplug_plan). Payment happens on a secure page, never in the chat; give the user the link.',
       input: z.object({
         plan: z.string().min(1).max(40).describe('Plan id, e.g. "pro"'),
         interval: z.enum(['month', 'year']).default('month'),
+        seats: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe('Plans priced per person (e.g. "team"): how many people'),
       }),
       risk: 'read',
       hints: { readOnly: true, idempotent: true, openWorld: false },
-      async run({ plan, interval }, ctx) {
-        const link = await billing(ctx).buyLink(ctx.principal.workspaceId, plan, interval);
+      async run({ plan, interval, seats }, ctx) {
+        await ctx.admin.authorize(ctx.principal, 'admin');
+        const link = await billing(ctx).buyLink(ctx.principal.workspaceId, plan, interval, seats);
         return {
           url: link.url,
           instructions: link.switching
@@ -72,6 +83,35 @@ export function billingActions(
         };
       },
     }),
+    define({
+      name: 'cancel_plan',
+      tags: ['commerce'],
+      title: 'Cancel the paid plan',
+      description:
+        'Cancels the paid subscription at the end of the paid period (the plan stays until then), or with undo=true takes a cancellation back. The user always confirms.',
+      input: z.object({ undo: z.boolean().default(false) }),
+      risk: 'dangerous',
+      requiresConfirmation: true,
+      hints: { destructive: true, idempotent: true, openWorld: false },
+      async run({ undo }, ctx) {
+        await ctx.admin.authorize(ctx.principal, 'admin');
+        const result = await billing(ctx).setCancelAtPeriodEnd(ctx.principal.workspaceId, !undo);
+        return undo
+          ? { resumed: true, plan: result.planId, renews: result.until }
+          : { canceled: true, plan: result.planId, plan_stays_until: result.until, after_that: 'free' };
+      },
+    }),
+  ];
+}
+
+/**
+ * The invite tool (`manyplug_invite`): the user's referral link and stats. Rarely needed, so the
+ * setup list puts it last (it is still found by search when the tool list is full).
+ */
+export function referralActions(
+  define: <T extends AnyObjectSchema>(spec: SetupActionSpec<T>) => ActionDefinition,
+): ActionDefinition[] {
+  return [
     define({
       name: 'invite',
       title: 'Invite friends',
@@ -82,22 +122,6 @@ export function billingActions(
       hints: { readOnly: true, idempotent: true, openWorld: false },
       async run(_input, ctx) {
         return billing(ctx).invite(ctx.principal.userId);
-      },
-    }),
-    define({
-      name: 'cancel_plan',
-      title: 'Cancel the paid plan',
-      description:
-        'Cancels the paid subscription at the end of the paid period (the plan stays until then), or with undo=true takes a cancellation back. The user always confirms.',
-      input: z.object({ undo: z.boolean().default(false) }),
-      risk: 'dangerous',
-      requiresConfirmation: true,
-      hints: { destructive: true, idempotent: true, openWorld: false },
-      async run({ undo }, ctx) {
-        const result = await billing(ctx).setCancelAtPeriodEnd(ctx.principal.workspaceId, !undo);
-        return undo
-          ? { resumed: true, plan: result.planId, renews: result.until }
-          : { canceled: true, plan: result.planId, plan_stays_until: result.until, after_that: 'free' };
       },
     }),
   ];

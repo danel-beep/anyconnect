@@ -5,7 +5,7 @@ import { DataKey, type KeyWrapper, type SecretBox } from '../lib/crypto.js';
  *
  * Every account has its own random data key (DEK). The DEK is stored wrapped by the master key
  * (`accounts.data_key_encrypted`, AAD = `account:<id>:dek`) and encrypts the account's secrets
- * (credentials, OAuth tokens; cached messages and other per-account data later), always with the account
+ * (credentials, OAuth tokens, the stored messenger chats and messages: `AccountCiphers`), always with the account
  * id in the AAD so a ciphertext copied to another row does not decrypt.
  *
  * Accounts created before envelope encryption have credentials encrypted directly with the master

@@ -1,0 +1,32 @@
+name: MCP Registry
+
+# Publishes server.json to the official MCP Registry when its version changes on main.
+# Needs the repository secret MCP_REGISTRY_PRIVATE_KEY (see docs/DIRECTORIES.md); without it the
+# job only reports that publishing is not set up.
+
+on:
+  push:
+    branches: [main]
+    paths: [server.json]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+      - name: Publish server.json
+        env:
+          MCP_REGISTRY_PRIVATE_KEY: ${{ secrets.MCP_REGISTRY_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MCP_REGISTRY_PRIVATE_KEY" ]; then
+            echo "::notice::MCP_REGISTRY_PRIVATE_KEY is not set: publish by hand (docs/DIRECTORIES.md)."
+            exit 0
+          fi
+          node scripts/mcp-registry.mjs publish

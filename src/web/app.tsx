@@ -38,6 +38,7 @@ export type AppSection =
   | 'activity'
   | 'confirm'
   | 'rules'
+  | 'teams'
   | 'billing'
   | 'security'
   | 'settings'
@@ -45,6 +46,7 @@ export type AppSection =
   | 'admin-users'
   | 'admin-revenue'
   | 'admin-audit'
+  | 'admin-errors'
   | 'admin-system';
 
 export interface ShellInfo {
@@ -69,6 +71,7 @@ const NAV: {
   { id: 'activity', href: '/app/activity', icon: 'activity', key: 'app.nav.activity', group: 'main' },
   { id: 'confirm', href: '/confirm', icon: 'bell', key: 'app.nav.confirm', group: 'main' },
   { id: 'rules', href: '/app/rules', icon: 'shield', key: 'app.nav.rules', group: 'main' },
+  { id: 'teams', href: '/app/teams', icon: 'users', key: 'app.nav.teams', group: 'main' },
   { id: 'billing', href: '/app/billing', icon: 'card', key: 'app.nav.billing', group: 'account' },
   { id: 'security', href: '/security', icon: 'lock', key: 'app.nav.security', group: 'account' },
   { id: 'settings', href: '/app/settings', icon: 'settings', key: 'app.nav.settings', group: 'account' },
@@ -76,6 +79,7 @@ const NAV: {
   { id: 'admin-users', href: '/admin/users', icon: 'users', key: 'admin.nav.users', group: 'admin' },
   { id: 'admin-revenue', href: '/admin/revenue', icon: 'card', key: 'admin.nav.revenue', group: 'admin' },
   { id: 'admin-audit', href: '/admin/audit', icon: 'book', key: 'admin.nav.audit', group: 'admin' },
+  { id: 'admin-errors', href: '/admin/errors', icon: 'alert', key: 'admin.nav.errors', group: 'admin' },
   { id: 'admin-system', href: '/admin/system', icon: 'layers', key: 'admin.nav.system', group: 'admin' },
 ];
 
@@ -463,10 +467,14 @@ export const FixButton: FC<{ ctx: PageCtx; a: AccountView; returnTo: string; pri
 };
 
 /**
- * Where account forms may send the browser back to (`back`): the overview or an account's own page.
- * Anything else falls back to the services list, so a form can never redirect elsewhere.
+ * Where account and rule forms may send the browser back to (`back`): the overview, an account's
+ * or an AI app's own page. Anything else falls back to the form's usual page, so a form can never
+ * redirect elsewhere.
  */
-export const ACCOUNT_BACK = /^\/app(?:\/accounts\/[\w-]{1,64})?$/;
+export const ACCOUNT_BACK = /^\/app(?:\/(?:accounts|apps)\/[\w-]{1,64})?$/;
+
+/** Where revoking a sign-in or a token may go back to: an access profile's or AI app's own page. */
+export const CONNECTION_BACK = /^\/app\/(?:profiles|apps)\/[\w-]{1,64}$/;
 
 /** A banner over the page when connected accounts stopped working, with a fix for each. */
 export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ ctx, accounts }) => {
@@ -644,18 +652,27 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
 };
 
 /** The MCP URL with per-client instructions; compact once an app is connected. */
-export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, compact }) => {
+/**
+ * The MCP address with steps for each AI app. `profile` shows a profile's own address instead of
+ * the main one (the steps are the same).
+ */
+export const ConnectAiCard: FC<{
+  ctx: PageCtx;
+  compact?: boolean;
+  profile?: { url: string; title: string; hint: string };
+}> = ({ ctx, compact, profile }) => {
   const { t, lang } = ctx;
+  const url = profile?.url ?? ctx.mcpUrl;
   return (
     <div class="card" id="connect-ai">
       <div class="card-head">
-        <h2>{compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
+        <h2>{profile ? profile.title : compact ? t('app.ai.urlTitle') : t('app.ai.title')}</h2>
         <a class="btn sm" href="/docs">
           <Icon name="book" /> {t('app.ai.docs')}
         </a>
       </div>
-      <CopyField t={t} id="mcp-url" value={ctx.mcpUrl} label={t('home.mcpUrl')} />
-      <p class="hint">{t('app.ai.hint')}</p>
+      <CopyField t={t} id="mcp-url" value={url} label={t('home.mcpUrl')} />
+      <p class="hint">{profile ? profile.hint : t('app.ai.hint')}</p>
       {compact ? null : (
         <div class="stack">
           <Tabs
@@ -673,12 +690,12 @@ export const ConnectAiCard: FC<{ ctx: PageCtx; compact?: boolean }> = ({ ctx, co
                   </ol>
                   {g.install ? (
                     <p>
-                      <a class="btn sm primary" href={g.install(ctx.mcpUrl).href}>
-                        {lang === 'ru' ? g.install(ctx.mcpUrl).label.ru : g.install(ctx.mcpUrl).label.en}
+                      <a class="btn sm primary" href={g.install(url).href}>
+                        {lang === 'ru' ? g.install(url).label.ru : g.install(url).label.en}
                       </a>
                     </p>
                   ) : null}
-                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(ctx.mcpUrl)} /> : null}
+                  {g.code ? <CodeBlock t={t} id={`client-code-${g.id}`} code={g.code(url)} /> : null}
                 </div>
               ),
             }))}
@@ -990,13 +1007,44 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
 // ---------------------------------------------------------------------------
 
 export interface AppsView {
-  grants: { id: string; name: string; client: string | null; createdAt: Date; lastUsedAt: Date | null }[];
-  tokens: { id: string; name: string; createdAt: Date; lastUsedAt: Date | null; expiresAt: Date | null }[];
-  personas: { name: string; url: string }[];
+  grants: {
+    id: string;
+    name: string;
+    client: string | null;
+    /** The AI app it belongs to (its page is `/app/apps/:id`). */
+    appId: string | null;
+    /** The access profile it connected through, if any. */
+    profile: string | null;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+  }[];
+  tokens: {
+    id: string;
+    name: string;
+    appId: string | null;
+    profile: string | null;
+    /** Also allowed to use the management API (not just MCP). */
+    api: boolean;
+    createdAt: Date;
+    lastUsedAt: Date | null;
+    expiresAt: Date | null;
+  }[];
+  /** Access profiles (personas): own MCP addresses with some accounts (`/app/profiles`). */
+  profiles: { id: string; name: string; slug: string; accounts: number; apps: number }[];
   /** A token just created: shown once. */
   newToken?: string | undefined;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
+
+/** An app's or token's name, linking to the AI app's own page when it has one. */
+const AppName: FC<{ id: string | null; name: string }> = ({ id, name }) =>
+  id ? (
+    <a class="acc-link" href={`/app/apps/${encodeURIComponent(id)}`}>
+      <strong>{name}</strong>
+    </a>
+  ) : (
+    <strong>{name}</strong>
+  );
 
 export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = ({ ctx, shell, view }) => {
   const { t, lang } = ctx;
@@ -1010,14 +1058,17 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
           <h2>{t('app.apps.connected')}</h2>
         </div>
         {view.grants.length === 0 ? (
-          <p class="muted pad-x">{t('home.noApps')}</p>
+          <p class="muted pad-x">{t(view.tokens.length ? 'aiapp.noSignIns' : 'home.noApps')}</p>
         ) : (
           <ul class="plain pad-x">
             {view.grants.map((g) => (
               <li>
                 <span class="grow">
-                  <strong>{g.name}</strong>
+                  <AppName id={g.appId} name={g.name} />
                   {g.client && g.client !== g.name ? <span class="badge">{g.client}</span> : null}
+                  {g.profile ? (
+                    <span class="badge accent">{t('profiles.badge', { name: g.profile })}</span>
+                  ) : null}
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, g.createdAt) })} ·{' '}
                     {g.lastUsedAt ? t('app.apps.used', { ago: fmtAgo(lang, g.lastUsedAt) }) : t('home.never')}
@@ -1038,20 +1089,33 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
           </ul>
         )}
       </div>
-      {view.personas.length ? (
-        <div class="card">
-          <h2>{t('app.apps.personas')}</h2>
-          <p class="muted">{t('app.apps.personasText')}</p>
+      <div class="card" id="profiles">
+        <div class="card-head">
+          <h2>{t('profiles.title')}</h2>
+          <a class={view.profiles.length ? 'btn sm' : 'btn sm primary'} href="/app/profiles">
+            {view.profiles.length ? t('profiles.manage') : t('profiles.createFirst')}
+          </a>
+        </div>
+        <p class="muted">{t('profiles.appsText')}</p>
+        {view.profiles.length ? (
           <ul class="plain">
-            {view.personas.map((p) => (
+            {view.profiles.map((p) => (
               <li>
-                <strong>{p.name}</strong>
-                <code>{p.url}</code>
+                <span class="grow">
+                  <a class="acc-link" href={`/app/profiles/${encodeURIComponent(p.id)}`}>
+                    <strong>{p.name}</strong>
+                  </a>{' '}
+                  <code class="small">/mcp/{p.slug}</code>
+                </span>
+                <span class="small muted">
+                  {t('profiles.accountsN', { n: p.accounts })} ·{' '}
+                  {p.apps ? t('profiles.appsN', { n: p.apps }) : t('profiles.noApps')}
+                </span>
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
       <div class="card" id="tokens">
         <h2>{t('app.tokens.title')}</h2>
         <p class="muted">{t('app.tokens.text')}</p>
@@ -1068,7 +1132,13 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
             {view.tokens.map((tok) => (
               <li>
                 <span class="grow">
-                  <strong>{tok.name}</strong>
+                  <AppName id={tok.appId} name={tok.name} />
+                  {tok.profile ? (
+                    <span class="badge accent">{t('profiles.badge', { name: tok.profile })}</span>
+                  ) : null}
+                  <span class={tok.api ? 'badge warn' : 'badge'}>
+                    {t(tok.api ? 'app.tokens.scopeApi' : 'app.tokens.scopeMcp')}
+                  </span>
                   <div class="small muted">
                     {t('app.apps.since', { date: fmtDate(lang, tok.createdAt) })} ·{' '}
                     {tok.lastUsedAt
@@ -1106,6 +1176,17 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               placeholder={t('app.tokens.placeholder')}
             />
           </div>
+          {view.profiles.length ? (
+            <div>
+              <label for="tok-profile">{t('profiles.tokenFor')}</label>
+              <select id="tok-profile" name="profile">
+                <option value="">{t('profiles.tokenMain')}</option>
+                {view.profiles.map((p) => (
+                  <option value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div>
             <label for="tok-exp">{t('app.tokens.expiry')}</label>
             <select id="tok-exp" name="days">
@@ -1117,12 +1198,19 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
               <option value="0">{t('app.tokens.never')}</option>
             </select>
           </div>
+          <div class="wide-2">
+            <label class="check">
+              <input type="checkbox" name="api" value="1" /> {t('app.tokens.api')}
+            </label>
+            <p class="hint">{t('app.tokens.apiHint')}</p>
+          </div>
           <div>
             <button type="submit" class="block">
               {t('app.tokens.create')}
             </button>
           </div>
         </form>
+        {view.profiles.length ? <p class="hint">{t('profiles.tokenHint')}</p> : null}
       </div>
     </AppShell>
   );
@@ -1579,6 +1667,10 @@ export const BillingPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: BillingView
                   <span class="btn block" aria-disabled="true">
                     {t('app.billing.yours')}
                   </span>
+                ) : plan.audience === 'team' ? (
+                  <a class="btn block" href="/app/teams">
+                    {t('app.billing.forTeams')}
+                  </a>
                 ) : plan.priceMonthly === 0 ? (
                   view.paid ? (
                     <span class="small muted">{t('app.billing.freeByCancel')}</span>
@@ -1760,7 +1852,7 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
           </form>
         </div>
       </div>
-      <div class="card flush">
+      <div class="card flush" id="sessions">
         <div class="card-head pad">
           <h2>{t('app.settings.sessions')}</h2>
           {view.sessions.length > 1 ? (

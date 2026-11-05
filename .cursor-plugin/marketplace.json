@@ -1,0 +1,17 @@
+{
+  "name": "manyplug",
+  "owner": {
+    "name": "Manyplug"
+  },
+  "metadata": {
+    "description": "Connect Gmail, Calendar, Drive, Slack, Notion, GitHub and more, several accounts per service, and use them all from Claude, ChatGPT, Cursor or any MCP app.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "manyplug",
+      "source": "integrations/cursor",
+      "description": "Connect Gmail, Calendar, Drive, Slack, Notion, GitHub and more, several accounts per service, and use them all from Claude, ChatGPT, Cursor or any MCP app."
+    }
+  ]
+}

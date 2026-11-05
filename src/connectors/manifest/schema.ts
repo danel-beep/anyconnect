@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTION_TAGS } from '../sdk.js';
 
 /**
  * The declarative HTTP connector format. A manifest is plain JSON-compatible data, so the same
@@ -173,6 +174,8 @@ export const ManifestAction = z.object({
     .optional(),
   /** `read`, `write` or `dangerous`; derived from `hints` when omitted (see `actionRisk`). */
   risk: z.enum(['read', 'write', 'dangerous']).optional(),
+  /** Kinds of effect AI app directories care about, e.g. `["moves_money"]` (see `ActionTag`). */
+  tags: z.array(z.enum(ACTION_TAGS)).optional(),
   undo: ManifestUndo.optional(),
   capability: z.union([ManifestCapability, z.array(ManifestCapability)]).optional(),
   request: ManifestRequest,

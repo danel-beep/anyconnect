@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../db/client.js';
 import { type UserRole, users, workspaceMembers, workspaces } from '../db/schema.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
@@ -76,14 +76,17 @@ export async function authenticate(
   return (await verifyPassword(password, user.passwordHash)) ? user : undefined;
 }
 
-/** The workspace a user works in by default (their first one). */
+/**
+ * The workspace a user works in by default: their personal one (the first they own), never a team
+ * they joined. Teams are reached by their own URL (`/mcp/team/<slug>`, `/app/team/<id>`).
+ */
 export async function getDefaultWorkspace(db: DbExecutor, userId: string): Promise<Workspace | undefined> {
   const [row] = await db
     .select({ workspace: workspaces })
     .from(workspaceMembers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
     .where(eq(workspaceMembers.userId, userId))
-    .orderBy(asc(workspaceMembers.createdAt))
+    .orderBy(sql`(${workspaces.kind} = 'personal') desc`, asc(workspaceMembers.createdAt))
     .limit(1);
   return row?.workspace;
 }
@@ -114,20 +117,31 @@ export async function ensureAdmin(
   db: Db,
   admin: { email: string; password: string },
 ): Promise<{ user: User; workspace: Workspace; created: boolean; passwordUpdated: boolean }> {
-  const existing = await findUserByEmail(db, admin.email);
+  return ensurePasswordUser(db, { ...admin, role: 'admin' });
+}
+
+/**
+ * A user configured by environment variables (the owner, the directory reviewers' account): created
+ * on first start; later starts restore its role and password if they were changed.
+ */
+export async function ensurePasswordUser(
+  db: Db,
+  spec: { email: string; password: string; role: User['role'] },
+): Promise<{ user: User; workspace: Workspace; created: boolean; passwordUpdated: boolean }> {
+  const existing = await findUserByEmail(db, spec.email);
   if (!existing) {
     const { user, workspace } = await createUser(db, {
-      email: admin.email,
-      password: admin.password,
-      role: 'admin',
+      email: spec.email,
+      password: spec.password,
+      role: spec.role,
     });
     return { user, workspace, created: true, passwordUpdated: false };
   }
-  if (existing.role !== 'admin')
-    await db.update(users).set({ role: 'admin' }).where(eq(users.id, existing.id));
+  if (existing.role !== spec.role)
+    await db.update(users).set({ role: spec.role }).where(eq(users.id, existing.id));
   let passwordUpdated = false;
-  if (!existing.passwordHash || !(await verifyPassword(admin.password, existing.passwordHash))) {
-    await setPassword(db, existing.id, admin.password);
+  if (!existing.passwordHash || !(await verifyPassword(spec.password, existing.passwordHash))) {
+    await setPassword(db, existing.id, spec.password);
     passwordUpdated = true;
   }
   let workspace = await getDefaultWorkspace(db, existing.id);

@@ -36,7 +36,13 @@ const PaddleSubscription = z.object({
   customer_id: z.string().nullish(),
   custom_data: z.record(z.string(), z.unknown()).nullish(),
   items: z
-    .array(z.object({ price: z.object({ id: z.string() }).nullish(), price_id: z.string().nullish() }))
+    .array(
+      z.object({
+        price: z.object({ id: z.string() }).nullish(),
+        price_id: z.string().nullish(),
+        quantity: z.number().int().positive().nullish(),
+      }),
+    )
     .default([]),
   billing_cycle: z.object({ interval: z.string() }).nullish(),
   current_billing_period: z.object({ ends_at: z.string() }).nullish(),
@@ -80,7 +86,7 @@ export class PaddleProvider implements BillingProvider {
 
   async checkout(input: CheckoutInput): Promise<{ url: string }> {
     const body = {
-      items: [{ price_id: input.priceId, quantity: 1 }],
+      items: [{ price_id: input.priceId, quantity: input.quantity }],
       collection_mode: 'automatic',
       ...(input.customerId ? { customer_id: input.customerId } : {}),
       // Copied by Paddle onto the subscription: webhooks find the workspace through it.
@@ -104,9 +110,12 @@ export class PaddleProvider implements BillingProvider {
     return { url: res.data.urls.general.overview };
   }
 
-  async changePrice(subscription: ProviderSubscriptionRef, priceId: string): Promise<void> {
+  async changeSubscription(
+    subscription: ProviderSubscriptionRef,
+    change: { priceId: string; quantity: number },
+  ): Promise<void> {
     await this.api('PATCH', `/subscriptions/${encodeURIComponent(subscription.externalId)}`, {
-      items: [{ price_id: priceId, quantity: 1 }],
+      items: [{ price_id: change.priceId, quantity: change.quantity }],
       proration_billing_mode: 'prorated_immediately',
     });
   }
@@ -152,6 +161,7 @@ export class PaddleProvider implements BillingProvider {
       externalId: sub.id,
       customerId: sub.customer_id ?? null,
       priceId: item?.price?.id ?? item?.price_id ?? null,
+      quantity: item?.quantity ?? null,
       interval: interval === 'month' || interval === 'year' ? (interval as BillingInterval) : null,
       status,
       periodEnd: end ? new Date(end) : null,

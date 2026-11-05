@@ -42,7 +42,9 @@ function denial(call: CallContext, decision: PolicyDecision): ExecResult {
   const what =
     decision.reason === 'persona'
       ? `${call.account ? `Account "${call.account.name}"` : 'The hub settings'} ${call.account ? 'is' : 'are'} not available through this connection.`
-      : `The user's access rules do not allow ${call.risk === 'read' ? 'reading' : 'this action'} on ${where} for this app.`;
+      : decision.reason === 'member'
+        ? `Account "${call.account?.name ?? ''}" belongs to another team member and is not shared with this user.`
+        : `The user's access rules do not allow ${call.risk === 'read' ? 'reading' : 'this action'} on ${where} for this app.`;
   return errorResult(`${what} Do not retry; tell the user if they asked for it.`, 'permission');
 }
 
@@ -246,6 +248,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       if (
         repeat.status === 'awaiting_confirmation' &&
         call.interaction?.canAsk &&
+        !call.principal.shared &&
         repeat.channels.includes('elicitation')
       ) {
         call.audit.outcome = 'awaiting_confirmation';
@@ -272,8 +275,9 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       return outcome(call, row);
     }
 
-    // 4. Ask in the chat when the client supports it.
-    if (call.interaction?.canAsk) {
+    // 4. Ask in the chat when the client supports it. Not through a team's shared connection:
+    //    whoever sits in that chat is not necessarily the person the hub would ask.
+    if (call.interaction?.canAsk && !call.principal.shared) {
       const row = await pending.requestConfirmation({ ...input, channels: ['elicitation'] });
       call.audit.outcome = 'awaiting_confirmation';
       return {

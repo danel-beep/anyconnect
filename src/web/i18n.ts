@@ -1,11 +1,15 @@
 import { accountEn, accountRu } from './i18n/account.js';
 import { appEn, appRu } from './i18n/app.js';
+import { appsEn, appsRu } from './i18n/apps.js';
 import { authEn, authRu } from './i18n/auth.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { emailEn, emailRu } from './i18n/email.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
+import { profilesEn, profilesRu } from './i18n/profiles.js';
+import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
+import { teamEn, teamRu } from './i18n/team.js';
 
 export type Locale = 'ru' | 'en';
 
@@ -60,6 +64,16 @@ const coreEn = {
   'security.recoveryNone': 'No unused codes left: create new ones.',
   'security.recoveryRegenerate': 'Create new codes',
   'security.recoveryNeedsFactor': 'Available once you set up an authenticator app or a passkey.',
+  'security.more': 'Also worth a look',
+  'security.browsers': 'Signed-in browsers',
+  'security.browsersN': '{n} signed in now. Sign out the ones you do not recognise.',
+  'security.review': 'Review',
+  'security.telegram': 'Approvals in Telegram',
+  'security.telegramOn': 'Linked: risky actions can be approved from your phone.',
+  'security.telegramOff': 'Not linked: risky actions wait for your OK on the Confirmations page.',
+  'security.telegramLink': 'Link Telegram',
+  'security.chat':
+    'You can also ask your AI: “Is my sign-in safe?” It can show these settings, but only you can change them, here.',
   'security.passkeys': 'Passkeys',
   'security.passkeysHint':
     'Sign in with Face ID, Touch ID, Windows Hello or a security key, without a password.',
@@ -94,6 +108,12 @@ const coreEn = {
   'consent.persona': 'Persona',
   'consent.personaHint': 'Through this address the app only sees the accounts of this persona.',
   'consent.personaMissing': 'This address belongs to a persona that does not exist in your workspace.',
+  'consent.access.team':
+    'use the team as you: your own accounts and the ones shared with you ({count}\u00a0active)',
+  'consent.team': 'Team',
+  'consent.teamHint': 'Teammates do not see your accounts unless you share them.',
+  'consent.teamMissing':
+    'This is the connector address of a team you are not a member of. Ask the team’s admin for an invitation, accept it while signed in with the invited email address, then connect again.',
   'consent.clientAs': 'Remember as',
   'consent.clientNew': '{name} (new app)',
   'consent.clientHint': 'Access rules of the chosen app apply to it.',
@@ -102,7 +122,7 @@ const coreEn = {
   'confirm.none': 'Nothing is waiting for confirmation.',
   'confirm.tg.ask': '🔐 Confirm the action',
   'confirm.tg.scheduled': '⏳ Runs in {seconds} s — you can still cancel',
-  'confirm.tg.linked': 'Done: confirmations from your Manyplug hub will arrive here.',
+  'confirm.tg.linked': 'Done: confirmations and alerts from your Manyplug hub will arrive here.',
   'confirm.tg.linkFailed': 'This link is invalid or expired. Open the hub and create a new one.',
   'confirm.tg.unknown': 'Unknown or foreign request.',
   'confirm.tg.tooLate': 'Already decided or expired.',
@@ -112,6 +132,10 @@ const coreEn = {
   'confirm.reason': 'Why it needs you',
   'confirm.arguments': 'Arguments (as the AI passed them)',
   'confirm.open': 'Open in the hub',
+  'notice.reauth.title': '{n|An account needs|Accounts need} you to sign in again',
+  'notice.reauth.action': 'Sign in again',
+  'notice.reauth.why':
+    'The service stopped accepting the connection (password changed, access revoked or expired). Your AI apps cannot use {n|this account|these accounts} until you sign in again.',
   'confirm.approve': '✅ Allow',
   'confirm.deny': '❌ Deny',
   'confirm.cancel': '↩️ Cancel',
@@ -187,6 +211,7 @@ const coreEn = {
 const en = {
   ...coreEn,
   ...siteEn,
+  ...seoEn,
   ...appEn,
   ...authEn,
   ...connectEn,
@@ -194,6 +219,9 @@ const en = {
   ...confirmEn,
   ...problemsEn,
   ...emailEn,
+  ...teamEn,
+  ...profilesEn,
+  ...appsEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -251,6 +279,16 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'security.recoveryNone': 'Неиспользованных кодов не осталось — создайте новые.',
   'security.recoveryRegenerate': 'Создать новые коды',
   'security.recoveryNeedsFactor': 'Станут доступны после настройки аутентификатора или ключа доступа.',
+  'security.more': 'Что ещё стоит проверить',
+  'security.browsers': 'Браузеры, где выполнен вход',
+  'security.browsersN': 'Сейчас: {n}. Выйдите из тех, которые не узнаёте.',
+  'security.review': 'Посмотреть',
+  'security.telegram': 'Подтверждения в Telegram',
+  'security.telegramOn': 'Привязан: рискованные действия можно подтверждать с телефона.',
+  'security.telegramOff': 'Не привязан: рискованные действия ждут вашего «да» на странице подтверждений.',
+  'security.telegramLink': 'Привязать Telegram',
+  'security.chat':
+    'Можно спросить и свой ИИ: «Мой вход хорошо защищён?» Он покажет эти настройки, но менять их можете только вы, здесь.',
   'security.passkeys': 'Ключи доступа (passkey)',
   'security.passkeysHint': 'Вход по Face ID, Touch ID, Windows Hello или аппаратному ключу — без пароля.',
   'security.passkeysNone': 'Ключей доступа пока нет.',
@@ -285,6 +323,12 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'consent.persona': 'Персона',
   'consent.personaHint': 'По этому адресу приложение видит только аккаунты этой персоны.',
   'consent.personaMissing': 'Этот адрес принадлежит персоне, которой нет в вашем пространстве.',
+  'consent.access.team':
+    'работать в команде от вашего имени: с вашими аккаунтами и теми, которыми с вами поделились (активных:\u00a0{count})',
+  'consent.team': 'Команда',
+  'consent.teamHint': 'Коллеги не видят ваши аккаунты, пока вы ими не поделитесь.',
+  'consent.teamMissing':
+    'Это адрес коннектора команды, в которой вы не состоите. Попросите администратора команды пригласить вас, примите приглашение, войдя с тем адресом почты, на который оно пришло, и подключитесь снова.',
   'consent.clientAs': 'Запомнить как',
   'consent.clientNew': '{name} (новое)',
   'consent.clientHint': 'К нему применяются правила доступа выбранного приложения.',
@@ -293,7 +337,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'confirm.none': 'Нет действий, ожидающих подтверждения.',
   'confirm.tg.ask': '🔐 Подтвердите действие',
   'confirm.tg.scheduled': '⏳ Выполнится через {seconds} с — ещё можно отменить',
-  'confirm.tg.linked': 'Готово: подтверждения от Manyplug будут приходить сюда.',
+  'confirm.tg.linked': 'Готово: подтверждения и предупреждения от Manyplug будут приходить сюда.',
   'confirm.tg.linkFailed': 'Ссылка неверная или устарела. Откройте кабинет Manyplug и создайте новую.',
   'confirm.tg.unknown': 'Неизвестный или чужой запрос.',
   'confirm.tg.tooLate': 'Уже решено или истекло.',
@@ -303,6 +347,11 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'confirm.reason': 'Почему нужно ваше решение',
   'confirm.arguments': 'Аргументы (как их передала нейронка)',
   'confirm.open': 'Открыть в кабинете',
+  'notice.reauth.title':
+    'Нужно войти заново: {n|аккаунт перестал|аккаунты перестали|аккаунты перестали} работать',
+  'notice.reauth.action': 'Войти заново',
+  'notice.reauth.why':
+    'Сервис больше не принимает подключение (сменили пароль, отозвали доступ или он истёк). Пока вы не войдёте заново, ИИ-приложения не смогут {n|им|ими|ими} пользоваться.',
   'confirm.approve': '✅ Разрешить',
   'confirm.deny': '❌ Отклонить',
   'confirm.cancel': '↩️ Отменить',
@@ -378,6 +427,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
 const ru: Record<Key, string> = {
   ...coreRu,
   ...siteRu,
+  ...seoRu,
   ...appRu,
   ...authRu,
   ...connectRu,
@@ -385,6 +435,9 @@ const ru: Record<Key, string> = {
   ...confirmRu,
   ...problemsRu,
   ...emailRu,
+  ...teamRu,
+  ...profilesRu,
+  ...appsRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

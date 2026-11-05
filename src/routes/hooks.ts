@@ -49,6 +49,9 @@ export function hookRoutes() {
             const chat = await s.messaging.store.findChatByExternalId(accountId, chatExternalId);
             if (chat) await s.messaging.store.markChatRead(chat.id);
           },
+          delivery: async (updates) => {
+            for (const update of updates) await s.messaging.store.recordDelivery(accountId, update);
+          },
         },
       );
       return new Response(response.body ?? null, {
