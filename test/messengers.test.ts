@@ -3,10 +3,12 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Principal } from '../src/core/principal.js';
+import { PgListener } from '../src/db/listener.js';
 import { messengerChats, messengerMessages, messengerOutbox } from '../src/db/schema.js';
-import { resetDatabase, startTestHub, type TestHub, unwrapUntrusted } from './helpers.js';
+import { OUTBOX_CHANNEL } from '../src/messaging/outbox.js';
+import { resetDatabase, startTestHub, TEST_DATABASE_URL, type TestHub, unwrapUntrusted } from './helpers.js';
 
 const BOT_TOKEN = '123456789:AAEhBP0av18aaaaaaaaaaaaaaaaaaaaaaaa';
 const APP_SECRET = '0123456789abcdef0123456789abcdef';
@@ -419,6 +421,24 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(none.cursor).toBe(second.cursor);
   });
 
+  it('tells the dispatchers of other processes about a queued message (Postgres NOTIFY)', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(8, 'Hi'));
+    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    // Another process's dispatcher, as far as Postgres is concerned.
+    const otherProcess = new PgListener({ connectionString: TEST_DATABASE_URL, logger: hub.services.logger });
+    const queued: string[] = [];
+    otherProcess.listen(OUTBOX_CHANNEL, (accountId) => queued.push(accountId));
+    otherProcess.start();
+    try {
+      await vi.waitFor(() => expect(otherProcess.connected).toBe(true), { timeout: 5_000 });
+      expect(json(await call('telegram_send', { chat: chat.id, text: 'Hello' })).status).toBe('sent');
+      await vi.waitFor(() => expect(queued).toEqual([account.id]), { timeout: 5_000 });
+    } finally {
+      await otherProcess.stop();
+    }
+  });
+
   it('sends through the outbox once, records the message and reports Telegram errors', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(7, 'Можно счёт?'));
@@ -582,6 +602,16 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(state?.sendPausedUntil?.getTime()).toBeGreaterThan(Date.now() + 590_000);
     const [job] = await hub.services.db.select().from(messengerOutbox);
     expect(job?.status).toBe('queued');
+
+    // The user lifts the pause (POST …/messenger/resume-sending): the held job goes out now.
+    const sends = apis.calls.filter((c) => c.path === 'sendMessage').length;
+    await hub.services.messaging.accounts.resumeSending(account.id);
+    await hub.services.messaging.outbox.releaseHold(account.id);
+    hub.services.messaging.dispatcher.kick();
+    await vi.waitFor(
+      () => expect(apis.calls.filter((c) => c.path === 'sendMessage').length).toBe(sends + 1),
+      { timeout: 10_000, interval: 50 },
+    );
   });
 
   it('deletes finished outgoing jobs after the retention period (privacy policy)', async () => {

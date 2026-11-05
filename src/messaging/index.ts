@@ -2,6 +2,7 @@ import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registr
 import type { AccountKeyring } from '../core/account-keys.js';
 import type { AccountService } from '../core/accounts.js';
 import type { Db } from '../db/client.js';
+import type { DbListener } from '../db/listener.js';
 import type { JobDefinition } from '../jobs/queue.js';
 import type { SecretBox } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
@@ -41,6 +42,8 @@ export function createMessaging(deps: {
   publicUrl: string;
   /** The gateway's internal API, when deployed. */
   gatewayConfig: { url: string; token: string } | undefined;
+  /** Wakes the outbox dispatcher when another process queues a message (it polls without one). */
+  listener?: DbListener;
   db: Db;
   /** Wraps the per-account data keys (data_keys for blind indexes stays on the master key). */
   secrets: SecretBox;
@@ -101,6 +104,7 @@ export function createMessaging(deps: {
     executor: directExecutor,
     worker: `hub:${process.pid}`,
     logger: logger.child({ component: 'outbox' }),
+    ...(deps.listener ? { listener: deps.listener } : {}),
   });
   const ready = dispatcher;
   return {

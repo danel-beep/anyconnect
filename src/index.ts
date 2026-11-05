@@ -29,12 +29,14 @@ async function main() {
   installProcessHandlers({ logger, errors: services.ops.errors });
   await bootstrap(services);
   const stopMaintenance = scheduleMaintenance(services);
+  // Notifications first, so the loops below wait for them instead of polling.
+  services.listener.start();
   services.pendingRunner.start();
   services.analytics.start();
   if (config.jobs.enabled) await services.jobs.start();
   services.messaging.start();
   let gateway: EmbeddedGateway | undefined;
-  if (embedded) gateway = await startEmbeddedGateway(embedded, logger);
+  if (embedded) gateway = await startEmbeddedGateway(embedded, logger, { listener: services.listener });
 
   const app = createApp(services);
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
