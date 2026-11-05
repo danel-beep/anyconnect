@@ -41,7 +41,7 @@ export const connectEn = {
   'guide.minutes': 'About {minutes} min',
   'guide.needs': 'You need',
   'guide.steps': 'Steps',
-  'guide.fills': 'Goes into the field',
+  'guide.fills': 'Paste into:',
   'guide.problems': 'If something goes wrong',
 } as const;
 
@@ -85,6 +85,6 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
   'guide.minutes': 'Около {minutes} мин',
   'guide.needs': 'Понадобится',
   'guide.steps': 'Шаги',
-  'guide.fills': 'Вставьте в поле',
+  'guide.fills': 'Вставьте в поле:',
   'guide.problems': 'Если что-то не получилось',
 };

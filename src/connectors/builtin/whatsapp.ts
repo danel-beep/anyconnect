@@ -712,21 +712,24 @@ export function createWhatsAppConnector(port: MessagingPort) {
                   fills: ['phoneNumberId', 'wabaId'],
                 },
                 {
-                  text: 'Откройте настройки компании → **Users → System users**, нажмите **Add**, назовите пользователя Manyplug, выберите роль **Admin** и нажмите **Create system user**.',
+                  text: 'Откройте **System users** в настройках бизнес-портфолио (кнопка ниже), нажмите **Add**, назовите пользователя Manyplug, выберите роль **Admin** и нажмите **Create system user**.',
                   link: {
                     label: 'Открыть System users',
                     url: 'https://business.facebook.com/settings/system-users',
                   },
                 },
                 {
-                  text: 'Нажмите **Assign assets**: в **Apps** выберите своё приложение, в **WhatsApp accounts** — свой аккаунт, дайте обоим **Full control** и сохраните.',
+                  text: 'Нажмите на нового пользователя **Manyplug**, затем **Assign assets**. В **Apps** выберите своё приложение, включите **Manage app** и нажмите **Save**.',
                 },
                 {
-                  text: 'Нажмите **Generate new token**, выберите приложение, срок действия **Never**, отметьте **whatsapp_business_messaging** и **whatsapp_business_management** и скопируйте токен.',
+                  text: 'Снова нажмите **Assign assets**. В **WhatsApp accounts** выберите аккаунт из шага 2 (у тестового номера — **Test WhatsApp Business Account**), включите **Full control** и нажмите **Save**.',
+                },
+                {
+                  text: 'Нажмите **Generate token**, выберите приложение, срок действия **Never**, отметьте **whatsapp_business_messaging** и **whatsapp_business_management** и скопируйте токен.',
                   fills: ['accessToken'],
                 },
                 {
-                  text: 'Вернитесь в приложение, откройте **App settings → Basic**, нажмите **Show** рядом с **App secret** и скопируйте его.',
+                  text: 'Вернитесь в приложение, откройте **App settings → Basic**, нажмите **Show** рядом с **App secret** (Meta попросит пароль от Facebook) и скопируйте его.',
                   fills: ['appSecret'],
                 },
                 {
@@ -734,30 +737,35 @@ export function createWhatsAppConnector(port: MessagingPort) {
                 },
               ],
               tips: [
-                'Свободно писать можно только в течение 24 часов после последнего сообщения клиента. Позже WhatsApp пропускает только одобренные шаблоны.',
+                'Пробуете тестовый номер Meta? Добавьте свой телефон на странице **API Setup** в **To → Manage phone number list**: тестовый номер пишет только на номера из этого списка.',
+                'Свободно писать можно только в течение 24 часов после последнего сообщения клиента. После этого WhatsApp пропускает только одобренные шаблоны.',
                 'Шаблоны Meta тарифицирует по своим ценам: перед отправкой добавьте способ оплаты в WhatsApp Manager.',
-                'Чтобы отозвать доступ, удалите токен системного пользователя в настройках компании или удалите аккаунт здесь.',
+                'Чтобы отозвать доступ, откройте системного пользователя в настройках бизнес-портфолио и нажмите **Revoke tokens** или удалите аккаунт здесь.',
               ],
               problems: [
                 {
                   problem: '«Meta rejected the access token»',
-                  fix: 'Скорее всего, это временный токен со страницы API Setup или у него нет нужного права. Создайте новый по шагам 3–5 со сроком **Never** и обоими правами whatsapp_ и нажмите **Переподключить**.',
+                  fix: 'Скорее всего, это временный токен со страницы API Setup или токен без нужного права. Создайте новый, как в шаге 6 (срок **Never**, оба права отмечены), и вставьте его через **Переподключить**.',
                 },
                 {
                   problem: '«Set the App Secret»',
-                  fix: 'Скопируйте **App secret** из **App settings → Basic** (шаг 6) и вставьте его в форму.',
+                  fix: 'Скопируйте **App secret** из **App settings → Basic** (шаг 7) и вставьте его в форму.',
                 },
                 {
                   problem: 'Сообщения клиентов не появляются',
                   fix: 'Проверьте, что поле **WhatsApp Business Account ID** заполнено, и нажмите **Проверить** на странице аккаунта: Manyplug заново включит приём сообщений.',
                 },
                 {
-                  problem: 'Отправка падает с ошибкой «Recipient phone number not in allowed list»',
-                  fix: 'Тестовый номер Meta пишет только на номера из списка **To** на странице **API Setup**. Добавьте номер туда или подключите свой номер.',
+                  problem: 'При отправке появляется ошибка «Recipient phone number not in allowed list»',
+                  fix: 'С тестового номера можно писать только на 5 номеров, добавленных на странице **API Setup** в **To → Manage phone number list**. Добавьте номер туда (ему придёт код для подтверждения) или подключите свой номер.',
+                },
+                {
+                  problem: 'В **Assign assets** нет моего приложения или аккаунта WhatsApp',
+                  fix: 'Переключитесь на бизнес-портфолио, выбранное в шаге 1 (слева вверху в настройках), и создайте системного пользователя там.',
                 },
                 {
                   problem: 'Моего номера нет в списке **From**',
-                  fix: 'Добавьте его внизу страницы **API Setup** кнопкой **Add phone number** и подтвердите по SMS. Номер из приложения WhatsApp сначала нужно удалить из приложения (чаты оттуда не переносятся).',
+                  fix: 'Добавьте его внизу страницы **API Setup** кнопкой **Add phone number** и введите код, который Meta пришлёт по SMS или звонком. Номер из приложения WhatsApp сначала нужно удалить из него. Затем Meta проверяет отображаемое имя, обычно за день-два.',
                 },
               ],
             },
@@ -778,7 +786,7 @@ export function createWhatsAppConnector(port: MessagingPort) {
             apiVersion: { label: 'Версия Graph API' },
             accessToken: {
               label: 'Токен доступа',
-              hint: 'Токен системного пользователя со сроком Never (шаг 5).',
+              hint: 'Токен системного пользователя со сроком Never (шаг 6).',
             },
             appSecret: { label: 'App Secret', hint: 'Нужен, чтобы проверять, что сообщения пришли от Meta.' },
             pacing: texts.ru.pacing,
@@ -821,21 +829,24 @@ export function createWhatsAppConnector(port: MessagingPort) {
                   fills: ['phoneNumberId', 'wabaId'],
                 },
                 {
-                  text: 'Open Business Settings → **Users → System users**, click **Add**, name the user Manyplug, choose the **Admin** role and click **Create system user**.',
+                  text: 'Open **System users** in your business portfolio settings (button below), click **Add**, name the user Manyplug, choose the **Admin** role and click **Create system user**.',
                   link: {
                     label: 'Open System users',
                     url: 'https://business.facebook.com/settings/system-users',
                   },
                 },
                 {
-                  text: 'Click **Assign assets**: under **Apps** pick your app, under **WhatsApp accounts** pick your account, give both **Full control** and save.',
+                  text: 'Click the new **Manyplug** user, then **Assign assets**. Under **Apps** pick your app, turn on **Manage app** and click **Save**.',
                 },
                 {
-                  text: 'Click **Generate new token**, pick your app, set the expiry to **Never**, tick **whatsapp_business_messaging** and **whatsapp_business_management** and copy the token.',
+                  text: 'Click **Assign assets** again. Under **WhatsApp accounts** pick the account from step 2 (for the test number, **Test WhatsApp Business Account**), turn on **Full control** and click **Save**.',
+                },
+                {
+                  text: 'Click **Generate token**, pick your app, set the expiry to **Never**, tick **whatsapp_business_messaging** and **whatsapp_business_management**, then copy the token.',
                   fills: ['accessToken'],
                 },
                 {
-                  text: 'Back in the app, open **App settings → Basic**, click **Show** next to **App secret** and copy it.',
+                  text: 'Back in the app, open **App settings → Basic**, click **Show** next to **App secret** (Meta asks for your Facebook password) and copy it.',
                   fills: ['appSecret'],
                 },
                 {
@@ -843,18 +854,19 @@ export function createWhatsAppConnector(port: MessagingPort) {
                 },
               ],
               tips: [
+                'Trying Meta’s test number? Add your own phone on **API Setup** under **To → Manage phone number list**: the test number only writes to numbers listed there.',
                 'You can write freely only within 24 hours after the customer’s last message. After that, WhatsApp only lets approved templates through.',
                 'Meta charges for template messages at its own rates: add a payment method in WhatsApp Manager before sending them.',
-                'To cut access, delete the system user’s token in Business Settings or remove the account here.',
+                'To cut access, open the system user in your business portfolio settings and click **Revoke tokens**, or remove the account here.',
               ],
               problems: [
                 {
                   problem: '“Meta rejected the access token”',
-                  fix: 'It is most likely the temporary token from API Setup, or it lacks a permission. Create a new one as in steps 3–5 with the expiry **Never** and both whatsapp_ permissions, then click **Reconnect**.',
+                  fix: 'It is most likely the temporary token from API Setup, or a token without a permission. Create a new one as in step 6 (expiry **Never**, both permissions ticked) and paste it with **Reconnect**.',
                 },
                 {
                   problem: '“Set the App Secret”',
-                  fix: 'Copy the **App secret** from **App settings → Basic** (step 6) and paste it into the form.',
+                  fix: 'Copy the **App secret** from **App settings → Basic** (step 7) and paste it into the form.',
                 },
                 {
                   problem: 'Messages from customers do not show up',
@@ -862,11 +874,15 @@ export function createWhatsAppConnector(port: MessagingPort) {
                 },
                 {
                   problem: 'Sending fails with “Recipient phone number not in allowed list”',
-                  fix: 'Meta’s test number only writes to the numbers listed under **To** on the **API Setup** page. Add the number there, or connect your own number.',
+                  fix: 'The test number can only write to up to 5 numbers you add on the **API Setup** page under **To → Manage phone number list**. Add the number there (it gets a code to confirm) or connect your own number.',
+                },
+                {
+                  problem: 'My app or WhatsApp account is missing in **Assign assets**',
+                  fix: 'Switch to the business portfolio you picked in step 1 (top left in the settings) and create the system user there.',
                 },
                 {
                   problem: 'My number is not listed under **From**',
-                  fix: 'Add it at the bottom of **API Setup** with **Add phone number** and confirm it by SMS. A number used in the WhatsApp app has to be removed from the app first (its chats do not move over).',
+                  fix: 'Add it at the bottom of **API Setup** with **Add phone number** and enter the code Meta sends by SMS or call. A number used in the WhatsApp app has to be removed from it first. Meta then reviews the display name, usually within a day or two.',
                 },
               ],
             },
@@ -887,7 +903,7 @@ export function createWhatsAppConnector(port: MessagingPort) {
             apiVersion: { label: 'Graph API version' },
             accessToken: {
               label: 'Access token',
-              hint: 'The system user token with the expiry Never (step 5).',
+              hint: 'The system user token with the expiry Never (step 6).',
             },
             appSecret: { label: 'App Secret', hint: 'Used to check that messages really come from Meta.' },
             pacing: texts.en.pacing,
