@@ -801,6 +801,8 @@ describe('website: public pages', () => {
       const page = await browser.request(path);
       expect(page.status, path).toBe(200);
       const html = await page.text();
+      // Standards mode: without the doctype browsers fall back to quirks-mode layout.
+      expect(html.startsWith('<!doctype html><html'), path).toBe(true);
       expect(html, path).toContain('<html lang="ru"');
       expect(html, path).toContain('<main id="main"');
     }

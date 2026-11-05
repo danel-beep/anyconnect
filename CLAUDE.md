@@ -28,6 +28,9 @@ develop further. In practice:
 - `npm run check` — lint (Biome) + typecheck (TypeScript 7) + tests (Vitest)
 - `npm test` — integration tests need Postgres at `TEST_DATABASE_URL`
   (default `postgres://postgres@localhost:5432/manyplug_test`); files run sequentially
+- `npm run test:visual` — every page in Chromium (light/dark, desktop/phone, EN/RU) against the layout
+  rules in `test/visual/`; `VISUAL_SCREENSHOTS=<dir>` saves all screenshots. Run it and look at the
+  screenshots after any UI change
 - `npm run db:generate` — create a migration after editing `src/db/schema.ts`; commit `drizzle/`
 - `npm run cli -- help` — admin CLI
 

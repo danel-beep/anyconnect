@@ -503,7 +503,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
           </div>
           <div class="stat">
             <span class="label">{t('admin.users.plan')}</span>
-            <div class="value">{planName(ctx, view.plan.id)}</div>
+            <div class="value small-value">{planName(ctx, view.plan.id)}</div>
             <div class="sub">
               {view.plan.until
                 ? t('app.billing.until', { date: fmtDate(lang, view.plan.until) })
