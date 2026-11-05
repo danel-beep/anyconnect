@@ -40,7 +40,8 @@ export const telegramConnectEn = {
   'tgc.safeTitle': 'What the bot can see',
   'tgc.safe1': 'Only the private chats you pick in Telegram, from the moment you connect.',
   'tgc.safe2': 'Telegram shows what the bot may do. Remove it any time under Settings → Chat Automation.',
-  'tgc.safe3': 'Your Telegram password and login codes never go to {brand}, and messages are stored encrypted.',
+  'tgc.safe3':
+    'Your Telegram password and login codes never go to {brand}, and messages are stored encrypted.',
   'tgc.noscript': 'This page follows Telegram by itself when JavaScript is on. Without it, tap Check now.',
 } as const;
 
@@ -83,7 +84,8 @@ export const telegramConnectRu: Record<keyof typeof telegramConnectEn, string> =
   'tgc.safe1': 'Только личные чаты, которые вы выберете в Telegram, и только с момента подключения.',
   'tgc.safe2':
     'Telegram показывает, что может бот. Убрать его можно в любой момент: «Настройки → Автоматизация чатов».',
-  'tgc.safe3': 'Пароль и коды входа Telegram в {brand} не передаются, а сообщения хранятся в зашифрованном виде.',
+  'tgc.safe3':
+    'Пароль и коды входа Telegram в {brand} не передаются, а сообщения хранятся в зашифрованном виде.',
   'tgc.noscript':
     'С включённым JavaScript страница сама следит за Telegram. Без него нажмите «Проверить сейчас».',
 };
