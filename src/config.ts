@@ -67,6 +67,8 @@ const EnvSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(90),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).default(30),
   TOOL_TIMEOUT_SECONDS: z.coerce.number().int().min(1).default(120),
+  /** Largest request body the hub reads (MCP calls, API, uploads); sign-in and OAuth forms take less. */
+  MAX_REQUEST_BODY_MB: z.coerce.number().min(0.1).max(100).default(10),
   /**
    * Let connectors reach private/loopback addresses (self-hosted services on a LAN, local tests).
    * Off by default: in the cloud it would expose internal services to anyone who can add an account.
@@ -173,6 +175,8 @@ export interface AppConfig {
   };
   sessionTtlSeconds: number;
   toolTimeoutMs: number;
+  /** Largest request body read, in bytes (`MAX_REQUEST_BODY_MB`). */
+  maxRequestBodyBytes: number;
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
   tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
@@ -443,6 +447,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     sessionTtlSeconds: env.SESSION_TTL_DAYS * 86_400,
     toolTimeoutMs: env.TOOL_TIMEOUT_SECONDS * 1000,
+    maxRequestBodyBytes: Math.round(env.MAX_REQUEST_BODY_MB * 1024 * 1024),
     allowPrivateNetwork: env.ALLOW_PRIVATE_NETWORK,
     anonymousMcp: { enabled: env.MCP_ANONYMOUS, perMinute: env.MCP_ANONYMOUS_RATE_LIMIT },
     site: {

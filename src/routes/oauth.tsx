@@ -4,7 +4,7 @@ import { OAuthProtocolError } from '../oauth/clients.js';
 import { isLoopbackRedirect, knownClientName } from '../oauth/redirect.js';
 import type { AuthorizationRequest } from '../oauth/server.js';
 import { suggestClientIdentity } from '../security/clients.js';
-import { clientIp, csrfToken, publicCors, verifyCsrf } from '../web/http.js';
+import { clientRateKey, csrfToken, publicCors, verifyCsrf } from '../web/http.js';
 import { ConsentPage, ErrorPage } from '../web/pages.js';
 import {
   type AppContext,
@@ -163,7 +163,7 @@ export function oauthRoutes() {
 
   app.post('/oauth/register', async (c) => {
     const s = c.get('services');
-    const limited = rateLimited(c, `register:${clientIp(c, s.config.trustProxy)}`, 30, 60 * 60_000);
+    const limited = rateLimited(c, `register:${clientRateKey(c, s.config.trustProxy)}`, 30, 60 * 60_000);
     if (limited) return limited;
     const body = await c.req.json().catch(() => undefined);
     try {
@@ -175,7 +175,7 @@ export function oauthRoutes() {
 
   app.post('/oauth/token', async (c) => {
     const s = c.get('services');
-    const limited = rateLimited(c, `token:${clientIp(c, s.config.trustProxy)}`, 120, 60_000);
+    const limited = rateLimited(c, `token:${clientRateKey(c, s.config.trustProxy)}`, 120, 60_000);
     if (limited) return limited;
     try {
       const tokens = await s.oauth.token(await bodyParams(c), c.req.header('authorization'));

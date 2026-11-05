@@ -6,6 +6,7 @@ import { aiAppRoutes } from './routes/ai-apps.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
 import { billingRoutes } from './routes/billing.js';
+import { requestBodyLimit } from './routes/body-limit.js';
 import { canonicalHost } from './routes/canonical-host.js';
 import { confirmRoutes } from './routes/confirm.js';
 import { connectRoutes } from './routes/connect.js';
@@ -55,6 +56,7 @@ export function createApp(services: Services) {
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
   app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
+  app.use('*', requestBodyLimit(services.config.maxRequestBodyBytes));
 
   // Liveness: the process answers. Cheap on purpose (the platform restarts the instance when it
   // fails, which does not help when the database is down).

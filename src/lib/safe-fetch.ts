@@ -31,27 +31,70 @@ for (const [prefix, bits] of [
   blocked.addSubnet(prefix, bits, 'ipv4');
 }
 for (const [prefix, bits] of [
-  ['::', 128],
-  ['::1', 128],
-  ['100::', 64],
-  ['2001:db8::', 32],
-  ['fc00::', 7],
-  ['fe80::', 10],
-  ['ff00::', 8],
+  ['::', 96], // unspecified, loopback and the deprecated IPv4-compatible block
+  ['64:ff9b:1::', 48], // local-use NAT64 (RFC 8215)
+  ['100::', 64], // discard
+  ['2001::', 32], // Teredo: tunnels to an IPv4 address
+  ['2001:10::', 28], // ORCHID (deprecated)
+  ['2001:20::', 28], // ORCHIDv2
+  ['2001:db8::', 32], // documentation
+  ['3fff::', 20], // documentation (RFC 9637)
+  ['5f00::', 16], // SRv6 segment ids
+  ['fc00::', 7], // unique local
+  ['fe80::', 10], // link local
+  ['fec0::', 10], // site local (deprecated)
+  ['ff00::', 8], // multicast
 ] as const) {
   blocked.addSubnet(prefix, bits, 'ipv6');
+}
+
+/** The eight 16-bit groups of an IPv6 address (any notation, zone id ignored). */
+function ipv6Groups(address: string): number[] | undefined {
+  let text = address.toLowerCase().split('%')[0]!;
+  const dotted = text.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) {
+    const octets = dotted[2]!.split('.').map(Number);
+    if (octets.some((o) => o > 255)) return undefined;
+    text = `${dotted[1]}${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return undefined;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return undefined;
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail].map((g) =>
+    /^[0-9a-f]{1,4}$/.test(g) ? Number.parseInt(g, 16) : Number.NaN,
+  );
+  return groups.some(Number.isNaN) ? undefined : groups;
+}
+
+const ipv4Of = (high: number, low: number) => `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
+
+/**
+ * The IPv4 address an IPv6 address stands for, when it embeds one that a host or a translator on
+ * the way may connect to: IPv4-mapped (`::ffff:a.b.c.d`), IPv4-translated (`::ffff:0:a.b.c.d`),
+ * NAT64 (`64:ff9b::a.b.c.d`, also written `64:ff9b::7f00:1`) and 6to4 (`2002:AABB:CCDD::`).
+ */
+function embeddedIpv4(groups: number[]): string | undefined {
+  const zeros = (from: number, to: number) => groups.slice(from, to).every((g) => g === 0);
+  if (zeros(0, 5) && groups[5] === 0xffff) return ipv4Of(groups[6]!, groups[7]!);
+  if (zeros(0, 4) && groups[4] === 0xffff && groups[5] === 0) return ipv4Of(groups[6]!, groups[7]!);
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && zeros(2, 6)) return ipv4Of(groups[6]!, groups[7]!);
+  if (groups[0] === 0x2002) return ipv4Of(groups[1]!, groups[2]!);
+  return undefined;
 }
 
 export function isPublicAddress(address: string): boolean {
   const family = net.isIP(address);
   if (family === 4) return !blocked.check(address, 'ipv4');
   if (family === 6) {
-    const lower = address.toLowerCase();
-    // IPv4-mapped / NAT64 addresses embed an IPv4 address that must be checked too.
-    const embedded = lower.match(/^(?:::ffff:|64:ff9b::)(\d+\.\d+\.\d+\.\d+)$/);
-    if (embedded) return isPublicAddress(embedded[1]!);
-    if (lower.startsWith('::ffff:')) return false;
-    return !blocked.check(address, 'ipv6');
+    const groups = ipv6Groups(address);
+    if (!groups) return false;
+    const ipv4 = embeddedIpv4(groups);
+    if (ipv4 !== undefined) return isPublicAddress(ipv4);
+    const canonical = groups.map((g) => g.toString(16)).join(':');
+    return !blocked.check(canonical, 'ipv6');
   }
   return false;
 }

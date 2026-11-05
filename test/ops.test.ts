@@ -5,7 +5,7 @@ import { jobsCheck } from '../src/ops/builtin-checks.js';
 import { HealthRegistry } from '../src/ops/checks.js';
 import { requestIdFrom, runWithContext } from '../src/ops/context.js';
 import { type ErrorEvent, ErrorReporter, fingerprint, toEvent } from '../src/ops/errors.js';
-import { scrubSecrets } from '../src/ops/scrub.js';
+import { scrubError, scrubSecrets } from '../src/ops/scrub.js';
 import { parseSentryDsn, SentrySink, sentryFrames } from '../src/ops/sentry.js';
 
 const meta = { release: '1.0.0', environment: 'test' };
@@ -27,6 +27,12 @@ describe('scrubSecrets', () => {
     ],
     ['mail to jane.doe@example.com failed', 'jane.doe@example.com'],
     ['key A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v2', 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v2'],
+    [
+      'POST https://api.telegram.org/bot123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage failed',
+      'AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw',
+    ],
+    ['maps key AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q rejected', 'AIzaSyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q'],
+    ['signing key 0123456789abcdef0123456789abcdef rejected', '0123456789abcdef0123456789abcdef'],
   ])('removes the secret from %s', (input, secret) => {
     expect(scrubSecrets(input)).not.toContain(secret);
   });
@@ -40,6 +46,60 @@ describe('scrubSecrets', () => {
 
   it('caps the length', () => {
     expect(scrubSecrets('x '.repeat(5000), 100).length).toBeLessThanOrEqual(101);
+  });
+});
+
+describe('errors in log lines', () => {
+  const leaky = () => {
+    const error = Object.assign(
+      new Error('refresh for bob@example.com failed: token ac_at_0123456789abcdefghij'),
+      {
+        code: 'E_REFRESH',
+        status: 400,
+        // What libraries attach: request configs, response bodies, Postgres row values.
+        config: { headers: { authorization: 'Bearer abcdefghijklmnopq' } },
+        detail: 'Key (email)=(bob@example.com) already exists.',
+        cause: new Error('POST https://api.telegram.org/bot123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/x'),
+      },
+    );
+    return error;
+  };
+
+  it('keeps the type, the scrubbed message and stack, codes and causes', () => {
+    const out = scrubError(leaky()) as Record<string, unknown>;
+    expect(out).toMatchObject({
+      type: 'Error',
+      message: 'refresh for [email] failed: token [redacted]',
+      code: 'E_REFRESH',
+      status: 400,
+      cause: { type: 'Error' },
+    });
+    expect(out.stack).toMatch(/^Error: refresh for \[email\]/);
+    expect(out).not.toHaveProperty('config');
+    expect(out).not.toHaveProperty('detail');
+    const text = JSON.stringify(out);
+    for (const secret of ['bob@example.com', 'ac_at_0123456789abcdefghij', 'abcdefghijklmnopq', 'AAHdqTcv']) {
+      expect(text).not.toContain(secret);
+    }
+    expect(scrubError('password=hunter2')).toBe('password=[redacted]');
+    expect(scrubError({ access_token: 'ya29.abcdefghijkl' })).not.toContain('ya29.abcdefghijkl');
+  });
+
+  it('is how the hub logger writes every err', () => {
+    const lines: string[] = [];
+    const log = createLogger({
+      level: 'info',
+      destination: { write: (line: string) => void lines.push(line) },
+    });
+    log.warn({ err: leaky(), account: 'acc_1' }, 'refresh failed');
+    log.error(leaky());
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(line).not.toContain('bob@example.com');
+      expect(line).not.toContain('AAHdqTcv');
+      expect(line).not.toContain('abcdefghijklmnopq');
+      expect(JSON.parse(line).err).toMatchObject({ code: 'E_REFRESH' });
+    }
   });
 });
 

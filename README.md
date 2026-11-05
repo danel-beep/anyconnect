@@ -212,11 +212,15 @@ npm run cli -- accounts:add --connector demo --label "Третий аккаун�
 npm run cli -- accounts:list
 npm run cli -- tools:list                      # что именно видит ИИ
 npm run cli -- exposure:set --mode per_account # отдельный инструмент на каждый аккаунт
-npm run cli -- tokens:create --name "laptop"   # личный токен для REST API / MCP
+npm run cli -- tokens:create --name "laptop" --api  # личный токен: MCP, с --api ещё и REST API
 npm run cli -- users:2fa:reset --email you@example.com  # потерян телефон: сбросить второй фактор
 ```
 
-REST API (`Authorization: Bearer ac_pat_...`):
+REST API (`Authorization: Bearer ac_pat_...`). Нужен токен со scope `api`: по умолчанию токены
+(в кабинете, CLI и `POST /api/v1/tokens`) работают только с MCP, а API управления включается
+явно (`--api`, галочка в кабинете, `"scopes": ["mcp", "api"]`). Токен с `api` может менять
+аккаунты, правила и настройки безопасности, поэтому его не отдают AI-приложению: иначе оно
+смогло бы ослабить свои же правила. Токен профиля доступа (`personaId`) работает только с MCP.
 
 | Метод | Путь | Что делает |
 | --- | --- | --- |

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { BUILTIN_PROVIDERS, resolveProvider } from '../connectors/oauth/providers.js';
 import { actionCapabilities, actionIdempotent, actionRisk, toJsonSchema } from '../connectors/sdk.js';
 import { toAccountView } from '../core/accounts.js';
-import { toApiTokenView } from '../core/api-tokens.js';
+import { TOKEN_SCOPES, toApiTokenView } from '../core/api-tokens.js';
 import { principalFromAuthInfo } from '../core/auth.js';
 import { StartConnectInput } from '../core/connect.js';
 import { getDefaultWorkspace, getUser, getWorkspace } from '../core/identity.js';
@@ -36,9 +36,12 @@ export function apiRoutes() {
           verifier: s.verifier,
           requiredScopes: ['api'],
         });
-        c.set('principal', principalFromAuthInfo(info));
+        const principal = principalFromAuthInfo(info);
+        // Profile tokens (made before profiles were limited to MCP) never manage the workspace.
+        if (principal.personaId) throw unauthorized();
+        c.set('principal', principal);
       } catch {
-        throw unauthorized('Invalid or insufficient token: use a personal access token');
+        throw unauthorized('Invalid or insufficient token: use a personal access token with the "api" scope');
       }
     } else {
       const session = await currentSession(c);
@@ -378,10 +381,8 @@ export function apiRoutes() {
       z.object({
         name: z.string().trim().min(1).max(100),
         expiresInDays: z.number().int().min(1).max(3650).optional(),
-        scopes: z
-          .array(z.enum(['mcp', 'api']))
-          .min(1)
-          .optional(),
+        /** Default: `["mcp"]`; add `"api"` for scripts that manage the workspace. */
+        scopes: z.array(z.enum(TOKEN_SCOPES)).min(1).optional(),
         /** Act as an existing AI client (shares its access rules); by default a new one is created. */
         aiClientId: z.string().optional(),
         /** Bind the token to a persona's MCP URL. */

@@ -248,12 +248,23 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     const ws = await workspaceOf(bad.id);
     const me = (token: string) =>
       fetch(`${hub.baseUrl}/api/v1/me`, { headers: { authorization: `Bearer ${token}` } });
-    const before = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: bad.id, name: 'a' });
+    const scopes = ['mcp', 'api'] as const;
+    const before = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: bad.id,
+      name: 'a',
+      scopes: [...scopes],
+    });
     expect((await me(before.token)).status).toBe(200);
     await hub.services.users.setStatus(bad.id, 'suspended', 'spam');
     expect((await me(before.token)).status).toBe(401);
     // A token that slipped through (issued in a race with the suspension) does not work either.
-    const late = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: bad.id, name: 'b' });
+    const late = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: bad.id,
+      name: 'b',
+      scopes: [...scopes],
+    });
     expect((await me(late.token)).status).toBe(401);
 
     expect((await browser.request('/app')).status).toBe(302);
@@ -274,7 +285,12 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
       `UPDATE workspaces SET created_at = now() - interval '20 days' WHERE id = $1`,
       [ws.id],
     );
-    const { token } = await hub.services.apiTokens.create({ workspaceId: ws.id, userId: user.id, name: 't' });
+    const { token } = await hub.services.apiTokens.create({
+      workspaceId: ws.id,
+      userId: user.id,
+      name: 't',
+      scopes: ['mcp', 'api'],
+    });
     const api = async (path: string, method = 'GET', body?: unknown) => {
       const response = await fetch(`${hub.baseUrl}/api/v1${path}`, {
         method,
