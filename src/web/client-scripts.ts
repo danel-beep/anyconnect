@@ -112,7 +112,7 @@ var stick=wrap&&wrap.parentElement||bar,r=box.getBoundingClientRect(),under=stic
 $$('[data-collapse]').forEach(function(b){var t=d.querySelector(b.getAttribute('data-collapse'));if(!t)return;b.hidden=false;
 b.addEventListener('click',function(){t.open=false;
 var h=location.hash&&d.getElementById(location.hash.slice(1));if(h&&t.contains(h)&&history.replaceState)history.replaceState(null,'',location.pathname+location.search);
-var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight)s.scrollIntoView({block:'center'})}})});
+var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight*0.75)s.scrollIntoView({block:'center'})}})});
 
 /* A <details> opened from its summary: data-focus-on-open="#search" takes keyboard focus there (not
    after a tap, where it would pop up the on-screen keyboard), data-scroll-on-open="#card" brings that

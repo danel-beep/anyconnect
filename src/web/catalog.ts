@@ -41,6 +41,8 @@ export interface ServiceMeta {
   glyph?: IconName;
   category: ServiceCategory;
   blurb: { ru: string; en: string };
+  /** Extra words people search this service by (other spellings, the other language). */
+  keywords?: string;
   /**
    * Another way in while this service cannot be connected here (its sign-in app is not set up):
    * a connector and form values to start it with, e.g. Gmail through IMAP with an app password.
@@ -294,8 +296,9 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
   },
   twilio: {
     icon: 'twilio',
+    keywords: 'sms смс',
     category: 'messengers',
-    blurb: { ru: 'SMS (СМС), номера и журнал звонков.', en: 'SMS, numbers and the call log.' },
+    blurb: { ru: 'SMS, номера и журнал звонков.', en: 'SMS, numbers and the call log.' },
   },
   postmark: {
     icon: 'postmark',
@@ -463,5 +466,5 @@ const CATEGORY_WORDS: Record<ServiceCategory, string> = {
 export function searchText(id: string, name: string, description: string): string {
   const meta = serviceMeta(id);
   const blurbs = meta ? `${meta.blurb.en} ${meta.blurb.ru}` : '';
-  return `${name} ${id} ${description} ${blurbs} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
+  return `${name} ${id} ${description} ${blurbs} ${meta?.keywords ?? ''} ${CATEGORY_WORDS[meta?.category ?? 'other']}`;
 }

@@ -119,7 +119,7 @@ a.onboard-step:hover{border-color:var(--border-strong);text-decoration:none}
 .svc-chips:not(.at-end){mask-image:linear-gradient(to right,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,#000 85%,transparent)}
 .svc-chips.scrolled.at-end{mask-image:linear-gradient(to right,transparent,#000 8%);-webkit-mask-image:linear-gradient(to right,transparent,#000 8%)}
 .svc-chips.scrolled:not(.at-end){mask-image:linear-gradient(to right,transparent,#000 8%,#000 85%,transparent);-webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 85%,transparent)}
-.chips-arrow{display:none;cursor:pointer;position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;min-height:0;padding:0;border-radius:50%;border:1px solid var(--border-strong);background:var(--card);color:var(--text);place-items:center;box-shadow:0 2px 8px -3px rgba(0,0,0,.3);z-index:1}
+.chips-arrow{display:none;cursor:pointer;position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;min-height:0;padding:0;border-radius:50%;border:1px solid var(--border-strong);background:var(--card);color:var(--text);place-items:center;box-shadow:0 0 0 8px var(--card),0 2px 8px -3px rgba(0,0,0,.3);z-index:1}
 .chips-arrow.next{right:14px}
 .chips-arrow.prev{left:14px}
 .chips-arrow svg{width:16px;height:16px;transform:rotate(-90deg)}
