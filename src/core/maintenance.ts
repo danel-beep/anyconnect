@@ -14,6 +14,7 @@ import {
 } from '../db/schema.js';
 import type { PgErrorStore } from '../ops/error-store.js';
 import type { ErrorReporter } from '../ops/errors.js';
+import type { StatusService } from '../ops/status.js';
 
 const DAY = 86_400_000;
 
@@ -53,7 +54,7 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
 export function scheduleMaintenance(
   deps: {
     db: Db;
-    ops: { errors: ErrorReporter; errorStore: PgErrorStore };
+    ops: { errors: ErrorReporter; errorStore: PgErrorStore; status: StatusService };
     config: { ops: { errorRetentionDays: number } };
   },
   intervalMs = 60 * 60_000,
@@ -62,6 +63,7 @@ export function scheduleMaintenance(
     try {
       await runMaintenance(deps.db);
       await deps.ops.errorStore.prune(deps.config.ops.errorRetentionDays);
+      await deps.ops.status.prune();
     } catch (error) {
       deps.ops.errors.capture(error, { source: 'maintenance' });
     }
