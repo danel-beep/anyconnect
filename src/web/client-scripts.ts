@@ -60,11 +60,26 @@ window.addEventListener('resize',placeOpen);window.addEventListener('scroll',pla
 d.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false})});
 d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});setNav(false)});
 
-/* Live filter */
+/* Live filter. Optional: data-filter-expand opens a <details> while searching (and restores it after),
+   data-filter-hide hides a block (e.g. a short "popular" row) while searching. Escape clears. */
 $$('[data-filter]').forEach(function(input){var box=d.querySelector(input.getAttribute('data-filter'));if(!box)return;
+function sel(a){var v=input.getAttribute(a);return v?d.querySelector(v):null}
+var expand=sel('data-filter-expand'),hide=sel('data-filter-hide'),wasOpen=null;
 input.addEventListener('input',function(){var q=input.value.trim().toLowerCase();$$('[data-search]',box).forEach(function(el){el.hidden=q!==''&&el.getAttribute('data-search').toLowerCase().indexOf(q)<0});
 $$('[data-filter-group]',box).forEach(function(g){g.hidden=$$('[data-search]',g).every(function(el){return el.hidden})});
-var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=!$$('[data-search]',box).every(function(el){return el.hidden})})});
+if(hide)hide.hidden=q!=='';
+if(expand){if(q!==''){if(wasOpen===null)wasOpen=expand.open;expand.open=true;expand.setAttribute('data-searching','')}else{expand.removeAttribute('data-searching');if(wasOpen!==null)expand.open=wasOpen;wasOpen=null}}
+var empty=input.getAttribute('data-filter-empty');var none=empty&&d.querySelector(empty);if(none)none.hidden=!$$('[data-search]',box).every(function(el){return el.hidden})});
+input.addEventListener('keydown',function(e){if(e.key==='Escape'&&input.value){e.preventDefault();input.value='';input.dispatchEvent(new Event('input'))}})});
+
+/* Buttons that close a <details> (e.g. "Show fewer" under a long list) and bring its top back into view */
+$$('[data-collapse]').forEach(function(b){var t=d.querySelector(b.getAttribute('data-collapse'));if(!t)return;b.hidden=false;
+b.addEventListener('click',function(){t.open=false;var s=t.querySelector('summary');if(s){s.focus({preventScroll:true});var r=s.getBoundingClientRect();if(r.top<0||r.bottom>window.innerHeight)s.scrollIntoView({block:'center'})}})});
+
+/* A link to a folded section (#custom) opens it */
+function openTarget(){var id=location.hash.slice(1);if(!id)return;var t=null;try{t=d.getElementById(decodeURIComponent(id))}catch(e){}
+var det=t&&(t.tagName==='DETAILS'?t:t.closest('details'));while(det){det.open=true;det=det.parentElement&&det.parentElement.closest('details')}}
+openTarget();window.addEventListener('hashchange',openTarget);
 
 /* Filter forms apply as soon as a choice changes (the button stays for keyboards and no-JS) */
 $$('form[data-autosubmit]').forEach(function(f){f.addEventListener('change',function(){f.submit()})});

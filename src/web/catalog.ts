@@ -347,6 +347,71 @@ export const PLANNED_SERVICES: {
   { name: 'Discord', icon: 'discord', category: 'messengers' },
 ];
 
+/**
+ * The services most people connect first, most common first. The dashboard shows the first few that
+ * can be connected here before the full list; reorder this list to change what people see first.
+ */
+export const POPULAR_SERVICES: readonly string[] = [
+  'gmail',
+  'gcal',
+  'outlook',
+  'slack',
+  'telegram',
+  'notion',
+  'gdrive',
+  'github',
+  'whatsapp',
+  'imap',
+  'todoist',
+  'hubspot',
+  'gsheets',
+  'linear',
+  'jira',
+];
+
+/**
+ * Sample services: their accounts are test data a new hub starts with (`SEED_DEMO_ACCOUNTS`), so the
+ * dashboard folds them into one row with a button that removes them all.
+ */
+export const SAMPLE_SERVICES: ReadonlySet<string> = new Set(['demo']);
+
+/** What the dashboard's "Add a service" card shows: a short popular row and the full list by category. */
+export interface CatalogLayout<T> {
+  popular: T[];
+  groups: [ServiceCategory, T[]][];
+  unavailable: T[];
+}
+
+/**
+ * Splits the catalog for the dashboard (pure, so it is easy to test): `popular` holds up to `limit`
+ * services that can be connected now, in `POPULAR_SERVICES` order and topped up by name; `groups`
+ * holds every connectable service by category in `CATEGORY_ORDER` (the user's own servers under
+ * "custom"), by name; `unavailable` holds the services that cannot be connected here yet, by name.
+ */
+export function arrangeCatalog<T extends { service: string; name: string; ready: boolean; custom?: boolean }>(
+  entries: readonly T[],
+  limit = 9,
+): CatalogLayout<T> {
+  const byName = (a: T, b: T) => a.name.localeCompare(b.name);
+  const rank = (id: string) => {
+    const i = POPULAR_SERVICES.indexOf(id);
+    return i < 0 ? POPULAR_SERVICES.length : i;
+  };
+  const ready = entries.filter((e) => e.ready);
+  const popular = [...ready]
+    .sort((a, b) => rank(a.service) - rank(b.service) || byName(a, b))
+    .slice(0, limit);
+  const groups: [ServiceCategory, T[]][] = [];
+  for (const category of CATEGORY_ORDER) {
+    const inCategory = ready
+      .filter((e) => (e.custom ? 'custom' : (serviceMeta(e.service)?.category ?? 'other')) === category)
+      .sort(byName);
+    if (inCategory.length) groups.push([category, inCategory]);
+  }
+  const unavailable = entries.filter((e) => !e.ready).sort(byName);
+  return { popular, groups, unavailable };
+}
+
 /** Hidden from public listings (test connector, the hub's own setup tools). */
 export const HIDDEN_SERVICES = new Set(['demo', BRAND.slug, ...LEGACY_SLUGS]);
 

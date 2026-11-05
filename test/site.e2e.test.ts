@@ -642,6 +642,36 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(await log('?account=nope')).toContain('title="demo_account_info"');
   });
 
+  it('folds the catalog behind popular services and removes the demo accounts in one go', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-svc', email: 'svc@example.com' });
+    const ws = await workspaceOf((await userByEmail('svc@example.com')).id);
+    const add = (connectorId: string, name: string) =>
+      hub.services.accounts.create(ws.id, { connectorId, name, label: name, credentials: { secret: 's' } });
+    await add('demo', 'main');
+    await add('demo', 'second');
+
+    const page = await (await browser.request('/app/services')).text();
+    // A short popular row first, the full list folded under it, the search box opens it.
+    expect(page).toContain('id="popular"');
+    expect(page).toMatch(/<details class="svc-all" id="all-services">/);
+    expect(page).toContain('data-filter-expand="#all-services"');
+    expect(page).toContain('id="add-slack"');
+    // Demo accounts are one folded row, not a group of real accounts; the own-server form is folded too.
+    expect(page).toContain('class="acc acc-sample"');
+    expect(page).not.toContain('class="acc-group"');
+    expect(page).toMatch(/<details class="card fold" id="custom">/);
+
+    const { csrf } = TestBrowser.hiddenInputs(page);
+    const removed = await browser.request('/app/samples/remove', { form: { csrf: csrf! } });
+    expect(removed.status).toBe(303);
+    expect(removed.headers.get('location')).toBe('/app/services');
+    expect(await hub.services.accounts.list(ws.id)).toEqual([]);
+    const after = await (await browser.request('/app/services')).text();
+    expect(after).not.toContain('acc-sample');
+    expect(after).toContain('notice ok');
+  });
+
   it('gives the custom MCP form back as filled when the address is wrong', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await oidc.signIn(browser, { sub: 'g-c', email: 'custom@example.com' });

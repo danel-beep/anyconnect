@@ -20,6 +20,7 @@ const ICONS = {
   x: 'M6 6l12 12M18 6 6 18',
   plus: 'M12 5v14M5 12h14',
   arrow: 'M5 12h14M13 6l6 6-6 6',
+  chevron: 'm6 9 6 6 6-6',
   external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
   shield: 'M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3Z',
   lock: 'M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3',

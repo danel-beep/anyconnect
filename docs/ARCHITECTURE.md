@@ -491,6 +491,15 @@ HTTP — `src/routes/login.tsx` и `src/routes/security.tsx`.
 | Кабинет | `/app` (обзор), `/app/services`, `/app/accounts/:id`, `/app/apps`, `/app/activity`, `/app/rules`, `/app/billing`, `/app/settings` | `routes/app.tsx`, `web/app.tsx`, `web/account-page.tsx`, `web/rules.tsx` |
 | Админка | `/admin`, `/admin/users`, `/admin/users/:id`, `/admin/audit`, `/admin/system` | `routes/admin.tsx`, `admin/service.ts`, `web/admin.tsx` |
 
+**Вкладка «Сервисы» в кабинете.** Сверху подключённые аккаунты; демо-аккаунты (`SAMPLE_SERVICES`
+в `web/catalog.ts`, сейчас сервис `demo`) свёрнуты в одну строку с кнопкой «Удалить»
+(`POST /app/samples/remove`). Ниже — «Добавить сервис»: поиск, короткий ряд популярных
+(`POPULAR_SERVICES`, порядок задаёт, что видно первым) и полный список по категориям, свёрнутый в
+`<details>`; что ещё нельзя подключить, собрано в конце. Раскладку считает чистая функция
+`arrangeCatalog` (тест `test/web-catalog.test.ts`). Поиск в `site.js` открывает список и прячет
+популярные (`data-filter-expand`, `data-filter-hide`), Escape очищает, кнопки `data-collapse`
+сворачивают. Форма своего MCP-сервера тоже свёрнута и открывается по ссылке `#custom`.
+
 **Вход через Google.** OpenID Connect с `state`, `nonce` и PKCE; ID-токен приходит напрямую от
 Google по TLS. К существующему пользователю вход привязывается по адресу, только если Google
 отвечает за этот адрес (`@gmail.com` или Google Workspace, где `hd` совпадает с доменом адреса).
