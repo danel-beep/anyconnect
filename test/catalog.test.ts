@@ -140,7 +140,7 @@ describe('tool catalog', () => {
       readOnlyHint: false,
       destructiveHint: true,
     });
-    expect(catalog.tools.find((t) => t.name === 'svc_read')!.annotations.destructiveHint).toBeUndefined();
+    expect(catalog.tools.find((t) => t.name === 'svc_read')!.annotations.destructiveHint).toBe(false);
   });
 });
 

@@ -39,6 +39,7 @@ export function billingActions(
   return [
     define({
       name: 'plan',
+      tags: ['commerce'],
       title: 'Plan and usage',
       description:
         'Shows the current plan, its limits, usage this month, the paid subscription (renewal, cancellation) and the plans with prices.',
@@ -51,6 +52,7 @@ export function billingActions(
     }),
     define({
       name: 'buy_plan',
+      tags: ['commerce'],
       title: 'Upgrade or change the plan',
       description:
         'Returns a link where the user buys a plan or switches the paid one (prices: manyplug_plan). Payment happens on a secure page, never in the chat; give the user the link.',
@@ -72,6 +74,7 @@ export function billingActions(
     }),
     define({
       name: 'cancel_plan',
+      tags: ['commerce'],
       title: 'Cancel the paid plan',
       description:
         'Cancels the paid subscription at the end of the paid period (the plan stays until then), or with undo=true takes a cancellation back. The user always confirms.',

@@ -48,6 +48,15 @@ services:
       # Optional: also send errors to Sentry (docs/OPERATIONS.md)
       - key: SENTRY_DSN
         sync: false
+      # AI app directories (docs/DIRECTORIES.md)
+      - key: CLIENT_POLICIES
+        value: claude
+      - key: REVIEW_ACCOUNT_EMAIL
+        sync: false
+      - key: REVIEW_ACCOUNT_PASSWORD
+        sync: false
+      - key: WELL_KNOWN_MCP_REGISTRY_AUTH
+        sync: false
 
 databases:
   - name: anyconnect-db

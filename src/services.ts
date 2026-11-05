@@ -404,6 +404,7 @@ export function createServices(
     maxResultTokens: config.tools.maxResultTokens,
     idempotencyWindowMs: config.tools.idempotencyWindowMs,
     toolListTokenBudget: config.tools.listTokenBudget,
+    clientPolicies: config.directories.clientPolicies,
     stages: { ...securityStages, ...overrides.stages },
     catalogFilter: overrides.catalogFilter ?? createCatalogFilter(policies),
   });
@@ -463,9 +464,15 @@ export function createServices(
     new RecoveryCodeService(db),
     new PasskeyService(db, { id: config.auth.rpId, name: config.auth.rpName, origin: config.auth.origin }),
   );
-  const mcp = createHubMcpHandler({ hub, logger, version: VERSION });
+  const mcp = createHubMcpHandler({ hub, logger, version: VERSION, publicUrl: config.publicUrl });
   const visitorMcp = config.anonymousMcp.enabled
-    ? createVisitorMcpHandler({ admin, setup: SETUP_CONNECTOR, logger, version: VERSION })
+    ? createVisitorMcpHandler({
+        admin,
+        setup: SETUP_CONNECTOR,
+        logger,
+        version: VERSION,
+        publicUrl: config.publicUrl,
+      })
     : undefined;
 
   return {

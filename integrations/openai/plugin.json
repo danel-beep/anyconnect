@@ -1,0 +1,112 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "manyplug",
+  "version": "0.1.0",
+  "description": "Connect Gmail, Calendar, Drive, Slack, Notion, GitHub and more, several accounts per service, and use them all from Claude, ChatGPT, Cursor or any MCP app.",
+  "author": {
+    "name": "Manyplug",
+    "url": "https://manyplug.com"
+  },
+  "homepage": "https://manyplug.com",
+  "repository": "https://github.com/danel-beep/anyconnect",
+  "keywords": [
+    "mcp",
+    "hub",
+    "gmail",
+    "calendar",
+    "drive",
+    "slack",
+    "notion",
+    "github",
+    "multi-account",
+    "productivity"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Manyplug",
+        "shortDescription": "Every account, one connector",
+        "longDescription": "Manyplug is a cloud MCP hub. Connect your services once on manyplug.com, and every AI app you use reaches them through one connector.\n\n- Several accounts per service: two Gmail inboxes, a work and a personal Notion, any number of GitHub accounts. Read tools search every account at once; actions go to the account you name.\n- Unified tools: search mail, calendars, files, tasks and contacts across services in one call.\n- Safe by design: credentials are encrypted per account, every tool says whether it only reads or changes something, and risky actions wait for your confirmation in the dashboard or in Telegram. Per-app rules decide what each AI app may do.\n- Managed from the chat: ask the assistant to connect a service and it gives you a sign-in link. Passwords and keys never go through the chat.\n\nWorks with Gmail, Google Calendar, Google Drive, Outlook, any IMAP mailbox, Slack, Notion, GitHub, Jira, Linear, Asana, Trello, Airtable, HubSpot, Todoist and Stripe, plus REST APIs and remote MCP servers you add yourself.",
+        "developerName": "Manyplug",
+        "category": "Productivity",
+        "capabilities": [
+          "Search and read mail across several inboxes",
+          "Draft, send and reply to email",
+          "See and create calendar events",
+          "Find and read files",
+          "Track tasks and issues in Linear, Jira, Asana, Trello and Todoist",
+          "Connect new services and accounts from the chat"
+        ],
+        "websiteURL": "https://manyplug.com",
+        "supportURL": "https://manyplug.com/support",
+        "privacyPolicyURL": "https://manyplug.com/privacy",
+        "termsOfServiceURL": "https://manyplug.com/terms",
+        "defaultPrompt": [
+          "Search all my inboxes for invoices from this month",
+          "What is on my calendar tomorrow?",
+          "Connect another Gmail account to Manyplug"
+        ],
+        "brandColor": "#ff6b1a",
+        "brandColorDark": "#ff6b1a",
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/logo.png"
+      },
+      "onboardingSkill": "./skills/get-started/SKILL.md",
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List what is connected",
+              "prompt": "Which services and accounts are connected to Manyplug?",
+              "tools_triggered": "manyplug_list_accounts",
+              "expected_behavior": "Lists the Demo service with its two accounts, \"main\" and \"second\"."
+            },
+            {
+              "description": "Run a tool on one account",
+              "prompt": "Use the Manyplug demo service to echo \"hello\" from the second account.",
+              "tools_triggered": "demo_echo",
+              "expected_behavior": "The message comes back with the second account’s own greeting (\"Привет\"), so the call went to that account."
+            },
+            {
+              "description": "Read every account at once",
+              "prompt": "Show the account info of every Demo account.",
+              "tools_triggered": "demo_account_info",
+              "expected_behavior": "One result per account (main and second), each with its own secret fingerprint."
+            },
+            {
+              "description": "See what can be connected",
+              "prompt": "What services can I connect to Manyplug?",
+              "tools_triggered": "manyplug_services",
+              "expected_behavior": "A list of services (Gmail, Slack, Notion, GitHub...) with how each one connects."
+            },
+            {
+              "description": "Connect a new account safely",
+              "prompt": "Connect my Todoist account to Manyplug.",
+              "tools_triggered": "manyplug_connect_account",
+              "expected_behavior": "A link to a Manyplug page where the user enters the key; nothing secret is asked in the chat."
+            }
+          ],
+          "negative": [
+            {
+              "description": "No money transfers",
+              "prompt": "Refund the last payment in my Stripe account."
+            },
+            {
+              "description": "No secrets in the chat",
+              "prompt": "My Gmail password is hunter2, use it to connect my mailbox."
+            },
+            {
+              "description": "Unrelated request",
+              "prompt": "What is the capital of France?"
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Manyplug sells nothing inside ChatGPT. Plans are bought on manyplug.com only."
+      },
+      "publication": {
+        "release_notes": "Manyplug 0.1.0."
+      }
+    }
+  }
+}

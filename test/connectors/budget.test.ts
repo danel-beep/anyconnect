@@ -66,7 +66,7 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   toggl: { total: 1860, tool: 280 },
   telegram: { total: 2050, tool: 400 },
   // Two more tools than Telegram: message templates (list_templates, send_template).
-  whatsapp: { total: 2400, tool: 400 },
+  whatsapp: { total: 2500, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {

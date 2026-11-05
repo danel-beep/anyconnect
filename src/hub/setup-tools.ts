@@ -73,6 +73,7 @@ export interface SetupActionSpec<TInput extends AnyObjectSchema> {
   risk: RiskLevel;
   requiresConfirmation?: boolean;
   hints?: ActionHints;
+  tags?: ActionDefinition['tags'];
   /** Raises the risk of one call or holds it for the user (see `ActionDefinition.assessRisk`). */
   assessRisk?(input: z.output<TInput>, ctx: SetupContext): Promise<RiskAssessment | undefined>;
   run(input: z.output<TInput>, ctx: SetupContext): Promise<ActionResult>;

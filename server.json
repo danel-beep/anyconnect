@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.manyplug/manyplug",
+  "title": "Manyplug",
+  "description": "Your services and accounts (several per service) in one MCP server: mail, calendar, files, tasks.",
+  "version": "0.1.0",
+  "websiteUrl": "https://manyplug.com",
+  "repository": {
+    "url": "https://github.com/danel-beep/anyconnect",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://manyplug.com/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    },
+    {
+      "src": "https://manyplug.com/icon-512.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://manyplug.com/mcp"
+    }
+  ]
+}
