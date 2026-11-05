@@ -7,6 +7,7 @@ import { botEn, botRu } from './i18n/bot.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { emailEn, emailRu } from './i18n/email.js';
+import { landingEn, landingRu } from './i18n/landing.js';
 import { messengerLoginEn, messengerLoginRu } from './i18n/messenger-login.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { profilesEn, profilesRu } from './i18n/profiles.js';
@@ -214,6 +215,7 @@ const coreEn = {
 const en = {
   ...coreEn,
   ...siteEn,
+  ...landingEn,
   ...seoEn,
   ...appEn,
   ...authEn,
@@ -433,6 +435,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
 const ru: Record<Key, string> = {
   ...coreRu,
   ...siteRu,
+  ...landingRu,
   ...seoRu,
   ...appRu,
   ...authRu,

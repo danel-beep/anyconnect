@@ -164,6 +164,19 @@ export const PLANS: readonly Plan[] = [
   },
 ];
 
+/**
+ * Whole months a yearly payment saves against twelve monthly ones (yearly prices are set as "two
+ * months free"), the smallest across the public paid plans, so the label is true for every plan.
+ */
+export function yearlyFreeMonths(plans: readonly Plan[] = PLANS): number {
+  const paid = plans.filter((p) => p.public && p.priceMonthly > 0);
+  if (!paid.length) return 0;
+  return Math.max(
+    0,
+    Math.min(...paid.map((p) => Math.floor((p.priceMonthly * 12 - p.priceYearly) / p.priceMonthly + 1e-9))),
+  );
+}
+
 export const DEFAULT_PLAN_ID = 'free';
 
 export function findPlan(id: string | null | undefined): Plan | undefined {

@@ -495,11 +495,26 @@ HTTP — `src/routes/login.tsx` и `src/routes/security.tsx`.
 
 | Раздел | Адреса | Код |
 | --- | --- | --- |
-| Сайт | `/`, `/pricing`, `/services`, `/services/:id`, `/docs`, `/privacy`, `/terms` | `routes/site.tsx`, `web/site.tsx` |
+| Сайт | `/`, `/pricing`, `/services`, `/services/:id`, `/docs`, `/privacy`, `/terms` | `routes/site.tsx`, `web/site.tsx`, главная — `web/landing.tsx` |
 | Документация и поиск | `/docs/:client`, `/services/:id/:client`, `/faq`, `/compare`, `/compare/:slug`, `/guides/:slug`, `/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt` | `routes/seo.tsx`, `web/seo-pages.tsx`, `web/seo/` (см. `docs/SEO.md`) |
 | Вход | `/login`, `/signup`, `/auth/google` (+ `/callback`), второй фактор | `routes/login.tsx`, `core/external-login.ts` |
 | Кабинет | `/app` (обзор), `/app/services`, `/app/accounts/:id`, `/app/apps`, `/app/activity`, `/app/rules`, `/app/billing`, `/app/settings` | `routes/app.tsx`, `web/app.tsx`, `web/account-page.tsx`, `web/rules.tsx` |
 | Админка | `/admin`, `/admin/users`, `/admin/users/:id`, `/admin/audit`, `/admin/system` | `routes/admin.tsx`, `admin/service.ts`, `web/admin.tsx` |
+
+**Главная страница** (`web/landing.tsx`, тексты `web/i18n/landing.ts`, стили `web/styles/landing.ts`).
+Порядок секций: первый экран с демо-чатом → схема «одна ссылка» (тёмная полоса) → три шага →
+возможности → сервисы → безопасность → тарифы → вопросы → финальный призыв. Шапка на главной
+ведёт якорями (`#features`, `#services`, `#security`, `#pricing`). Числа на странице честные:
+`roughCount` округляет число сервисов вниз до кратного 5 («45+»), а «N месяцев бесплатно» при
+оплате за год считает `yearlyFreeMonths` из цен тарифов.
+
+Анимации без встроенных стилей и скриптов (CSP): атрибут `data-reveal` — блок проявляется один
+раз при прокрутке (`="kids"` — дети по очереди, `="play"` — запускает вложенную анимацию, например
+демо-чат), `data-live` — бесконечная анимация идёт, только пока блок на экране. Классы ставит
+`site.js`; конечное состояние — обычный стиль, а скрытое «до» описано только под `.reveal` и
+`prefers-reduced-motion: no-preference`. Поэтому без JS и при «уменьшить движение» страница
+сразу целая, а то, что уже на экране при загрузке, не анимируется. Анимируются только
+`opacity`, `transform` и штрихи SVG — без сдвигов вёрстки.
 
 **Вкладка «Сервисы» в кабинете.** Сверху подключённые аккаунты; демо-аккаунты (`SAMPLE_SERVICES`
 в `web/catalog.ts`, сейчас сервис `demo`) свёрнуты в одну строку с кнопкой «Удалить»

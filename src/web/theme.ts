@@ -74,7 +74,8 @@ export const THEMES = {
     'ok-soft': '#213429',
     'warn-bg': '#3a3122',
     'warn-border': '#8a6a2a',
-    'ink-surface': '#3a3a40',
+    /** Darker than the page here, so the band and the call-to-action stand apart from it. */
+    'ink-surface': '#1a1a1d',
   },
 } satisfies Record<'light' | 'dark', Palette>;
 

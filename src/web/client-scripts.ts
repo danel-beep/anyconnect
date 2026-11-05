@@ -40,6 +40,18 @@ d.addEventListener('click',function(e){if(!root.classList.contains('nav-open'))r
 /* Header shadow on scroll */
 var header=d.querySelector('[data-site-header]');if(header){var onScroll=function(){header.classList.toggle('scrolled',window.scrollY>8)};onScroll();window.addEventListener('scroll',onScroll,{passive:true})}
 
+/* Landing motion (styles/landing.ts): [data-reveal] blocks rise in the first time they scroll into view and
+   [data-live] blocks animate only while visible. Blocks already on screen are marked at once without the
+   rise, so nothing blinks. Nothing happens with reduced motion; without this script every block simply shows. */
+(function(){var els=$$('[data-reveal],[data-live]');if(!els.length||!('IntersectionObserver' in window))return;
+if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+var vh=window.innerHeight,now=els.filter(function(el){var r=el.getBoundingClientRect();return r.top<vh&&r.bottom>0});
+root.classList.add('reveal');
+now.forEach(function(el){if(el.hasAttribute('data-reveal'))el.classList.add('in','now');if(el.hasAttribute('data-live'))el.classList.add('live')});
+var seen=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');seen.unobserve(e.target)}})},{rootMargin:'0px 0px -8% 0px'});
+var live=new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('live',e.isIntersecting)})});
+els.forEach(function(el){if(el.hasAttribute('data-reveal')&&!el.classList.contains('in'))seen.observe(el);if(el.hasAttribute('data-live'))live.observe(el)})})();
+
 /* Monthly / yearly prices */
 $$('[data-interval-root]').forEach(function(box){$$('[data-interval-set]',box).forEach(function(b){b.addEventListener('click',function(){var v=b.getAttribute('data-interval-set');box.setAttribute('data-interval',v);$$('[data-interval-set]',box).forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});$$('[data-interval-input]',box).forEach(function(i){i.value=v})})})});
 
