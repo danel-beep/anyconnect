@@ -577,7 +577,8 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     try {
       await vi.waitFor(() => expect(otherProcess.connected).toBe(true), { timeout: 5_000 });
       expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Hello' })).status).toBe('sent');
-      await vi.waitFor(() => expect(queued).toEqual([account.id]), { timeout: 5_000 });
+      // Two jobs: marking the unread "Hi" read, then the reply.
+      await vi.waitFor(() => expect(queued).toEqual([account.id, account.id]), { timeout: 5_000 });
     } finally {
       await otherProcess.stop();
     }
@@ -744,7 +745,10 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(Date.now() - started).toBeLessThan(5_000);
     const state = await hub.services.messaging.accounts.get(account.id);
     expect(state?.sendPausedUntil?.getTime()).toBeGreaterThan(Date.now() + 590_000);
-    const [job] = await hub.services.db.select().from(messengerOutbox);
+    const [job] = await hub.services.db
+      .select()
+      .from(messengerOutbox)
+      .where(eq(messengerOutbox.kind, 'message'));
     expect(job?.status).toBe('queued');
 
     // The user lifts the pause (POST …/messenger/resume-sending): the held job goes out now.
@@ -767,9 +771,12 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(prune?.cron).toBeDefined();
     const { db } = hub.services;
 
-    // A fresh job stays.
+    // Fresh jobs stay (marking the chat read before the reply, then the reply).
     await prune!.run({}, {} as never);
-    expect(await db.select().from(messengerOutbox)).toHaveLength(1);
+    expect((await db.select().from(messengerOutbox)).map((job) => job.kind)).toEqual([
+      'mark_read',
+      'message',
+    ]);
 
     // One finished more than 30 days ago is deleted; the stored copy of the chat stays.
     await db.update(messengerOutbox).set({ updatedAt: new Date(Date.now() - 31 * 86_400_000) });
@@ -864,18 +871,29 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       expect(chat).toMatchObject({ title: 'Иван', unread: 1 });
       const sent = json(await call('whatsapp_send', { chat: chat.id, text: 'Да, есть' }));
       expect(sent.status).toBe('sent');
-      const send = apis.calls.find((c) => c.path === '/v23.0/1111111111/messages' && c.body?.type === 'text');
+      const messages = apis.calls.filter((c) => c.path === '/v23.0/1111111111/messages');
+      const send = messages.find((c) => c.body?.type === 'text');
       expect(send).toMatchObject({
         auth: 'Bearer EAAG-test-token-xxxxxxxxxxxxxxxx',
         body: { to: '79991234567', text: { body: 'Да, есть' } },
       });
+      // A reply marks the person's message read first, as a person reading the chat would.
+      const read = messages.find((c) => c.body?.status === 'read');
+      expect(read?.body.message_id).toBe('wamid.A');
+      expect(messages.indexOf(read!)).toBeLessThan(messages.indexOf(send!));
+      // Nothing unread any more: the next reply does not mark again.
+      expect(json(await call('whatsapp_send', { chat: chat.id, text: 'Привезём завтра' })).status).toBe(
+        'sent',
+      );
+      expect(apis.calls.filter((c) => c.body?.status === 'read')).toHaveLength(1);
 
+      await postWhatsApp(account.id, inbound('wamid.B', 'Спасибо'));
       expect(json(await call('whatsapp_mark_read', { chat: chat.id }))).toBeTruthy();
       await new Promise((resolve) => setTimeout(resolve, 300));
       await hub.services.messaging.dispatcher.tick();
       await new Promise((resolve) => setTimeout(resolve, 300));
-      const read = apis.calls.find((c) => c.body?.status === 'read');
-      expect(read?.body.message_id).toBe('wamid.A');
+      const reads = apis.calls.filter((c) => c.body?.status === 'read');
+      expect(reads.at(-1)?.body.message_id).toBe('wamid.B');
     });
 
     it('sends documents with a file name', async () => {
