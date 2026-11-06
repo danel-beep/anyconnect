@@ -263,6 +263,11 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(json(await call('telegram_bot_search', { query: 'декабрь' })).messages).toBeUndefined();
     expect(json(await call('telegram_bot_search', { from: 'анна' })).messages).toHaveLength(2);
     expect(json(await call('telegram_bot_list_chats', { query: 'петров' })).chats).toHaveLength(1);
+    // No match (contacts often carry a nickname): the newest chats come back instead of a dead end.
+    const missed = json(await call('telegram_bot_list_chats', { query: 'Данел' }));
+    expect(missed.chats ?? []).toEqual([]);
+    expect(missed.note).toMatch(/nickname/);
+    expect(missed.recent_chats.map((c: { title: string }) => c.title)).toContain('Анна Петрова');
 
     const read = json(await call('telegram_bot_read_chat', { chat: chats.chats[0].id }));
     expect(read.messages.map((m: { text: string }) => m.text)).toEqual([

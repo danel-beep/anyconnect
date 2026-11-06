@@ -184,6 +184,8 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
 
     await gatewayA.close();
     await until(() => gatewayB!.runtime.host.isOnline(account.id), 'takeover by the second instance');
+    // The host marks the session live in memory first and writes "online" to the row right after.
+    await until(async () => (await row(account.id)).state === 'online', 'online row after the takeover');
     // B connected with the device saved during the login on A.
     expect(log.connects).toBe(connectsBefore + 1);
     const lease = await row(account.id);
