@@ -16,8 +16,8 @@ import type { ExecResult } from './result.js';
  * fan-out, a unified capability tool or a `call_tools` batch — runs as one *unit* (one action on one
  * account) through the same ordered chain of stages:
  *
- *   audit → meter → quota → policy → risk → confirm → limits → circuit → idempotency → untrusted → shape
- *   → invoke
+ *   audit → meter → quota → policy → risk → confirm → approvals → limits → circuit → idempotency →
+ *   untrusted → shape → invoke
  *
  * Each stage is a middleware `(call, next) => result`: it may inspect the call, short-circuit with
  * its own result (a policy denial), call `next()` more than once (a retry) or post-process the
@@ -36,6 +36,8 @@ export const STAGE_ORDER = [
   'risk',
   /** Asks the user before risky actions (MCP elicitation, Telegram…; security layer). */
   'confirm',
+  /** Records standing approvals an approved call grants, e.g. "carry on this conversation" (security layer). */
+  'approvals',
   /** Per-account rate limits and safe retries of transient failures. */
   'limits',
   /** Fails fast while a service keeps failing for an account (circuit breaker). */
@@ -112,6 +114,8 @@ export interface CallContext {
   locals: Record<string, unknown>;
   /** Set by the executor once the call reaches the service (after every stage let it through). */
   invoked?: boolean;
+  /** Set by the executor when the action said this call is not usage (`countsAsUsage`). */
+  free?: boolean;
   interaction?: Interaction;
   /** Already approved by the user (e.g. a stored call approved in Telegram): `confirm` lets it pass. */
   preApproved?: boolean;

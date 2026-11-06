@@ -4,8 +4,9 @@ import type { Middleware } from '../executor.js';
 import type { UsageMeter } from '../usage.js';
 
 /**
- * Counts every unit that reached the service (refused, held for confirmation, deduplicated or
- * answered from an earlier approved run are not usage) per workspace, day, caller and action, and
+ * Counts every unit that reached the service (refused, held for confirmation, deduplicated,
+ * answered from an earlier approved run or declared free by the action, e.g. a wait that saw
+ * nothing new, are not usage) per workspace, day, caller and action, and
  * charges it to the plan that pays for it (`payer`, from the billing layer; in a team its payer's or
  * the member's own). It never blocks: stage `quota` reads what was charged and refuses before
  * `next()`. Counting failures are logged, never fatal for the call.
@@ -17,7 +18,7 @@ export function meterStage(deps: {
 }): Middleware {
   return async (call, next) => {
     const result = await next();
-    if (!call.invoked) return result;
+    if (!call.invoked || call.free) return result;
     const { principal } = call;
     try {
       await deps.meter.record({

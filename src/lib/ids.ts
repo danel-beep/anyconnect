@@ -47,6 +47,7 @@ export type IdPrefix =
   | 'prs' // persona: a named slice of the workspace with its own MCP URL
   | 'rul' // access rule (client × persona × account × risk)
   | 'pcl' // pending call: waiting for confirmation or for its undo window
+  | 'apr' // standing approval: a series of calls the user approved once (e.g. a conversation)
   | 'ntf' // notification channel (e.g. the owner's Telegram chat)
   | 'pky' // passkey (WebAuthn credential)
   | 'oap' // OAuth app of a service provider (bring your own app)

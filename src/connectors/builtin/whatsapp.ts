@@ -11,7 +11,12 @@ import {
   type OutboundJob,
   type TemplateMessage,
 } from '../messaging.js';
-import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
+import {
+  conversationInstructions,
+  messengerActions,
+  messengerUiTexts,
+  pacingConfig,
+} from '../messaging-actions.js';
 import { deliveryFetch, readJson, secretsEqual } from '../messaging-http.js';
 import { type AccountContext, type ActionFactory, ConnectorError, defineConnector } from '../sdk.js';
 
@@ -643,7 +648,8 @@ export function createWhatsAppConnector(port: MessagingPort) {
     homepage: 'https://www.whatsapp.com',
     instructions:
       "WhatsApp tools read from the hub's synced copy of the chats. Find chats with whatsapp_list_chats, then read or send by chat id. " +
-      'Cloud API numbers can reply freely only within 24 hours after the person last wrote. Before writing to someone new, ask the user.',
+      'Cloud API numbers can reply freely only within 24 hours after the person last wrote. Before writing to someone new, ask the user. ' +
+      conversationInstructions('whatsapp'),
     config,
     credentials,
     messenger: {

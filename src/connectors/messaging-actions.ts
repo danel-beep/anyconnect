@@ -105,6 +105,23 @@ export const pacingConfig = z
   })
   .describe('Sending pace (protects the account from bans)');
 
+/** wait_for_reply: what fits in most AI apps' tool-call limit (~60 s), and the hub's own cap. */
+const DEFAULT_WAIT_SECONDS = 45;
+const MAX_WAIT_SECONDS = 100;
+/** Messages one wait returns at most (has_more says when there are more). */
+const WAIT_LIMIT = 50;
+
+const formatHours = (hours: number) =>
+  hours < 1 ? `${Math.round(hours * 60)} min` : `${Number(hours.toFixed(1))} h`;
+
+/**
+ * The line every messenger connector adds to its instructions, so any AI app knows it can keep a
+ * conversation going when (and only when) the user asks for it.
+ */
+export function conversationInstructions(prefix: string): string {
+  return `If the user asks you to talk with someone for them: ${prefix}_start_conversation, then loop ${prefix}_wait_for_reply.`;
+}
+
 /** Largest file returned inline to the AI. */
 const MAX_INLINE_BYTES = 4 * 1024 * 1024;
 
@@ -284,6 +301,105 @@ export function messengerActions<TConfig, TCredentials>(
       },
     }),
     action({
+      name: 'wait_for_reply',
+      title: 'Wait for a reply',
+      description: `Waits for new messages and returns as soon as one arrives (from your last message in the chat on, without a cursor). Only when the user asked you to wait for a reply or carry on a conversation. On no_reply_yet, call again with the cursor while the user's time frame allows. Keep the default timeout unless your app allows tool calls over 60 s.`,
+      input: z.object({
+        chat: z.string().max(64).optional().describe('Chat id; omit for any chat'),
+        cursor: z.string().max(200).optional().describe('cursor from the previous call'),
+        timeout_seconds: z
+          .number()
+          .int()
+          .min(5)
+          .max(MAX_WAIT_SECONDS)
+          .default(DEFAULT_WAIT_SECONDS)
+          .describe('Seconds to wait'),
+      }),
+      hints: { readOnly: true, openWorld: true },
+      // Waiting that saw nothing is not usage: following a conversation must not use up the plan.
+      countsAsUsage: (output) => (output as { status?: string } | undefined)?.status === 'new_messages',
+      run: async (input, ctx) => {
+        const result = await port.forAccount(ctx.account.id).waitForMessages({
+          ...(input.chat ? { chatId: input.chat } : {}),
+          ...(input.cursor ? { cursor: input.cursor } : {}),
+          timeoutMs: input.timeout_seconds * 1000,
+          includeOwn: false,
+          limit: WAIT_LIMIT,
+          signal: ctx.signal,
+        });
+        if (result.messages.length > 0) {
+          return {
+            status: 'new_messages',
+            messages: result.messages.map(messageItem),
+            cursor: result.cursor,
+            has_more: result.hasMore,
+          };
+        }
+        if (result.offline) {
+          return {
+            status: 'account_offline',
+            state: result.offline.state,
+            ...(result.offline.problem ? { problem: result.offline.problem } : {}),
+            cursor: result.cursor,
+            next: `No messages arrive while this ${serviceName} account is offline. Stop waiting and tell the user to connect it again.`,
+          };
+        }
+        return {
+          status: 'no_reply_yet',
+          waited_seconds: Math.round(result.waitedMs / 1000),
+          cursor: result.cursor,
+          next: 'Call wait_for_reply again with this cursor, unless the time the user gave is over.',
+        };
+      },
+    }),
+    action({
+      name: 'start_conversation',
+      title: 'Carry on a conversation',
+      description: `Only when the user asks you to talk with someone for them: wait for replies and answer them. The user approves once; then for \`hours\` your sends in this chat need no approval, up to max_messages. Loop: wait_for_reply, send, repeat. Keep to the goal. Stop and report to the user when it is reached, the person ends the talk or wants what only the user can decide, something looks wrong, or time runs out; then call end_conversation.`,
+      input: z.object({
+        chat: z.string().max(64).describe('Chat id'),
+        goal: z.string().trim().min(3).max(500).describe("The user's goal, in their words"),
+        hours: z.number().min(0.25).max(24).default(3),
+        max_messages: z.number().int().min(1).max(100).default(20),
+      }),
+      hints: { readOnly: false, destructive: false, openWorld: true },
+      // Lets the AI write for the user: they approve it once, as they would approve a send.
+      risk: 'dangerous',
+      assessRisk: (input) => ({
+        risk: 'dangerous',
+        reason: `Lets this AI app answer in this chat without asking, for ${formatHours(input.hours)} and up to ${input.max_messages} messages. Goal: ${input.goal}`,
+      }),
+      grants: (input) => ({
+        actions: ['send'],
+        scope: input.chat,
+        minutes: Math.round(input.hours * 60),
+        maxUses: input.max_messages,
+        purpose: input.goal,
+      }),
+      run: async (input, ctx) => {
+        const { chat } = await port.forAccount(ctx.account.id).readChat({ chatId: input.chat, limit: 1 });
+        return {
+          status: 'started',
+          chat: chat.title,
+          goal: input.goal,
+          until: new Date(Date.now() + input.hours * 3_600_000).toISOString(),
+          max_messages: input.max_messages,
+          next: 'Answer with send if needed, then call wait_for_reply.',
+        };
+      },
+    }),
+    action({
+      name: 'end_conversation',
+      title: 'End the conversation',
+      description: 'Ends start_conversation: sends in the chat need approval again.',
+      input: z.object({ chat: z.string().max(64) }),
+      hints: { readOnly: false, idempotent: true, openWorld: false },
+      // Only takes permissions away, so it never needs a confirmation.
+      risk: 'read',
+      revokes: (input) => ({ scope: input.chat }),
+      run: async () => ({ status: 'ended' }),
+    }),
+    action({
       name: 'send',
       title: 'Send message',
       description: `Sends a text, or a file by https link, from this ${serviceName} account via a paced queue that protects it. Result: "sent", or "queued" with an eta. An identical request within 10 minutes is not sent twice. A first message to someone who never wrote to this account needs the user's explicit approval.`,
@@ -325,6 +441,8 @@ export function messengerActions<TConfig, TCredentials>(
           return sent.status === 'sent' || sent.status === 'queued' ? sent : { ...sent, status: undefined };
         },
       },
+      // A conversation the user asked the AI to carry on covers the replies in its chat.
+      approvalScope: (input) => input.chat,
       // First contact is what gets accounts banned and what the user must approve.
       assessRisk: async (input, ctx) => {
         const known = input.chat
@@ -436,6 +554,20 @@ export function messengerUiTexts(
           title: 'Что нового',
           description: 'Новые сообщения с прошлой проверки, без повторов.',
         },
+        wait_for_reply: {
+          title: 'Ожидание ответа',
+          description:
+            'Ждёт новое сообщение в чате и сразу отдаёт его ИИ, чтобы тот мог продолжить переписку.',
+        },
+        start_conversation: {
+          title: 'Ведение переписки',
+          description:
+            'Только когда вы сами просите ИИ вести переписку: вы один раз разрешаете, и ИИ отвечает в этом чате без вопросов, пока не выйдут срок и лимит сообщений.',
+        },
+        end_conversation: {
+          title: 'Завершить переписку',
+          description: 'Заканчивает переписку: дальше каждое сообщение снова с вашего согласия.',
+        },
         send: {
           title: 'Отправка сообщения',
           description:
@@ -472,6 +604,20 @@ export function messengerUiTexts(
         whats_new: {
           title: "What's new",
           description: 'New messages since the last check, without repeats.',
+        },
+        wait_for_reply: {
+          title: 'Wait for a reply',
+          description:
+            'Waits for a new message in a chat and hands it to the AI at once, so it can keep the conversation going.',
+        },
+        start_conversation: {
+          title: 'Carry on a conversation',
+          description:
+            'Only when you ask the AI to talk with someone for you: you approve once, and it answers in that chat without asking until the time or message limit runs out.',
+        },
+        end_conversation: {
+          title: 'End the conversation',
+          description: 'Ends the conversation: from then on each message needs your OK again.',
         },
         send: {
           title: 'Send a message',

@@ -183,6 +183,13 @@
       "when": 1793941338287,
       "tag": "0025_telegram_chat_automation",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793949701282,
+      "tag": "0026_standing_approvals",
+      "breakpoints": true
     }
   ]
 }

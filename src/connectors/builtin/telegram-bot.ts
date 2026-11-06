@@ -10,7 +10,12 @@ import {
   type OutboundJob,
   type SentReceipt,
 } from '../messaging.js';
-import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
+import {
+  conversationInstructions,
+  messengerActions,
+  messengerUiTexts,
+  pacingConfig,
+} from '../messaging-actions.js';
 import {
   deliveryAttempt,
   deliveryFetch,
@@ -584,10 +589,11 @@ export function createTelegramBotConnector(port: MessagingPort, hub: TelegramHub
     homepage: 'https://core.telegram.org/bots',
     instructions:
       "Telegram Bot tools read the hub's synced copy of the chats: fast and free. " +
-      'Find chats with telegram_bot_list_chats, then read or send by chat id; follow new messages with telegram_bot_whats_new and its cursor. ' +
-      'A bot sees only chats where people wrote to it and cannot start a conversation. ' +
-      "Via Chat Automation (Telegram Business) the user's own picked private chats appear from connection on; " +
-      "replies go out as the user, within 24 hours of the person's last message.",
+      'Find chats with telegram_bot_list_chats, then read or send by chat id. ' +
+      'A bot sees only chats where people wrote to it and cannot write first. ' +
+      "Via Chat Automation (Telegram Business) the user's picked private chats appear from connection on; " +
+      "replies go out as the user, within 24 hours of the person's last message. " +
+      conversationInstructions('telegram_bot'),
     config,
     credentials,
     messenger: {

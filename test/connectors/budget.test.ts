@@ -64,10 +64,10 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   netlify: { total: 1400, tool: 235 },
   harvest: { total: 1510, tool: 300 },
   toggl: { total: 1860, tool: 280 },
-  telegram: { total: 2050, tool: 400 },
-  telegram_bot: { total: 2150, tool: 410 },
+  telegram: { total: 2700, tool: 400 },
+  telegram_bot: { total: 2750, tool: 410 },
   // Two more tools than Telegram: message templates (list_templates, send_template).
-  whatsapp: { total: 2500, tool: 400 },
+  whatsapp: { total: 3250, tool: 400 },
 };
 
 function account(connectorId: string): AccountRow {

@@ -653,6 +653,42 @@ export interface PendingCallPrincipal {
 }
 
 /**
+ * Standing approvals: the user approved a series of calls once (e.g. "carry on this conversation"
+ * lets the AI app that started it reply in one chat for a few hours). Bound to that AI app
+ * connection; covered calls are counted against `maxUses` (see `security/standing-approvals.ts`).
+ */
+export const standingApprovals = pgTable(
+  'standing_approvals',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: text().notNull(),
+    /** Who may use it: the AI app connection (`oauth:<grant>`, `api_token:<id>`) or `user:<id>`. */
+    holder: text().notNull(),
+    connectorId: text().notNull(),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Actions it covers, e.g. {send}. */
+    actions: text().array().notNull(),
+    /** What covered calls act on (e.g. the hub's chat id). */
+    scope: text().notNull(),
+    /** The tool that granted it, for the audit log and the panel. */
+    grantedBy: text().notNull(),
+    /** SecretBox, AAD = `approval:<id>:purpose`; the goal the user gave, if any. */
+    purposeEncrypted: text(),
+    maxUses: integer().notNull(),
+    uses: integer().notNull().default(0),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    revokedAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.accountId, t.scope), index().on(t.workspaceId, t.expiresAt)],
+);
+
+/**
  * A tool call the hub holds back: waiting for the user's confirmation (in the chat, Telegram or the
  * web page) or for its undo window. Arguments and results are encrypted; rows are short-lived.
  */
