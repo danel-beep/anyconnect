@@ -11,6 +11,8 @@ import { UseWith } from '../web/seo-pages.js';
 import { DocsPage, LegalPage, PricingPage, ServiceDetailPage, ServicesPage } from '../web/site.js';
 import { StatusPage } from '../web/status-page.js';
 import { supportDoc } from '../web/support.js';
+import { trustDoc } from '../web/trust.js';
+import { TrustPage } from '../web/trust-page.js';
 import type { AppContext, AppEnv } from './context.js';
 import { currentUser } from './context.js';
 import { pageCtx, saveLocale } from './page-helpers.js';
@@ -149,6 +151,11 @@ export function siteRoutes() {
     ),
   );
 
+  app.get('/trust', async (c) => {
+    const ctx = pageCtx(c, await currentUser(c));
+    return c.html(<TrustPage ctx={ctx} doc={trustDoc(ctx.lang, { supportEmail: ctx.supportEmail })} />);
+  });
+
   app.get('/support', async (c) => {
     const ctx = pageCtx(c, await currentUser(c));
     const doc = supportDoc(ctx.lang, { publicUrl: ctx.publicUrl, supportEmail: ctx.supportEmail });
@@ -161,6 +168,7 @@ export function siteRoutes() {
       const doc = legalDoc(kind, ctx.lang, {
         publicUrl: ctx.publicUrl,
         supportEmail: ctx.supportEmail,
+        operator: c.get('services').config.site.legalOperator,
       });
       return c.html(<LegalPage ctx={ctx} doc={doc} path={`/${kind}`} />);
     });

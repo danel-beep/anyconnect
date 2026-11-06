@@ -129,6 +129,7 @@ export function llmsTxt(input: LlmsInput): string {
     '## Optional',
     '',
     `- [Full text for language models](${u}/llms-full.txt): guides, every service's tools and the FAQ in one file.`,
+    `- [Trust: what is encrypted, who sees what, how to delete data](${u}/trust)`,
     `- [Privacy policy](${u}/privacy)`,
     `- [Terms of service](${u}/terms)`,
     '',

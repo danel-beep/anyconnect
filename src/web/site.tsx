@@ -25,16 +25,16 @@ import { Brand, CodeBlock, CopyField, fmtNumber, GoogleG, Icon, Prefs, ServiceLo
 // Layout
 // ---------------------------------------------------------------------------
 
-export type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal' | 'status';
+export type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal' | 'status' | 'security';
 
 const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) => {
   const { t } = ctx;
   // On the landing page the links jump to its sections; elsewhere they open the full pages.
   const home = current === 'home';
-  const nav: [Section | 'features' | 'security', string, string][] = [
+  const nav: [Section | 'features', string, string][] = [
     ['services', home ? '#services' : '/services', t('site.nav.services')],
     ['features', home ? '#features' : '/#features', t('site.nav.features')],
-    ['security', home ? '#security' : '/#security', t('site.nav.security')],
+    ['security', home ? '#security' : '/trust', t('site.nav.security')],
     ['pricing', home ? '#pricing' : '/pricing', t('site.nav.pricing')],
     ['docs', '/docs', t('site.nav.docs')],
   ];
@@ -133,10 +133,13 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 <a href="/login">{t('site.cta.signIn')}</a>
               </>
             )}
-            <a href={ctx.user ? '/security' : '/#security'}>{t('site.footer.security')}</a>
+            <a href={ctx.user ? '/security' : localizedPath('/trust', ctx.lang)}>
+              {t('site.footer.security')}
+            </a>
           </div>
           <div>
             <h2>{t('site.footer.company')}</h2>
+            <a href={localizedPath('/trust', ctx.lang)}>{t('site.footer.trust')}</a>
             <a href="/support">{t('site.footer.support')}</a>
             {ctx.supportEmail ? <a href={`mailto:${ctx.supportEmail}`}>{t('site.footer.contact')}</a> : null}
             <a href="/status">{t('site.footer.status')}</a>

@@ -39,6 +39,8 @@ services:
         sync: false
       - key: SUPPORT_EMAIL
         sync: false
+      - key: LEGAL_OPERATOR_NAME
+        sync: false
       - key: GOOGLE_SITE_VERIFICATION
         sync: false
       - key: BING_SITE_VERIFICATION

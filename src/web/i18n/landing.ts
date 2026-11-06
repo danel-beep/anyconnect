@@ -118,6 +118,7 @@ export const landingEn = {
   'landing.sec.encryption.title': 'Encrypted per account',
   'landing.sec.encryption.text':
     'Every token and password is encrypted with its own key. A stolen database alone is useless.',
+  'landing.sec.encryption.link': 'What is encrypted',
   'landing.sec.secrets.title': 'The AI never sees your logins',
   'landing.sec.secrets.text':
     'You enter keys on our page, not in the chat. They’re stored encrypted and sent only to the service they belong to.',
@@ -276,6 +277,7 @@ export const landingRu: Record<LandingKey, string> = {
   'landing.sec.encryption.title': 'Шифрование каждого аккаунта',
   'landing.sec.encryption.text':
     'Каждый токен и пароль зашифрован своим ключом. Украденная база сама по себе бесполезна.',
+  'landing.sec.encryption.link': 'Что шифруется',
   'landing.sec.secrets.title': 'ИИ не видит пароли и ключи',
   'landing.sec.secrets.text':
     'Ключи вводятся на нашей странице, а не в чате. Они хранятся зашифрованными и уходят только в тот сервис, к которому относятся.',

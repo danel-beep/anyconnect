@@ -53,6 +53,7 @@ const STATIC_PAGES: SitemapEntry[] = [
   { path: '/compare', priority: 0.5 },
   { path: '/use-cases', priority: 0.7 },
   { path: '/blog', priority: 0.6 },
+  { path: '/trust', priority: 0.4 },
   { path: '/support', priority: 0.3 },
   { path: '/status', priority: 0.3 },
   { path: '/privacy', priority: 0.2 },
