@@ -521,10 +521,13 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       expect(pending?.reason).toContain('Согласовать цену доставки');
       await hub.services.pendingCalls.decide(id!, true, 'web');
       await hub.services.pendingRunner.tick();
-      expect(json(await call('telegram_bot_start_conversation', start))).toMatchObject({
-        status: 'started',
-        max_messages: 2,
-      });
+      const started = json(await call('telegram_bot_start_conversation', start));
+      expect(started).toMatchObject({ status: 'started', max_messages: 2 });
+      // A ready prompt for a check the AI app can schedule for itself, to go on after its reply ends.
+      expect(started.follow_up.when).toContain('schedule');
+      expect(started.follow_up.prompt).toContain(chat.id);
+      expect(started.follow_up.prompt).toContain('Согласовать цену доставки');
+      expect(started.follow_up.prompt).toContain(started.until);
 
       expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Доставка 10 €' })).status).toBe(
         'sent',

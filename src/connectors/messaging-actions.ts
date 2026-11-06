@@ -111,6 +111,29 @@ const MAX_WAIT_SECONDS = 100;
 /** Messages one wait returns at most (has_more says when there are more). */
 const WAIT_LIMIT = 50;
 
+/** How long a conversation may run: with checks scheduled in the AI app (`follow_up`), days are realistic. */
+const MAX_CONVERSATION_HOURS = 72;
+
+/**
+ * How to keep a conversation going after the AI's reply ends: most AI apps can schedule a task for
+ * themselves (Claude and ChatGPT scheduled tasks, hourly; Claude Code /loop or cron, by the minute).
+ * The hub cannot know which one the caller has, so it hands over a ready prompt for any of them. A
+ * scheduled run comes through the same AI app, so the conversation's approval still covers it.
+ */
+function followUp(c: {
+  serviceName: string;
+  account: string;
+  chatId: string;
+  chatTitle: string;
+  goal: string;
+  until: string;
+}) {
+  return {
+    when: `If the person may answer after this reply of yours ends and your app can schedule tasks for you (scheduled tasks, reminders, /loop, cron), offer the user to schedule a check with this prompt: every hour or as often as the app allows, until ${c.until}. Set it up only if they agree.`,
+    prompt: `Continue the ${c.serviceName} conversation in the chat "${c.chatTitle}" (Manyplug, account "${c.account}", chat id ${c.chatId}) for me. Goal: ${c.goal}. Call the ${c.serviceName} wait_for_reply tool with this chat and timeout_seconds 30. If a reply came, answer it with send, keeping to the goal, and wait again; if nothing came, stop until the next check. Stop for good and tell me what happened when the goal is reached, the person ends the conversation or asks for something only I can decide, a send needs my approval, or after ${c.until}; then call end_conversation for this chat and remove this scheduled check.`,
+  };
+}
+
 const formatHours = (hours: number) =>
   hours < 1 ? `${Math.round(hours * 60)} min` : `${Number(hours.toFixed(1))} h`;
 
@@ -348,7 +371,7 @@ export function messengerActions<TConfig, TCredentials>(
           status: 'no_reply_yet',
           waited_seconds: Math.round(result.waitedMs / 1000),
           cursor: result.cursor,
-          next: 'Call wait_for_reply again with this cursor, unless the time the user gave is over.',
+          next: 'Call wait_for_reply again with this cursor, unless the time the user gave is over. If the answer may take longer than this reply lasts, use follow_up from start_conversation.',
         };
       },
     }),
@@ -359,7 +382,7 @@ export function messengerActions<TConfig, TCredentials>(
       input: z.object({
         chat: z.string().max(64).describe('Chat id'),
         goal: z.string().trim().min(3).max(500).describe("The user's goal, in their words"),
-        hours: z.number().min(0.25).max(24).default(3),
+        hours: z.number().min(0.25).max(MAX_CONVERSATION_HOURS).default(3),
         max_messages: z.number().int().min(1).max(100).default(20),
       }),
       hints: { readOnly: false, destructive: false, openWorld: true },
@@ -378,13 +401,22 @@ export function messengerActions<TConfig, TCredentials>(
       }),
       run: async (input, ctx) => {
         const { chat } = await port.forAccount(ctx.account.id).readChat({ chatId: input.chat, limit: 1 });
+        const until = new Date(Date.now() + input.hours * 3_600_000).toISOString();
         return {
           status: 'started',
           chat: chat.title,
           goal: input.goal,
-          until: new Date(Date.now() + input.hours * 3_600_000).toISOString(),
+          until,
           max_messages: input.max_messages,
           next: 'Answer with send if needed, then call wait_for_reply.',
+          follow_up: followUp({
+            serviceName,
+            account: ctx.account.name,
+            chatId: input.chat,
+            chatTitle: chat.title,
+            goal: input.goal,
+            until,
+          }),
         };
       },
     }),
