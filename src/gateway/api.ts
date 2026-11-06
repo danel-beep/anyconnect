@@ -45,6 +45,8 @@ export function gatewayApi(deps: { host: SessionHost; token: string; logger: Log
     return parsed.data as z.output<T>;
   };
 
+  app.get('/v1/drivers', (c) => c.json({ drivers: deps.host.driverStatus() }));
+
   app.post('/v1/accounts/:id/login', async (c) =>
     c.json(await deps.host.startLogin(c.req.param('id'), await body(c, StartLoginInput))),
   );

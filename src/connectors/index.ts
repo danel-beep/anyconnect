@@ -38,6 +38,7 @@ import slack from './builtin/slack.js';
 import smartsheet from './builtin/smartsheet.js';
 import stripe from './builtin/stripe.js';
 import { createTelegramConnector } from './builtin/telegram.js';
+import { createTelegramBotConnector } from './builtin/telegram-bot.js';
 import todoist from './builtin/todoist.js';
 import toggl from './builtin/toggl.js';
 import trello from './builtin/trello.js';
@@ -121,6 +122,7 @@ export function createBuiltinRegistry(deps: BuiltinDeps = { messaging: NO_MESSAG
     .register(harvest)
     .register(toggl)
     .register(createTelegramConnector(deps.messaging))
+    .register(createTelegramBotConnector(deps.messaging))
     .register(createWhatsAppConnector(deps.messaging));
 }
 

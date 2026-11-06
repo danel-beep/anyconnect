@@ -30,6 +30,10 @@ export const connectEn = {
     '{service} signs you in on its own site, and this server is not registered with {service} yet. The owner of the server can turn it on.',
   'connect.unavailableAdmin':
     '{service} signs users in on its own site, and this server has no {service} sign-in app yet. Add its client ID and secret in System settings, and the Connect button starts working for everyone.',
+  'connect.unavailableSetupText':
+    '{service} needs a part of this server that is not switched on yet. The owner of the server can turn it on.',
+  'connect.unavailableSetupAdmin':
+    '{service} needs a part of this server that is not switched on yet. Set {env} in the server environment and restart it, and the Connect button starts working for everyone.',
   'connect.unavailableAltTitle': 'You can still connect it.',
   'connect.unavailableAlt':
     'Use {alternative} with an app password: the AI gets the same mail, and setup takes about three minutes.',
@@ -74,6 +78,10 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
     'Вход в {service} идёт на сайте самого сервиса, а этот сервер ещё не зарегистрирован в {service}. Владелец сервера может это включить.',
   'connect.unavailableAdmin':
     'Вход в {service} идёт на сайте самого сервиса, а у этого сервера ещё нет приложения для входа в {service}. Добавьте его client ID и секрет в «Системе», и кнопка «Подключить» заработает у всех.',
+  'connect.unavailableSetupText':
+    'Для {service} нужна часть сервера, которая ещё не включена. Владелец сервера может её включить.',
+  'connect.unavailableSetupAdmin':
+    'Для {service} нужна часть сервера, которая ещё не включена. Задайте {env} в переменных окружения сервера и перезапустите его, и кнопка «Подключить» заработает у всех.',
   'connect.unavailableAltTitle': 'Подключить всё равно можно.',
   'connect.unavailableAlt':
     'Как «{alternative}» с паролем приложения: ИИ получит ту же почту, настройка займёт около трёх минут.',

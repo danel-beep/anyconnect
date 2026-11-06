@@ -47,7 +47,12 @@ export interface ServiceMeta {
    * Another way in while this service cannot be connected here (its sign-in app is not set up):
    * a connector and form values to start it with, e.g. Gmail through IMAP with an app password.
    */
-  alternative?: { connectorId: string; values?: Record<string, string> };
+  alternative?: {
+    connectorId: string;
+    values?: Record<string, string>;
+    /** What the alternative gives instead, when the default text (an app password for mail) does not fit. */
+    note?: Record<UiLanguage, string>;
+  };
 }
 
 export const SERVICE_META: Record<string, ServiceMeta> = {
@@ -83,8 +88,23 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     icon: 'telegram',
     category: 'messengers',
     blurb: {
-      ru: 'Ваш бот, а с Telegram Business и личные чаты: поиск по переписке, ответы.',
-      en: 'Your bot, and with Telegram Business your own chats: message search, replies.',
+      ru: 'Ваш личный аккаунт: все чаты и группы, поиск по переписке, ответы от вашего имени.',
+      en: 'Your personal account: all chats and groups, message search, replies sent as you.',
+    },
+    alternative: {
+      connectorId: 'telegram_bot',
+      note: {
+        ru: 'Как «Telegram Bot»: ваш бот через официальный Bot API, а с Telegram Business и ваши личные чаты.',
+        en: 'As a Telegram Bot: your bot through the official Bot API, and with Telegram Business your own chats too.',
+      },
+    },
+  },
+  telegram_bot: {
+    icon: 'telegram',
+    category: 'messengers',
+    blurb: {
+      ru: 'Ваш бот через Bot API, а с Telegram Business и личные чаты: поиск, ответы.',
+      en: 'Your bot through the Bot API, and with Telegram Business your own chats: search, replies.',
     },
   },
   whatsapp: {
@@ -443,6 +463,7 @@ export function serviceAlternative(
   return {
     service: connectorText(connector, lang).name,
     url: `/connect/${encodeURIComponent(connector.id)}${query ? `?${query}` : ''}`,
+    ...(alternative.note ? { note: alternative.note[lang] } : {}),
   };
 }
 

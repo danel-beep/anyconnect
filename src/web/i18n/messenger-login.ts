@@ -40,7 +40,7 @@ export const messengerLoginEn = {
   'mlogin.retry': 'Try again',
   'mlogin.expired': 'This login has expired. Start again.',
   'mlogin.unavailable':
-    'Logging in to this messenger is not available on this server yet: the messenger gateway is not running. The administrator turns it on (see docs/MESSENGERS.md).',
+    'Logging in to this messenger is not available on this server yet: the messenger gateway or its API keys are not set up. The administrator turns it on (see docs/MESSENGERS.md).',
   'mlogin.unavailableTry': 'The messenger gateway is not answering right now. Try again in a minute.',
 };
 
@@ -81,6 +81,6 @@ export const messengerLoginRu: Record<keyof typeof messengerLoginEn, string> = {
   'mlogin.retry': 'Попробовать снова',
   'mlogin.expired': 'Время на вход истекло. Начните заново.',
   'mlogin.unavailable':
-    'Вход в этот мессенджер на этом сервере пока недоступен: не запущен шлюз мессенджеров. Его включает администратор (см. docs/MESSENGERS.md).',
+    'Вход в этот мессенджер на этом сервере пока недоступен: не настроен шлюз мессенджеров или его ключи API. Его включает администратор (см. docs/MESSENGERS.md).',
   'mlogin.unavailableTry': 'Шлюз мессенджеров сейчас не отвечает. Попробуйте через минуту.',
 };
