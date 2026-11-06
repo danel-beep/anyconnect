@@ -28,7 +28,7 @@ export const accountPagesEn = {
   'security.ask.1': 'Check my Manyplug security and tell me what to set up next.',
   'security.ask.2': 'Which browsers are signed in to my Manyplug account?',
 
-  'app.settings.sub': 'Your profile, how the AI sees your tools, and where you are signed in.',
+  'app.settings.sub': 'Your profile, confirmations, how the AI sees your tools, and where you are signed in.',
   'app.settings.profileHint': 'Your name and the language of this site.',
   'app.settings.signinHint': 'How you get into Manyplug.',
   'app.settings.securityCta': 'Two-step sign-in and passkeys',
@@ -43,6 +43,19 @@ export const accountPagesEn = {
   'app.settings.ask.1': 'In Manyplug, give each of my accounts its own set of tools.',
   'app.settings.ask.2': 'In Manyplug, go back to automatic tool listing with one set of tools per service.',
   'app.settings.recommended': 'Recommended',
+  'app.settings.confirm': 'Confirmations',
+  'app.settings.confirmHint': 'Before risky actions, like sending a message, Manyplug asks you first.',
+  'app.settings.confirmIn': 'Where you confirm',
+  'app.settings.confirmIn.link': 'On a Manyplug page',
+  'app.settings.confirmInHint.link':
+    'The AI gives you a link, or you tap the button in Telegram. Safest: nothing in the chat can confirm for you.',
+  'app.settings.confirmIn.chat': 'Right in the AI chat',
+  'app.settings.confirmInHint.chat':
+    'The AI asks you in the chat and goes ahead after your “yes”. Faster, but you trust the AI app to ask honestly.',
+  'app.settings.confirmFloor':
+    'Deleting accounts and changes that lower your protection always ask on a Manyplug page.',
+  'app.settings.confirmRules': 'Which actions ask first',
+  'app.flash.confirmInSaved': 'Saved. The next action that asks first will use this.',
   'app.settings.sessionsHint': 'Sign out of any browser you do not recognise.',
 } as const;
 
@@ -76,7 +89,7 @@ export const accountPagesRu: Record<AccountPagesKey, string> = {
   'security.ask.1': 'Проверь защиту моего Manyplug и подскажи, что настроить дальше.',
   'security.ask.2': 'В каких браузерах выполнен вход в мой Manyplug?',
 
-  'app.settings.sub': 'Профиль, то, как ИИ видит инструменты, и где выполнен вход.',
+  'app.settings.sub': 'Профиль, подтверждения, то, как ИИ видит инструменты, и где выполнен вход.',
   'app.settings.profileHint': 'Ваше имя и язык этого сайта.',
   'app.settings.signinHint': 'Как вы входите в Manyplug.',
   'app.settings.securityCta': 'Двухэтапный вход и ключи доступа',
@@ -92,5 +105,19 @@ export const accountPagesRu: Record<AccountPagesKey, string> = {
   'app.settings.ask.2':
     'В Manyplug верни автоматический список инструментов и один набор инструментов на сервис.',
   'app.settings.recommended': 'Рекомендуем',
+  'app.settings.confirm': 'Подтверждения',
+  'app.settings.confirmHint':
+    'Перед рискованными действиями, например отправкой сообщения, Manyplug спрашивает вас.',
+  'app.settings.confirmIn': 'Где вы подтверждаете',
+  'app.settings.confirmIn.link': 'На странице Manyplug',
+  'app.settings.confirmInHint.link':
+    'ИИ даёт ссылку, или вы нажимаете кнопку в Telegram. Надёжнее всего: из чата за вас ничего не подтвердить.',
+  'app.settings.confirmIn.chat': 'Прямо в чате с ИИ',
+  'app.settings.confirmInHint.chat':
+    'ИИ спрашивает вас в чате и выполняет действие после вашего «да». Быстрее, но вы доверяете ИИ-приложению честно спросить.',
+  'app.settings.confirmFloor':
+    'Удаление аккаунтов и изменения, которые ослабляют защиту, всегда подтверждаются на странице Manyplug.',
+  'app.settings.confirmRules': 'Какие действия спрашивают',
+  'app.flash.confirmInSaved': 'Сохранено. Следующее действие с подтверждением пойдёт так.',
   'app.settings.sessionsHint': 'Выйдите из браузеров, которые вы не узнаёте.',
 };

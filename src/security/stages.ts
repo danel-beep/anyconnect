@@ -15,12 +15,15 @@ import type { CallerPolicy, PolicyService } from './policy-service.js';
  *
  * - `policy`: client × account × risk rules and personas; denies before anything is decrypted.
  * - `confirm`: holds risky calls until the user confirms (in the chat via MCP elicitation, else in
- *   Telegram or on the web page) and applies undo windows.
+ *   Telegram or on the web page, or, when the user chose `confirmIn: chat`, by answering the AI app,
+ *   which then repeats the call) and applies undo windows.
  * - `untrusted`: marks third-party content in results as data, not instructions.
  */
 
 const POLICY = 'security.policy';
 const QUESTION_KEY = 'manyplug_confirm';
+/** Channel of a call the user confirms by answering the AI app in the chat (`confirmIn: chat`). */
+export const CHAT_CHANNEL = 'chat';
 
 /** The caller's policy, loaded once per request (all units of a fan-out share the principal). */
 function policyLoader(policies: PolicyService) {
@@ -119,8 +122,47 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     return id;
   };
 
-  const pendingText = (row: PendingCallRow, how: string) =>
-    `${how} Ask the user to confirm it ${row.channels.includes('telegram') ? 'with the button in their Manyplug Telegram chat or ' : ''}at ${center.confirmUrl(row.id)} — then call this tool again with exactly the same arguments to get the result. Do not claim it was done before that.`;
+  /**
+   * What the AI is told about a call waiting for the user, in words and as `structuredContent`, so it
+   * knows whether to send the user to a link or to ask them in the chat.
+   */
+  const awaiting = async (row: PendingCallRow, how: string): Promise<ExecResult> => {
+    if (row.channels.includes(CHAT_CHANNEL)) {
+      const d = await center.describe(row);
+      const reason = row.reason ? ` (${row.reason})` : '';
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `${how} The user confirms in this chat, there is no link to open. Ask them now whether to run “${d.action}” on ${d.service} (${d.account})${reason}, and show what exactly will be sent or changed. Only if they clearly say yes, call this tool again with exactly the same arguments: that call runs it. If they say no or do not answer, do not call it again. Never answer for the user, and do not claim it was done before that.`,
+          },
+        ],
+        structuredContent: {
+          confirmation: { id: row.id, status: 'awaiting_confirmation', confirm_in: 'chat', next: 'ask_user' },
+        },
+      };
+    }
+    const telegram = row.channels.includes('telegram');
+    const url = center.confirmUrl(row.id);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `${how} The user confirms outside this chat: give them the link ${url}${telegram ? ' (or the button in their Manyplug Telegram chat)' : ''}; a yes in the chat does not confirm it. After they confirm there, call this tool again with exactly the same arguments to get the result. Do not claim it was done before that.`,
+        },
+      ],
+      structuredContent: {
+        confirmation: {
+          id: row.id,
+          status: 'awaiting_confirmation',
+          confirm_in: 'link',
+          url,
+          ...(telegram ? { telegram: true } : {}),
+          next: 'send_link',
+        },
+      },
+    };
+  };
 
   /** What the caller gets for a held-back call, depending on where it stands. */
   const outcome = async (call: CallContext, row: PendingCallRow): Promise<ExecResult> => {
@@ -161,12 +203,32 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       }
       default:
         call.audit.outcome = 'awaiting_confirmation';
-        return {
-          content: [
-            { type: 'text', text: pendingText(row, 'This action is waiting for the user’s confirmation.') },
-          ],
-        };
+        return awaiting(row, 'This action is waiting for the user’s confirmation.');
     }
+  };
+
+  /** Runs a call the user has just approved in the chat (now, or after its undo window). */
+  const runApproved = async (
+    call: CallContext,
+    row: PendingCallRow,
+    via: string,
+    undoWindowSeconds: number,
+    next: () => Promise<ExecResult>,
+  ): Promise<ExecResult> => {
+    if (undoWindowSeconds > 0) {
+      const scheduled = await pending.decide(row.id, true, via);
+      if (!scheduled) return outcome(call, (await pending.get(row.id)) ?? row);
+      await deps.retain?.(scheduled);
+      await center.notify(scheduled);
+      return outcome(call, scheduled);
+    }
+    const claimed = await pending.approveAndClaim(row.id, via);
+    if (!claimed) return outcome(call, (await pending.get(row.id)) ?? row);
+    call.audit.outcome = 'confirmed';
+    const result = await next();
+    await pending.complete(row.id, toStored(result));
+    await pending.consume(row.id);
+    return result;
   };
 
   const question = async (call: CallContext, row: PendingCallRow): Promise<HubQuestion> => {
@@ -195,9 +257,12 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     const declaredDelay = call.meta.undo?.kind === 'delay' ? call.meta.undo.seconds : 0;
     const undoWindowSeconds = call.risk === 'read' ? 0 : Math.max(decision.undoWindowSeconds, declaredDelay);
     // Actions that delete data or widen access always need the user, whatever the rules say.
-    const confirm =
-      decision.confirm || call.action.requiresConfirmation === true || call.mustConfirm === true;
+    const floor = call.action.requiresConfirmation === true || call.mustConfirm === true;
+    const confirm = decision.confirm || floor;
     if (!confirm && undoWindowSeconds === 0) return next();
+    // The user may let the AI app ask them in the chat. Not for what the floor guards (the AI must
+    // not lift its own restrictions on its word alone), nor through a team's shared connection.
+    const inChat = decision.confirmIn === 'chat' && !floor && !call.principal.shared;
 
     const riskReason = typeof call.locals.riskReason === 'string' ? call.locals.riskReason : undefined;
     const input: PendingCallInput = {
@@ -231,25 +296,16 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
         call.audit.outcome = 'declined';
         return errorResult('The user declined this action, so nothing was done.', 'permission');
       }
-      if (undoWindowSeconds > 0) {
-        const scheduled = await pending.decide(row.id, true, 'elicitation');
-        if (!scheduled) return outcome(call, (await pending.get(row.id)) ?? row);
-        await deps.retain?.(scheduled);
-        await center.notify(scheduled);
-        return outcome(call, scheduled);
-      }
-      const claimed = await pending.approveAndClaim(row.id, 'elicitation');
-      if (!claimed) return outcome(call, (await pending.get(row.id)) ?? row);
-      call.audit.outcome = 'confirmed';
-      const result = await next();
-      await pending.complete(row.id, toStored(result));
-      await pending.consume(row.id);
-      return result;
+      return runApproved(call, row, 'elicitation', undoWindowSeconds, next);
     }
 
     // 2. The same call was already held back: report where it stands (or wait a bit more).
     const repeat = await pending.findRepeat(call.principal, call.tool.name, target.accountId, input.args);
     if (repeat) {
+      // Asked in the chat: the AI repeats the call once the user said yes, and that runs it.
+      if (repeat.status === 'awaiting_confirmation' && repeat.channels.includes(CHAT_CHANNEL) && inChat) {
+        return runApproved(call, repeat, CHAT_CHANNEL, undoWindowSeconds, next);
+      }
       // The chat client retried without an answer: ask the same question again.
       if (
         repeat.status === 'awaiting_confirmation' &&
@@ -259,9 +315,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       ) {
         call.audit.outcome = 'awaiting_confirmation';
         return {
-          content: [
-            { type: 'text', text: pendingText(repeat, 'This action needs the user’s confirmation.') },
-          ],
+          ...(await awaiting(repeat, 'This action needs the user’s confirmation.')),
           question: await question(call, repeat),
         };
       }
@@ -289,9 +343,18 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
       await deps.retain?.(row);
       call.audit.outcome = 'awaiting_confirmation';
       return {
-        content: [{ type: 'text', text: pendingText(row, 'This action needs the user’s confirmation.') }],
+        ...(await awaiting(row, 'This action needs the user’s confirmation.')),
         question: await question(call, row),
       };
+    }
+
+    // 4b. The user chose to confirm in the chat, but the client cannot ask them itself: the AI asks
+    //     in its own words and repeats the call (step 2) once they said yes.
+    if (inChat) {
+      const row = await pending.requestConfirmation({ ...input, channels: [CHAT_CHANNEL] });
+      await deps.retain?.(row);
+      call.audit.outcome = 'awaiting_confirmation';
+      return awaiting(row, 'This action needs the user’s confirmation.');
     }
 
     // 5. Ask out of band (Telegram, web page) and wait a little for the answer.

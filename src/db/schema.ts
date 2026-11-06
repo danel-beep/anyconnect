@@ -118,6 +118,11 @@ export type RiskLevel = 'read' | 'write' | 'dangerous';
 export type AccessLevel = 'none' | 'read' | 'write' | 'full';
 /** From which risk on a call needs the user's confirmation. */
 export type ConfirmLevel = 'never' | 'dangerous' | 'write' | 'always';
+/**
+ * Where the user confirms a call: `link`, outside the AI chat (the Manyplug page or Telegram);
+ * `chat`, by answering the AI app in the chat itself (the AI asks and repeats the call).
+ */
+export type ConfirmIn = 'link' | 'chat';
 
 export interface SecuritySettings {
   /** Default: `full`. */
@@ -126,6 +131,8 @@ export interface SecuritySettings {
   defaultConfirm?: ConfirmLevel;
   /** Undo window for changing actions (seconds, 0 = run at once). Default: 0. */
   undoWindowSeconds?: number;
+  /** Where confirmations are given. Default: `link`. */
+  confirmIn?: ConfirmIn;
 }
 
 export type WorkspaceKind = 'personal' | 'team';

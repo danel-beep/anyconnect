@@ -2402,6 +2402,8 @@ export interface SettingsView {
   locale: string | null;
   toolListing: 'auto' | 'direct' | 'discovery';
   toolExposure: 'grouped' | 'per_account';
+  /** Where the user confirms actions that ask first. */
+  confirmIn: 'link' | 'chat';
   identities: { provider: string; email: string | null }[];
   hasPassword: boolean;
   sessions: { current: boolean; ip: string | null; userAgent: string | null; lastSeenAt: Date }[];
@@ -2514,6 +2516,36 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
             <Icon name="arrow" />
           </a>
         </div>
+      </div>
+      <div class="card" id="confirmations">
+        <SectionHead icon="check" title={t('app.settings.confirm')} hint={t('app.settings.confirmHint')} />
+        <form method="post" action="/app/settings/confirmations">
+          <input type="hidden" name="csrf" value={ctx.csrf} />
+          <fieldset class="choice-list">
+            <legend>{t('app.settings.confirmIn')}</legend>
+            {(['link', 'chat'] as const).map((v) => (
+              <label class="choice">
+                <input type="radio" name="confirmIn" value={v} checked={view.confirmIn === v} />
+                <span>
+                  <strong>
+                    {t(`app.settings.confirmIn.${v}`)}
+                    {v === 'link' ? <span class="badge ok">{t('app.settings.recommended')}</span> : null}
+                  </strong>
+                  <span class="small muted">{t(`app.settings.confirmInHint.${v}`)}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <p class="hint">{t('app.settings.confirmFloor')}</p>
+          <div class="actions start">
+            <button type="submit" class="primary">
+              {t('app.settings.save')}
+            </button>
+            <a class="btn" href="/app/rules">
+              {t('app.settings.confirmRules')}
+            </a>
+          </div>
+        </form>
       </div>
       {/* Advanced and rarely changed: folded unless the user has already moved off the defaults. */}
       <details

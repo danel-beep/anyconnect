@@ -8,7 +8,13 @@ import { isRecentAuth } from '../core/auth-methods.js';
 import { isSetupConnector } from '../hub/setup-tools.js';
 import { hashToken } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
-import { ACCESS_LEVELS, accessAllows, CONFIRM_LEVELS, confirmationRequired } from '../security/policy.js';
+import {
+  ACCESS_LEVELS,
+  accessAllows,
+  CONFIRM_IN,
+  CONFIRM_LEVELS,
+  confirmationRequired,
+} from '../security/policy.js';
 import { AccountPage } from '../web/account-page.js';
 import {
   ACCOUNT_BACK,
@@ -893,8 +899,9 @@ export function appRoutes() {
     page('/app/settings', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [settings, identities, sessions, shell] = await Promise.all([
+      const [settings, security, identities, sessions, shell] = await Promise.all([
         s.admin.settings(ws),
+        s.admin.security(ws),
         s.users.identities(auth.user.id),
         s.sessions.list(auth.user.id),
         shellInfo(c, ws),
@@ -910,6 +917,7 @@ export function appRoutes() {
             locale: auth.user.locale,
             toolListing: settings.toolListing ?? 'auto',
             toolExposure: settings.toolExposure ?? 'grouped',
+            confirmIn: security.confirmIn,
             identities: identities.map((i) => ({ provider: i.provider, email: i.email })),
             hasPassword: auth.user.passwordHash !== null,
             sessions: sessions.map((x) => ({
@@ -950,6 +958,15 @@ export function appRoutes() {
         .parse({ toolListing: form.toolListing, toolExposure: form.toolExposure });
       await c.get('services').admin.updateSettings(auth.workspace.id, input);
       setFlash(c, 'ok', 'app.flash.toolsSaved');
+    }),
+  );
+
+  app.post(
+    '/app/settings/confirmations',
+    action('/app/settings', async (c, auth, form) => {
+      const { confirmIn } = z.object({ confirmIn: z.enum(CONFIRM_IN) }).parse({ confirmIn: form.confirmIn });
+      await c.get('services').admin.updateSecurity(auth.workspace.id, { confirmIn });
+      setFlash(c, 'ok', 'app.flash.confirmInSaved');
     }),
   );
 

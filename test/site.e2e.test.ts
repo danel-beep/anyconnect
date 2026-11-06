@@ -450,6 +450,26 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(await (await browser.request('/app/rules')).text()).toContain('class="notice bad"');
   });
 
+  it('chooses on the Settings page where actions are confirmed: on a page or in the AI chat', async () => {
+    const browser = new TestBrowser(hub.baseUrl);
+    await oidc.signIn(browser, { sub: 'g-c', email: 'confirm-in@example.com' });
+    const ws = await workspaceOf((await userByEmail('confirm-in@example.com')).id);
+    const page = await (await browser.request('/app/settings')).text();
+    expect(page).toContain('name="confirmIn" value="link" checked=""');
+    const { csrf } = TestBrowser.hiddenInputs(page);
+    const save = (confirmIn: string) =>
+      browser.request('/app/settings/confirmations', { form: { csrf: csrf!, confirmIn } });
+    expect((await save('chat')).status).toBe(303);
+    expect((await hub.services.admin.security(ws.id)).confirmIn).toBe('chat');
+    expect(await (await browser.request('/app/settings')).text()).toContain(
+      'name="confirmIn" value="chat" checked=""',
+    );
+    await save('anything');
+    expect((await hub.services.admin.security(ws.id)).confirmIn).toBe('chat');
+    expect((await save('link')).status).toBe(303);
+    expect((await hub.services.admin.security(ws.id)).confirmIn).toBe('link');
+  });
+
   it('records a paid plan request, shows it to the admin and closes it when the plan is set', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await oidc.signIn(browser, { sub: 'g-p', email: 'payer@example.com' });

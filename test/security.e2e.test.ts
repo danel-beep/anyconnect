@@ -546,6 +546,69 @@ describe('data protection in the running hub', () => {
     await plain.client.close();
   });
 
+  it('tells the AI to send the user to the link by default, also in structured form', async () => {
+    const held = await call('inbox_purge', { account: 'work' });
+    expect(resultText(held)).toContain('a yes in the chat does not confirm it');
+    expect(held.structuredContent).toMatchObject({
+      confirmation: { status: 'awaiting_confirmation', confirm_in: 'link', next: 'send_link' },
+    });
+    expect(purged).toBe(0);
+  });
+
+  it('confirms in the AI chat when the user chose it: the repeated call runs the action', async () => {
+    await hub.services.admin.updateSecurity(workspaceId, { confirmIn: 'chat' });
+    const held = await call('inbox_purge', { account: 'work' });
+    const text = resultText(held);
+    expect(text).toContain('confirms in this chat');
+    expect(text).not.toContain('/confirm/');
+    expect(held.structuredContent).toMatchObject({
+      confirmation: { status: 'awaiting_confirmation', confirm_in: 'chat', next: 'ask_user' },
+    });
+    expect(purged).toBe(0);
+    // No message to Telegram: the question stays in the chat.
+    expect(telegram.calls.filter((c) => c.method === 'sendMessage')).toHaveLength(0);
+
+    // Another AI app repeating the same call does not approve this one.
+    const other = (await hub.services.aiClients.createUnique(workspaceId, 'ChatGPT', 'oauth')).id;
+    const otherCaller = { ...principal, aiClientId: other, credentialId: 'grant_other' };
+    expect(resultText(await call('inbox_purge', { account: 'work' }, otherCaller))).toContain(
+      'confirms in this chat',
+    );
+    expect(purged).toBe(0);
+
+    const done = await call('inbox_purge', { account: 'work' });
+    expect(done.isError).toBeFalsy();
+    expect(resultText(done)).toContain('purged');
+    expect(purged).toBe(1);
+    // Delivered: the same call later is a new action and asks again.
+    expect(resultText(await call('inbox_purge', { account: 'work' }))).toContain('confirms in this chat');
+    expect(purged).toBe(1);
+  });
+
+  it('keeps the link for what the AI must not approve on its own, even in chat mode', async () => {
+    await hub.services.admin.updateSecurity(workspaceId, { confirmIn: 'chat' });
+    // Removing an account always needs the user outside the chat.
+    const removal = resultText(await call('manyplug_remove_account', { account: 'inbox:home' }));
+    expect(removal).toContain('/confirm/pcl_');
+    expect(resultText(await call('manyplug_remove_account', { account: 'inbox:home' }))).toContain(
+      '/confirm/pcl_',
+    );
+    expect(await hub.services.accounts.get(workspaceId, accounts.home)).toBeDefined();
+  });
+
+  it('switches to chat confirmations from the chat only after the user confirms on the page', async () => {
+    const asked = resultText(await call('manyplug_set_rule', { confirm_in: 'chat' }));
+    expect(asked).toContain('/confirm/pcl_');
+    expect((await hub.services.admin.security(workspaceId)).confirmIn).toBe('link');
+    await decideOnWeb(await signIn(), pendingId(asked)!, 'approve');
+    await hub.services.pendingRunner.tick();
+    expect((await hub.services.admin.security(workspaceId)).confirmIn).toBe('chat');
+    // Back to the link tightens protection: it applies at once.
+    const back = await call('manyplug_set_rule', { confirm_in: 'link' });
+    expect(resultText(back)).toContain('"confirm_in":"link"');
+    expect((await hub.services.admin.security(workspaceId)).confirmIn).toBe('link');
+  });
+
   it('rejects a forged or moved confirmation answer', async () => {
     const s = hub.services;
     const caller = { ...principal };

@@ -81,15 +81,15 @@ export class CallerPolicy {
     return accountPolicy(this.rules, this.subject, target, this.settings).access !== 'none';
   }
 
-  /** What applies to the caller on a target: access level, from which risk it asks, undo window. */
+  /** What applies to the caller on a target: access level, from which risk it asks and where, undo window. */
   effective(target: PolicyTarget) {
-    const { access, confirmLevel, undoWindowSeconds } = accountPolicy(
+    const { access, confirmLevel, confirmIn, undoWindowSeconds } = accountPolicy(
       this.rules,
       this.subject,
       target,
       this.settings,
     );
-    return { access, confirm: confirmLevel, undoWindowSeconds };
+    return { access, confirm: confirmLevel, confirmIn, undoWindowSeconds };
   }
 
   decide(target: PolicyTarget, risk: RiskLevel): PolicyDecision {
