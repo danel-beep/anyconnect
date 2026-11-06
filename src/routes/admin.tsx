@@ -829,6 +829,11 @@ async function systemChecks(c: AppContext, actorIp: string | null | undefined): 
       detail: cfg.site.supportEmail ?? off('SUPPORT_EMAIL'),
     },
     {
+      label: t('admin.sys.legalOperator'),
+      level: cfg.site.legalOperator ? 'ok' : 'warn',
+      detail: cfg.site.legalOperator ?? off('LEGAL_OPERATOR_NAME'),
+    },
+    {
       label: t('admin.sys.https'),
       // Plain http is expected on a laptop, not on the live site.
       level: cfg.secureCookies ? 'ok' : cfg.env === 'production' ? 'warn' : 'off',

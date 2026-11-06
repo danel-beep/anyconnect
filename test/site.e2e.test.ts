@@ -822,6 +822,7 @@ describe('website: public pages', () => {
       '/privacy',
       '/terms',
       '/refunds',
+      '/trust',
     ]) {
       const page = await browser.request(path);
       expect(page.status, path).toBe(200);

@@ -97,6 +97,8 @@ const EnvSchema = z.object({
   ADMIN_SESSION_HOURS: z.coerce.number().int().min(1).max(720).default(8),
   /** Contact address shown on the website and in the legal pages. */
   SUPPORT_EMAIL: optionalString,
+  /** Legal name of whoever operates the service, named in the terms of service (Paddle asks for it). */
+  LEGAL_OPERATOR_NAME: optionalString,
   /** Ownership tokens of Google Search Console and Bing Webmaster Tools (meta tag method). */
   GOOGLE_SITE_VERIFICATION: optionalString,
   BING_SITE_VERIFICATION: optionalString,
@@ -239,6 +241,8 @@ export interface AppConfig {
     adminAllowedIps: string[];
     adminSessionMaxAgeMs: number;
     supportEmail: string | undefined;
+    /** Legal name of the operator, named in the terms of service when set. */
+    legalOperator: string | undefined;
     /** Search console ownership tokens, rendered as meta tags on public pages. */
     verification: { google: string | undefined; bing: string | undefined };
     /** "Sign in with Google": absent when no Google OAuth client is configured. */
@@ -553,6 +557,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       adminAllowedIps: adminAllowedIps(env.ADMIN_ALLOWED_IPS),
       adminSessionMaxAgeMs: env.ADMIN_SESSION_HOURS * 3_600_000,
       supportEmail: env.SUPPORT_EMAIL,
+      legalOperator: env.LEGAL_OPERATOR_NAME,
       verification: { google: env.GOOGLE_SITE_VERIFICATION, bing: env.BING_SITE_VERIFICATION },
       google: googleLogin(env, source),
     },

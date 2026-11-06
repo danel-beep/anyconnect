@@ -704,10 +704,12 @@ const Security: FC<{ ctx: PageCtx }> = ({ ctx: { t, lang } }) => (
                 <h3>{t(`landing.sec.${key}.title`)}</h3>
                 <p>
                   {t(`landing.sec.${key}.text`)}
-                  {key === 'status' ? (
+                  {key === 'status' || key === 'encryption' ? (
                     <>
                       {' '}
-                      <a href={localizedPath('/status', lang)}>{t('landing.sec.status.link')}</a>
+                      <a href={localizedPath(key === 'status' ? '/status' : '/trust', lang)}>
+                        {t(`landing.sec.${key}.link`)}
+                      </a>
                     </>
                   ) : null}
                 </p>

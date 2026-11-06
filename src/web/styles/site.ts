@@ -256,6 +256,52 @@ details.more-ways{margin-top:14px}
 .post-card p{margin:0}
 @media (max-width:640px){.wide-cards{grid-template-columns:1fr}}
 
+/* Trust page (src/web/trust-page.tsx) */
+.trust{padding-top:48px;padding-bottom:64px}
+.trust-head{margin-bottom:32px}
+.trust-head p.small{margin-top:10px}
+.trust-glance{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.trust-glance .card{margin:0}
+.trust-glance h2{font-size:17px;margin:14px 0 6px}
+.trust-glance p{margin:0;font-size:14.5px;line-height:1.55}
+.trust-icon{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink)}
+.trust-icon svg{width:18px;height:18px}
+.trust-section{margin-top:56px;scroll-margin-top:88px}
+.trust-section>h2{font-size:clamp(22px,2.6vw,28px);letter-spacing:-.02em;margin:0 0 6px}
+.trust-section>p.muted{margin:0 0 18px;max-width:720px}
+.trust-table td{vertical-align:top;line-height:1.55;padding-top:14px;padding-bottom:14px}
+.trust-table td:first-child{font-weight:560;width:26%}
+.trust-table td p{margin:8px 0 0}
+.trust-table th:nth-child(2){width:40%}
+.trust-parties{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.trust-parties .card{margin:0}
+.trust-parties h3{font-size:17px;margin:0 0 12px}
+.trust-label{font:500 11px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
+.trust-points{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.trust-points li{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;line-height:1.5}
+.trust-points svg{width:16px;height:16px;flex:none;margin-top:3px;color:var(--accent-ink)}
+.trust-points.never svg{color:var(--muted)}
+.trust-steps{list-style:none;padding:0;margin:0 0 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;counter-reset:step}
+.trust-steps li.card{margin:0;counter-increment:step}
+.trust-steps h3{font-size:16px;margin:0 0 8px;display:flex;gap:10px;align-items:baseline}
+.trust-steps h3::before{content:counter(step);font:600 13px ${MONO};color:var(--accent-ink)}
+.trust-steps p{margin:0;font-size:14.5px;line-height:1.55}
+.trust .bullets{max-width:760px}
+.trust .bullets li{line-height:1.6}
+@media (max-width:900px){.trust-glance,.trust-steps{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
+  .trust{padding-top:28px}
+  .trust-section{margin-top:40px}
+  .trust-parties{grid-template-columns:minmax(0,1fr)}
+  .trust-table,.trust-table tbody,.trust-table tr,.trust-table td{display:block;width:auto}
+  .trust-table thead{display:none}
+  .trust-table tr{padding:16px 20px;border-top:1px solid var(--border)}
+  .trust-table tr:first-child{border-top:0}
+  .card.flush table.trust-table td,.card.flush table.trust-table td:first-child,.card.flush table.trust-table td:last-child{border:0;padding:0;width:auto}
+  .trust-table td+td{margin-top:12px}
+  .trust-table td[data-label]::before{content:attr(data-label);display:block;font:500 11px/1.4 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+}
+
 /* Status page */
 .status-wrap{max-width:880px;padding-top:40px;padding-bottom:64px}
 .status-wrap h1{margin:0 0 20px}
