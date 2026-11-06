@@ -936,6 +936,7 @@ export class Hub {
         if (row.status !== 'active')
           await this.deps.accounts.markStatus(account.id, 'active', null).catch(() => {});
       }
+      if (action.countsAsUsage?.(value) === false) call.free = true;
       return normalizeResult(value);
     } catch (error) {
       return this.handleError(error, call);

@@ -9,6 +9,7 @@ import type { ConfirmationCenter } from './confirmations.js';
 import type { PendingCallInput, PendingCallRow, PendingCallService, StoredResult } from './pending-calls.js';
 import { accessAllows, type PolicyDecision, type PolicyTarget } from './policy.js';
 import type { CallerPolicy, PolicyService } from './policy-service.js';
+import type { StandingApprovals } from './standing-approvals.js';
 
 /**
  * The security layer's executor stages (see `hub/executor.ts` for the chain):
@@ -17,6 +18,8 @@ import type { CallerPolicy, PolicyService } from './policy-service.js';
  * - `confirm`: holds risky calls until the user confirms (in the chat via MCP elicitation, else in
  *   Telegram or on the web page, or, when the user chose `confirmIn: chat`, by answering the AI app,
  *   which then repeats the call) and applies undo windows.
+ * - `approvals`: records the standing approvals an approved call grants (e.g. "carry on this
+ *   conversation"); `confirm` lets calls they cover through without asking again.
  * - `untrusted`: marks third-party content in results as data, not instructions.
  */
 
@@ -95,6 +98,8 @@ export interface ConfirmStageDeps {
    * and only this request has (the caller's open vault, `VaultScopes.hold`).
    */
   retain?: (row: PendingCallRow) => Promise<void>;
+  /** Series of calls the user approved once (see `approvalsStage`). */
+  approvals?: StandingApprovals;
 }
 
 export function toStored(result: ExecResult): StoredResult {
@@ -258,7 +263,24 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     const undoWindowSeconds = call.risk === 'read' ? 0 : Math.max(decision.undoWindowSeconds, declaredDelay);
     // Actions that delete data or widen access always need the user, whatever the rules say.
     const floor = call.action.requiresConfirmation === true || call.mustConfirm === true;
-    const confirm = decision.confirm || floor;
+    let confirm = decision.confirm || floor;
+    // A series the user already approved (e.g. replies in a conversation they asked the AI to carry
+    // on) needs no new confirmation, never for what the floor guards. Undo windows still apply.
+    if (confirm && !floor && deps.approvals && call.account) {
+      const scope = call.action.approvalScope?.(call.input);
+      const approval = scope
+        ? await deps.approvals.use(call.principal, {
+            connectorId: call.connector.id,
+            accountId: call.account.id,
+            action: call.action.name,
+            scope,
+          })
+        : undefined;
+      if (approval) {
+        confirm = false;
+        call.audit.approval = approval.id;
+      }
+    }
     if (!confirm && undoWindowSeconds === 0) return next();
     // The user may let the AI app ask them in the chat. Not for what the floor guards (the AI must
     // not lift its own restrictions on its word alone), nor through a team's shared connection.
@@ -366,6 +388,44 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     await center.notify(row);
     const final = await pending.waitForOutcome(row.id, deps.waitMs, call.signal);
     return outcome(call, final ?? row);
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Standing approvals
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs after `confirm`, so only calls the user approved (or that their rules let run without asking)
+ * get here: when such a call of an action that `grants` a standing approval succeeds, the approval is
+ * recorded for the same caller; an action that `revokes` ends it. Calls run later by the pending-call
+ * runner pass through here too, with the caller who asked.
+ */
+export function approvalsStage(approvals: StandingApprovals): Middleware {
+  return async (call, next) => {
+    const { action, account } = call;
+    if (!account || (!action.grants && !action.revokes)) return next();
+    if (action.grants && call.principal.shared) {
+      return errorResult(
+        'This cannot be started through the team’s shared connection: the user has to connect their own AI app to the team.',
+        'permission',
+      );
+    }
+    const result = await next();
+    if (result.isError || !call.invoked) return result;
+    const target = { connectorId: call.connector.id, accountId: account.id };
+    if (action.revokes) {
+      await approvals.revoke(call.principal, { ...target, scope: action.revokes(call.input).scope });
+    }
+    if (action.grants) {
+      const approval = await approvals.grant(
+        call.principal,
+        { ...target, grantedBy: call.tool.name },
+        action.grants(call.input),
+      );
+      call.audit.approval = approval.id;
+    }
+    return result;
   };
 }
 

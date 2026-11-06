@@ -278,7 +278,37 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
     input: unknown,
     ctx: ActionContext<TConfig, TCredentials>,
   ): Promise<RiskAssessment | undefined> | RiskAssessment | undefined;
+  /**
+   * This action, once it ran (approved by the user where their rules ask for it), grants a
+   * standing approval: later calls of the listed actions on the same account and scope run without
+   * asking again, for a while and a number of times. E.g. "carry on this conversation" lets `send`
+   * answer in one chat. It never covers what always needs the user (`requiresConfirmation`).
+   */
+  grants?(input: unknown): StandingApprovalSpec;
+  /** This action ends the standing approvals of this account with this scope (e.g. "end conversation"). */
+  revokes?(input: unknown): { scope: string };
+  /** What a call of this action acts on, matched against standing approvals (e.g. the chat id). */
+  approvalScope?(input: unknown): string | undefined;
+  /**
+   * Whether a call that ran counts as usage for plan limits (default: always). A long wait that
+   * ended with nothing new returns false, so following a conversation does not use up the plan.
+   */
+  countsAsUsage?(output: unknown): boolean;
   run(input: unknown, ctx: ActionContext<TConfig, TCredentials>): Promise<ActionResult> | ActionResult;
+}
+
+/** A series of calls the user approves once, see {@link ActionDefinition.grants}. */
+export interface StandingApprovalSpec {
+  /** Actions of the same connector this approval covers, e.g. `['send']`. */
+  actions: string[];
+  /** What covered calls must act on, compared with their `approvalScope` (e.g. a chat id). */
+  scope: string;
+  /** How long it lasts. */
+  minutes: number;
+  /** How many covered calls it allows at most. */
+  maxUses: number;
+  /** Shown to the user, e.g. the goal of the conversation (stored encrypted). */
+  purpose?: string;
 }
 
 export interface TestResult {
@@ -518,9 +548,12 @@ export type FieldKey<TConfig extends AnyObjectSchema, TCredentials extends AnyOb
 
 type ActionSpec<TInput extends AnyObjectSchema, TConfig, TCredentials> = Omit<
   ActionDefinition<TConfig, TCredentials>,
-  'input' | 'run' | 'assessRisk'
+  'input' | 'run' | 'assessRisk' | 'grants' | 'revokes' | 'approvalScope'
 > & {
   input: TInput;
+  grants?(input: z.output<TInput>): StandingApprovalSpec;
+  revokes?(input: z.output<TInput>): { scope: string };
+  approvalScope?(input: z.output<TInput>): string | undefined;
   assessRisk?(
     input: z.output<TInput>,
     ctx: ActionContext<TConfig, TCredentials>,

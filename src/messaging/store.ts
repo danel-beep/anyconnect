@@ -15,6 +15,7 @@ import type { Db } from '../db/client.js';
 import { messengerChats, messengerMessages } from '../db/schema.js';
 import { newId } from '../lib/ids.js';
 import type { CipherSource, JsonCipher } from './ciphers.js';
+import type { InboundSignal } from './inbound-signal.js';
 import type { MessengerKeys } from './keys.js';
 import { indexTerms, matchesQuery, queryTerms } from './search-index.js';
 
@@ -98,6 +99,8 @@ export class MessageStore {
     private readonly db: Db,
     private readonly ciphers: CipherSource,
     private readonly keys: MessengerKeys,
+    /** Wakes waits for replies when a new incoming message is stored. */
+    private readonly inbound?: InboundSignal,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -254,6 +257,7 @@ export class MessageStore {
               : {}),
         })
         .where(eq(messengerChats.id, chat.id));
+      if (message.direction === 'in') await this.inbound?.notify(accountId);
     }
     return { ...this.toStoredMessage(row), body };
   }
@@ -481,7 +485,7 @@ export class MessageStore {
    */
   async whatsNew(
     accountIds: string[],
-    query: { cursor?: string; sinceHours: number; includeOwn: boolean; limit: number },
+    query: { cursor?: string; sinceHours: number; includeOwn: boolean; limit: number; chatId?: string },
   ): Promise<{ messages: MessageView[]; cursor: string; hasMore: boolean }> {
     if (accountIds.length === 0) return { messages: [], cursor: query.cursor ?? '', hasMore: false };
     const after = Number(decodeCursor(query.cursor)?.[0] ?? Number.NaN);
@@ -495,6 +499,7 @@ export class MessageStore {
         : gt(messengerMessages.sentAt, new Date(Date.now() - query.sinceHours * 3_600_000)),
     ];
     if (!query.includeOwn) conditions.push(eq(messengerMessages.direction, 'in'));
+    if (query.chatId) conditions.push(eq(messengerMessages.chatId, query.chatId));
     const rows = await this.db
       .select()
       .from(messengerMessages)
@@ -523,6 +528,28 @@ export class MessageStore {
       }
     }
     return { messages, cursor: encodeCursor([lastSeq]), hasMore: rows.length > query.limit };
+  }
+
+  /**
+   * A "what's new" cursor for waiting on replies in one chat: right after the account's own last
+   * message there, so a reply that came in before the wait started is not missed; without one, the
+   * current end of the account's feed.
+   */
+  async replyCursor(accountId: string, chatId?: string): Promise<string> {
+    if (chatId) {
+      const [own] = await this.db
+        .select({ seq: messengerMessages.seq })
+        .from(messengerMessages)
+        .where(and(eq(messengerMessages.chatId, chatId), eq(messengerMessages.direction, 'out')))
+        .orderBy(desc(messengerMessages.seq))
+        .limit(1);
+      if (own) return encodeCursor([own.seq]);
+    }
+    const [latest] = await this.db
+      .select({ seq: sql<number>`coalesce(max(${messengerMessages.seq}), 0)` })
+      .from(messengerMessages)
+      .where(eq(messengerMessages.accountId, accountId));
+    return encodeCursor([Number(latest?.seq ?? 0)]);
   }
 
   // -------------------------------------------------------------------------

@@ -18,6 +18,7 @@ import { accounts } from '../db/schema.js';
 import type { Logger } from '../logger.js';
 import { MessengerAccounts } from './accounts.js';
 import type { GatewayApi } from './gateway-client.js';
+import type { InboundSignal } from './inbound-signal.js';
 import type { MessengerKeys } from './keys.js';
 import type { Outbox, OutboxRow } from './outbox.js';
 import { resolvePacing } from './pacing.js';
@@ -25,6 +26,12 @@ import { type MessageStore, type StoredChat, toChatView } from './store.js';
 
 /** How long `send` waits for delivery before answering `queued`. */
 const DEFAULT_SEND_WAIT_MS = 12_000;
+/** Open waits for replies per account in one process (a client looping in parallel gains nothing). */
+const MAX_WAITS_PER_ACCOUNT = 5;
+/** A woken wait reads after the store's visibility lag (see `MessageStore.whatsNew`). */
+const READ_AFTER_WAKE_MS = 1_100;
+/** Session states in which messages keep arriving. */
+const LIVE_SESSION_STATES = new Set(['online', 'connecting', 'backoff']);
 
 export interface ResolvedMessenger {
   row: AccountRow;
@@ -50,10 +57,14 @@ export class MessagingService implements MessagingPort {
       gateway: GatewayApi | undefined;
       publicUrl: string;
       logger: Logger;
+      /** Wakes waits for replies when a message arrives. */
+      inbound?: InboundSignal;
       /** Wakes the in-process dispatcher for direct transports. */
       onEnqueued?: (accountId: string) => void;
     },
   ) {}
+
+  private readonly openWaits = new Map<string, number>();
 
   webhookUrl(accountId: string): string {
     return `${this.deps.publicUrl}/hooks/messenger/${accountId}`;
@@ -153,6 +164,25 @@ export class MessagingService implements MessagingPort {
         };
       },
       whatsNew: (query) => store.whatsNew([accountId], query),
+
+      waitForMessages: async (query) => {
+        if (query.chatId) await requireChat(query.chatId);
+        const open = this.openWaits.get(accountId) ?? 0;
+        if (open >= MAX_WAITS_PER_ACCOUNT) {
+          throw new ConnectorError(
+            'rate_limited',
+            'Too many waits for this account at once. Wait in one call at a time.',
+          );
+        }
+        this.openWaits.set(accountId, open + 1);
+        try {
+          return await this.waitForMessages(accountId, query);
+        } finally {
+          const left = (this.openWaits.get(accountId) ?? 1) - 1;
+          if (left > 0) this.openWaits.set(accountId, left);
+          else this.openWaits.delete(accountId);
+        }
+      },
 
       send: async (request) => {
         const resolved = await requireResolved();
@@ -286,6 +316,44 @@ export class MessagingService implements MessagingPort {
 
       webhook: () => ({ url: this.webhookUrl(accountId), secret: this.deps.keys.webhookSecret(accountId) }),
     };
+  }
+
+  private async waitForMessages(
+    accountId: string,
+    query: Parameters<AccountMessaging['waitForMessages']>[0],
+  ): Promise<Awaited<ReturnType<AccountMessaging['waitForMessages']>>> {
+    const { store, inbound } = this.deps;
+    const started = Date.now();
+    const deadline = started + query.timeoutMs;
+    let cursor = query.cursor ?? (await store.replyCursor(accountId, query.chatId));
+    const read = () =>
+      store.whatsNew([accountId], {
+        cursor,
+        sinceHours: 1,
+        includeOwn: query.includeOwn,
+        limit: query.limit,
+        ...(query.chatId ? { chatId: query.chatId } : {}),
+      });
+    for (;;) {
+      const page = await read();
+      cursor = page.cursor;
+      const waitedMs = Date.now() - started;
+      if (page.messages.length > 0) return { ...page, waitedMs };
+      // A session that is logged out or stopped will not receive anything: say so instead of waiting.
+      const session = await this.forAccount(accountId).session();
+      if (session && !LIVE_SESSION_STATES.has(session.state)) {
+        return { ...page, waitedMs, offline: session };
+      }
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || query.signal?.aborted) return { ...page, waitedMs };
+      if (inbound) await inbound.wait(accountId, remaining, query.signal);
+      else await new Promise((resolve) => setTimeout(resolve, Math.min(remaining, 2_000)));
+      if (query.signal?.aborted) return { ...(await read()), waitedMs: Date.now() - started };
+      // Freshly stored messages become visible to the cursor a moment later.
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(READ_AFTER_WAKE_MS, Math.max(0, deadline - Date.now()))),
+      );
+    }
   }
 
   private async toSendResult(row: OutboxRow, deduplicated: boolean): Promise<SendResult> {

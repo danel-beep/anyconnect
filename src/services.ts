@@ -86,12 +86,14 @@ import { PersonaService } from './security/personas.js';
 import { PolicyService } from './security/policy-service.js';
 import { PendingCallRunner } from './security/runner.js';
 import {
+  approvalsStage,
   confirmStage,
   createCatalogFilter,
   policyStage,
   toStored,
   untrustedStage,
 } from './security/stages.js';
+import { StandingApprovals } from './security/standing-approvals.js';
 import { type BotUpdateHandler, chainUpdateHandlers, TelegramBot } from './security/telegram.js';
 import { VERSION } from './version.js';
 import { translator } from './web/i18n.js';
@@ -171,6 +173,8 @@ export interface Services {
   policies: PolicyService;
   /** Calls held back for the user's confirmation or an undo window. */
   pendingCalls: PendingCallService;
+  /** Series of calls the user approved once, e.g. a conversation the AI carries on. */
+  approvals: StandingApprovals;
   notificationChannels: NotificationChannels;
   confirmations: ConfirmationCenter;
   /** Runs approved calls when their undo window ends (started by the server, not by tests). */
@@ -427,6 +431,7 @@ export function createServices(
   });
   const policies = new PolicyService(db, async (principal) => (await teams.view(principal))?.access);
   const pendingCalls = new PendingCallService(db, secrets, { confirmationTtlMs: config.confirmations.ttlMs });
+  const approvals = new StandingApprovals(db, secrets);
   const notificationChannels = new NotificationChannels(db);
   const telegramBot = config.telegram.botToken
     ? new TelegramBot(config.telegram.botToken, {
@@ -519,7 +524,9 @@ export function createServices(
       stateKey: secrets.deriveKey('confirm-state'),
       waitMs: config.confirmations.waitMs,
       retain: retainVault,
+      approvals,
     }),
+    approvals: approvalsStage(approvals),
     untrusted: untrustedStage,
   };
 
@@ -573,6 +580,13 @@ export function createServices(
       analytics,
     }),
     ...messaging.jobs,
+    {
+      name: 'security.prune_approvals',
+      description: 'Delete standing approvals (conversations the AI carried on) a day after they ended',
+      cron: '43 2 * * *',
+      expectEveryMs: 26 * 3_600_000,
+      run: () => approvals.prune(),
+    },
   ])
     jobs.register(job);
   const hub = new Hub({
@@ -740,6 +754,7 @@ export function createServices(
     personas,
     policies,
     pendingCalls,
+    approvals,
     notificationChannels,
     confirmations,
     pendingRunner,

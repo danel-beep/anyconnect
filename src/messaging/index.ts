@@ -12,6 +12,7 @@ import { AccountCiphers } from './ciphers.js';
 import { DirectDeliveryExecutor } from './direct-executor.js';
 import { Dispatcher } from './dispatcher.js';
 import { type GatewayApi, HttpGatewayClient } from './gateway-client.js';
+import { InboundSignal } from './inbound-signal.js';
 import { DataKeys, MessengerKeys } from './keys.js';
 import { Outbox } from './outbox.js';
 import { MessagingService } from './service.js';
@@ -63,7 +64,8 @@ export function createMessaging(deps: {
   const { db, secrets, logger } = deps;
   const keys = new MessengerKeys(new DataKeys(db, secrets));
   const ciphers = new AccountCiphers(db, deps.keyring);
-  const store = new MessageStore(db, ciphers, keys);
+  const inbound = new InboundSignal(db, deps.listener);
+  const store = new MessageStore(db, ciphers, keys, inbound);
   const outbox = new Outbox(db, ciphers, keys);
   const messengerAccounts = new MessengerAccounts(db);
   const gateway =
@@ -88,6 +90,7 @@ export function createMessaging(deps: {
     gateway,
     publicUrl: deps.publicUrl,
     logger,
+    inbound,
     onEnqueued: () => {
       // The account may be new to the executor's cached list.
       directExecutor?.invalidate();

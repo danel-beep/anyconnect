@@ -304,6 +304,10 @@ oauth: { provider: 'google', scopes: ['https://www.googleapis.com/auth/gmail.mod
 | `hints` | Подсказки MCP-клиентам (`readOnly`, `destructive`, `idempotent`, `openWorld`) | — |
 | `risk` | `read` / `write` / `dangerous`: для политики доступа, подтверждений и журнала | `read`, если `hints.readOnly`; `dangerous`, если `hints.destructive`; иначе `write` |
 | `assessRisk(input, ctx)` | Повысить риск конкретного вызова, например первое сообщение новому собеседнику → `dangerous` с причиной. С `confirm: true` вызов спросит пользователя при любых правилах (как `requiresConfirmation`, но для одного вызова). Понизить нельзя; если проверка упала, вызов считается `dangerous` | — |
+| `grants(input)` | Разовое разрешение на серию вызовов: после того как вызов прошёл (с подтверждением, если правила его требуют), действия из `actions` в том же `scope` идут без вопроса `minutes` минут и не больше `maxUses` раз, только для того же ИИ-приложения. Пример — `start_conversation` у мессенджеров (docs/ARCHITECTURE.md, «Разовые разрешения») | — |
+| `approvalScope(input)` | Где действует вызов, для сравнения с `scope` разрешений (у `send` — id чата) | — |
+| `revokes(input)` | Заканчивает разрешения этого аккаунта с таким `scope` (`end_conversation`) | — |
+| `countsAsUsage(output)` | `false` — вызов не считается использованием тарифа (ожидание `wait_for_reply`, которое ничего не принесло) | всегда считается |
 | `undo` | Как отменить: `{ kind: 'action', action: 'delete_message' }`, `{ kind: 'delay', seconds: 10 }` (окно отмены) или `{ kind: 'none' }` | не указано |
 | `capability` | Какую общую операцию реализует действие (`'mail.search'`, можно массив и `{ id, mapInput, mapOutput }`) | — |
 | `response.fields` | Поля результата, которые ИИ может выбрать аргументом `fields` (хаб добавит его сам) | аргумента нет |

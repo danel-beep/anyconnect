@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { Principal } from '../src/core/principal.js';
 import { PgListener } from '../src/db/listener.js';
 import { messengerChats, messengerMessages, messengerOutbox } from '../src/db/schema.js';
+import { INBOUND_CHANNEL } from '../src/messaging/inbound-signal.js';
 import { OUTBOX_CHANNEL } from '../src/messaging/outbox.js';
 import { resetDatabase, startTestHub, TEST_DATABASE_URL, type TestHub, unwrapUntrusted } from './helpers.js';
 
@@ -426,6 +427,139 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     const none = json(await call('telegram_bot_whats_new', { cursor: second.cursor }));
     expect(none.messages).toBeUndefined();
     expect(none.cursor).toBe(second.cursor);
+  });
+
+  describe('carrying on a conversation', () => {
+    const texts = (r: { messages?: { text: string }[] }) => (r.messages ?? []).map((m) => m.text);
+    const sentTexts = () => apis.calls.filter((c) => c.path === 'sendMessage').map((c) => c.body.text);
+    const pendingId = (result: { content: unknown }) =>
+      /\/confirm\/(pcl_[0-9a-z]+)/i.exec(JSON.stringify(result.content))?.[1];
+
+    async function chatWithReply() {
+      const account = await addBot();
+      await postTelegram(account.id, botUpdate(31, 'Сколько стоит доставка?'));
+      const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
+      return { account, chat };
+    }
+
+    it('returns a reply at once and wakes up as soon as the next one arrives', async () => {
+      const { account, chat } = await chatWithReply();
+      expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Доставка 10 €' })).status).toBe(
+        'sent',
+      );
+      await postTelegram(account.id, botUpdate(34, 'Сколько стоит доставка?'));
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+      // The client answered before the wait started: it is the reply, earlier messages are not.
+      const first = json(await call('telegram_bot_wait_for_reply', { chat: chat.id, timeout_seconds: 5 }));
+      expect(first.status).toBe('new_messages');
+      expect(texts(first)).toEqual(['Сколько стоит доставка?']);
+
+      const started = Date.now();
+      const waiting = call('telegram_bot_wait_for_reply', {
+        chat: chat.id,
+        cursor: first.cursor,
+        timeout_seconds: 30,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await postTelegram(account.id, botUpdate(32, 'Жду ответа'));
+      const second = json(await waiting);
+      expect(texts(second)).toEqual(['Жду ответа']);
+      expect(Date.now() - started).toBeLessThan(5_000);
+
+      // Nothing new: an honest "not yet" with the same cursor, and it is not counted as usage.
+      const before = await hub.services.db.query.usageCounters.findMany();
+      const none = json(
+        await call('telegram_bot_wait_for_reply', {
+          chat: chat.id,
+          cursor: second.cursor,
+          timeout_seconds: 5,
+        }),
+      );
+      expect(none).toMatchObject({ status: 'no_reply_yet', cursor: second.cursor });
+      expect(none.waited_seconds).toBeGreaterThanOrEqual(4);
+      expect(await hub.services.db.query.usageCounters.findMany()).toEqual(before);
+    }, 20_000);
+
+    it('wakes up waits in other processes through Postgres NOTIFY', async () => {
+      const { account } = await chatWithReply();
+      const otherProcess = new PgListener({
+        connectionString: TEST_DATABASE_URL,
+        logger: hub.services.logger,
+      });
+      const woken: string[] = [];
+      otherProcess.listen(INBOUND_CHANNEL, (accountId) => woken.push(accountId));
+      otherProcess.start();
+      try {
+        await vi.waitFor(() => expect(otherProcess.connected).toBe(true), { timeout: 5_000 });
+        await postTelegram(account.id, botUpdate(33, 'ещё'));
+        await vi.waitFor(() => expect(woken).toEqual([account.id]), { timeout: 5_000 });
+      } finally {
+        await otherProcess.stop();
+      }
+    });
+
+    it('lets the AI answer in one chat without asking each time, once the user approved it', async () => {
+      const { account, chat } = await chatWithReply();
+      const otherUpdate = botUpdate(40, 'Другой чат');
+      otherUpdate.message.chat = { id: 77, type: 'private', first_name: 'Борис', last_name: 'Иванов' };
+      await postTelegram(account.id, otherUpdate);
+      const other = json(await call('telegram_bot_list_chats', {})).chats.find(
+        (c: { id: string }) => c.id !== chat.id,
+      );
+      expect(other).toBeDefined();
+      // Back to the defaults: every message needs the user's OK.
+      for (const rule of await hub.services.policies.listRules(principal.workspaceId)) {
+        await hub.services.policies.deleteRule(principal.workspaceId, rule.id);
+      }
+      // A new request: the caller's rules are loaded per request.
+      principal = { ...principal };
+      const start = { chat: chat.id, goal: 'Согласовать цену доставки', hours: 2, max_messages: 2 };
+      const held = await call('telegram_bot_start_conversation', start);
+      const id = pendingId(held);
+      expect(id).toBeDefined();
+      const pending = await hub.services.pendingCalls.get(id!);
+      expect(pending?.reason).toContain('Согласовать цену доставки');
+      await hub.services.pendingCalls.decide(id!, true, 'web');
+      await hub.services.pendingRunner.tick();
+      expect(json(await call('telegram_bot_start_conversation', start))).toMatchObject({
+        status: 'started',
+        max_messages: 2,
+      });
+
+      expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Доставка 10 €' })).status).toBe(
+        'sent',
+      );
+      expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Подходит?' })).status).toBe('sent');
+      // The limit is reached, other chats were never covered.
+      expect(pendingId(await call('telegram_bot_send', { chat: chat.id, text: 'Третье' }))).toBeDefined();
+      expect(pendingId(await call('telegram_bot_send', { chat: other.id, text: 'Привет' }))).toBeDefined();
+      expect(sentTexts()).toEqual(['Доставка 10 €', 'Подходит?']);
+
+      // Another AI app cannot use what this one was allowed.
+      const otherApp = { ...principal, aiClientId: 'app_other' };
+      expect(
+        await hub.services.approvals.find(otherApp, {
+          connectorId: 'telegram_bot',
+          accountId: account.id,
+          action: 'send',
+          scope: chat.id,
+        }),
+      ).toBeUndefined();
+    });
+
+    it('ends the conversation when the AI stops', async () => {
+      const { account, chat } = await chatWithReply();
+      const start = { chat: chat.id, goal: 'Ответить на вопрос о доставке' };
+      // With "never ask" rules the conversation starts at once.
+      expect(json(await call('telegram_bot_start_conversation', start)).status).toBe('started');
+      const target = { connectorId: 'telegram_bot', accountId: account.id, action: 'send', scope: chat.id };
+      expect(await hub.services.approvals.find(principal, target)).toMatchObject({
+        usesLeft: 20,
+        purpose: 'Ответить на вопрос о доставке',
+      });
+      expect(json(await call('telegram_bot_end_conversation', { chat: chat.id })).status).toBe('ended');
+      expect(await hub.services.approvals.find(principal, target)).toBeUndefined();
+    });
   });
 
   it('tells the dispatchers of other processes about a queued message (Postgres NOTIFY)', async () => {

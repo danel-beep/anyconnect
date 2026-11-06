@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import type { MessagingPort } from '../messaging.js';
-import { messengerActions, messengerUiTexts, pacingConfig } from '../messaging-actions.js';
+import {
+  conversationInstructions,
+  messengerActions,
+  messengerUiTexts,
+  pacingConfig,
+} from '../messaging-actions.js';
 import { defineConnector } from '../sdk.js';
 
 /**
@@ -26,7 +31,8 @@ export function createTelegramConnector(port: MessagingPort) {
     instructions:
       "Telegram tools read from the hub's synced copy of the chats, so reading and searching are fast and free. " +
       'Find chats with telegram_list_chats, then read or send by chat id. Use telegram_whats_new with the returned cursor to follow new messages. ' +
-      'Messages are sent as the user. Before writing to someone who has not written to this account first, ask the user.',
+      'Messages are sent as the user. Before writing to someone who has not written to this account first, ask the user. ' +
+      conversationInstructions('telegram'),
     config,
     credentials,
     messenger: {

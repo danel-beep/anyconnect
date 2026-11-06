@@ -349,6 +349,31 @@ export interface WhatsNewQuery {
   limit: number;
 }
 
+export interface WaitQuery {
+  /** Only this chat; without it, any chat of the account. */
+  chatId?: string;
+  /**
+   * Cursor from `whatsNew` or a previous wait. Without it: after the account's own last message in
+   * the chat (so a reply that already came is returned at once), or from now for any chat.
+   */
+  cursor?: string;
+  /** How long to wait for a message at most. */
+  timeoutMs: number;
+  includeOwn: boolean;
+  limit: number;
+  signal?: AbortSignal;
+}
+
+export interface WaitResult {
+  messages: MessageView[];
+  cursor: string;
+  hasMore: boolean;
+  /** How long the call waited. */
+  waitedMs: number;
+  /** Set when messages cannot arrive now (the account's session is offline). */
+  offline?: SessionStatusView;
+}
+
 export interface SendRequest {
   chatId?: string;
   /** For a first message to someone without a chat yet: phone number or @username. */
@@ -380,6 +405,8 @@ export interface AccountMessaging {
   search(query: SearchQuery): Promise<Page<MessageView>>;
   readChat(query: ReadChatQuery): Promise<{ chat: ChatView; messages: MessageView[]; nextCursor?: string }>;
   whatsNew(query: WhatsNewQuery): Promise<{ messages: MessageView[]; cursor: string; hasMore: boolean }>;
+  /** Waits until new messages arrive (or the timeout passes) and returns them, like `whatsNew`. */
+  waitForMessages(query: WaitQuery): Promise<WaitResult>;
   send(request: SendRequest): Promise<SendResult>;
   markRead(chatId: string): Promise<{ status: string }>;
   download(messageId: string, attachmentId: string): Promise<DownloadedFile>;
