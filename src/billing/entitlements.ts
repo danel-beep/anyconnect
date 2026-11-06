@@ -1,5 +1,6 @@
 import { and, count, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import type { AccountLimits } from '../core/accounts.js';
+import type { ActivityRetention } from '../core/activity.js';
 import { type Principal, usageCaller } from '../core/principal.js';
 import type { Db } from '../db/client.js';
 import {
@@ -27,6 +28,7 @@ import {
   METRICS,
   type Metric,
   type Plan,
+  smallestLimit,
 } from './plans.js';
 import { type StartPhase, startNow } from './start.js';
 
@@ -148,7 +150,7 @@ export const billingError = {
  * Payment providers and admins change plans through `setPlan`; admins add limits with `grant`;
  * members change who pays for a team with `changeTeamBilling`.
  */
-export class EntitlementService implements QuotaGate, AccountLimits {
+export class EntitlementService implements QuotaGate, AccountLimits, ActivityRetention {
   /** Short-lived snapshot of usage per payer, bumped locally between refreshes. */
   private readonly usageCache = new Map<string, { at: number; period: string; actions: number }>();
   private readonly callerCache = new Map<string, { at: number; period: string; actions: number }>();
@@ -182,6 +184,16 @@ export class EntitlementService implements QuotaGate, AccountLimits {
   }
 
   // --- Reading -----------------------------------------------------------------
+
+  /** How long a workspace keeps its activity log: its plan's `historyDays` (a team: its payer's). */
+  async historyDays(workspaceId: string): Promise<number | null> {
+    return (await this.entitlements(workspaceId)).limits.historyDays;
+  }
+
+  /** The shortest activity log any plan keeps (see `ActivityService.prune`). */
+  get minimumHistoryDays(): number {
+    return smallestLimit('historyDays') ?? 0;
+  }
 
   async subscription(workspaceId: string): Promise<SubscriptionRow | undefined> {
     const [row] = await this.deps.db

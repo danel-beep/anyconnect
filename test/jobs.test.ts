@@ -114,6 +114,8 @@ describe('background job queue (pg-boss)', () => {
       customServices: {} as never,
       billingNotices: {} as never,
       status: {} as never,
+      activity: {} as never,
+      retention: {} as never,
     });
     expect(new Set(jobs.map((j) => j.name)).size).toBe(jobs.length);
     for (const job of jobs) expect(job.cron).toMatch(/^(\S+\s){4}\S+$/);

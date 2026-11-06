@@ -17,7 +17,7 @@ export const METRICS = [
   'messengers',
   /** Background tasks (schedules, triggers). Enforced by the jobs layer. */
   'backgroundJobs',
-  /** How long the activity log is kept, in days. */
+  /** How long the activity log is kept, in days. Enforced by the daily job `activity.prune`. */
   'historyDays',
 ] as const;
 
@@ -127,6 +127,20 @@ export const PLANS: readonly Plan[] = [
     public: false,
   },
 ];
+
+/**
+ * The smallest number any plan, trial or step of a plan's start gives a metric ("no limit" is not
+ * a number and is skipped); undefined when none does. Grants only add on top.
+ */
+export function smallestLimit(metric: Metric, plans: readonly Plan[] = PLANS): number | undefined {
+  const values = plans.flatMap((plan) => [
+    plan.limits[metric],
+    plan.start?.trial.except?.[metric],
+    ...(plan.start?.steps ?? []).map((step) => step.limits[metric]),
+  ]);
+  const numbers = values.filter((value): value is number => typeof value === 'number');
+  return numbers.length ? Math.min(...numbers) : undefined;
+}
 
 /**
  * Whole months a yearly payment saves against twelve monthly ones (yearly prices are set as "two

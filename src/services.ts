@@ -512,12 +512,15 @@ export function createServices(
     reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
     logger,
   });
+  const activity = new ActivityService(db);
   for (const job of [
     ...builtinJobs({
       health,
       alerts,
       customServices,
       status: ops.status,
+      activity,
+      retention: entitlements,
       backups,
       billingNotices,
       analytics,
@@ -631,7 +634,6 @@ export function createServices(
       (config.site.google ? [new OidcLoginProvider(googleLoginSpec(config.site.google), network.fetch)] : []),
   );
   const adminPanel = new AdminService({ db, users, entitlements });
-  const activity = new ActivityService(db);
   const pendingLogins = new PendingLoginService(db);
   const secondFactors = new SecondFactorService(
     new TotpService(db, secrets, config.auth.rpName),

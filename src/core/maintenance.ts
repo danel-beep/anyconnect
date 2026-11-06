@@ -9,7 +9,6 @@ import {
   oauthGrants,
   oauthTokens,
   pendingLogins,
-  toolCalls,
   vaultRequests,
   vaultWraps,
   webauthnChallenges,
@@ -21,8 +20,8 @@ import type { StatusService } from '../ops/status.js';
 
 const DAY = 86_400_000;
 
-/** Deletes expired security artifacts and old audit entries. Safe to run on every instance. */
-export async function runMaintenance(db: Db, options: { auditRetentionDays?: number } = {}): Promise<void> {
+/** Deletes expired security artifacts. Safe to run on every instance. */
+export async function runMaintenance(db: Db): Promise<void> {
   const now = Date.now();
   await db.delete(oauthAuthorizationCodes).where(lt(oauthAuthorizationCodes.expiresAt, new Date(now - DAY)));
   await db.delete(oauthTokens).where(lt(oauthTokens.expiresAt, new Date(now - DAY)));
@@ -84,8 +83,7 @@ export async function runMaintenance(db: Db, options: { auditRetentionDays?: num
     );
   // Revoked grants are kept for a while for the audit trail, then removed.
   await db.delete(oauthGrants).where(lt(oauthGrants.revokedAt, new Date(now - 30 * DAY)));
-  const retention = options.auditRetentionDays ?? 90;
-  await db.delete(toolCalls).where(lt(toolCalls.createdAt, new Date(now - retention * DAY)));
+  // The activity log (tool_calls) is kept per plan: job `activity.prune` (ActivityService.prune).
 }
 
 export function scheduleMaintenance(

@@ -1,5 +1,6 @@
 import type { Analytics } from '../analytics/index.js';
 import type { AccountAlerts } from '../core/account-alerts.js';
+import type { ActivityRetention, ActivityService } from '../core/activity.js';
 import type { CustomServiceManager } from '../core/custom-services.js';
 import type { AccountHealthService } from '../core/health.js';
 import type { BillingNotices } from '../notices/billing-notices.js';
@@ -14,6 +15,9 @@ export function builtinJobs(deps: {
   customServices: CustomServiceManager;
   billingNotices: BillingNotices;
   status: StatusService;
+  activity: ActivityService;
+  /** How long each workspace keeps its activity log (the plan's `historyDays`). */
+  retention: ActivityRetention;
   /** Present when a backup bucket is configured. */
   backups?: BackupService | undefined;
   analytics?: Analytics | undefined;
@@ -47,6 +51,16 @@ export function builtinJobs(deps: {
           },
         ]
       : []),
+    {
+      name: 'activity.prune',
+      description: 'Delete activity log entries older than each plan keeps them',
+      cron: '47 1 * * *',
+      expectEveryMs: 26 * 3_600_000,
+      run: async (_data, ctx) => {
+        const { workspaces } = await deps.activity.prune(deps.retention);
+        if (workspaces) ctx.logger.info({ workspaces }, 'activity log pruned');
+      },
+    },
     {
       name: 'status.sample',
       description: 'Record the status page sample of this minute',
