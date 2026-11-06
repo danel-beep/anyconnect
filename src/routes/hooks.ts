@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import type { InboundMessage } from '../connectors/messaging.js';
 import type { AppEnv } from './context.js';
 
 /** Webhook bodies larger than this are rejected (Telegram and Meta send a few KB). */
@@ -40,19 +39,7 @@ export function hookRoutes() {
       const response = await transport.webhook.handle(
         { method: c.req.method, headers, query: c.req.query(), body },
         ctx,
-        {
-          ...endpoint,
-          ingest: async (messages: InboundMessage[]) => {
-            await s.messaging.store.ingest(accountId, messages);
-          },
-          markChatRead: async (chatExternalId: string) => {
-            const chat = await s.messaging.store.findChatByExternalId(accountId, chatExternalId);
-            if (chat) await s.messaging.store.markChatRead(chat.id);
-          },
-          delivery: async (updates) => {
-            for (const update of updates) await s.messaging.store.recordDelivery(accountId, update);
-          },
-        },
+        { ...endpoint, ...s.messaging.service.inbound(accountId) },
       );
       return new Response(response.body ?? null, {
         status: response.status,

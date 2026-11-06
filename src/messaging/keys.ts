@@ -95,6 +95,14 @@ export class MessengerKeys {
   }
 
   /**
+   * Keyed hash of an id the hub sees before it knows the account, e.g. which Telegram user added
+   * the hub's own bot. Separate from every account's lookups (account ids never equal `hub`).
+   */
+  hubLookupKey(scope: string, value: string): string {
+    return this.lookupKey('hub', scope, value);
+  }
+
+  /**
    * 32-bit blind index token. Short on purpose: collisions only cost a false candidate that is
    * dropped after decryption, and they make frequency analysis of the index less useful.
    */

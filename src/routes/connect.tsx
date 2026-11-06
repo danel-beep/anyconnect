@@ -30,9 +30,11 @@ import { renderInApp } from './page-helpers.js';
  * Browser side of connecting accounts:
  *
  * - `GET /connect/:connectorId?account=&app=&label=&name=&returnTo=` is the link the panel and the
- *   setup tools give out. For OAuth services it starts a flow for the signed-in user and redirects
- *   to the provider (`POST /api/v1/connect` is the API equivalent); for the rest (and with
- *   `via=form` for optional OAuth; `via=oauth` forces the provider's sign-in) it shows a form built from the connector's schemas
+ *   setup tools give out. A service with a quick connect flow that works now (`core/quick-connect.ts`,
+ *   Telegram Chat Automation) starts it and goes to its page. For OAuth services it starts a flow
+ *   for the signed-in user and redirects to the provider (`POST /api/v1/connect` is the API
+ *   equivalent); for the rest (and with `via=form` for optional OAuth or instead of a quick flow;
+ *   `via=oauth` forces the provider's sign-in) it shows a form built from the connector's schemas
  *   (`core/connect-form.ts`), posted back to `POST /connect/:connectorId`;
  * - `GET /connect/callback` is the single redirect URI registered at every provider.
  *
@@ -97,6 +99,34 @@ export function connectRoutes() {
     // before an account is created that could never log in.
     const gap = await s.admin.setupGap(connector);
     if (gap) return unavailable(c, user, connector, { reason: 'setup', env: gap.env });
+
+    // The quick way first, when it works now and for this account (`via=form` keeps the form).
+    if (!q('via') || q('via') === 'app') {
+      const reconnect = await reconnectTarget(c, user, workspace, connector, q('account'));
+      const quick = await s.quickConnects.for(connector.id, reconnect);
+      if (quick && (reconnect || !q('account'))) {
+        const limit = s.rateLimiter.consume(`quick-connect:${user.id}`, 30, 60 * 60_000);
+        if (!limit.allowed) {
+          const t = c.get('t');
+          return c.html(
+            <ErrorPage t={t} lang={c.get('locale')} message={t('connect.quickRateLimited')} />,
+            429,
+          );
+        }
+        const returnTo = q('returnTo');
+        const page = await quick.start({
+          workspaceId: workspace.id,
+          userId: user.id,
+          ...(owner ? { owner } : {}),
+          ...(q('name') ? { name: q('name')! } : {}),
+          ...(q('label') ? { label: q('label')! } : {}),
+          ...(reconnect ? { reconnect } : {}),
+          ...(returnTo ? { returnTo: safeNextPath(returnTo) } : {}),
+          locale: c.get('locale'),
+        });
+        return c.redirect(page, 302);
+      }
+    }
 
     const via = q('via') === 'oauth' ? 'oauth' : await s.admin.connectVia(workspace.id, connector);
     if (via === 'form' || q('via') === 'form') {
@@ -440,7 +470,7 @@ function formError(t: Translate, fields: FormField[], error: AppError): FormProb
 }
 
 /** The "Connected" page in the dashboard: what to ask the AI now, and the next step. */
-async function renderConnected(
+export async function renderConnected(
   c: AppContext,
   user: SessionUser,
   connector: ConnectorDefinition | undefined,
@@ -509,6 +539,11 @@ async function renderForm(
   }
   const oauthUrl = new URL(`/connect/${encodeURIComponent(connector.id)}`, s.config.publicUrl);
   for (const [key, value] of Object.entries(options.hidden)) oauthUrl.searchParams.set(key, value);
+  // The quick way (scan a QR code in the service's app), when it works for this account.
+  const quick = await s.quickConnects.for(connector.id, options.reconnect);
+  const quickUrl = new URL(oauthUrl);
+  quickUrl.searchParams.set('via', 'app');
+  if (options.label) quickUrl.searchParams.set('label', options.label);
   const variants = connector.ui?.setupVariants;
   const fieldName = (key: string | undefined) => fields.find((f) => f.key === key)?.name;
   const view: ConnectFormView = {
@@ -537,6 +572,7 @@ async function renderForm(
     ...(options.error ? { error: options.error } : {}),
     ...(options.invalid?.length ? { invalid: options.invalid } : {}),
     ...(options.oauth ? { oauthUrl: oauthUrl.pathname + oauthUrl.search } : {}),
+    ...(quick ? { quickUrl: quickUrl.pathname + quickUrl.search } : {}),
   };
   const page = <ConnectFormPage t={c.get('t')} lang={locale} csrf={csrf} view={view} />;
   return user ? renderInApp(c, user, 'services', page, status) : c.html(page, status);

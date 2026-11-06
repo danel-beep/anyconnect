@@ -91,4 +91,48 @@ details.guide-problems>summary::after{width:8px;height:8px;right:4px}
 .try-it{margin:22px 0 4px;padding:18px 0 0;border-top:1px solid var(--border)}
 .try-it h2{margin:0}
 .try-it p.small{margin:6px 0 0}
+
+/* Quick connect: the offer above a form, and the Telegram page (QR code, steps, live status) */
+.quick-offer{display:flex;gap:12px 16px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 18px;padding:14px 16px;border:1px solid var(--accent);border-radius:12px;background:var(--accent-soft)}
+.quick-offer p{margin:0;flex:1 1 260px;font-size:14px;line-height:1.45}
+.quick-offer strong{display:block;font-size:14.5px;margin:0 0 2px}
+.tg-card{padding:24px 26px}
+.tg-flow{display:grid;grid-template-columns:auto minmax(0,1fr);gap:24px;align-items:start}
+.tg-flow.single{grid-template-columns:minmax(0,1fr)}
+.tg-qr{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--bg-subtle)}
+.tg-qr .qr{width:188px;height:188px;margin:0}
+.tg-qr p{margin:0;max-width:188px;font-size:12.5px;line-height:1.4;color:var(--muted);text-align:center}
+.tg-progress{list-style:none;counter-reset:tg;padding:0;margin:0 0 6px}
+.tg-progress li{counter-increment:tg;position:relative;padding:3px 0 14px 38px;font-size:14.5px;line-height:1.45;color:var(--muted)}
+.tg-progress li::before{content:counter(tg);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--border-strong);background:var(--card);color:var(--muted);font:650 12.5px/1 ${MONO}}
+.tg-progress li:not(:last-child)::after{content:"";position:absolute;left:12.5px;top:30px;bottom:2px;width:1px;background:var(--border)}
+.tg-progress li[data-step=done]{color:var(--text)}
+.tg-progress li[data-step=done]::before{content:"\\2713";background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.tg-progress li[data-step=current]{color:var(--text);font-weight:600}
+.tg-progress li[data-step=current]::before{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.tg-open{margin:4px 0 0}
+.tg-code{margin:4px 0 0}
+.tg-code label{display:block;font-weight:600;font-size:14px;margin:0 0 6px}
+.tg-code-row{display:flex;gap:8px;align-items:stretch}
+.tg-code-row input{flex:0 1 10em;min-width:0;font:600 20px/1.2 ${MONO};letter-spacing:.18em;text-align:center}
+.tg-code .notice{margin:10px 0 0}
+.tg-code .hint{margin:8px 0 0}
+.tg-last{margin:0 0 4px;padding:14px 16px;border:1px solid var(--accent);border-radius:12px;background:var(--accent-soft)}
+.tg-last ol{margin:0;padding-left:20px;font-size:14.5px;line-height:1.5}
+.tg-last li+li{margin-top:6px}
+.tg-bot{font:600 14px/1.3 ${MONO};padding:2px 6px;border-radius:6px;background:var(--card);border:1px solid var(--border);user-select:all}
+.tg-wait{display:flex;gap:10px;align-items:center;margin:16px 0 0;font-size:14px;color:var(--muted)}
+.tg-wait::before{content:"";flex:none;width:14px;height:14px;border-radius:50%;border:2px solid var(--border-strong);border-top-color:var(--accent);animation:tg-spin .9s linear infinite}
+@keyframes tg-spin{to{transform:rotate(360deg)}}
+.tg-foot{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}
+.tg-foot form{margin:0}
+.tg-foot .btn svg{width:14px;height:14px}
+.tg-outcome h2{margin:0 0 8px}
+.tg-outcome p{margin:0 0 14px}
+.tg-other{margin:20px 0 0;padding:14px 0 0;border-top:1px solid var(--border);font-size:13.5px;color:var(--muted)}
+.tg-safe h2{display:flex;gap:8px;align-items:center;margin:0 0 8px}
+.tg-safe h2 svg{width:17px;height:17px;color:var(--ok)}
+.tg-safe ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.tg-safe li+li{margin-top:4px}
+@media (max-width:640px){.tg-card{padding:20px 18px}.tg-flow{grid-template-columns:minmax(0,1fr);gap:18px}.tg-qr{order:2;justify-self:center}.tg-open{display:flex;width:100%;justify-content:center}}
 `;

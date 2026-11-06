@@ -16,6 +16,7 @@ import type { Principal } from '../core/principal.js';
 import {
   ACCESS_LEVELS,
   CONFIRM_LEVELS,
+  type ConnectLink,
   type RuleChange,
   type RulesOverview,
   type WorkspaceAdmin,
@@ -213,6 +214,14 @@ function looseningReason(input: z.output<typeof RuleInput>, kinds: Set<string>):
 const NEW_TOOLS_HINT =
   'New tools work right away through manyplug_search_tools and manyplug_call_tool; some apps show them in their tool list only after reconnecting.';
 
+/** What the user does on the connect page, by how it connects the service. */
+const CONNECT_STEPS: Record<ConnectLink['method'], string> = {
+  oauth: ' (sign in with the provider)',
+  form: '',
+  none: '',
+  app: ' (scan the QR code with their phone and confirm on the page; no password or key is needed)',
+};
+
 export const SETUP_ACTIONS: ActionDefinition[] = [
   setupAction({
     name: 'services',
@@ -255,7 +264,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       return {
         url: link.url,
         method: link.method,
-        instructions: `Ask the user to open the link and finish there${link.method === 'oauth' ? ' (sign in with the provider)' : ''}. Then check with manyplug_list_accounts. ${NEW_TOOLS_HINT}`,
+        instructions: `Ask the user to open the link and finish there${CONNECT_STEPS[link.method]}. Then check with manyplug_list_accounts. ${NEW_TOOLS_HINT}`,
       };
     },
   }),

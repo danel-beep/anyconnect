@@ -66,6 +66,8 @@ interface FieldTexts {
   entries: FieldLocale[];
   /** Keys shown up front, when the connector chose them. */
   primary: Set<string> | undefined;
+  /** Select values the form does not offer (accounts with them are made another way). */
+  hidden: string[];
 }
 
 function fieldsOf(
@@ -81,7 +83,7 @@ function fieldsOf(
     // provider preset): a checkbox could only say yes or no, so it becomes a three-way choice.
     const tristate = kind === 'boolean' && !required.has(key) && property.default === undefined;
     if (tristate) kind = 'select';
-    const { entries, primary } = texts(key);
+    const { entries, primary, hidden } = texts(key);
     // A locale entry replaces the schema texts as a whole: a translated field without a hint has none.
     const [entry] = entries;
     const field: FormField = {
@@ -103,10 +105,13 @@ function fieldsOf(
         label: entries.find((e) => e.options?.[value])?.options?.[value] ?? '',
       }));
     } else if (kind === 'select') {
-      field.options = (property.enum as unknown[]).map((raw) => {
-        const value = String(raw);
-        return { value, label: entries.find((e) => e.options?.[value])?.options?.[value] ?? value };
-      });
+      field.options = (property.enum as unknown[])
+        .map(String)
+        .filter((value) => !hidden.includes(value))
+        .map((value) => ({
+          value,
+          label: entries.find((e) => e.options?.[value])?.options?.[value] ?? value,
+        }));
     }
     if (group === 'config' && property.default !== undefined) {
       field.defaultValue =
@@ -126,14 +131,26 @@ export function connectFormFields(connector: ConnectorDefinition, language: UiLa
   const locales = uiLocales(connector, language);
   const primaryFields = connector.ui?.primaryFields;
   const primary = primaryFields ? new Set(primaryFields) : undefined;
+  const hiddenOptions: Partial<Record<string, string[]>> = connector.ui?.formHiddenOptions ?? {};
   const texts = (key: string): FieldTexts => ({
     entries: locales.flatMap((locale) => locale.fields?.[key] ?? []),
     primary,
+    hidden: hiddenOptions[key] ?? [],
   });
   return [
     ...fieldsOf(toJsonSchema(connector.config), 'config', texts),
     ...fieldsOf(toJsonSchema(connector.credentials), 'credentials', texts),
-  ];
+  ].filter((field) => !onlyDefaultLeft(field, hiddenOptions[field.key]));
+}
+
+/** A select whose other values are all hidden: nothing to choose, its default applies. */
+function onlyDefaultLeft(field: FormField, hidden: string[] | undefined): boolean {
+  return (
+    !!hidden?.length &&
+    field.kind === 'select' &&
+    field.options?.length === 1 &&
+    field.options[0]!.value === field.defaultValue
+  );
 }
 
 /**
@@ -172,6 +189,9 @@ export function readConnectForm(
     if (text === '') continue;
     if (field.valueType === 'boolean') {
       values[field.group][field.key] = text === 'true';
+    } else if (field.kind === 'select' && !field.options?.some((option) => option.value === text)) {
+      // Only what the form offers: hidden values belong to accounts made another way.
+      values.problems[field.name] = 'not one of the choices';
     } else if (field.kind === 'number') {
       const number = Number(text);
       if (Number.isFinite(number)) values[field.group][field.key] = number;

@@ -3,7 +3,7 @@ import { CYRILLIC } from '../lib/slug.js';
 /**
  * The website's two small scripts, served from our own origin (`script-src 'self'`).
  * Every page works without them; they only add comfort: theme switch, copy buttons, tabs,
- * filters, menus and confirmations.
+ * filters, menus, confirmations and pages that follow a state by themselves.
  */
 
 /** Runs in <head> before the first paint: marks JS as available and applies the saved theme. */
@@ -201,6 +201,15 @@ function slug(v){var l=v.toLowerCase(),s='';for(var i=0;i<l.length;i++){var ch=l
 if(s.normalize)s=s.normalize('NFKD').replace(/[\\u0300-\\u036f]/g,'');return s.replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,28).replace(/-+$/,'')}
 $$('[data-slug-target]').forEach(function(src){var out=d.querySelector(src.getAttribute('data-slug-target'));if(!out)return;var empty=out.getAttribute('placeholder')||'';
 function update(){out.setAttribute('placeholder',slug(src.value)||empty)}src.addEventListener('input',update);update()});
+
+/* A page waiting for something done elsewhere (a QR code scanned in Telegram) asks the server every
+   few seconds and reloads once it changed: data-poll="<url answering {state}>", data-poll-state="<now>".
+   It pauses while the tab is hidden and stops after about 40 minutes or when signed out. */
+$$('[data-poll]').forEach(function(el){var url=el.getAttribute('data-poll'),now=el.getAttribute('data-poll-state'),busy=false,left=960,timer;
+function tick(){if(busy||d.hidden)return;if(--left<0){clearInterval(timer);return}busy=true;
+fetch(url,{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}}).then(function(r){if(r.status===401||r.status===404){clearInterval(timer);return null}return r.ok?r.json():null})
+.then(function(j){busy=false;if(j&&j.state&&j.state!==now){clearInterval(timer);location.reload()}},function(){busy=false})}
+timer=setInterval(tick,2500);d.addEventListener('visibilitychange',function(){if(!d.hidden)tick()})});
 
 /* A page shown in answer to a form post (e.g. a new token) gets a clean address, so reloading it
    does not post the form again. */

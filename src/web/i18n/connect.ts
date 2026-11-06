@@ -47,6 +47,11 @@ export const connectEn = {
   'guide.steps': 'Steps',
   'guide.fills': 'Paste into:',
   'guide.problems': 'If something goes wrong',
+  'connect.quickTitle': 'Faster: under a minute',
+  'connect.quickText':
+    'Scan a QR code with your phone and confirm with the code you get in the app. No password or key.',
+  'connect.quickButton': 'Connect with a QR code',
+  'connect.quickRateLimited': 'Too many QR codes in the last hour. Wait a little and try again.',
 } as const;
 
 export const connectRu: Record<keyof typeof connectEn, string> = {
@@ -95,4 +100,10 @@ export const connectRu: Record<keyof typeof connectEn, string> = {
   'guide.steps': 'Шаги',
   'guide.fills': 'Вставьте в поле:',
   'guide.problems': 'Если что-то не получилось',
+  'connect.quickTitle': 'Быстрее: меньше минуты',
+  'connect.quickText':
+    'Отсканируйте QR-код телефоном и подтвердите кодом, который придёт в приложение. Без пароля и ключей.',
+  'connect.quickButton': 'Подключить по QR-коду',
+  'connect.quickRateLimited':
+    'Слишком много QR-кодов за последний час. Подождите немного и попробуйте снова.',
 };

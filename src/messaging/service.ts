@@ -3,6 +3,7 @@ import {
   type AccountMessaging,
   type DirectTransport,
   type InboundChat,
+  type InboundSink,
   MAX_CAPTION_LENGTH,
   type MessagingPort,
   type MessengerTransport,
@@ -74,6 +75,37 @@ export class MessagingService implements MessagingPort {
       signal,
       logger: this.deps.logger.child({ connector: resolved.connector.id, account: resolved.row.id }),
     });
+  }
+
+  /** Where what a messenger reports about an account goes: the message store. */
+  inbound(accountId: string): InboundSink {
+    const { store } = this.deps;
+    return {
+      ingest: async (messages) => {
+        await store.ingest(accountId, messages);
+      },
+      markChatRead: async (chatExternalId) => {
+        const chat = await store.findChatByExternalId(accountId, chatExternalId);
+        if (chat) await store.markChatRead(chat.id);
+      },
+      delivery: async (updates) => {
+        for (const update of updates) await store.recordDelivery(accountId, update);
+      },
+    };
+  }
+
+  /**
+   * Hands an event that reached the hub on a channel it owns for many accounts (the hub's Telegram
+   * bot) to this account's transport. False when the account cannot take it (deleted, disabled, or
+   * its transport has no `routed` handler): the event is then dropped, never stored anywhere else.
+   */
+  async route(accountId: string, event: unknown): Promise<boolean> {
+    const resolved = await this.resolve(accountId);
+    const transport = resolved?.transport;
+    if (!resolved?.row.enabled || transport?.kind !== 'direct' || !transport.routed) return false;
+    const ctx = await this.context(resolved, AbortSignal.timeout(20_000));
+    await transport.routed.handle(event, ctx, this.inbound(accountId));
+    return true;
   }
 
   async pacing(resolved: ResolvedMessenger): Promise<PacingLimits> {

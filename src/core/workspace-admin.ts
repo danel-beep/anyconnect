@@ -21,6 +21,7 @@ import type { AddServiceInput, CustomServiceManager, ServiceView } from './custo
 import { getWorkspace } from './identity.js';
 import type { OAuthAppService } from './oauth-apps.js';
 import type { Principal } from './principal.js';
+import type { QuickConnects } from './quick-connect.js';
 import type { TeamMember, TeamService, TeamView } from './teams.js';
 
 /** One account by `service:name`, a name that is unique, or its id. */
@@ -83,7 +84,12 @@ export interface ServiceEntry {
 
 export interface ConnectLink {
   url: string;
-  method: ConnectMethod;
+  /**
+   * How the page connects it; `app`: the person confirms in the service's own app (Telegram: scan
+   * a QR code, then the code from the hub's bot typed on the page), with no password or key (see
+   * `quick-connect.ts`).
+   */
+  method: ConnectMethod | 'app';
   service: string;
 }
 
@@ -129,6 +135,8 @@ export class WorkspaceAdmin {
       aiClients: AiClientService;
       /** Teams: who may change what (personal workspaces: the owner, everything). */
       teams?: TeamService;
+      /** Services connected by confirming in their own app; the connect page offers them first. */
+      quickConnects?: QuickConnects;
       /** Server-side prerequisites of services (the messenger gateway's API keys). */
       availability?: ConnectorAvailability;
       publicUrl: string;
@@ -295,16 +303,17 @@ export class WorkspaceAdmin {
     if (input.forTeam && !view) throw badRequest('Team accounts exist only in a team.');
     const connector = await this.deps.connectors.get(workspaceId, input.service);
     if (!connector) throw badRequest(`Unknown service "${input.service}". List them with the services tool.`);
-    const method = await this.linkMethod(workspaceId, connector);
+    const reconnect = input.reconnect
+      ? await this.accountFor(principal, input.reconnect, { manage: true, service: connector.id })
+      : undefined;
+    // The page offers the quick way first when it works for this account (the same check as there).
+    const quick = await this.deps.quickConnects?.for(connector.id, reconnect);
+    const method = quick ? 'app' : await this.linkMethod(workspaceId, connector);
     // The page connects into this team, as the member who opens it (or for the whole team).
     const url = this.connectPage(connector.id, view?.team.slug);
     if (input.forTeam) url.searchParams.set('owner', 'team');
-    if (input.reconnect) {
-      const account = await this.accountFor(principal, input.reconnect, {
-        manage: true,
-        service: connector.id,
-      });
-      url.searchParams.set('account', account.id);
+    if (reconnect) {
+      url.searchParams.set('account', reconnect.id);
     } else {
       if (input.name && (await this.deps.accounts.findByName(workspaceId, connector.id, input.name))) {
         throw badRequest(`${connector.name} already has an account named "${input.name}".`);

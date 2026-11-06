@@ -94,8 +94,8 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     alternative: {
       connectorId: 'telegram_bot',
       note: {
-        ru: 'Как «Telegram Bot»: ваш бот через официальный Bot API, а с Telegram Business и ваши личные чаты.',
-        en: 'As a Telegram Bot: your bot through the official Bot API, and with Telegram Business your own chats too.',
+        ru: `Как «Telegram Bot»: ваши личные чаты через бота ${BRAND.name} в «Автоматизации чатов» (QR-код, меньше минуты) или ваш бот через официальный Bot API.`,
+        en: `As a Telegram Bot: your private chats through the ${BRAND.name} bot in Chat Automation (a QR code, under a minute), or your bot through the official Bot API.`,
       },
     },
   },
@@ -103,8 +103,8 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     icon: 'telegram',
     category: 'messengers',
     blurb: {
-      ru: 'Ваш бот через Bot API, а с Telegram Business и личные чаты: поиск, ответы.',
-      en: 'Your bot through the Bot API, and with Telegram Business your own chats: search, replies.',
+      ru: 'Ваши личные чаты по QR-коду («Автоматизация чатов») или ваш бот через Bot API: поиск, ответы.',
+      en: 'Your private chats by QR code (Chat Automation) or your bot through the Bot API: search, replies.',
     },
   },
   whatsapp: {

@@ -228,6 +228,27 @@ export interface DirectTransport<TConfig = unknown, TCredentials = unknown> {
    */
   resolveRecipient?(to: string, ctx: AccountContext<TConfig, TCredentials>): Promise<InboundChat>;
   webhook?: WebhookHandler<TConfig, TCredentials>;
+  /**
+   * Events of this account that reach the hub through a channel it owns for many accounts (the
+   * hub's own Telegram bot, which people add to their account with Telegram Chat Automation). The
+   * hub has authenticated the event and picked the account; the transport turns it into messages.
+   */
+  routed?: RoutedEventHandler<TConfig, TCredentials>;
+}
+
+/** Where a transport puts what an event carries (see {@link WebhookHandler} for the same sinks). */
+export interface InboundSink {
+  /** Stores messages in the hub's message store (deduplicated, encrypted). */
+  ingest(messages: InboundMessage[]): Promise<void>;
+  /** Records that a chat was read elsewhere (on the phone). */
+  markChatRead(chatExternalId: string): Promise<void>;
+  /** Records how far the user's own messages got (delivered, read, failed). */
+  delivery(updates: DeliveryUpdate[]): Promise<void>;
+}
+
+export interface RoutedEventHandler<TConfig = unknown, TCredentials = unknown> {
+  /** `event` is the service's own payload, e.g. a Telegram Update. */
+  handle(event: unknown, ctx: AccountContext<TConfig, TCredentials>, sink: InboundSink): Promise<void>;
 }
 
 /** A transport served by a persistent session in the messenger gateway (MTProto, WhatsApp Web). */
@@ -260,14 +281,7 @@ export interface WebhookHandler<TConfig = unknown, TCredentials = unknown> {
   handle(
     request: WebhookRequest,
     ctx: AccountContext<TConfig, TCredentials>,
-    hook: WebhookEndpoint & {
-      /** Stores messages in the hub's message store (deduplicated, encrypted). */
-      ingest(messages: InboundMessage[]): Promise<void>;
-      /** Records that a chat was read elsewhere (on the phone). */
-      markChatRead(chatExternalId: string): Promise<void>;
-      /** Records how far the user's own messages got (delivered, read, failed). */
-      delivery(updates: DeliveryUpdate[]): Promise<void>;
-    },
+    hook: WebhookEndpoint & InboundSink,
   ): Promise<WebhookResponse>;
 }
 
