@@ -14,7 +14,7 @@ export interface AiAppPageView {
   app: {
     id: string;
     name: string;
-    kind: 'oauth' | 'api_token';
+    kind: 'oauth' | 'api_token' | 'automation';
     createdAt: Date;
     lastUsedAt: Date | null;
   };

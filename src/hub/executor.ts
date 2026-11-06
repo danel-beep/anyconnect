@@ -16,8 +16,8 @@ import type { ExecResult } from './result.js';
  * fan-out, a unified capability tool or a `call_tools` batch — runs as one *unit* (one action on one
  * account) through the same ordered chain of stages:
  *
- *   audit → meter → quota → policy → risk → confirm → approvals → limits → circuit → idempotency →
- *   untrusted → shape → invoke
+ *   audit → meter → quota → policy → risk → automation → confirm → approvals → limits → circuit →
+ *   idempotency → untrusted → shape → invoke
  *
  * Each stage is a middleware `(call, next) => result`: it may inspect the call, short-circuit with
  * its own result (a policy denial), call `next()` more than once (a retry) or post-process the
@@ -34,6 +34,8 @@ export const STAGE_ORDER = [
   'policy',
   /** Lets the action raise the risk of this particular call (`assessRisk`), e.g. a new recipient. */
   'risk',
+  /** A trigger acting on its own: only the tools its rule allows, risky ones held for the user. */
+  'automation',
   /** Asks the user before risky actions (MCP elicitation, Telegram…; security layer). */
   'confirm',
   /** Records standing approvals an approved call grants, e.g. "carry on this conversation" (security layer). */

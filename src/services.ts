@@ -95,6 +95,7 @@ import {
 } from './security/stages.js';
 import { StandingApprovals } from './security/standing-approvals.js';
 import { type BotUpdateHandler, chainUpdateHandlers, TelegramBot } from './security/telegram.js';
+import { createTriggers, type Triggers } from './triggers/index.js';
 import { VERSION } from './version.js';
 import { translator } from './web/i18n.js';
 import { PendingLoginService } from './web/pending-logins.js';
@@ -211,6 +212,8 @@ export interface Services {
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
   messaging: Messaging;
+  /** Triggers: rules on new messages and mail, the event feed, AI keys (docs/TRIGGERS.md). */
+  triggers: Triggers;
   /** /mcp for apps that have not signed in yet; absent when `MCP_ANONYMOUS` is off. */
   visitorMcp?: McpHttpHandler;
   close(): Promise<void>;
@@ -554,19 +557,41 @@ export function createServices(
       owners: view.access.owners,
     };
   };
+  const ownerNotifier = new TelegramOwnerNotifier({
+    channels: notificationChannels,
+    bot: telegramBot,
+    t: translator,
+    logger,
+  });
   const alerts = new AccountAlerts({
     db,
     connectors,
-    notifier: new TelegramOwnerNotifier({
-      channels: notificationChannels,
-      bot: telegramBot,
-      t: translator,
-      logger,
-    }),
+    notifier: ownerNotifier,
     reconnectUrl: (workspaceId, _service, accountId) => admin.reconnectUrl(workspaceId, accountId),
     logger,
   });
   const activity = new ActivityService(db);
+  // The hub is built below with the trigger tools in it; triggers reach it only when they run.
+  let hubRef: Hub | undefined;
+  const triggers = createTriggers({
+    db,
+    secrets,
+    messaging,
+    accounts,
+    connectors,
+    aiClients,
+    notifier: ownerNotifier,
+    hub: () => {
+      if (!hubRef) throw new Error('hub is not initialized');
+      return hubRef;
+    },
+    jobs: () => jobs,
+    listener,
+    fetch: network.fetch,
+    publicUrl: config.publicUrl,
+    logger,
+    onError: (error, context) => ops.errors.capture(error, { source: 'trigger', context }),
+  });
   for (const job of [
     ...builtinJobs({
       health,
@@ -580,6 +605,7 @@ export function createServices(
       analytics,
     }),
     ...messaging.jobs,
+    ...triggers.jobs,
     {
       name: 'security.prune_approvals',
       description: 'Delete standing approvals (conversations the AI carried on) a day after they ended',
@@ -619,6 +645,7 @@ export function createServices(
         requireSecondFactor: config.auth.requireSecondFactor,
         publicUrl: config.publicUrl,
       }),
+      triggers: triggers.service,
     },
     rateLimiter,
     circuitBreaker,
@@ -633,6 +660,7 @@ export function createServices(
     catalogFilter: overrides.catalogFilter ?? teamCatalogFilter(createCatalogFilter(policies), teamOf),
     team: teamOf,
   });
+  hubRef = hub;
   const pendingRunner = new PendingCallRunner({
     pending: pendingCalls,
     center: confirmations,
@@ -777,9 +805,11 @@ export function createServices(
     idempotency,
     mcp,
     messaging,
+    triggers,
     ...(visitorMcp ? { visitorMcp } : {}),
     async close() {
       await analytics.close();
+      triggers.stop();
       await messaging?.stop();
       await listener.stop();
       await pendingRunner.stop();

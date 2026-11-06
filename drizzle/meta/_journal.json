@@ -190,6 +190,13 @@
       "when": 1793949701282,
       "tag": "0026_standing_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793962498109,
+      "tag": "0027_triggers",
+      "breakpoints": true
     }
   ]
 }

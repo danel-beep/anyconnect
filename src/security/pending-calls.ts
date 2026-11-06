@@ -70,6 +70,7 @@ function snapshot(principal: Principal): PendingCallPrincipal {
     ...(principal.aiClientId ? { aiClientId: principal.aiClientId } : {}),
     ...(principal.personaId ? { personaId: principal.personaId } : {}),
     ...(principal.shared ? { shared: true } : {}),
+    ...(principal.automation ? { automation: principal.automation } : {}),
   };
 }
 

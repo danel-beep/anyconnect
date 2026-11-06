@@ -17,6 +17,7 @@ import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
 import { teamEn, teamRu } from './i18n/team.js';
 import { telegramConnectEn, telegramConnectRu } from './i18n/telegram-connect.js';
+import { triggersEn, triggersRu } from './i18n/triggers.js';
 import { vaultEn, vaultRu } from './i18n/vault.js';
 
 export type Locale = 'ru' | 'en';
@@ -237,6 +238,7 @@ const en = {
   ...teamEn,
   ...planPageEn,
   ...profilesEn,
+  ...triggersEn,
   ...appsEn,
   ...botEn,
   ...telegramConnectEn,
@@ -466,6 +468,7 @@ const ru: Record<Key, string> = {
   ...teamRu,
   ...planPageRu,
   ...profilesRu,
+  ...triggersRu,
   ...appsRu,
   ...botRu,
   ...telegramConnectRu,

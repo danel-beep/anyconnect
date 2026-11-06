@@ -69,6 +69,7 @@ import type { UserSecurity } from './security-tools.js';
 import type { SetupContext } from './setup-tools.js';
 import { shapeData } from './shaping.js';
 import { defaultStages, recordToolCall } from './stages/index.js';
+import type { WorkspaceTriggers } from './trigger-tools.js';
 import type { UsageMeter } from './usage.js';
 
 export type { ToolCallResult } from './result.js';
@@ -114,6 +115,7 @@ export interface HubDeps {
     profiles?: WorkspaceProfiles;
     apps?: WorkspaceApps;
     security?: UserSecurity;
+    triggers?: WorkspaceTriggers;
   };
   /**
    * Directory rules enforced for clients of known AI apps (ids from `client-policies.ts`, config
@@ -812,6 +814,7 @@ export class Hub {
       ...(setup.profiles ? { profiles: setup.profiles } : {}),
       ...(setup.apps ? { apps: setup.apps } : {}),
       ...(setup.security ? { security: setup.security } : {}),
+      ...(setup.triggers ? { triggers: setup.triggers } : {}),
       signal,
     };
     const call: CallContext = {

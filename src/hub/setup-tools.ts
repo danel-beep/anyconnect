@@ -29,6 +29,7 @@ import type { CatalogAllow } from './catalog-types.js';
 import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
 import { securityActions, type UserSecurity } from './security-tools.js';
 import { TEAM_ONLY_ACTIONS, teamActions } from './team-tools.js';
+import { triggerActions, type WorkspaceTriggers } from './trigger-tools.js';
 
 /**
  * The hub's own setup tools (`manyplug_*`): after connecting the hub once, the user manages
@@ -66,6 +67,8 @@ export interface SetupContext {
   apps?: WorkspaceApps;
   /** The user's sign-in security, read only (`security-tools.ts`). */
   security?: UserSecurity;
+  /** Triggers and the "anything new?" check (`trigger-tools.ts`); absent in hubs built without them. */
+  triggers?: WorkspaceTriggers;
   signal: AbortSignal;
 }
 
@@ -480,6 +483,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   }),
   ...profileActions(setupAction),
   ...billingActions(setupAction),
+  ...triggerActions(setupAction),
   // Rarely needed: listed after the rest while they fit, always found by search. The team tools
   // show only inside a team (but the overview), where the access profile tools give them room.
   ...appActions(setupAction),
@@ -503,6 +507,10 @@ const TEAM_ADMIN_TOOLS: ReadonlySet<string> = new Set([
   // An AI app of a team is everyone's who uses it: renaming or disconnecting it affects them all.
   'rename_app',
   'disconnect_app',
+  // A trigger acts for the whole team's setup: the team's admins add and change them.
+  'create_trigger',
+  'update_trigger',
+  'delete_trigger',
 ]);
 /**
  * Setup tools for what teams do not have yet: access profiles (`/mcp/<profile>` addresses belong

@@ -555,7 +555,8 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
       logger,
       notifier: {
         notify: async (userId, notice) => {
-          sent[userId] = notice.accounts.map(({ account, url }) => ({ account, url }));
+          if (notice.kind === 'accounts_need_reauth')
+            sent[userId] = notice.accounts.map(({ account, url }) => ({ account, url }));
           return 'sent';
         },
       },

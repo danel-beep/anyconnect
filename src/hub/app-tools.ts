@@ -7,7 +7,8 @@ import type { SetupActionSpec, SetupContext } from './setup-tools.js';
 export interface AppInfo {
   id: string;
   name: string;
-  kind: 'oauth' | 'api_token';
+  /** `automation`: the hub's own triggers acting on their own. */
+  kind: 'oauth' | 'api_token' | 'automation';
   lastUsedAt: Date | null;
   connections: {
     kind: 'oauth' | 'token';
@@ -46,7 +47,8 @@ function appView(app: AppInfo, ctx: SetupContext) {
     app: app.name,
     id: app.id,
     ...(app.id === ctx.principal.aiClientId ? { this_app: true } : {}),
-    kind: app.kind === 'api_token' ? 'personal token' : 'signs in',
+    kind:
+      app.kind === 'api_token' ? 'personal token' : app.kind === 'automation' ? 'hub triggers' : 'signs in',
     connected: app.connections.length > 0,
     connections: app.connections.map((c) => ({
       via: c.kind === 'token' ? 'token' : 'sign-in',

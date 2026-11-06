@@ -284,7 +284,12 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     if (!confirm && undoWindowSeconds === 0) return next();
     // The user may let the AI app ask them in the chat. Not for what the floor guards (the AI must
     // not lift its own restrictions on its word alone), nor through a team's shared connection.
-    const inChat = decision.confirmIn === 'chat' && !floor && !call.principal.shared;
+    // A trigger acting on its own has no chat to ask in.
+    const inChat =
+      decision.confirmIn === 'chat' &&
+      !floor &&
+      !call.principal.shared &&
+      call.principal.kind !== 'automation';
 
     const riskReason = typeof call.locals.riskReason === 'string' ? call.locals.riskReason : undefined;
     const input: PendingCallInput = {
