@@ -150,6 +150,20 @@ export class MessagingService implements MessagingPort {
       return this.deps.gateway;
     };
 
+    /** Queues "read up to the latest incoming message" for the chat and clears its unread counter. */
+    const queueRead = async (chat: StoredChat): Promise<OutboxRow> => {
+      const upTo = await store.latestInbound(chat.id);
+      const { row } = await outbox.enqueue({
+        accountId,
+        chatId: chat.id,
+        kind: 'mark_read',
+        payload: upTo ? { upToExternalId: upTo.body.externalId } : {},
+      });
+      this.deps.onEnqueued?.(accountId);
+      await store.markChatRead(chat.id);
+      return row;
+    };
+
     return {
       listChats: (query) => store.listChats(accountId, query),
       search: (query) => store.search(accountId, query),
@@ -236,6 +250,9 @@ export class MessagingService implements MessagingPort {
             'Pass chat (from list_chats) or to (phone number / @username).',
           );
         }
+        // A person reads before answering: unread messages of the chat are marked read first (the
+        // outbox keeps the order), so the other side never sees a reply under an unread message.
+        if (chat.unread > 0) await queueRead(chat);
         let replyToExternalId: string | undefined;
         if (request.replyTo) {
           const target = await store.getMessage(accountId, request.replyTo);
@@ -262,16 +279,7 @@ export class MessagingService implements MessagingPort {
       },
 
       markRead: async (chatId) => {
-        const chat = await requireChat(chatId);
-        const upTo = await store.latestInbound(chat.id);
-        const { row } = await outbox.enqueue({
-          accountId,
-          chatId: chat.id,
-          kind: 'mark_read',
-          payload: upTo ? { upToExternalId: upTo.body.externalId } : {},
-        });
-        this.deps.onEnqueued?.(accountId);
-        await store.markChatRead(chat.id);
+        const row = await queueRead(await requireChat(chatId));
         return { status: row.status === 'sent' ? 'read' : 'queued' };
       },
 
