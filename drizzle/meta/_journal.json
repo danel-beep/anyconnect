@@ -169,6 +169,20 @@
       "when": 1793909574465,
       "tag": "0023_drop_vault_device_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793940175389,
+      "tag": "0024_telegram_split",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793941338287,
+      "tag": "0025_telegram_chat_automation",
+      "breakpoints": true
     }
   ]
 }

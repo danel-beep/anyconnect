@@ -11,7 +11,7 @@ import { renderInApp } from './page-helpers.js';
 
 /**
  * The page of a Telegram Chat Automation link (`/connect/telegram/link/:linkId`, made by
- * `GET /connect/telegram`): the QR code, the bot's code typed here (`POST …/confirm`), then the last
+ * `GET /connect/telegram_bot`): the QR code, the bot's code typed here (`POST …/confirm`), then the last
  * step in Telegram, then the "Connected" page. Only the user who made the link sees it. The site script asks `…/state` every few seconds and
  * reloads the page when the state changes; without scripts, "Check now" does the same.
  */
@@ -25,18 +25,23 @@ export function telegramConnectRoutes() {
 
   const base = (linkId: string) => `/connect/telegram/link/${encodeURIComponent(linkId)}`;
 
-  /** `/connect/telegram` with what the link was made with: a new QR code, or the form. */
-  const startUrl = async (c: AppContext, link: TelegramLinkView, via?: 'form') => {
+  /**
+   * `/connect/telegram_bot` with what the link was made with: a new QR code, or the form; with
+   * `personal`, the personal account service (`telegram`) instead.
+   */
+  const startUrl = async (c: AppContext, link: TelegramLinkView, via?: 'form' | 'personal') => {
     const s = c.get('services');
-    const url = new URL('/connect/telegram', s.config.publicUrl);
+    const service = via === 'personal' ? 'telegram' : s.telegramAutomation!.connectorId;
+    const url = new URL(`/connect/${service}`, s.config.publicUrl);
     const team = await s.teams.slugOf(link.workspaceId);
     if (team) url.searchParams.set('team', team);
     if (link.draft.owner?.userId === null) url.searchParams.set('owner', 'team');
-    if (link.reconnectAccountId) url.searchParams.set('account', link.reconnectAccountId);
+    if (link.reconnectAccountId && via !== 'personal')
+      url.searchParams.set('account', link.reconnectAccountId);
     if (link.draft.label) url.searchParams.set('label', link.draft.label);
     if (link.draft.name) url.searchParams.set('name', link.draft.name);
     if (link.returnTo) url.searchParams.set('returnTo', link.returnTo);
-    if (via) url.searchParams.set('via', via);
+    if (via === 'form') url.searchParams.set('via', via);
     return url.pathname + url.search;
   };
 
@@ -48,7 +53,7 @@ export function telegramConnectRoutes() {
     if (!link) throw notFound('Link');
     c.header('cache-control', 'no-store');
     const locale = c.get('locale');
-    const connector = await s.connectors.get(link.workspaceId, 'telegram');
+    const connector = await s.connectors.get(link.workspaceId, s.telegramAutomation!.connectorId);
     const account = link.accountId
       ? await s.accounts.get(link.workspaceId, link.accountId).catch(() => undefined)
       : undefined;
@@ -82,6 +87,7 @@ export function telegramConnectRoutes() {
       confirmUrl: `${base(link.id)}/confirm`,
       restartUrl: await startUrl(c, link),
       formUrl: await startUrl(c, link, 'form'),
+      personalUrl: await startUrl(c, link, 'personal'),
       guide: connector ? connectorGuide(connector, locale, 'app').setup : undefined,
     };
     return renderInApp(c, user, 'services', <TelegramConnectPage t={c.get('t')} lang={locale} view={view} />);

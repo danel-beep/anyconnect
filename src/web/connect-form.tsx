@@ -255,7 +255,7 @@ export const ConnectFormPage: FC<{ t: Translate; lang: string; csrf: string; vie
             <div class="quick-offer">
               <p>
                 <strong>{t('connect.quickTitle')}</strong>
-                {t('connect.quickText', { service: view.service })}
+                {t('connect.quickText')}
               </p>
               <a class="btn primary" href={view.quickUrl}>
                 {t('connect.quickButton')} <Icon name="arrow" />
@@ -426,11 +426,18 @@ export interface ServiceUnavailableView {
   service: string;
   /** The viewer runs this server: point them to where the sign-in app is set up. */
   isAdmin: boolean;
+  /**
+   * `oauth`: the service signs in through OAuth and this server has no OAuth app for it yet.
+   * `setup`: the server lacks something else the service needs (`env` names it), e.g. the
+   * messenger gateway's Telegram API keys.
+   */
+  reason: 'oauth' | 'setup';
+  env?: string[] | undefined;
   /** Another way to connect the same data, e.g. Gmail over IMAP. */
-  alternative?: { service: string; url: string } | undefined;
+  alternative?: { service: string; url: string; note?: string | undefined } | undefined;
 }
 
-/** The service signs in through OAuth and this server has no OAuth app for it yet. */
+/** The service cannot be connected on this server yet (see `reason`). */
 export const ServiceUnavailablePage: FC<{ t: Translate; lang: string; view: ServiceUnavailableView }> = ({
   t,
   lang,
@@ -449,14 +456,20 @@ export const ServiceUnavailablePage: FC<{ t: Translate; lang: string; view: Serv
           </div>
           <h1>{t('connect.unavailableTitle', { service: view.service })}</h1>
           <p>
-            {t(view.isAdmin ? 'connect.unavailableAdmin' : 'connect.unavailableText', {
-              service: view.service,
-            })}
+            {view.reason === 'setup'
+              ? t(view.isAdmin ? 'connect.unavailableSetupAdmin' : 'connect.unavailableSetupText', {
+                  service: view.service,
+                  env: (view.env ?? []).join(', '),
+                })
+              : t(view.isAdmin ? 'connect.unavailableAdmin' : 'connect.unavailableText', {
+                  service: view.service,
+                })}
           </p>
           {view.alternative ? (
             <div class="notice info">
               <strong>{t('connect.unavailableAltTitle')}</strong>{' '}
-              {t('connect.unavailableAlt', { service: view.service, alternative: view.alternative.service })}
+              {view.alternative.note ??
+                t('connect.unavailableAlt', { service: view.service, alternative: view.alternative.service })}
             </div>
           ) : null}
           <div class="actions start">
@@ -466,7 +479,7 @@ export const ServiceUnavailablePage: FC<{ t: Translate; lang: string; view: Serv
                 <Icon name="arrow" />
               </a>
             ) : null}
-            {view.isAdmin ? (
+            {view.isAdmin && view.reason === 'oauth' ? (
               <a class={view.alternative ? 'btn' : 'btn primary'} href="/admin/system#apps">
                 {t('connect.unavailableSetup')}
               </a>

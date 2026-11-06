@@ -118,7 +118,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     principal = { kind: 'session', userId: user.id, workspaceId: workspace.id, scopes: ['mcp', 'api'] };
     hub.services.messaging.start();
     // These tests are about delivery: the user said "do not ask" for Telegram.
-    await hub.services.policies.createRule(workspace.id, { connectorId: 'telegram', confirm: 'never' });
+    await hub.services.policies.createRule(workspace.id, { connectorId: 'telegram_bot', confirm: 'never' });
     browser = new TestBrowser(hub.baseUrl);
     expect((await browser.login()).status).toBe(303);
   };
@@ -153,9 +153,9 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
       (call.body.reply_markup as { inline_keyboard?: unknown } | undefined)?.inline_keyboard ?? [],
     );
 
-  /** Opens `/connect/telegram` like the user: a redirect to a new link's page with its QR code. */
+  /** Opens `/connect/telegram_bot` like the user: a redirect to a new link's page with its QR code. */
   async function openLink(query = '') {
-    const response = await browser.request(`/connect/telegram${query}`);
+    const response = await browser.request(`/connect/telegram_bot${query}`);
     expect(response.status).toBe(302);
     const path = response.headers.get('location')!;
     expect(path).toMatch(/^\/connect\/telegram\/link\/tgl_[0-9a-z]{26}$/);
@@ -181,7 +181,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
   };
 
   const telegramAccounts = () =>
-    hub.services.db.select().from(accounts).where(eq(accounts.connectorId, 'telegram'));
+    hub.services.db.select().from(accounts).where(eq(accounts.connectorId, 'telegram_bot'));
 
   /** The 6-digit code in the bot's last message to `user`. */
   const codeOf = (user: { id: number }) => /<code>(\d{6})<\/code>/.exec(String(lastTo(user).body.text))?.[1];
@@ -242,7 +242,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     const [account] = await telegramAccounts();
     expect(account).toMatchObject({
       label: '@dana_lee',
-      config: { mode: 'automation' },
+      config: { bot: 'hub' },
       status: 'active',
       metadata: { identity: '@dana_lee' },
       workspaceId: principal.workspaceId,
@@ -263,13 +263,13 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
 
     // A message in a chat Dana shared reaches the account; the AI reads and answers it as Dana.
     expect((await webhook(businessMessage(5, 'Hi Dana, are we still on for Friday?'))).status).toBe(200);
-    const [chat] = (await call('telegram_list_chats', {})).chats;
+    const [chat] = (await call('telegram_bot_list_chats', {})).chats;
     expect(chat).toMatchObject({ title: 'Maria', username: 'maria_k', kind: 'direct' });
-    const read = await call('telegram_read_chat', { chat: chat.id });
+    const read = await call('telegram_bot_read_chat', { chat: chat.id });
     expect(read.messages.map((m: { text: string }) => m.text)).toEqual([
       'Hi Dana, are we still on for Friday?',
     ]);
-    const sent = await call('telegram_send', { chat: chat.id, text: 'Yes, see you at 3' });
+    const sent = await call('telegram_bot_send', { chat: chat.id, text: 'Yes, see you at 3' });
     expect(sent.status).toBe('sent');
     expect(bot.calls.filter((c) => c.method === 'sendMessage').at(-1)!.body).toMatchObject({
       business_connection_id: 'BC-dana-1',
@@ -279,7 +279,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
 
     // Updates of a connection nobody connected are not stored anywhere.
     const texts = async () =>
-      (await call('telegram_read_chat', { chat: chat.id })).messages.map((m: { text: string }) => m.text);
+      (await call('telegram_bot_read_chat', { chat: chat.id })).messages.map((m: { text: string }) => m.text);
     expect(await texts()).toEqual(['Hi Dana, are we still on for Friday?', 'Yes, see you at 3']);
     await webhook(businessMessage(6, 'unrouted', 'BC-unknown'));
     expect(await texts()).toHaveLength(2);
@@ -291,7 +291,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(after!.status).toBe('needs_reauth');
     await webhook(businessMessage(7, 'after disconnect'));
     expect(await texts()).toHaveLength(2);
-    await expect(call('telegram_send', { chat: chat.id, text: 'still there?' })).rejects.toThrow();
+    await expect(call('telegram_bot_send', { chat: chat.id, text: 'still there?' })).rejects.toThrow();
   });
 
   it('never moves a connected Telegram account from the bot alone, and fails after wrong codes', async () => {
@@ -330,7 +330,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     await createUser(hub.services.db, { email: 'ben@example.com', password: 'ben-long-password-1' });
     const ben = new TestBrowser(hub.baseUrl);
     expect((await ben.login('ben@example.com', 'ben-long-password-1')).status).toBe(303);
-    const path = (await ben.request('/connect/telegram')).headers.get('location')!;
+    const path = (await ben.request('/connect/telegram_bot')).headers.get('location')!;
     const payload = /start=(c_[A-Za-z0-9_-]{32})/.exec(await (await ben.request(path)).text())![1]!;
     await webhook(start(DANA, `/start ${payload}`));
     const ask = String(lastTo(DANA).body.text);
@@ -343,7 +343,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     const moved = await telegramAccounts();
     expect(moved).toHaveLength(2);
     const bens = moved.find((a) => a.id !== mine!.id)!;
-    expect(bens).toMatchObject({ status: 'active', config: { mode: 'automation' } });
+    expect(bens).toMatchObject({ status: 'active', config: { bot: 'hub' } });
     expect(bens.workspaceId).not.toBe(principal.workspaceId);
     expect(moved.find((a) => a.id === mine!.id)!.status).toBe('needs_reauth');
 
@@ -358,7 +358,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
   it('finishes when the bot was added before the QR code was scanned', async () => {
     await webhook(businessConnection(DANA));
     // Added without a link: the bot says where to finish, with a button to the site.
-    expect(buttons(lastTo(DANA))).toContain(`${hub.baseUrl}/connect/telegram`);
+    expect(buttons(lastTo(DANA))).toContain(`${hub.baseUrl}/connect/telegram_bot`);
     expect(await telegramAccounts()).toHaveLength(0);
 
     const link = await openLink();
@@ -366,7 +366,7 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     await typeCode(link.path, codeOf(DANA)!);
     // The connection is there already: the right code connects at once.
     const [account] = await telegramAccounts();
-    expect(account).toMatchObject({ status: 'active', config: { mode: 'automation' } });
+    expect(account).toMatchObject({ status: 'active', config: { bot: 'hub' } });
     expect(buttons(lastTo(DANA))).toMatch(/tgc:tgc_[0-9a-z]{26}:x/);
     expect(await state(link.path)).toBe('connected');
   });
@@ -434,7 +434,10 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
     expect(await state(newer.path)).toBe('expired');
     const page = await (await browser.request(newer.path)).text();
     expect(page).toContain('QR-код устарел');
+    expect(page).toContain('href="/connect/telegram_bot"');
+    // Other ways in: the personal account (full access) and an own bot's form.
     expect(page).toContain('href="/connect/telegram"');
+    expect(page).toContain('href="/connect/telegram_bot?via=form"');
     await webhook(start(DANA, `/start ${newer.payload}`));
     expect(buttons(lastTo(DANA))).not.toContain('tgl:');
 
@@ -451,20 +454,22 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
   });
 
   it('keeps the form one link away and never makes a Chat Automation account from it', async () => {
-    const form = await browser.request('/connect/telegram?via=form');
+    const form = await browser.request('/connect/telegram_bot?via=form');
     expect(form.status).toBe(200);
     const html = await form.text();
-    expect(html).not.toContain('value="automation"');
-    expect(html).toContain('href="/connect/telegram?via=app"');
+    expect(html).not.toContain('name="config.bot"');
+    expect(html).toContain('href="/connect/telegram_bot?via=app"');
     const hidden = TestBrowser.hiddenInputs(html);
-    const posted = await browser.request('/connect/telegram', {
-      form: { ...hidden, 'config.mode': 'automation', label: 'Sneaky' },
+    const posted = await browser.request('/connect/telegram_bot', {
+      form: { ...hidden, 'config.bot': 'hub', label: 'Sneaky' },
     });
+    // The value is ignored: an own bot without a token, which the check refuses.
     expect(posted.status).toBe(400);
+    expect(await posted.text()).toContain('bot token');
     expect(await telegramAccounts()).toHaveLength(0);
 
     // The AI's connect link goes to the quick way, and says so.
-    const link = await call('manyplug_connect_account', { service: 'telegram' });
+    const link = await call('manyplug_connect_account', { service: 'telegram_bot' });
     expect(link.method).toBe('app');
     expect(link.instructions).toContain('QR code');
   });
@@ -504,12 +509,13 @@ describe('Telegram through the hub bot (Chat Automation)', () => {
 
   it('shows the form when the hub bot cannot be added to accounts (Secretary Mode off)', async () => {
     await startHub({ secretary: false });
-    const response = await browser.request('/connect/telegram');
+    const response = await browser.request('/connect/telegram_bot');
     expect(response.status).toBe(200);
     const html = await response.text();
-    expect(html).toContain('name="config.mode"');
+    expect(html).toContain('name="credentials.botToken"');
+    expect(html).not.toContain('name="config.bot"');
     expect(html).not.toContain('via=app');
-    const link = await call('manyplug_connect_account', { service: 'telegram' });
+    const link = await call('manyplug_connect_account', { service: 'telegram_bot' });
     expect(link.method).toBe('form');
   });
 });

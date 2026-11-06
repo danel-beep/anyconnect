@@ -9,7 +9,7 @@ import { createBillingProvider, TestBillingProvider } from './billing/providers/
 import { ReferralService } from './billing/referrals.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
-import { NO_HUB_BOT, type TelegramHubBot } from './connectors/builtin/telegram.js';
+import { NO_HUB_BOT, type TelegramHubBot } from './connectors/builtin/telegram-bot.js';
 import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
 import type { MessagingPort } from './connectors/messaging.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
@@ -492,7 +492,7 @@ export function createServices(
         capture: (error, context) => {
           ops.errors.capture(error, { source: 'telegram', context });
         },
-        onConnected: () => analytics.track('connect.quick', 'telegram'),
+        onConnected: () => analytics.track('connect.quick', 'telegram_bot'),
       })
     : undefined;
   const quickConnects = new QuickConnects(telegramAutomation ? [telegramAutomation] : []);
@@ -534,6 +534,7 @@ export function createServices(
     aiClients,
     teams,
     quickConnects,
+    availability: messaging.availability,
     publicUrl: config.publicUrl,
     logger,
   });

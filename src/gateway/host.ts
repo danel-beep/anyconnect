@@ -10,7 +10,12 @@ import type { NetworkPolicy } from '../lib/network.js';
 import type { Logger } from '../logger.js';
 import { describeProblem, FATAL_PROBLEMS } from '../messaging/accounts.js';
 import type { DeliveryExecutor } from '../messaging/dispatcher.js';
-import type { LoginStepInput, LoginView, StartLoginInput } from '../messaging/gateway-client.js';
+import type {
+  DriverStatus,
+  LoginStepInput,
+  LoginView,
+  StartLoginInput,
+} from '../messaging/gateway-client.js';
 import type { Messaging } from '../messaging/index.js';
 import type { DriverSession, LiveSession, LoginFlow, SessionDriver } from './drivers/types.js';
 import { SessionError } from './drivers/types.js';
@@ -105,6 +110,15 @@ export class SessionHost implements DeliveryExecutor {
     this.stopping = true;
     if (this.scanTimer) clearInterval(this.scanTimer);
     await Promise.all([...this.running.values()].map((r) => this.shutdown(r)));
+  }
+
+  /** The drivers of this gateway and whether each can take logins (see `SessionDriver.missing`). */
+  driverStatus(): DriverStatus[] {
+    return this.deps.drivers.map((d) => ({
+      connectorId: d.connectorId,
+      ready: !d.missing,
+      ...(d.missing ? { missing: d.missing } : {}),
+    }));
   }
 
   sessionCount(): number {

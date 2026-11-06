@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   botUpdateToMessages,
-  createTelegramConnector,
+  createTelegramBotConnector,
   NO_HUB_BOT,
   type TelegramHubBot,
-} from '../src/connectors/builtin/telegram.js';
+} from '../src/connectors/builtin/telegram-bot.js';
 import { DeliveryError, type DirectTransport, type MessagingPort } from '../src/connectors/messaging.js';
 import type { AccountRow } from '../src/core/accounts.js';
 import { connectFormFields, readConnectForm } from '../src/core/connect-form.js';
@@ -20,8 +20,8 @@ const port: MessagingPort = {
 
 /** The automation transport with a hub bot that answers every call with `response`. */
 function automationTransport(hub: TelegramHubBot) {
-  const connector = createTelegramConnector(port, hub);
-  const config = connector.config.parse({ mode: 'automation' });
+  const connector = createTelegramBotConnector(port, hub);
+  const config = connector.config.parse({ bot: 'hub' });
   return connector.messenger!.transport(config) as DirectTransport<unknown, unknown>;
 }
 
@@ -105,58 +105,66 @@ describe('Telegram accounts on the hub bot', () => {
   });
 
   it('checks the account through the connection Telegram reported', async () => {
-    const connector = createTelegramConnector(port, {
+    const connector = createTelegramBotConnector(port, {
       ...NO_HUB_BOT,
       connection: async () => ({ identity: '@dana', enabled: true, rights: ['can_read_messages'] }),
     });
     const test = connector.test!({
       ...(ctx as object),
-      config: connector.config.parse({ mode: 'automation' }),
+      config: connector.config.parse({ bot: 'hub' }),
     } as never);
     await expect(test).resolves.toMatchObject({ ok: true, identity: '@dana' });
-    const paused = createTelegramConnector(port, {
+    const paused = createTelegramBotConnector(port, {
       ...NO_HUB_BOT,
       connection: async () => ({ identity: '@dana', enabled: false, rights: [] }),
     });
     await expect(
-      paused.test!({ ...(ctx as object), config: paused.config.parse({ mode: 'automation' }) } as never),
+      paused.test!({ ...(ctx as object), config: paused.config.parse({ bot: 'hub' }) } as never),
     ).rejects.toMatchObject({ kind: 'auth' });
   });
 
   it('never offers the hub bot in the connect form', () => {
-    const connector = createTelegramConnector(port);
+    const connector = createTelegramBotConnector(port);
     const fields = connectFormFields(connector, 'en');
-    const mode = fields.find((f) => f.key === 'mode')!;
-    expect(mode.options!.map((o) => o.value)).toEqual(['bot', 'user']);
-    expect(readConnectForm(fields, { 'config.mode': 'automation' }).problems).toEqual({
-      'config.mode': 'not one of the choices',
-    });
-    expect(readConnectForm(fields, { 'config.mode': 'user' }).problems).toEqual({});
+    // Only "own" is left, so there is nothing to choose: the field is not shown at all.
+    expect(fields.map((f) => f.key)).not.toContain('bot');
+    expect(fields.find((f) => f.key === 'botToken')).toMatchObject({ advanced: false });
+    // A posted value for it is ignored: the default (an own bot) applies.
+    expect(readConnectForm(fields, { 'config.bot': 'hub' })).toMatchObject({ config: {}, problems: {} });
+  });
+
+  it('asks an own bot for its token', async () => {
+    const connector = createTelegramBotConnector(port);
+    await expect(
+      connector.test!({ ...(ctx as object), config: connector.config.parse({}) } as never),
+    ).rejects.toMatchObject({ kind: 'auth', message: expect.stringContaining('bot token') });
   });
 });
 
 describe('quick connect flows', () => {
   const account = (config: Record<string, unknown>) =>
-    ({ id: 'acc_1', connectorId: 'telegram', config }) as unknown as AccountRow;
+    ({ id: 'acc_1', connectorId: 'telegram_bot', config }) as unknown as AccountRow;
   const flow = (available: () => Promise<boolean>): QuickConnectFlow => ({
-    connectorId: 'telegram',
+    connectorId: 'telegram_bot',
     available,
-    reconnects: (a) => a.config.mode === 'automation',
+    reconnects: (a) => a.config.bot === 'hub',
     start: async () => '/connect/telegram/link/x',
   });
 
   it('offers a flow only when it works now and for the account to reconnect', async () => {
     const ready = flow(async () => true);
     const quick = new QuickConnects([ready]);
-    expect(await quick.for('telegram')).toBe(ready);
+    expect(await quick.for('telegram_bot')).toBe(ready);
     expect(await quick.for('gmail')).toBeUndefined();
-    expect(await quick.for('telegram', account({ mode: 'automation' }))).toBe(ready);
+    expect(await quick.for('telegram_bot', account({ bot: 'hub' }))).toBe(ready);
     // An account made with the form goes back to the form.
-    expect(await quick.for('telegram', account({ mode: 'bot' }))).toBeUndefined();
+    expect(await quick.for('telegram_bot', account({ bot: 'own' }))).toBeUndefined();
     // The service is away or turned it off: the form, not an error page.
-    expect(await new QuickConnects([flow(async () => false)]).for('telegram')).toBeUndefined();
+    expect(await new QuickConnects([flow(async () => false)]).for('telegram_bot')).toBeUndefined();
     expect(
-      await new QuickConnects([flow(() => Promise.reject(new Error('Telegram is down')))]).for('telegram'),
+      await new QuickConnects([flow(() => Promise.reject(new Error('Telegram is down')))]).for(
+        'telegram_bot',
+      ),
     ).toBeUndefined();
   });
 

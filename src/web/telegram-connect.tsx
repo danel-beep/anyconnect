@@ -38,6 +38,8 @@ export interface TelegramConnectView {
   restartUrl: string;
   /** The connect form: a personal account with full access, or an own bot. */
   formUrl: string;
+  /** The personal account (all chats, groups and older messages). */
+  personalUrl: string;
   guide?: ResolvedSetupGuide | undefined;
 }
 
@@ -58,7 +60,7 @@ export const TelegramConnectPage: FC<{ t: Translate; lang: string; view: Telegra
   lang,
   view,
 }) => {
-  const meta = serviceMeta('telegram');
+  const meta = serviceMeta('telegram_bot');
   const title = view.reconnecting ? t('tgc.reconnectTitle', { label: view.reconnecting }) : t('tgc.title');
   const waiting = view.state === 'pending' || view.state === 'opened' || view.state === 'confirmed';
   return (
@@ -83,18 +85,21 @@ export const TelegramConnectPage: FC<{ t: Translate; lang: string; view: Telegra
         >
           {waiting ? <Waiting t={t} view={view} /> : <Outcome t={t} view={view} />}
           <p class="tg-other">
-            {t('tgc.otherTitle')} <a href={view.formUrl}>{t('tgc.otherLink')}</a>
+            {t('tgc.otherTitle')} <a href={view.personalUrl}>{t('tgc.otherLink')}</a>
+          </p>
+          <p class="tg-other">
+            <a href={view.formUrl}>{t('tgc.ownBotLink')}</a>
           </p>
         </div>
         <aside class="connect-aside">
           {view.guide ? (
             <div class="card guide-card" id="connect-guide">
-              <h2 class="h3">{t('connect.howTo')}</h2>
+              <h2>{t('connect.howTo')}</h2>
               <SetupGuideView t={t} guide={view.guide} />
             </div>
           ) : null}
           <div class="card tight tg-safe">
-            <h2 class="h3">
+            <h2>
               <Icon name="shield" /> {t('tgc.safeTitle')}
             </h2>
             <ul>
@@ -120,7 +125,7 @@ const Waiting: FC<{ t: Translate; view: TelegramConnectView }> = ({ t, view }) =
           <p>{t('tgc.qrHint')}</p>
         </div>
       ) : null}
-      <div class="tg-now">
+      <div>
         <ol class="tg-progress">
           {STEPS.map((name, i) => (
             <li data-step={i < step ? 'done' : i === step ? 'current' : undefined}>
@@ -218,7 +223,7 @@ const Outcome: FC<{ t: Translate; view: TelegramConnectView }> = ({ t, view }) =
         : [t('tgc.expiredTitle'), t('tgc.expired')];
   return (
     <div class="tg-outcome">
-      <h2 class="h3">{heading}</h2>
+      <h2>{heading}</h2>
       <p
         class={view.state === 'failed' ? 'notice bad' : undefined}
         role={view.state === 'failed' ? 'alert' : undefined}

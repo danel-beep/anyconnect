@@ -324,6 +324,12 @@ export function telegramUserDriver(options: TelegramDriverOptions): SessionDrive
 
   return {
     connectorId: 'telegram',
+    missing: options.app
+      ? undefined
+      : {
+          message: 'Personal Telegram accounts need the Telegram app of this server (from my.telegram.org).',
+          env: ['TELEGRAM_API_ID', 'TELEGRAM_API_HASH'],
+        },
 
     async connect(session) {
       const { client, storage } = await newClient(session);

@@ -7,6 +7,7 @@ import type { JobDefinition } from '../jobs/queue.js';
 import type { SecretBox } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
 import { MessengerAccounts } from './accounts.js';
+import { SessionAvailability } from './availability.js';
 import { AccountCiphers } from './ciphers.js';
 import { DirectDeliveryExecutor } from './direct-executor.js';
 import { Dispatcher } from './dispatcher.js';
@@ -26,6 +27,8 @@ export interface Messaging {
   accounts: MessengerAccounts;
   service: MessagingService;
   gateway: GatewayApi | undefined;
+  /** Whether gateway-session messengers can be connected on this server (gateway and driver set up). */
+  availability: SessionAvailability;
   /** Delivers jobs of direct-API accounts (Bot API, Cloud API) from this process. */
   dispatcher: Dispatcher;
   directExecutor: DirectDeliveryExecutor;
@@ -115,6 +118,7 @@ export function createMessaging(deps: {
     accounts: messengerAccounts,
     service,
     gateway,
+    availability: new SessionAvailability({ gateway }),
     dispatcher: ready,
     directExecutor: directExecutor,
     jobs: [

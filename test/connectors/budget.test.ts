@@ -65,6 +65,7 @@ const BUDGET: Record<string, { total: number; tool: number }> = {
   harvest: { total: 1510, tool: 300 },
   toggl: { total: 1860, tool: 280 },
   telegram: { total: 2050, tool: 400 },
+  telegram_bot: { total: 2150, tool: 410 },
   // Two more tools than Telegram: message templates (list_templates, send_template).
   whatsapp: { total: 2500, tool: 400 },
 };

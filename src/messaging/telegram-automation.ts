@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { BRAND } from '../brand.js';
-import type { TelegramBotConnection, TelegramHubBot } from '../connectors/builtin/telegram.js';
+import type { TelegramBotConnection, TelegramHubBot } from '../connectors/builtin/telegram-bot.js';
 import { DeliveryError } from '../connectors/messaging.js';
 import { ConnectorError } from '../connectors/sdk.js';
 import { ACCOUNT_NAME, type AccountRow, type AccountService } from '../core/accounts.js';
@@ -248,7 +248,7 @@ export interface TelegramAutomationDeps {
 }
 
 export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
-  readonly connectorId = 'telegram';
+  readonly connectorId = 'telegram_bot';
 
   constructor(private readonly deps: TelegramAutomationDeps) {}
 
@@ -260,7 +260,7 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
   }
 
   reconnects(account: AccountRow): boolean {
-    return account.connectorId === this.connectorId && account.config.mode === 'automation';
+    return account.connectorId === this.connectorId && account.config.bot === 'hub';
   }
 
   async start(input: QuickConnectStart): Promise<string> {
@@ -847,7 +847,7 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
         connectorId: this.connectorId,
         label: link.draft.label ?? identityOf(info),
         ...(link.draft.name ? { name: link.draft.name } : {}),
-        config: { mode: 'automation' },
+        config: { bot: 'hub' },
       },
       link.draft.owner,
     );
@@ -1001,7 +1001,7 @@ export class TelegramAutomation implements TelegramHubBot, QuickConnectFlow {
   }
 
   private siteButton(t: Translate): InlineButton[][] {
-    const url = `${this.deps.publicUrl}/connect/telegram`;
+    const url = `${this.deps.publicUrl}/connect/${this.connectorId}`;
     return [[{ text: t('bot.tc.openSite', { host: new URL(url).host }), url }]];
   }
 

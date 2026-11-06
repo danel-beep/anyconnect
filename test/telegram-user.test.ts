@@ -54,7 +54,7 @@ function fakeSession(state = memoryState()) {
   const ingested: InboundMessage[] = [];
   const chats: InboundChat[] = [];
   const session: DriverSession = {
-    account: { id: 'acc_tg', name: 'personal', config: { mode: 'user' }, credentials: {} },
+    account: { id: 'acc_tg', name: 'personal', config: {}, credentials: {} },
     state,
     ingest: async (messages) => {
       ingested.push(...messages);

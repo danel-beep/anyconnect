@@ -10,7 +10,6 @@ import {
   oauthTokens,
   pendingLogins,
   telegramLinks,
-  toolCalls,
   vaultRequests,
   vaultWraps,
   webauthnChallenges,

@@ -116,17 +116,12 @@ describe('Telegram personal account: connect on the website, log in, use from th
 
   it('walks the whole flow: form, QR login with cloud password, chats, sending', async () => {
     fake.twoFactor = true;
-    // The connect form offers the personal account and needs no token for it.
-    const form = await browser.request('/connect/telegram?config.mode=user');
+    // The personal account is its own service and needs nothing typed in the form.
+    const form = await browser.request('/connect/telegram');
     const formHtml = await form.text();
-    expect(formHtml).toContain('Личный аккаунт (вход по QR-коду)');
+    expect(formHtml).not.toContain('credentials.botToken');
     const created = await browser.request('/connect/telegram', {
-      form: {
-        ...TestBrowser.hiddenInputs(formHtml),
-        label: 'Мой Telegram',
-        'config.mode': 'user',
-        'credentials.botToken': '',
-      },
+      form: { ...TestBrowser.hiddenInputs(formHtml), label: 'Мой Telegram' },
     });
     expect(created.status).toBe(303);
     const loginPath = created.headers.get('location')!;

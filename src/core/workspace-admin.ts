@@ -58,6 +58,15 @@ export type ConnectMethod =
   /** Nothing to enter. */
   | 'none';
 
+/**
+ * Server-side prerequisites of services beyond OAuth apps, e.g. the messenger gateway and its API
+ * keys for Telegram as a personal account (`SessionAvailability` in `src/messaging/`).
+ */
+export interface ConnectorAvailability {
+  /** Why the service cannot be connected on this server, or undefined when it can. */
+  check(connector: ConnectorDefinition): Promise<{ problem: string; env: string[] } | undefined>;
+}
+
 export interface ServiceEntry {
   service: string;
   name: string;
@@ -128,6 +137,8 @@ export class WorkspaceAdmin {
       teams?: TeamService;
       /** Services connected by confirming in their own app; the connect page offers them first. */
       quickConnects?: QuickConnects;
+      /** Server-side prerequisites of services (the messenger gateway's API keys). */
+      availability?: ConnectorAvailability;
       publicUrl: string;
       logger: ConnectorLogger;
     },
@@ -209,22 +220,28 @@ export class WorkspaceAdmin {
       // How it connects now: optional OAuth without an app takes a personal token in the form.
       const route = connector.oauth ? await this.oauthRoute(workspaceId, connector) : undefined;
       const method = route?.via ?? this.connectMethod(connector);
-      const problem = route?.problem;
-      const setupVar = problem
+      const gap = route?.problem ? undefined : await this.setupGap(connector);
+      const problem = route?.problem ?? gap?.problem;
+      const setupVar = route?.problem
         ? `OAUTH_APP_${resolveProvider(connector.oauth!).id.toUpperCase()}_CLIENT_ID`
-        : undefined;
+        : gap?.env[0];
       entries.push({
         service: connector.id,
         name: connector.name,
         description: connector.description,
         connect: method,
         ready: !problem,
-        ...(problem ? { problem, setupVar } : {}),
+        ...(problem ? { problem, ...(setupVar ? { setupVar } : {}) } : {}),
         custom: customIds.has(connector.id),
         accounts: accounts.filter((a) => a.connectorId === connector.id).length,
       });
     }
     return entries.sort((a, b) => b.accounts - a.accounts || a.name.localeCompare(b.name));
+  }
+
+  /** What this server still lacks for the service outside OAuth (see {@link ConnectorAvailability}). */
+  setupGap(connector: ConnectorDefinition): Promise<{ problem: string; env: string[] } | undefined> {
+    return this.deps.availability?.check(connector) ?? Promise.resolve(undefined);
   }
 
   /**
@@ -331,6 +348,8 @@ export class WorkspaceAdmin {
 
   /** How a link connects the service now; throws (user-safe) when it cannot. */
   private async linkMethod(workspaceId: string, connector: ConnectorDefinition): Promise<ConnectMethod> {
+    const gap = await this.setupGap(connector);
+    if (gap) throw badRequest(gap.problem);
     if (!connector.oauth) return this.connectMethod(connector);
     const route = await this.oauthRoute(workspaceId, connector);
     if (route.problem) throw badRequest(route.problem);

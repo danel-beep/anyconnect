@@ -45,6 +45,8 @@ export function messengerLoginRoutes() {
     const row = await s.messaging.accounts.get(account.id);
     const online = row?.state === 'online';
     const statusView = row && !online ? MessengerAccounts.view(row) : undefined;
+    // Logins need the gateway and its driver set up (Telegram's API keys); otherwise say so.
+    const ready = Boolean(s.messaging.gateway) && !(await s.admin.setupGap(connector));
     const identity = typeof account.metadata?.identity === 'string' ? account.metadata.identity : undefined;
     const view: MessengerLoginView = {
       accountId: account.id,
@@ -53,7 +55,7 @@ export function messengerLoginRoutes() {
       label: account.label,
       csrf: csrfToken(c, { secure: s.config.secureCookies }),
       online,
-      available: Boolean(s.messaging.gateway),
+      available: ready,
       ...(identity ? { identity } : {}),
       ...(statusView?.message ? { status: statusView.message } : {}),
       ...(extra.login ? { login: extra.login } : {}),
@@ -115,8 +117,9 @@ export function messengerLoginRoutes() {
     const form = await bodyParams(c);
     if (!checkCsrf(c, form)) return csrfFailed(c);
     const loaded = await load(c, user);
-    const gateway = c.get('services').messaging.gateway;
-    if (!gateway) return page(c, user, loaded);
+    const s = c.get('services');
+    const gateway = s.messaging.gateway;
+    if (!gateway || (await s.admin.setupGap(loaded.connector))) return page(c, user, loaded);
     const input = StartLoginInput.safeParse({
       method: form.method === 'phone' ? 'phone' : 'qr',
       ...(form.method === 'phone' ? { phone: (form.phone ?? '').replace(/[\s()-]/g, '') } : {}),

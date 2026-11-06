@@ -140,7 +140,17 @@ export function connectFormFields(connector: ConnectorDefinition, language: UiLa
   return [
     ...fieldsOf(toJsonSchema(connector.config), 'config', texts),
     ...fieldsOf(toJsonSchema(connector.credentials), 'credentials', texts),
-  ];
+  ].filter((field) => !onlyDefaultLeft(field, hiddenOptions[field.key]));
+}
+
+/** A select whose other values are all hidden: nothing to choose, its default applies. */
+function onlyDefaultLeft(field: FormField, hidden: string[] | undefined): boolean {
+  return (
+    !!hidden?.length &&
+    field.kind === 'select' &&
+    field.options?.length === 1 &&
+    field.options[0]!.value === field.defaultValue
+  );
 }
 
 /**

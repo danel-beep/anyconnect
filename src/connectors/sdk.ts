@@ -477,7 +477,8 @@ export interface ConnectorUi<TFieldKey extends string = string> {
   };
   /**
    * Values of select fields the connect form does not offer, because accounts with them are made
-   * another way (e.g. `{ mode: ['automation'] }`: Telegram accounts of the quick connect page).
+   * another way (e.g. `{ bot: ['hub'] }`: Telegram Bot accounts of the quick connect page). A select
+   * left with only its default is not shown at all.
    */
   formHiddenOptions?: Partial<Record<TFieldKey, string[]>>;
 }
