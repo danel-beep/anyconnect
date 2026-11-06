@@ -78,6 +78,11 @@
   и `src/web/app.tsx` (`PageHead`, `Meter`, `Tabs`, `CopyField`…). `Tabs variant="tiles"` — выбор
   плитками с логотипом (так выбирается ИИ-приложение в карточке «Подключите ИИ»).
 - Заголовок карточки с иконкой, пояснением и статусом справа — `SectionHead`.
+- Логотип сервиса — `ServiceLogo` с `icon` из `SERVICE_META` (`src/web/catalog.ts`). Знаки берутся
+  из `src/web/brand-icons.ts`, который собирает `node scripts/brand-icons.mjs`: из simple-icons, а
+  знаки, которых там нет (Slack, Outlook, Twilio, Zoom…), — из `scripts/brand-icons-extra.json` с
+  указанием открытого источника. Если открытого знака нет, — буквы в цвете бренда в
+  `src/web/brand-monograms.ts`. `test/brand-icons.test.ts` не пропустит коннектор без логотипа.
 - «Спросите свой ИИ»: блок готовых запросов, которые копируются по нажатию, — `AskAi` (каждый запрос — `CopyText prompt`). Всё, что
   настраивается на сайте, можно сделать и из чата: ставь `AskAi` рядом с такими настройками
   (запросы должны работать с настоящими инструментами `manyplug_*`). Это тихая секция под

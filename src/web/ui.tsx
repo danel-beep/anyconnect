@@ -125,7 +125,7 @@ export const BrandIcon: FC<{ slug: string }> = ({ slug }) => {
   if (!icon) return null;
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d={icon.path} />
+      <path d={icon.path} fill-rule={icon.evenodd ? 'evenodd' : undefined} />
     </svg>
   );
 };

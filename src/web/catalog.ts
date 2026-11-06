@@ -58,7 +58,7 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     alternative: { connectorId: 'imap', values: { 'config.provider': 'gmail' } },
   },
   outlook: {
-    icon: 'outlook',
+    icon: 'microsoftoutlook',
     category: 'mail',
     blurb: {
       ru: 'Почта и календарь Microsoft 365 и Outlook.com.',
@@ -317,12 +317,12 @@ export const SERVICE_META: Record<string, ServiceMeta> = {
     blurb: { ru: 'Сайты, деплои, сборки, формы.', en: 'Sites, deploys, builds, forms.' },
   },
   harvest: {
-    glyph: 'clock',
+    icon: 'harvest',
     category: 'tasks',
     blurb: { ru: 'Учёт времени, таймеры, отчёты.', en: 'Time tracking, timers, reports.' },
   },
   toggl: {
-    icon: 'toggl',
+    icon: 'toggltrack',
     category: 'tasks',
     blurb: { ru: 'Таймеры и записи времени.', en: 'Timers and time entries.' },
   },
