@@ -155,7 +155,8 @@ export function securityRoutes(api: Hono<AppEnv>) {
       throw forbidden('Only the signed-in user can approve or deny an action (web panel or Telegram).');
     }
     const id = c.req.param('id');
-    await s.pendingCalls.getInWorkspace(p.workspaceId, id);
+    const held = await s.pendingCalls.getInWorkspace(p.workspaceId, id);
+    if (decision === 'approve') await s.retainVault(held);
     const row = await s.confirmations.decide(id, decision, 'api');
     if (!row)
       return c.json({ error: { code: 'conflict', message: 'The call was already decided or expired' } }, 409);

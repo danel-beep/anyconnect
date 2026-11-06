@@ -1,3 +1,4 @@
+import { getPlan } from '../billing/plans.js';
 import type { Locale } from './i18n.js';
 import type { LegalDoc } from './site.js';
 
@@ -14,6 +15,7 @@ interface Facts {
 }
 
 const UPDATED = { ru: 'Редакция от 5 ноября 2026 года', en: 'Last updated November 5, 2026' };
+const PRIVACY_UPDATED = { ru: 'Редакция от 6 ноября 2026 года', en: 'Last updated November 6, 2026' };
 
 export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc {
   const contact =
@@ -26,10 +28,13 @@ export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc 
 
 type Builder = (f: { contact: string; site: string }) => LegalDoc;
 
+/** Days of activity history per public plan, straight from the plan catalog (enforced by `activity.prune`). */
+const history = (id: 'free' | 'personal' | 'pro') => getPlan(id).limits.historyDays;
+
 const privacy: Record<Locale, Builder> = {
   ru: ({ contact, site }) => ({
     title: 'Политика конфиденциальности',
-    updated: UPDATED.ru,
+    updated: PRIVACY_UPDATED.ru,
     intro: `Здесь описано, какие данные собирает сервис Manyplug (${site}), зачем и как мы их защищаем. Коротко: мы храним только то, что нужно для работы подключений, шифруем данные для входа в сервисы и не продаём данные.`,
     sections: [
       {
@@ -37,6 +42,7 @@ const privacy: Record<Locale, Builder> = {
         paragraphs: [
           'Аккаунт: адрес почты, имя и идентификатор Google, если вы входите через Google; дата регистрации и последнего входа; язык интерфейса.',
           'Подключения: названия подключённых аккаунтов сервисов, их настройки и данные для входа (токены OAuth, API-ключи, пароли приложений). Данные для входа хранятся только в зашифрованном виде, каждый аккаунт своим ключом.',
+          'Мессенджеры (Telegram, WhatsApp): если вы подключили мессенджер, Manyplug хранит свою копию переписки, которая к нему приходит, чтобы ИИ-приложение быстро читало и искало сообщения, не обращаясь каждый раз к мессенджеру. В копии есть названия чатов, текст сообщений, отправители, даты и сведения о вложениях (имя, тип и размер файла, но не сам файл), а также исходящие сообщения в очереди на отправку. Сообщения сохраняются по мере того, как приходят и уходят, а не только когда спрашивает ИИ. Личный аккаунт Telegram при подключении копирует последние сообщения недавних чатов, а для работы сессии хранит её ключи и список собеседников, который нужен Telegram.',
           'Журнал действий: какой инструмент вызывался, когда, через какое ИИ-приложение и с каким результатом (успех или ошибка). Аргументы вызовов и содержимое ваших писем, файлов и сообщений в журнал не записываются.',
           'Технические данные: IP-адрес и браузер для сессий входа и защиты от злоупотреблений.',
         ],
@@ -45,7 +51,8 @@ const privacy: Record<Locale, Builder> = {
         title: 'Как данные используются',
         paragraphs: [
           'Чтобы выполнять запросы вашего ИИ-ассистента к подключённым сервисам, показывать вам историю и расход лимитов, защищать аккаунт от взлома и злоупотреблений.',
-          'Содержимое ваших сервисов проходит через Manyplug только в момент запроса и передаётся тому ИИ-приложению, которому вы дали доступ. Мы не используем его для обучения моделей и не просматриваем его.',
+          'Содержимое почты, календарей, файлов и других сервисов проходит через Manyplug только в момент запроса, передаётся тому ИИ-приложению, которому вы дали доступ, и не сохраняется. Исключение — мессенджеры: их переписка хранится, как описано выше.',
+          'Мы не используем содержимое ваших сервисов и сообщений для обучения моделей и не просматриваем его.',
         ],
       },
       {
@@ -59,7 +66,7 @@ const privacy: Record<Locale, Builder> = {
       {
         title: 'ИИ-приложения и ваши переписки',
         paragraphs: [
-          'Manyplug никогда не получает историю ваших чатов, память ИИ-приложения и файлы, которые вы дали ИИ-приложению. В каждом запросе ИИ-приложение передаёт только название инструмента и нужные ему аргументы, например поисковый запрос. Аргументы используются только для этого запроса и не хранятся; лишь действие, которое что-то меняет, запоминается на несколько минут, чтобы повторный запрос не выполнил его дважды.',
+          'Manyplug никогда не получает историю ваших чатов, память ИИ-приложения и файлы, которые вы дали ИИ-приложению. В каждом запросе ИИ-приложение передаёт только название инструмента и нужные ему аргументы, например поисковый запрос. Аргументы используются только для этого запроса и не хранятся, кроме трёх случаев: действие, которое что-то меняет, запоминается на несколько минут, чтобы повторный запрос не выполнил его дважды; действие, которое ждёт вашего подтверждения, хранится зашифрованным, пока вы не ответите, и удаляется через сутки после этого; сообщение, отправленное через мессенджер, становится частью сохранённой переписки.',
           'Если ИИ-приложение передаёт с запросами анонимный идентификатор пользователя (так делает ChatGPT), мы храним только его необратимый хеш, чтобы считать расход по аккаунту ИИ.',
         ],
       },
@@ -76,14 +83,17 @@ const privacy: Record<Locale, Builder> = {
         title: 'Защита',
         paragraphs: [
           'Данные для входа в сервисы (пароли, API-ключи, токены) шифруются (AES-256-GCM) отдельным ключом для каждого аккаунта. Токены входа хранятся только в виде хешей. Доступна двухэтапная проверка и вход по ключу доступа (passkey).',
+          'Сохранённая переписка мессенджеров (текст, отправители, названия чатов, сведения о вложениях), очередь исходящих сообщений и состояние сессии шифруются тем же ключом аккаунта. Идентификаторы чатов и сообщений из мессенджера хранятся только в виде хешей с секретным ключом, а поиск работает по таким же хешам слов, а не по читаемому тексту.',
           'Опасные действия можно настроить так, чтобы они выполнялись только после вашего подтверждения.',
         ],
       },
       {
         title: 'Сроки хранения и удаление',
         paragraphs: [
-          'Журнал действий хранится столько дней, сколько предусматривает ваш тариф, затем удаляется.',
-          'Вы можете отключить любой аккаунт сервиса (его ключи удаляются сразу) или удалить свой аккаунт Manyplug в настройках: все подключения, ключи, токены и история будут удалены.',
+          `Журнал действий хранится столько, сколько предусматривает тариф: ${history('free')} дней на бесплатном, ${history('personal')} на «Личном», ${history('pro')} на «Про». Во время бесплатного пробного периода действует срок «Про». Более старые записи удаляются раз в сутки. Журнал команды хранится по тарифу того, кто за неё платит.`,
+          'Переписка мессенджера хранится, пока аккаунт мессенджера подключён, чтобы ИИ мог искать и по старым сообщениям. Если мессенджер сообщает, что сообщение удалено, его текст и вложения стираются и из копии. Исходящие сообщения удаляются из очереди отправки через 30 дней после отправки (в самой переписке они остаются).',
+          'Вы можете отключить любой аккаунт сервиса: сразу удаляются его ключи, а у мессенджера ещё и вся сохранённая переписка, очередь отправки и сессия. Или удалите свой аккаунт Manyplug в настройках: все подключения, ключи, токены, переписка и история будут удалены.',
+          'Удалённые данные ещё до 30 дней могут оставаться в зашифрованных резервных копиях базы, пока эти копии не удалятся.',
         ],
       },
       {
@@ -115,7 +125,7 @@ const privacy: Record<Locale, Builder> = {
   }),
   en: ({ contact, site }) => ({
     title: 'Privacy policy',
-    updated: UPDATED.en,
+    updated: PRIVACY_UPDATED.en,
     intro: `This page explains what data Manyplug (${site}) collects, why, and how we protect it. In short: we keep only what connections need, encrypt access keys and never sell data.`,
     sections: [
       {
@@ -123,6 +133,7 @@ const privacy: Record<Locale, Builder> = {
         paragraphs: [
           'Your account: email address, name and Google ID if you sign in with Google; sign-up and last sign-in dates; interface language.',
           'Connections: names of your connected service accounts, their settings and credentials (OAuth tokens, API keys, app passwords). Credentials are stored only encrypted, each account with its own key.',
+          'Messengers (Telegram, WhatsApp): if you connect a messenger, Manyplug keeps its own copy of the chats that reach it, so your AI app can read and search messages quickly without asking the messenger every time. The copy holds chat names, message text, senders, dates and attachment details (file name, type and size, not the file itself), plus outgoing messages waiting to be sent. Messages are saved as they are sent and received, not only when your AI app asks. A personal Telegram account also copies the latest messages of your recent chats when you connect it, and keeps the session keys and the list of people you chat with that Telegram needs to stay signed in.',
           'Activity log: which tool was called, when, by which AI app and whether it succeeded. Call arguments and the contents of your mail, files and messages are not logged.',
           'Technical data: IP address and browser, for sign-in sessions and abuse protection.',
         ],
@@ -131,7 +142,8 @@ const privacy: Record<Locale, Builder> = {
         title: 'How we use data',
         paragraphs: [
           'To run your AI assistant’s requests to the services you connected, to show you history and usage, and to protect your account from break-ins and abuse.',
-          'Content of your services passes through Manyplug only during a request and goes to the AI app you gave access to. We do not use it to train models and do not look at it.',
+          'Content of your mail, calendars, files and other services passes through Manyplug only during a request, goes to the AI app you gave access to and is not stored. Messengers are the exception: their chats are stored as described above.',
+          'We do not use the content of your services or messages to train models and do not look at it.',
         ],
       },
       {
@@ -145,7 +157,7 @@ const privacy: Record<Locale, Builder> = {
       {
         title: 'AI apps and your conversations',
         paragraphs: [
-          'Manyplug never receives your chat history, the AI app’s memory or files you gave the AI app. For each request the AI app sends only the name of a tool and the arguments it needs, for example a search query. The arguments are used for that one request and are not stored, except that a write action is remembered for a few minutes so that a repeated request does not run it twice.',
+          'Manyplug never receives your chat history, the AI app’s memory or files you gave the AI app. For each request the AI app sends only the name of a tool and the arguments it needs, for example a search query. The arguments are used for that one request and are not stored, with three exceptions: a write action is remembered for a few minutes so that a repeated request does not run it twice; an action waiting for your confirmation is kept encrypted until you answer and deleted a day after that; and a message sent through a messenger becomes part of the stored chat.',
           'If an AI app sends an anonymous user ID with requests (ChatGPT does), we keep only a one-way hash of it, to count usage per AI account.',
         ],
       },
@@ -162,14 +174,17 @@ const privacy: Record<Locale, Builder> = {
         title: 'Protection',
         paragraphs: [
           'Credentials are encrypted (AES-256-GCM) with a separate key per account. Sign-in tokens are stored only as hashes. Two-step verification and passkeys are available.',
+          'Stored messenger chats (text, senders, chat names, attachment details), the queue of outgoing messages and the session state are encrypted with the same per-account key. Chat and message ids from the messenger are stored only as keyed hashes, and search works on keyed hashes of words rather than on readable text.',
           'Risky actions can be set to run only after you confirm them.',
         ],
       },
       {
         title: 'Retention and deletion',
         paragraphs: [
-          'The activity log is kept for as many days as your plan includes and is then deleted.',
-          'You can disconnect any service account (its credentials are deleted at once) or delete your Manyplug account in Settings: all connections, keys, tokens and history are removed.',
+          `The activity log is kept as long as your plan includes: ${history('free')} days on Free, ${history('personal')} on Personal, ${history('pro')} on Pro. During the free trial the Pro period applies. Older entries are deleted once a day. A team’s log follows the plan of whoever pays for it.`,
+          'A messenger’s chats are kept while the messenger account stays connected, so your AI app can search older messages too. When the messenger reports that a message was deleted, its text and attachments are erased from the copy as well. Outgoing messages are deleted from the sending queue 30 days after they were sent (they stay in the chat itself).',
+          'You can disconnect any service account: its credentials are deleted at once, and for a messenger so are all its stored chats, sending queue and session. Or delete your Manyplug account in Settings: all connections, keys, tokens, chats and history are removed.',
+          'Deleted data can stay in encrypted database backups for up to 30 more days, until those backups are deleted.',
         ],
       },
       {

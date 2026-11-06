@@ -42,6 +42,8 @@ const ICONS = {
   alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
   layers: 'M12 3 2 8l10 5 10-5-10-5ZM2 13l10 5 10-5M2 18l10 5 10-5',
   terminal: 'M4 17l6-5-6-5M12 19h8',
+  code: 'm8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14',
+  chat: 'M20 11.5a7.5 7.5 0 0 1-10.9 6.7L4 19.5l1.3-4.6A7.5 7.5 0 1 1 20 11.5Z',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18',
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7',
   hash: 'M4 9h16M4 15h16M10 3 8 21M16 3l-2 18',
@@ -123,7 +125,7 @@ export const BrandIcon: FC<{ slug: string }> = ({ slug }) => {
   if (!icon) return null;
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d={icon.path} />
+      <path d={icon.path} fill-rule={icon.evenodd ? 'evenodd' : undefined} />
     </svg>
   );
 };
@@ -157,16 +159,20 @@ export const ServiceLogo: FC<{
   );
 };
 
-/** A read-only value with a copy button (the button needs JS; the text stays selectable without it). */
-export const CopyField: FC<{ t: Translate; id: string; value: string; label: string }> = ({
+/**
+ * A read-only value with a copy button (the button needs JS; the text stays selectable without it).
+ * `quiet` makes the button secondary when another action on the screen is the main one.
+ */
+export const CopyField: FC<{ t: Translate; id: string; value: string; label: string; quiet?: boolean }> = ({
   t,
   id,
   value,
   label,
+  quiet,
 }) => (
   <div class="copy">
     <input id={id} type="text" readonly value={value} aria-label={label} data-select-on-focus />
-    <button type="button" class="primary" data-copy={`#${id}`}>
+    <button type="button" class={quiet ? undefined : 'primary'} data-copy={`#${id}`}>
       <Icon name="copy" />
       <span class="copy-label">{t('ui.copy')}</span>
       <span class="copy-done">{t('ui.copied')}</span>
@@ -187,6 +193,84 @@ export const CodeBlock: FC<{ t: Translate; id: string; code: string }> = ({ t, i
         <span class="copy-done">{t('ui.copied')}</span>
       </button>
     </div>
+  </div>
+);
+
+/**
+ * Ready text to paste somewhere else (a message for a teammate), shown as it will be pasted, with
+ * one button that copies all of it. Line breaks in `text` are kept. `prompt`: a request for the AI,
+ * where the whole card is the button (one tap copies it).
+ */
+export const CopyText: FC<{ t: Translate; id: string; text: string; label?: string; prompt?: boolean }> = ({
+  t,
+  id,
+  text,
+  label,
+  prompt,
+}) =>
+  prompt ? (
+    <button type="button" class="copy-text prompt" data-copy={`#${id}`}>
+      <span class="prompt-text" id={id}>
+        {text}
+      </span>
+      <span class="prompt-action">
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </span>
+    </button>
+  ) : (
+    <div class="copy-text">
+      <p id={id}>{text}</p>
+      <button type="button" class="sm" data-copy={`#${id}`}>
+        <Icon name="copy" />
+        <span class="copy-label">{label ?? t('ui.copy')}</span>
+        <span class="copy-done">{t('ui.copied')}</span>
+      </button>
+    </div>
+  );
+
+/**
+ * Ready-made requests to paste into the user's AI app: tapping one copies it. Everything the
+ * dashboard sets up can also be asked in the chat, and this is the shortest way to show it.
+ */
+export const AskAi: FC<{ t: Translate; id: string; title: string; hint?: string; prompts: string[] }> = ({
+  t,
+  id,
+  title,
+  hint,
+  prompts,
+}) => (
+  // A quiet section, not a callout: it sits under the page's own controls and must not outshout them.
+  <div class="ask-ai" id={id}>
+    <p class="ask-ai-head">
+      <Icon name="chat" /> <strong>{title}</strong>
+      {hint ? <span class="muted"> {hint}</span> : null}
+    </p>
+    <div class="prompt-list">
+      {prompts.map((prompt, i) => (
+        <CopyText t={t} id={`${id}-${i}`} text={prompt} prompt />
+      ))}
+    </div>
+  </div>
+);
+
+/** A card's heading with an icon tile, a one-line explanation and an optional status on the right. */
+export const SectionHead: FC<{ icon: IconName; title: string; hint?: string; aside?: Child }> = ({
+  icon,
+  title,
+  hint,
+  aside,
+}) => (
+  <div class="sec-head">
+    <span class="sec-icon">
+      <Icon name={icon} />
+    </span>
+    <div class="grow">
+      <h2>{title}</h2>
+      {hint ? <p class="small muted">{hint}</p> : null}
+    </div>
+    {aside ?? null}
   </div>
 );
 
@@ -275,15 +359,17 @@ export const Prefs: FC<{ t: Translate; lang: string; path?: string }> = ({ t, la
 
 /**
  * Tabs: buttons switch panels with JS; without JS every panel is shown under its own heading.
- * `remember` keeps the chosen tab across pages (e.g. the AI client).
+ * `remember` keeps the chosen tab across pages (e.g. the AI client). `tiles` shows the tabs as a grid
+ * of cards (labels with a logo, e.g. the AI app picker) instead of an underlined row.
  */
 export const Tabs: FC<{
   id: string;
   remember?: string;
+  variant?: 'tiles';
   tabs: { id: string; label: Child; panel: Child }[];
-}> = ({ id, remember, tabs }) => (
+}> = ({ id, remember, variant, tabs }) => (
   <div data-tabs={id} data-remember={remember}>
-    <div class="tabs" role="tablist">
+    <div class={variant ? `tabs ${variant}` : 'tabs'} role="tablist">
       {tabs.map((tab, i) => (
         <button
           type="button"

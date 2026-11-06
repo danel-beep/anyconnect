@@ -205,9 +205,12 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     };
   }
 
+  /** A call from the user's own AI app: inside a request that brings their vault. */
   async function callMe() {
-    const catalog = await hub.services.hub.getCatalog(principal);
-    return hub.services.hub.callTool(principal, catalog, 'fake_me', {});
+    return browser.inVault(hub.services, async () => {
+      const catalog = await hub.services.hub.getCatalog(principal);
+      return hub.services.hub.callTool(principal, catalog, 'fake_me', {});
+    });
   }
 
   it('connects a new account: PKCE, scopes, encrypted tokens, identity from the test', async () => {
@@ -305,15 +308,47 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     expect((await callMe()).isError).toBeUndefined();
   });
 
-  it('the health job refreshes tokens before they expire and re-tests accounts', async () => {
+  it('connects from a browser the vault does not open yet, and refuses to reconnect there with a 423', async () => {
+    // Regression (ref 0a783f20ea): the vault was created on a laptop; on a phone not yet approved
+    // the callback sealed the new account, then failed to store its tokens with a 500.
+    await browser.request('/app'); // the laptop: creates the vault
+    const phone = new TestBrowser(hub.baseUrl);
+    expect((await phone.login()).status).toBe(303);
+    const start = await phone.request('/connect/fake?label=Phone');
+    expect(start.status).toBe(302);
+    const { code, state } = provider.approve(start.headers.get('location')!);
+    const callback = await phone.request(`/connect/callback?code=${code}&state=${state}`);
+    expect(callback.status).toBe(200);
+    expect(await callback.text()).toContain('Аккаунт подключён');
+
+    const [account] = await hub.services.accounts.list(principal.workspaceId);
+    expect(account).toMatchObject({ label: 'Phone', status: 'active' });
+    expect(await hub.services.accounts.isSealed(account!.id)).toBe(true);
+    const stored = await hub.services.database.pool.query('select tokens_encrypted from account_oauth');
+    expect(stored.rows[0].tokens_encrypted).not.toContain(provider.accessToken);
+    // Where the vault is open (the AI app, the laptop) the account works with those tokens.
+    const result = await callMe();
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ email: 'user@fake.example', name: 'User' });
+
+    // Reconnecting needs the account's key: refused before the provider's consent screen.
+    const again = await phone.request(`/connect/fake?account=${account!.id}`);
+    expect(again.status).toBe(423);
+    expect(await again.text()).toContain('private vault');
+  });
+
+  it('background jobs leave sealed accounts alone: the hub cannot open them outside a call', async () => {
     provider.accessExpiresIn = 600;
     await connect('?label=Work');
-    const result = await hub.services.health.refreshExpiringTokens(15 * 60_000);
-    expect(result).toEqual({ refreshed: 1, failed: 0 });
-    expect(provider.refreshCalls).toBe(1);
+    provider.refreshCalls = 0;
+    expect(await hub.services.health.refreshExpiringTokens(15 * 60_000)).toEqual({ refreshed: 0, failed: 0 });
+    expect(provider.refreshCalls).toBe(0);
 
     await hub.services.database.pool.query("update accounts set checked_at = now() - interval '2 days'");
-    expect(await hub.services.health.checkStaleAccounts()).toEqual({ checked: 1, failing: 0 });
+    expect(await hub.services.health.checkStaleAccounts()).toEqual({ checked: 0, failing: 0 });
+    const [account] = await hub.services.accounts.list(principal.workspaceId);
+    expect(account!.status).toBe('active');
+    // Its tokens refresh at call time instead (see 'refreshes an expiring token once').
   });
 
   it('uses a workspace OAuth app (bring your own app) over the hub app', async () => {
@@ -416,7 +451,10 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     await connect('?label=Work');
     const refresh = provider.refreshToken;
     const [account] = await hub.services.accounts.list(principal.workspaceId);
-    await hub.services.accounts.delete(principal.workspaceId, account!.id);
+    // Deleted from the dashboard, where the vault is open (a locked browser deletes without revoking).
+    await browser.inVault(hub.services, () =>
+      hub.services.accounts.delete(principal.workspaceId, account!.id),
+    );
     expect(provider.revoked).toEqual([refresh]);
     const rows = await hub.services.database.pool.query('select count(*)::int as n from account_oauth');
     expect(rows.rows[0].n).toBe(0);

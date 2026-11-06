@@ -154,7 +154,7 @@ export const ProfilesPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ProfilesVi
       <PageHead crumbs={<Crumbs ctx={ctx} />} title={t('profiles.title')} sub={t('profiles.sub')} />
       <Flash flash={view.flash} />
       <div class="card">
-        <h2 class="h3">{t('profiles.how')}</h2>
+        <h2>{t('profiles.how')}</h2>
         <p class="muted">{t('profiles.howText')}</p>
         {view.profiles.length ? null : <p class="muted">{t('profiles.none')}</p>}
         <p class="hint">{t('profiles.chat')}</p>
@@ -379,7 +379,7 @@ export const ProfilePage: FC<{ ctx: PageCtx; shell: ShellInfo; view: ProfileView
         </form>
       </div>
       <div class="card danger-zone">
-        <h2 class="h3">{t('profiles.delete')}</h2>
+        <h2>{t('profiles.delete')}</h2>
         <p class="muted">{t('profiles.deleteText')}</p>
         <form
           method="post"

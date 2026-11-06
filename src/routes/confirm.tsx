@@ -127,9 +127,11 @@ export function confirmRoutes() {
       return csrfFailed(c);
     const auth = await session(c, `/confirm/${id}`);
     if ('redirect' in auth) return c.redirect(auth.redirect, 303);
-    await s.pendingCalls.getForUser(auth.user.id, id);
+    const row = await s.pendingCalls.getForUser(auth.user.id, id);
     const decision = form.decision;
     if (decision === 'approve' || decision === 'deny' || decision === 'cancel') {
+      // Approved in a browser where the vault is open: the run can use it even after a restart.
+      if (decision === 'approve') await s.retainVault(row);
       await s.confirmations.decide(id, decision, 'web');
       s.logger.info({ pendingCall: id, decision, userId: auth.user.id }, 'pending call decided');
     }

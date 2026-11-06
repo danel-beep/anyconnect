@@ -7,6 +7,7 @@ import { loadConfig } from '../src/config.js';
 import type { BuiltinDeps } from '../src/connectors/index.js';
 import type { ConnectorRegistry } from '../src/connectors/registry.js';
 import type { OidcLoginProvider } from '../src/core/external-login.js';
+import { VaultSecret } from '../src/core/vault-scope.js';
 import { runMigrations } from '../src/db/migrate.js';
 import type { StageMap } from '../src/hub/executor.js';
 import type { safeFetch } from '../src/lib/safe-fetch.js';
@@ -242,6 +243,41 @@ export class TestBrowser {
   /** Value of a cookie, by its full name. */
   cookie(name: string): string | undefined {
     return this.cookies.get(name);
+  }
+
+  /** This browser's device key for its user's vault (set on the first signed-in page). */
+  vaultSecret(): VaultSecret | undefined {
+    const [userId, deviceId, secret] = this.cookie('mp_vault')?.split('.') ?? [];
+    if (!userId || !deviceId || !secret) return undefined;
+    return new VaultSecret(userId, 'device', deviceId, Buffer.from(secret, 'base64url'));
+  }
+
+  /**
+   * Runs `fn` as code inside one of this browser's requests: with its vault open, so services
+   * called directly can use the user's sealed accounts.
+   */
+  async inVault<T>(services: Services, fn: () => Promise<T>): Promise<T> {
+    if (!this.cookie('mp_vault')) await this.request('/app');
+    return services.vaultScopes.run(this.vaultSecret(), fn);
+  }
+
+  /**
+   * Lets this browser open the vault the way a user does: it shows a code on Security, and `owner`
+   * (a browser where the vault is open) presses Allow next to the same code.
+   */
+  async approveFrom(owner: TestBrowser): Promise<void> {
+    const mine = await (await this.request('/security')).text();
+    const code = mine.match(/<code class="device-code">([^<]+)<\/code>/)?.[1];
+    if (!code) throw new Error('This browser shows no vault code (is its vault already open?)');
+    const page = await (await owner.request('/security')).text();
+    const at = page.indexOf(`<code class="device-code">${code}</code>`);
+    const action =
+      at < 0
+        ? undefined
+        : page.slice(at).match(/action="(\/security\/vault\/requests\/device\/[^"]+\/allow)"/)?.[1];
+    if (!action) throw new Error(`The owner's browser shows no request with code ${code}`);
+    const response = await owner.request(action, { form: { csrf: TestBrowser.hiddenInputs(page).csrf! } });
+    if (response.status !== 303) throw new Error(`Allowing the browser failed: ${response.status}`);
   }
 
   static hiddenInputs(html: string): Record<string, string> {

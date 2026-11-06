@@ -62,7 +62,7 @@ export const ProblemText: FC<{
   const text = problemText(t, problem, message);
   const raw = message && problem.kind !== 'other' ? message : undefined;
   return (
-    <span class="problem" title={details ? undefined : raw}>
+    <span title={details ? undefined : raw}>
       {text}
       {details && raw ? (
         <details class="problem-raw">

@@ -22,11 +22,57 @@ export interface ActivityFilter {
 }
 
 /**
+ * How long each workspace keeps its activity log: the plan's `historyDays` (see
+ * `EntitlementService`). The privacy policy promises these numbers.
+ */
+export interface ActivityRetention {
+  /** Days the workspace's log is kept; null keeps it forever. */
+  historyDays(workspaceId: string): Promise<number | null>;
+  /** No workspace keeps less, so rows younger than this are never looked at. */
+  readonly minimumHistoryDays: number;
+}
+
+/**
  * What the AI did in a workspace, for the dashboard: counts by day and by service over the
  * audit log (`tool_calls`). Only metadata is stored there, never arguments or results.
  */
 export class ActivityService {
   constructor(private readonly db: Db) {}
+
+  /**
+   * Deletes log entries older than each workspace's retention. Only workspaces with entries past
+   * the shortest retention are looked up. One failing workspace does not stop the others; the
+   * failures are thrown together at the end.
+   */
+  async prune(retention: ActivityRetention, now = new Date()): Promise<{ workspaces: number }> {
+    const floor = new Date(now.getTime() - retention.minimumHistoryDays * DAY);
+    const candidates = await this.db
+      .selectDistinct({ workspaceId: toolCalls.workspaceId })
+      .from(toolCalls)
+      .where(lt(toolCalls.createdAt, floor));
+    const failures: unknown[] = [];
+    let pruned = 0;
+    for (const { workspaceId } of candidates) {
+      try {
+        const days = await retention.historyDays(workspaceId);
+        if (days === null) continue;
+        await this.db
+          .delete(toolCalls)
+          .where(
+            and(
+              eq(toolCalls.workspaceId, workspaceId),
+              lt(toolCalls.createdAt, new Date(now.getTime() - days * DAY)),
+            ),
+          );
+        pruned++;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length)
+      throw new AggregateError(failures, `Activity log pruning failed for ${failures.length} workspace(s)`);
+    return { workspaces: pruned };
+  }
 
   async summary(workspaceId: string, days: number, now = new Date()): Promise<ActivitySummary> {
     const start = new Date(
@@ -130,13 +176,5 @@ export class ActivityService {
         ),
       );
     return { calls: row?.calls ?? 0, errors: row?.errors ?? 0 };
-  }
-
-  async countSince(workspaceId: string, since: Date): Promise<number> {
-    const [row] = await this.db
-      .select({ n: count() })
-      .from(toolCalls)
-      .where(and(eq(toolCalls.workspaceId, workspaceId), gte(toolCalls.createdAt, since)));
-    return row?.n ?? 0;
   }
 }

@@ -10,6 +10,7 @@ import { principalFromAuthInfo } from '../core/auth.js';
 import { StartConnectInput } from '../core/connect.js';
 import { getDefaultWorkspace, getUser, getWorkspace } from '../core/identity.js';
 import { CreateOAuthAppInput } from '../core/oauth-apps.js';
+import { bearerVaultSecret, type VaultSecret } from '../core/vault-scope.js';
 import { workspaces } from '../db/schema.js';
 import { utcDay } from '../hub/usage.js';
 import { AppError, badRequest, notFound, unauthorized } from '../lib/errors.js';
@@ -30,6 +31,7 @@ export function apiRoutes() {
   api.use('*', async (c, next) => {
     const s = c.get('services');
     const authorization = c.req.header('authorization');
+    let vaultSecret: VaultSecret | undefined;
     if (authorization) {
       try {
         const info = await verifyBearerToken(authorization, {
@@ -40,6 +42,7 @@ export function apiRoutes() {
         // Profile tokens (made before profiles were limited to MCP) never manage the workspace.
         if (principal.personaId) throw unauthorized();
         c.set('principal', principal);
+        if (info.token) vaultSecret = bearerVaultSecret(principal, info.token);
       } catch {
         throw unauthorized('Invalid or insufficient token: use a personal access token with the "api" scope');
       }
@@ -72,8 +75,11 @@ export function apiRoutes() {
         workspaceId: workspace.id,
         scopes: ['mcp', 'api'],
       });
+      // Signed-in browser: the device vault scope set by `webVault()` already applies.
+      return next();
     }
-    await next();
+    // A personal token opens its owner's vault for this request (sealed accounts, docs/VAULTS.md).
+    await s.vaultScopes.run(vaultSecret, () => next());
   });
 
   api.get('/me', async (c) => {
@@ -296,6 +302,7 @@ export function apiRoutes() {
     const s = c.get('services');
     const row = await s.accounts.get(principal(c).workspaceId, c.req.param('id'));
     await s.messaging.accounts.resumeSending(row.id);
+    await s.messaging.outbox.releaseHold(row.id);
     s.messaging.dispatcher.kick();
     return c.json({ ok: true });
   });

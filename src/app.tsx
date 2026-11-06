@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { compress } from 'hono/compress';
+import { VaultLockedError } from './core/vaults.js';
 import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
 import { adminRoutes } from './routes/admin.js';
@@ -28,6 +29,7 @@ import { siteRoutes } from './routes/site.js';
 import { teamRoutes } from './routes/team.js';
 import { telegramConnectRoutes } from './routes/telegram-connect.js';
 import { webRoutes } from './routes/web.js';
+import { webVault } from './routes/web-vault.js';
 import type { Services } from './services.js';
 import { pageSecurityHeaders } from './web/http.js';
 import { DEFAULT_LOCALE, translator } from './web/i18n.js';
@@ -72,6 +74,8 @@ export function createApp(services: Services) {
   app.use('*', compress({ encoding: 'gzip', contentTypeFilter: COMPRESSIBLE }));
   // Counts served pages into an in-memory buffer after they are rendered (docs/ANALYTICS.md).
   app.use('*', pageAnalytics());
+  // Opens (or, the first time, creates) the signed-in user's vault from this browser's device key.
+  app.use('*', webVault());
 
   // Liveness: the process answers. Cheap on purpose (the platform restarts the instance when it
   // fails, which does not help when the database is down).
@@ -125,7 +129,11 @@ export function createApp(services: Services) {
     );
   });
 
-  app.onError((error, c) => {
+  app.onError((thrown, c) => {
+    // A sealed account this request cannot open is the user's situation, not a server fault: any
+    // path that misses its own check still answers 423 with the actionable message.
+    const error =
+      thrown instanceof VaultLockedError ? new AppError(423, 'vault_locked', thrown.message) : thrown;
     if (error instanceof AppError) {
       if (c.req.path.startsWith('/api/')) {
         return c.json(

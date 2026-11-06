@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { isRecentAuth } from '../core/auth-methods.js';
 import { PASSKEY_NAME_MAX, PasskeyError } from '../core/passkeys.js';
 import { hasSecondFactor } from '../core/second-factors.js';
+import { deviceCode } from '../core/vaults.js';
+import { UnlockedVault } from '../lib/vault.js';
 import { csrfToken, safeNextPath, verifyCsrf } from '../web/http.js';
 import { ErrorPage } from '../web/pages.js';
-import { RecoveryCodesPage, SecurityPage } from '../web/security-pages.js';
+import { RecoveryCodesPage, RecoveryKeyPage, SecurityPage, type VaultView } from '../web/security-pages.js';
 import type { WebSession } from '../web/sessions.js';
 import { type AppContext, type AppEnv, bodyParams, currentSession, loginUrl } from './context.js';
-import { renderInApp } from './page-helpers.js';
+import { renderInApp, setFlash, takeFlash } from './page-helpers.js';
 
 type Session = WebSession & { token: string };
 
@@ -23,6 +25,8 @@ const PasskeyRegistration = z.object({
   next: z.string().max(4096).optional(),
   response: z.unknown().optional(),
 });
+
+const RequestKind = z.enum(['device', 'oauth', 'api_token']);
 
 const PasskeyName = z.string().trim().min(1).max(PASSKEY_NAME_MAX);
 
@@ -44,6 +48,8 @@ async function renderSecurity(
     s.telegramBot ? s.notificationChannels.status(userId) : undefined,
   ]);
   const hasFactor = hasSecondFactor(summary);
+  const vault = await vaultView(c, userId);
+  const flash = takeFlash(c);
   return renderInApp(
     c,
     session.user,
@@ -73,12 +79,52 @@ async function renderSecurity(
           backedUp: p.backedUp,
         })),
         sessions: sessions.length,
+        ...(vault ? { vault } : {}),
+        ...(flash ? { flash } : {}),
         ...(channels ? { telegram: { linked: channels.telegram.linked } } : {}),
       }}
     />,
     options.status ?? 200,
   );
 }
+
+/** The vault card: open or locked in this browser, requests from other browsers, recovery key. */
+async function vaultView(c: AppContext, userId: string): Promise<VaultView | undefined> {
+  const s = c.get('services');
+  if (!(await s.vaults.exists(userId))) return undefined;
+  const open = (await s.vaultScopes.prepare()) !== undefined;
+  const device = c.get('vaultDevice');
+  const [requests, devices, recovery] = await Promise.all([
+    s.vaultLinks.requests(userId),
+    s.vaults.devices(userId),
+    s.vaults.hasRecoveryKey(userId),
+  ]);
+  const isMine = (r: { kind: string; subject: string }) => r.kind === 'device' && r.subject === device?.ref;
+  const others = requests.filter((r) => !isMine(r));
+  return {
+    open,
+    ...(!open && device
+      ? {
+          thisCode: deviceCode(UnlockedVault.devicePublicKey(device.secret).encoded),
+          waiting: requests.some(isMine),
+        }
+      : {}),
+    requests: open
+      ? others.map((r) => ({
+          kind: r.kind,
+          subject: r.subject,
+          ...(r.kind === 'device' ? { code: r.code } : { name: r.label ?? r.subject }),
+          createdAt: r.createdAt,
+        }))
+      : [],
+    // A locked browser cannot approve anything, but it says which apps are waiting.
+    waitingApps: open ? [] : others.filter((r) => r.kind !== 'device').map((r) => r.label ?? r.subject),
+    devices: devices.length,
+    recovery,
+  };
+}
+
+const vaultUrl = (next: string | undefined) => `${securityUrl(next)}#vault`;
 
 /**
  * Checks for a security change submitted as a form: signed in, valid CSRF token, and signed in
@@ -200,6 +246,106 @@ export function securityRoutes() {
         lang={c.get('locale')}
         codes={codes}
         continueTo={securityUrl(guard.next)}
+      />,
+    );
+  });
+
+  // --- Vault (docs/VAULTS.md) ------------------------------------------------------
+  // Approving a browser seals the vault key to that browser's device key: the approving request
+  // never learns the new browser's secret, and the hub never holds the vault key outside a request.
+  // An AI app or personal token is let in the same way: the vault key is sealed to public keys its
+  // tokens derive, so the approving browser never sees the tokens either.
+  app.post('/security/vault/requests/:kind/:subject/allow', async (c) => {
+    const s = c.get('services');
+    const guard = await guardForm(c);
+    if (guard instanceof Response) return guard;
+    const kind = RequestKind.safeParse(c.req.param('kind'));
+    const userId = guard.session.user.id;
+    const vault = await s.vaultScopes.prepare();
+    if (!kind.success) {
+      setFlash(c, 'bad', 'vault.flash.gone');
+    } else if (!vault || s.vaultScopes.currentUserId() !== userId) {
+      setFlash(c, 'bad', 'vault.flash.locked');
+    } else if (await s.vaults.approve(userId, vault, kind.data, c.req.param('subject'))) {
+      s.logger.info({ userId, kind: kind.data }, 'vault: request allowed');
+      setFlash(c, 'ok', kind.data === 'device' ? 'vault.flash.allowed' : 'vault.flash.appAllowed');
+    } else {
+      setFlash(c, 'bad', 'vault.flash.gone');
+    }
+    return c.redirect(vaultUrl(guard.next), 303);
+  });
+
+  app.post('/security/vault/requests/:kind/:subject/deny', async (c) => {
+    const s = c.get('services');
+    const guard = await guardForm(c);
+    if (guard instanceof Response) return guard;
+    const kind = RequestKind.safeParse(c.req.param('kind'));
+    if (kind.success) await s.vaults.deny(guard.session.user.id, kind.data, c.req.param('subject'));
+    setFlash(c, 'ok', 'vault.flash.denied');
+    return c.redirect(vaultUrl(guard.next), 303);
+  });
+
+  /** This browser asks again after its request expired. */
+  app.post('/security/vault/ask', async (c) => {
+    const s = c.get('services');
+    const guard = await guardForm(c);
+    if (guard instanceof Response) return guard;
+    const device = c.get('vaultDevice');
+    if (device && !(await s.vaults.hasWrap(device.userId, 'device', device.ref))) {
+      await s.vaults.requestDevice(device.userId, device.ref, device.secret);
+      setFlash(c, 'ok', 'vault.flash.asked');
+    }
+    return c.redirect(vaultUrl(guard.next), 303);
+  });
+
+  /** Opens the vault in this browser with the recovery key and keeps it open here. */
+  app.post('/security/vault/unlock', async (c) => {
+    const s = c.get('services');
+    const guard = await guardForm(c);
+    if (guard instanceof Response) return guard;
+    const userId = guard.session.user.id;
+    const device = c.get('vaultDevice');
+    let vault: UnlockedVault | undefined;
+    try {
+      vault = await s.vaults.unlockWithRecoveryKey(userId, guard.form.recoveryKey ?? '');
+    } catch {
+      vault = undefined;
+    }
+    if (!vault || !device) {
+      s.logger.warn({ userId }, 'vault: recovery key rejected');
+      setFlash(c, 'bad', 'vault.flash.wrongKey');
+      return c.redirect(vaultUrl(guard.next), 303);
+    }
+    await s.vaults.addWrap(userId, vault, 'device', device.ref, device.secret);
+    await s.vaults.deny(userId, 'device', device.ref);
+    s.logger.info({ userId }, 'vault: opened with the recovery key');
+    setFlash(c, 'ok', 'vault.flash.unlocked');
+    return c.redirect(vaultUrl(guard.next), 303);
+  });
+
+  /** Creates (or replaces) the optional recovery key and shows it once. */
+  app.post('/security/vault/recovery-key', async (c) => {
+    const s = c.get('services');
+    const guard = await guardForm(c);
+    if (guard instanceof Response) return guard;
+    const userId = guard.session.user.id;
+    const vault = await s.vaultScopes.prepare();
+    if (!vault || s.vaultScopes.currentUserId() !== userId) {
+      setFlash(c, 'bad', 'vault.flash.locked');
+      return c.redirect(vaultUrl(guard.next), 303);
+    }
+    const recoveryKey = await s.vaults.setRecoveryKey(userId, vault);
+    s.logger.info({ userId }, 'vault: recovery key created');
+    c.header('Cache-Control', 'no-store');
+    return renderInApp(
+      c,
+      guard.session.user,
+      'security',
+      <RecoveryKeyPage
+        t={c.get('t')}
+        lang={c.get('locale')}
+        recoveryKey={recoveryKey}
+        continueTo={vaultUrl(guard.next)}
       />,
     );
   });

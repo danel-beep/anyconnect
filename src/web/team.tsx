@@ -1,10 +1,19 @@
 import type { FC } from 'hono/jsx';
+import { PLANS } from '../billing/plans.js';
 import type { MemberRole, ShareLevel, TeamBillingMode } from '../db/schema.js';
-import { AppShell, Flash, PageHead, type ShellInfo, type UsageView } from './app.js';
+import {
+  AppShell,
+  ConnectAiCard,
+  Flash,
+  PageHead,
+  SetupSteps,
+  type ShellInfo,
+  type UsageView,
+} from './app.js';
 import type { Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { Layout } from './pages.js';
-import { CodeBlock, CopyField, fmtAgo, fmtDate, fmtNumber, Tabs, UsageStat } from './ui.js';
+import { CopyField, CopyText, fmtAgo, fmtDate, fmtNumber, Icon, initials, UsageStat } from './ui.js';
 
 /**
  * The team pages: the list of the user's teams (`/app/teams`), one team (`/app/team/:slug`) and the
@@ -28,31 +37,28 @@ export const TeamsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamsView }> 
     <AppShell ctx={ctx} shell={shell} section="teams" title={t('app.nav.teams')}>
       <PageHead title={t('app.nav.teams')} sub={t('team.list.sub')} />
       <Flash flash={view.flash} />
-      {/* With no team yet the page is just the "create" card, which says so itself. */}
       {view.teams.length > 0 ? (
-        <div class="card flush">
-          <ul class="plain pad-x">
-            {view.teams.map((team) => (
-              <li>
-                <span class="grow">
-                  <a href={`/app/team/${team.slug}`}>
-                    <strong>{team.name}</strong>
-                  </a>
-                  <div class="small muted">
-                    {roleText(t, team.role)} · {t('team.list.members', { n: team.members })}
-                  </div>
+        <div class="team-grid">
+          {view.teams.map((team) => (
+            <a class="team-tile" href={`/app/team/${team.slug}`}>
+              <span class="team-mark" aria-hidden="true">
+                {initials(team.name)}
+              </span>
+              <span class="grow">
+                <strong>{team.name}</strong>
+                <span class="small muted">
+                  {roleText(t, team.role)} · {t('team.list.members', { n: team.members })}
                 </span>
-                <a class="btn sm" href={`/app/team/${team.slug}`}>
-                  →
-                </a>
-              </li>
-            ))}
-          </ul>
+              </span>
+              <Icon name="arrow" />
+            </a>
+          ))}
         </div>
-      ) : null}
-      <div class="card">
+      ) : (
+        <TeamIntro ctx={ctx} />
+      )}
+      <div class="card" id="create">
         <h2>{t('team.list.create')}</h2>
-        {view.teams.length === 0 ? <p class="muted">{t('team.list.none')}</p> : null}
         {view.owned >= view.maxOwned ? (
           <p class="muted">{t('team.list.limit', { n: view.maxOwned })}</p>
         ) : (
@@ -82,6 +88,41 @@ export const TeamsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamsView }> 
   );
 };
 
+/** What a team is, in three pictured steps: shown while the user is in no team yet. */
+const TeamIntro: FC<{ ctx: PageCtx }> = ({ ctx }) => {
+  const { t } = ctx;
+  const steps = [
+    { icon: 'users', title: t('team.intro.s1'), text: t('team.intro.s1Text') },
+    { icon: 'plus', title: t('team.intro.s2'), text: t('team.intro.s2Text') },
+    { icon: 'plug', title: t('team.intro.s3'), text: t('team.intro.s3Text') },
+  ] as const;
+  return (
+    <div class="card team-intro">
+      <h2>{t('team.intro.title')}</h2>
+      <ol class="team-steps">
+        {steps.map((step, i) => (
+          <li>
+            <span class="team-step-icon">
+              <Icon name={step.icon} />
+            </span>
+            <strong>
+              {i + 1}. {step.title}
+            </strong>
+            <span class="muted">{step.text}</span>
+          </li>
+        ))}
+      </ol>
+      <ul class="team-facts">
+        {(['fact1', 'fact2', 'fact3'] as const).map((key) => (
+          <li>
+            <Icon name="check" /> {t(`team.intro.${key}`)}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 export interface TeamAccountView {
   id: string;
   label: string;
@@ -101,6 +142,8 @@ export interface TeamPageView {
     joinedAt: Date;
     /** This member pays for the team (all of it, or in "each" mode its own accounts and key). */
     pays: boolean;
+    /** An AI app of this member is connected to the team's address. */
+    ai: boolean;
   }[];
   invitations: { id: string; email: string; role: MemberRole; expiresAt: Date }[];
   /** An invitation just created: its link is shown once. */
@@ -163,6 +206,9 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
       <div class="wide-2">
         <label for={forTeam ? 'connect-team' : 'connect-mine'}>{t('team.accounts.service')}</label>
         <select id={forTeam ? 'connect-team' : 'connect-mine'} name="service" required>
+          <option value="" selected>
+            {t('team.accounts.choose')}
+          </option>
           {view.services.map((s) => (
             <option value={s.id}>{s.name}</option>
           ))}
@@ -193,33 +239,132 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
       />
       <Flash flash={view.flash} />
 
-      <div class="card" id="connector">
-        <h2>{t('team.connector.title')}</h2>
-        <CopyField t={t} id="team-url" value={view.team.url} label={t('team.connector.title')} />
-        <p class="hint">{t('team.connector.hint')}</p>
-        <Tabs
-          id="team-clients"
-          remember="client"
-          tabs={[
-            { id: 'chatgpt', label: 'ChatGPT', panel: <p>{t('team.guide.chatgpt')}</p> },
-            { id: 'claude', label: 'Claude', panel: <p>{t('team.guide.claude')}</p> },
-            {
-              id: 'claude-code',
-              label: 'Claude Code',
-              panel: (
-                <div class="stack">
-                  <p>{t('team.guide.code')}</p>
-                  <CodeBlock
-                    t={t}
-                    id="team-code"
-                    code={`claude mcp add --transport http manyplug-${view.team.slug} ${view.team.url}`}
-                  />
+      <TeamSetup ctx={ctx} view={view} admin={admin} />
+
+      <ConnectAiCard
+        ctx={ctx}
+        profile={{ url: view.team.url, title: t('team.connector.title'), hint: t('team.connector.hint') }}
+      />
+
+      <TeamChatCard ctx={ctx} view={view} admin={admin} />
+
+      <div class="card" id="people">
+        <h2>{t('team.members.title')}</h2>
+        <ul class="plain">
+          {view.members.map((m) => (
+            <li class="person">
+              <span class="avatar" aria-hidden="true">
+                {initials(m.name)}
+              </span>
+              <span class="grow">
+                <strong>{m.name}</strong>
+                {m.userId === view.me.userId ? <span class="badge">{t('team.you')}</span> : null}{' '}
+                <span class="badge">{roleText(t, m.role)}</span>{' '}
+                {m.ai ? (
+                  <span class="badge ok">
+                    <Icon name="check" /> {t('team.members.ai')}
+                  </span>
+                ) : (
+                  <span class="badge">{t('team.members.noAi')}</span>
+                )}
+                {m.pays ? (
+                  <>
+                    {' '}
+                    <span class="badge accent">
+                      {t(view.plan.mode === 'each' ? 'team.members.paysTeam' : 'team.members.pays')}
+                    </span>
+                  </>
+                ) : null}
+                <div class="small muted">
+                  {m.email} · {t('team.members.joined', { date: fmtDate(lang, m.joinedAt) })}
                 </div>
-              ),
-            },
-            { id: 'other', label: '…', panel: <p>{t('team.guide.other')}</p> },
-          ]}
-        />
+              </span>
+              {owner && m.role !== 'owner' ? (
+                <form method="post" action={`${base}/members/${m.userId}/role`}>
+                  {csrf}
+                  <input type="hidden" name="role" value={m.role === 'admin' ? 'member' : 'admin'} />
+                  <button class="sm" type="submit">
+                    {m.role === 'admin' ? t('team.members.makeMember') : t('team.members.makeAdmin')}
+                  </button>
+                </form>
+              ) : null}
+              {admin &&
+              m.role !== 'owner' &&
+              m.userId !== view.me.userId &&
+              (owner || m.role === 'member') ? (
+                <form
+                  method="post"
+                  action={`${base}/members/${m.userId}/remove`}
+                  data-confirm={t('team.members.removeConfirm', { name: m.name })}
+                >
+                  {csrf}
+                  <button class="sm danger" type="submit">
+                    {t('team.members.remove')}
+                  </button>
+                </form>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        {admin ? (
+          <>
+            {view.invitations.length ? (
+              <>
+                <hr />
+                <h3>{t('team.invite.open')}</h3>
+                <ul class="plain">
+                  {view.invitations.map((i) => (
+                    <li>
+                      <span class="grow">
+                        <strong>{i.email}</strong> <span class="badge">{roleText(t, i.role)}</span>
+                        <div class="small muted">
+                          {t('team.invite.expires', { date: fmtDate(lang, i.expiresAt) })}
+                        </div>
+                      </span>
+                      <form method="post" action={`${base}/invitations/${i.id}/revoke`}>
+                        {csrf}
+                        <button class="sm" type="submit">
+                          {t('team.invite.revoke')}
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+            <hr />
+            <h3>{t('team.invite.title')}</h3>
+            {view.newInvite ? (
+              <div class="notice ok" data-replace-url={base}>
+                <p>{t('team.invite.created', { email: view.newInvite.email })}</p>
+                <CopyField t={t} id="invite-url" value={view.newInvite.url} label={t('team.invite.title')} />
+              </div>
+            ) : null}
+            <form method="post" action={`${base}/invite`} class="inline-form">
+              {csrf}
+              <div class="wide-2">
+                <label for="invite-email">{t('team.invite.email')}</label>
+                <input id="invite-email" type="email" name="email" required maxlength={254} />
+              </div>
+              <div>
+                <label for="invite-role">{t('team.invite.role')}</label>
+                <select id="invite-role" name="role">
+                  <option value="member" selected>
+                    {t('team.role.member')}
+                  </option>
+                  <option value="admin">{t('team.role.admin')}</option>
+                </select>
+              </div>
+              <div>
+                <button type="submit" class="primary block">
+                  {t('team.invite.send')}
+                </button>
+              </div>
+            </form>
+            <p class="hint">{t('team.invite.hint')}</p>
+            <TeamMessage ctx={ctx} view={view} />
+          </>
+        ) : null}
       </div>
 
       <div class="card" id="accounts">
@@ -351,166 +496,70 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
         </div>
       ) : null}
 
-      <div class="card" id="people">
-        <h2>{t('team.members.title')}</h2>
-        <ul class="plain">
-          {view.members.map((m) => (
-            <li>
-              <span class="grow">
-                <strong>{m.name}</strong>
-                {m.userId === view.me.userId ? <span class="badge">{t('team.you')}</span> : null}{' '}
-                <span class="badge">{roleText(t, m.role)}</span>
-                {m.pays ? (
-                  <>
-                    {' '}
-                    <span class="badge accent">
-                      {t(view.plan.mode === 'each' ? 'team.members.paysTeam' : 'team.members.pays')}
-                    </span>
-                  </>
-                ) : null}
-                <div class="small muted">
-                  {m.email} · {t('team.members.joined', { date: fmtDate(lang, m.joinedAt) })}
-                </div>
-              </span>
-              {owner && m.role !== 'owner' ? (
-                <form method="post" action={`${base}/members/${m.userId}/role`}>
-                  {csrf}
-                  <input type="hidden" name="role" value={m.role === 'admin' ? 'member' : 'admin'} />
-                  <button class="sm" type="submit">
-                    {m.role === 'admin' ? t('team.members.makeMember') : t('team.members.makeAdmin')}
-                  </button>
-                </form>
-              ) : null}
-              {admin &&
-              m.role !== 'owner' &&
-              m.userId !== view.me.userId &&
-              (owner || m.role === 'member') ? (
-                <form
-                  method="post"
-                  action={`${base}/members/${m.userId}/remove`}
-                  data-confirm={t('team.members.removeConfirm', { name: m.name })}
-                >
-                  {csrf}
-                  <button class="sm danger" type="submit">
-                    {t('team.members.remove')}
-                  </button>
-                </form>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        {admin ? (
-          <>
-            {view.invitations.length ? (
-              <>
-                <h3>{t('team.invite.open')}</h3>
-                <ul class="plain">
-                  {view.invitations.map((i) => (
-                    <li>
-                      <span class="grow">
-                        <strong>{i.email}</strong> <span class="badge">{roleText(t, i.role)}</span>
-                        <div class="small muted">
-                          {t('team.invite.expires', { date: fmtDate(lang, i.expiresAt) })}
-                        </div>
-                      </span>
-                      <form method="post" action={`${base}/invitations/${i.id}/revoke`}>
-                        {csrf}
-                        <button class="sm" type="submit">
-                          {t('team.invite.revoke')}
-                        </button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
-            <h3>{t('team.invite.title')}</h3>
-            {view.newInvite ? (
-              <div class="notice ok" data-replace-url={base}>
-                <p>{t('team.invite.created', { email: view.newInvite.email })}</p>
-                <CopyField t={t} id="invite-url" value={view.newInvite.url} label={t('team.invite.title')} />
-              </div>
-            ) : null}
-            <form method="post" action={`${base}/invite`} class="inline-form">
-              {csrf}
-              <div class="wide-2">
-                <label for="invite-email">{t('team.invite.email')}</label>
-                <input id="invite-email" type="email" name="email" required maxlength={254} />
-              </div>
-              <div>
-                <label for="invite-role">{t('team.invite.role')}</label>
-                <select id="invite-role" name="role">
-                  <option value="member" selected>
-                    {t('team.role.member')}
-                  </option>
-                  <option value="admin">{t('team.role.admin')}</option>
-                </select>
-              </div>
-              <div>
-                <button type="submit" class="primary block">
-                  {t('team.invite.send')}
-                </button>
-              </div>
-            </form>
-            <p class="hint">{t('team.invite.hint')}</p>
-          </>
-        ) : null}
-      </div>
-
       <TeamPlanCard ctx={ctx} view={view} admin={admin} />
 
       {admin ? (
-        <div class="card" id="keys">
-          <h2>{t('team.keys.title')}</h2>
-          <p class="muted">{t('team.keys.hint')}</p>
-          {view.newKey ? (
-            <div class="notice ok" data-replace-url={base}>
-              <p>
-                <strong>{t('team.keys.created')}</strong>
-              </p>
-              <CopyField t={t} id="team-key" value={view.newKey} label={t('team.keys.title')} />
-            </div>
-          ) : null}
-          {view.keys.length ? (
-            <ul class="plain">
-              {view.keys.map((k) => (
-                <li>
-                  <span class="grow">
-                    <strong>{k.name}</strong>
-                    <div class="small muted">
-                      {t('app.apps.since', { date: fmtDate(lang, k.createdAt) })} ·{' '}
-                      {k.lastUsedAt
-                        ? t('app.apps.used', { ago: fmtAgo(lang, k.lastUsedAt) })
-                        : t('home.never')}
-                    </div>
-                  </span>
-                  <form
-                    method="post"
-                    action={`${base}/keys/${k.id}/revoke`}
-                    data-confirm={t('team.keys.revokeConfirm', { name: k.name })}
-                  >
-                    {csrf}
-                    <button class="sm danger" type="submit">
-                      {t('team.keys.revoke')}
-                    </button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <form method="post" action={`${base}/keys`} class="inline-form">
-            {csrf}
-            <div class="wide-2">
-              <label for="key-name">{t('team.keys.name')}</label>
-              <input id="key-name" type="text" name="name" required maxlength={80} />
-            </div>
-            <div>
-              <button type="submit" class="block">
-                {t('team.keys.create')}
-              </button>
-            </div>
-          </form>
-        </div>
+        <details class="card fold" id="keys" open={Boolean(view.newKey) || view.keys.length > 0}>
+          <summary>
+            <span class="grow">
+              <span class="fold-title">
+                <Icon name="key" /> {t('team.keys.title')}
+                {view.keys.length ? <span class="badge tiny-badge">{view.keys.length}</span> : null}
+              </span>
+              <span class="muted small fold-sub">{t('team.keys.short')}</span>
+            </span>
+          </summary>
+          <div class="fold-body">
+            <p class="muted">{t('team.keys.hint')}</p>
+            {view.newKey ? (
+              <div class="notice ok" data-replace-url={base}>
+                <p>
+                  <strong>{t('team.keys.created')}</strong>
+                </p>
+                <CopyField t={t} id="team-key" value={view.newKey} label={t('team.keys.title')} />
+              </div>
+            ) : null}
+            {view.keys.length ? (
+              <ul class="plain">
+                {view.keys.map((k) => (
+                  <li>
+                    <span class="grow">
+                      <strong>{k.name}</strong>
+                      <div class="small muted">
+                        {t('app.apps.since', { date: fmtDate(lang, k.createdAt) })} ·{' '}
+                        {k.lastUsedAt
+                          ? t('app.apps.used', { ago: fmtAgo(lang, k.lastUsedAt) })
+                          : t('home.never')}
+                      </div>
+                    </span>
+                    <form
+                      method="post"
+                      action={`${base}/keys/${k.id}/revoke`}
+                      data-confirm={t('team.keys.revokeConfirm', { name: k.name })}
+                    >
+                      {csrf}
+                      <button class="sm danger" type="submit">
+                        {t('team.keys.revoke')}
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <form method="post" action={`${base}/keys`} class="inline-form">
+              {csrf}
+              <div class="wide-2">
+                <label for="key-name">{t('team.keys.name')}</label>
+                <input id="key-name" type="text" name="name" required maxlength={80} />
+              </div>
+              <div>
+                <button type="submit" class="block">
+                  {t('team.keys.create')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </details>
       ) : null}
 
       <div class="card">
@@ -537,6 +586,77 @@ export const TeamPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TeamPageView }
   );
 };
 
+/** The first steps in a team, each ticked once done; gone when all are. */
+const TeamSetup: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = ({ ctx, view, admin }) => {
+  const { t } = ctx;
+  const me = view.members.find((m) => m.userId === view.me.userId);
+  const accounts = view.mine.length + view.teamAccounts.length + view.sharedWithMe.length;
+  const steps = [
+    { done: Boolean(me?.ai), href: '#connect-ai', title: t('team.setup.ai'), text: t('team.setup.aiText') },
+    ...(admin
+      ? [
+          {
+            done: view.members.length > 1 || view.invitations.length > 0,
+            href: '#people',
+            title: t('team.setup.invite'),
+            text: t('team.setup.inviteText'),
+          },
+        ]
+      : []),
+    {
+      done: accounts > 0,
+      href: '#accounts',
+      title: t('team.setup.accounts'),
+      text: t(admin ? 'team.setup.accountsText' : 'team.setup.accountsMember'),
+    },
+  ];
+  if (steps.every((s) => s.done)) return null;
+  return <SetupSteps ctx={ctx} steps={steps} />;
+};
+
+/**
+ * The message that brings a teammate in: the address and what to do, ready to send with the
+ * invitation. Folded until an invitation has just been made, when it is the next thing to send.
+ */
+const TeamMessage: FC<{ ctx: PageCtx; view: TeamPageView }> = ({ ctx, view }) => {
+  const { t } = ctx;
+  const page = new URL(`/app/team/${view.team.slug}`, view.team.url).href;
+  return (
+    <details class="ai-manual" id="team-message-fold" open={Boolean(view.newInvite)}>
+      <summary>{t('team.share.title')}</summary>
+      <p class="muted">{t('team.share.text')}</p>
+      <CopyText
+        t={t}
+        id="team-message"
+        text={t('team.share.message', { team: view.team.name, url: view.team.url, page })}
+        label={t('team.share.copy')}
+      />
+    </details>
+  );
+};
+
+/** Requests the AI runs itself once it is connected to the team, each copied in one tap. */
+const TeamChatCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = ({ ctx, view, admin }) => {
+  const { t } = ctx;
+  const prompts = [
+    t('team.chat.who', { team: view.team.name }),
+    view.mine.length ? t('team.chat.share') : t('team.chat.connect'),
+    ...(admin ? [t('team.chat.invite')] : []),
+    ...(view.teamAccounts.length || view.sharedWithMe.length ? [t('team.chat.today')] : []),
+  ];
+  return (
+    <div class="card" id="ask-ai">
+      <h2>{t('team.chat.title')}</h2>
+      <p class="muted">{t('team.chat.text')}</p>
+      <div class="prompt-list">
+        {prompts.map((text, i) => (
+          <CopyText t={t} id={`team-prompt-${i}`} text={text} prompt />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 /** Who pays for the team, what that plan has used, and the buttons to change who pays and how. */
 const TeamPlanCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = ({ ctx, view, admin }) => {
   const { t, lang } = ctx;
@@ -550,6 +670,8 @@ const TeamPlanCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = (
       : phase.kind === 'trial'
         ? t('team.plan.trial', { plan: planName(phase.asPlan ?? 'pro'), date: fmtDate(lang, phase.until) })
         : t('app.usage.step', { date: fmtDate(lang, phase.until) });
+  /** A plan anyone can buy (not a special one from the admin, such as Unlimited). */
+  const buyable = (id: string) => PLANS.some((p) => p.id === id && p.public);
   const billingUrl = `/app/billing?team=${encodeURIComponent(view.team.slug)}`;
   const each = plan.mode === 'each';
   const who = each
@@ -608,7 +730,7 @@ const TeamPlanCard: FC<{ ctx: PageCtx; view: TeamPageView; admin: boolean }> = (
             {t('team.plan.pay')}
           </button>
         </form>
-      ) : plan.payer.you ? (
+      ) : !buyable(plan.plan) ? null : plan.payer.you ? (
         <p>
           <a href={billingUrl}>{t('team.plan.changeMine')}</a>
         </p>

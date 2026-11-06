@@ -1,5 +1,5 @@
 import type { Child, FC } from 'hono/jsx';
-import { type Metric, PLANS, type Plan } from '../billing/plans.js';
+import { type Metric, PLANS, type Plan, yearlyFreeMonths } from '../billing/plans.js';
 import { BRAND } from '../brand.js';
 import type { ResolvedSetupGuide, RiskLevel } from '../connectors/sdk.js';
 import {
@@ -11,32 +11,15 @@ import {
 } from './catalog.js';
 import { CLIENT_GUIDES, clientName } from './clients.js';
 import { Doc } from './document.js';
-import type { Translate } from './i18n.js';
+import type { Locale, Translate } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { ARTICLES } from './seo/articles.js';
 import { clientGuidePath } from './seo/client-pages.js';
 import { OG_IMAGE_PATH } from './seo/og-image.js';
-import {
-  breadcrumbs,
-  faqPage,
-  type JsonLd,
-  organization,
-  softwareApplication,
-  website,
-} from './seo/structured-data.js';
+import { breadcrumbs, faqPage, type JsonLd, softwareApplication } from './seo/structured-data.js';
 import { alternates, localizedPath, OG_LOCALE, SITE_LOCALES } from './seo/urls.js';
 import { PromptList, RiskBadge, SetupGuideView } from './setup-guide.js';
-import {
-  Brand,
-  BrandIcon,
-  CodeBlock,
-  CopyField,
-  fmtNumber,
-  GoogleG,
-  Icon,
-  Prefs,
-  ServiceLogo,
-} from './ui.js';
+import { Brand, CodeBlock, CopyField, fmtNumber, GoogleG, Icon, Prefs, ServiceLogo } from './ui.js';
 
 // ---------------------------------------------------------------------------
 // Layout
@@ -46,10 +29,13 @@ export type Section = 'home' | 'services' | 'pricing' | 'docs' | 'legal' | 'stat
 
 const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) => {
   const { t } = ctx;
-  const nav: [Section | 'features', string, string][] = [
-    ['features', '/#features', t('site.nav.features')],
-    ['services', '/services', t('site.nav.services')],
-    ['pricing', '/pricing', t('site.nav.pricing')],
+  // On the landing page the links jump to its sections; elsewhere they open the full pages.
+  const home = current === 'home';
+  const nav: [Section | 'features' | 'security', string, string][] = [
+    ['services', home ? '#services' : '/services', t('site.nav.services')],
+    ['features', home ? '#features' : '/#features', t('site.nav.features')],
+    ['security', home ? '#security' : '/#security', t('site.nav.security')],
+    ['pricing', home ? '#pricing' : '/pricing', t('site.nav.pricing')],
     ['docs', '/docs', t('site.nav.docs')],
   ];
   return (
@@ -58,23 +44,21 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
         <Brand />
         <nav class="site-nav" id="site-nav" aria-label={t('site.nav.label')}>
           {nav.map(([id, href, label]) => (
-            <a href={localizedPath(href, ctx.lang)} aria-current={id === current ? 'page' : undefined}>
+            <a
+              href={href.startsWith('#') ? href : localizedPath(href, ctx.lang)}
+              aria-current={id === current ? 'page' : undefined}
+            >
               {label}
             </a>
           ))}
-          {/* Phones: the header has room only for the logo and the menu, so the buttons live here. */}
+          {/* Phones: the header keeps the logo, the main button and the menu; the rest lives here. */}
           <div class="nav-extra">
-            {ctx.user ? (
-              <a class="btn primary" href="/app">
-                {t('site.cta.dashboard')}
-              </a>
-            ) : (
+            <Prefs t={t} lang={ctx.lang} path={ctx.path} />
+            {ctx.user ? null : (
               <>
-                <a class="btn" href="/login">
+                <StartButton ctx={ctx} size="lg" />
+                <a class="btn lg" href="/login">
                   {t('site.cta.signIn')}
-                </a>
-                <a class="btn primary" href="/signup">
-                  {t('site.cta.start')}
                 </a>
               </>
             )}
@@ -92,7 +76,8 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
                 {t('site.cta.signIn')}
               </a>
               <a class="btn primary cta-main" href="/signup">
-                {t('site.cta.start')}
+                <span class="long">{t('site.cta.start')}</span>
+                <span class="short">{t('site.cta.startShort')}</span>
               </a>
             </>
           )}
@@ -105,6 +90,7 @@ const SiteHeader: FC<{ ctx: PageCtx; current: Section }> = ({ ctx, current }) =>
             aria-label={t('ui.menu')}
           >
             <Icon name="menu" />
+            <Icon name="x" />
           </button>
         </div>
       </div>
@@ -123,14 +109,14 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <p class="muted small">{t('site.footer.tagline')}</p>
           </div>
           <div>
-            <h4>{t('site.footer.product')}</h4>
+            <h2>{t('site.footer.product')}</h2>
             <a href={localizedPath('/#features', ctx.lang)}>{t('site.nav.features')}</a>
             <a href={localizedPath('/services', ctx.lang)}>{t('site.nav.services')}</a>
             <a href={localizedPath('/pricing', ctx.lang)}>{t('site.nav.pricing')}</a>
             <a href={localizedPath('/docs', ctx.lang)}>{t('site.nav.docs')}</a>
           </div>
           <div>
-            <h4>{t('site.footer.resources')}</h4>
+            <h2>{t('site.footer.resources')}</h2>
             <a href={localizedPath('/guides/what-is-mcp', ctx.lang)}>{t('site.nav.whatIsMcp')}</a>
             <a href={localizedPath('/faq', ctx.lang)}>{t('site.nav.faq')}</a>
             <a href={localizedPath('/use-cases', ctx.lang)}>{t('site.nav.useCases')}</a>
@@ -138,7 +124,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href={localizedPath('/compare', ctx.lang)}>{t('site.nav.compare')}</a>
           </div>
           <div>
-            <h4>{t('site.footer.account')}</h4>
+            <h2>{t('site.footer.account')}</h2>
             {ctx.user ? (
               <a href="/app">{t('site.cta.dashboard')}</a>
             ) : (
@@ -150,7 +136,7 @@ const SiteFooter: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <a href={ctx.user ? '/security' : '/#security'}>{t('site.footer.security')}</a>
           </div>
           <div>
-            <h4>{t('site.footer.company')}</h4>
+            <h2>{t('site.footer.company')}</h2>
             <a href="/support">{t('site.footer.support')}</a>
             {ctx.supportEmail ? <a href={`mailto:${ctx.supportEmail}`}>{t('site.footer.contact')}</a> : null}
             <a href="/status">{t('site.footer.status')}</a>
@@ -226,7 +212,7 @@ export const SiteLayout: FC<{
 );
 
 /** "Start with Google" (or the sign-up page when Google is not configured). */
-const StartButton: FC<{ ctx: PageCtx; size?: 'lg' }> = ({ ctx, size }) =>
+export const StartButton: FC<{ ctx: PageCtx; size?: 'lg' }> = ({ ctx, size }) =>
   ctx.user ? (
     <a class={`btn primary ${size ?? ''}`} href="/app">
       {ctx.t('site.cta.dashboard')}
@@ -306,7 +292,7 @@ const Roadmap: FC<{ ctx: PageCtx; services: PublicService[]; limit?: number }> =
   ].slice(0, limit ?? Number.POSITIVE_INFINITY);
   if (!items.length) return null;
   return (
-    <div class="roadmap" data-filter-group>
+    <div data-filter-group>
       <h3 class="cat-title">{ctx.t('services.roadmap')}</h3>
       <ul class="roadmap-list">
         {items.map((x) => (
@@ -351,15 +337,28 @@ const limitText = (t: Translate, lang: string, metric: Metric, value: number | n
   return t(`plan.metric.${metric}`, { n: fmtNumber(lang, value) });
 };
 
-/** A plan's start in short: trial length and plan, and the steps down ("500 → 300"). */
-function startText(lang: string, plan: Plan): { days: number; plan: string; steps: string } {
+/**
+ * A plan's start in short: trial length and plan, the steps down ("500 → 300") and how many months
+ * from sign-up they last.
+ */
+/** The Free plan's start: the trial, then a monthly allowance that steps down to the plan's own. */
+function startText(
+  t: Translate,
+  lang: string,
+  plan: Plan,
+): { days: number; plan: string; steps: string; months: number } {
   const start = plan.start!;
-  const steps = start.steps
-    .map((s) => s.limits.actions)
-    .filter((n): n is number => typeof n === 'number')
-    .map((n) => fmtNumber(lang, n))
-    .join(' → ');
-  return { days: start.trial.days, plan: start.trial.plan, steps };
+  const steps = start.steps.flatMap((s) =>
+    typeof s.limits.actions === 'number' ? [{ n: s.limits.actions, untilDay: s.untilDay }] : [],
+  );
+  return {
+    days: start.trial.days,
+    plan: start.trial.plan,
+    steps: steps
+      .map((s) => t('plan.metric.stepMonth', { n: fmtNumber(lang, s.n), m: Math.ceil(s.untilDay / 30) }))
+      .join(', '),
+    months: Math.ceil(Math.max(0, ...steps.map((s) => s.untilDay)) / 30),
+  };
 }
 
 export const PlanCard: FC<{
@@ -369,14 +368,15 @@ export const PlanCard: FC<{
   action?: Child;
 }> = ({ ctx, plan, current, action }) => {
   const { t, lang } = ctx;
-  const start = plan.start ? startText(lang, plan) : undefined;
+  const start = plan.start ? startText(t, lang, plan) : undefined;
   // What every plan gives today; features still being built are listed apart in the compare table.
+  // Every plan has every service and safety feature, which the pricing intro says once for all.
   const features: Metric[] = ['actions', 'accounts', 'historyDays'];
   const featureText = (metric: Metric): string => {
     if (metric === 'actions' && start)
       return t('plan.metric.actionsSteps', {
         n: fmtNumber(lang, plan.limits.actions ?? 0),
-        steps: start.steps,
+        months: start.months,
       });
     return limitText(t, lang, metric, plan.limits[metric]);
   };
@@ -395,7 +395,14 @@ export const PlanCard: FC<{
         </div>
         <div class="price-year">
           {plan.priceMonthly === 0 ? (
-            t('pricing.forever')
+            start ? (
+              t('plan.metric.trial', {
+                days: start.days,
+                plan: t(`plan.${start.plan}.name` as 'plan.free.name'),
+              })
+            ) : (
+              t('pricing.forever')
+            )
           ) : (
             <>
               <span class="when-month">{t('pricing.orYear', { price: `$${plan.priceYearly}` })}</span>
@@ -405,17 +412,6 @@ export const PlanCard: FC<{
         </div>
       </div>
       <ul>
-        {start ? (
-          <li>
-            <Check />
-            <span>
-              {t('plan.metric.trial', {
-                days: start.days,
-                plan: t(`plan.${start.plan}.name` as 'plan.free.name'),
-              })}
-            </span>
-          </li>
-        ) : null}
         {features.map((metric) => (
           <li>
             <Check />
@@ -425,10 +421,6 @@ export const PlanCard: FC<{
         <li>
           <Check />
           <span>{t('plan.feature.teams')}</span>
-        </li>
-        <li>
-          <Check />
-          <span>{t('plan.feature.everything')}</span>
         </li>
       </ul>
       {action}
@@ -448,7 +440,10 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
         {ctx.t('pricing.monthly')}
       </button>
       <button type="button" aria-pressed="false" data-interval-set="year">
-        {ctx.t('pricing.yearly')} <span class="save">{ctx.t('pricing.save')}</span>
+        {ctx.t('pricing.yearly')}{' '}
+        {yearlyFreeMonths() ? (
+          <span class="save">{ctx.t('pricing.save', { n: yearlyFreeMonths() })}</span>
+        ) : null}
       </button>
     </fieldset>
     <div class="plans">
@@ -485,424 +480,11 @@ const PlanCta: FC<{ ctx: PageCtx; plan: Plan }> = ({ ctx, plan }) => {
   );
 };
 
-// ---------------------------------------------------------------------------
-// Landing
-// ---------------------------------------------------------------------------
-
-const DemoWindow: FC<{ t: Translate }> = ({ t }) => (
-  <div class="demo" aria-label={t('landing.demo.label')} role="img">
-    <div class="demo-bar">
-      <span class="demo-avatar">
-        <BrandIcon slug="claude" />
-      </span>
-      <strong class="grow">{t('landing.demo.title')}</strong>
-      <span class="demo-status">
-        <span class="dot ok" /> {t('landing.demo.connected')}
-      </span>
-    </div>
-    <div class="demo-body">
-      <div class="msg user step s1">{t('landing.demo.ask')}</div>
-      <div class="call step s2">
-        <span class="dot ok" />
-        <span class="args">
-          <b>mail_search</b> account: "all", query: "ACME invoice"
-        </span>
-        <span class="res">{t('landing.demo.found')}</span>
-      </div>
-      <div class="call step s3">
-        <span class="dot ok" />
-        <span class="args">
-          <b>mail_read</b> gmail:work · INV-2041
-        </span>
-        <span class="res">{t('landing.demo.read')}</span>
-      </div>
-      <div class="call step s4">
-        <span class="dot accent" />
-        <span class="args">
-          <b>messages_send</b> slack:team → @alex
-        </span>
-        <span class="res wait">{t('landing.demo.confirmed')}</span>
-      </div>
-      <div class="msg ai step s5">{t('landing.demo.answer')}</div>
-    </div>
-    <div class="demo-input" aria-hidden="true">
-      <span class="grow">{t('landing.demo.input')}</span>
-      <Icon name="arrow" />
-    </div>
-  </div>
-);
-
-const WORKS_WITH: { name: string; icon?: string }[] = [
-  { name: 'Claude', icon: 'claude' },
-  { name: 'ChatGPT' },
-  { name: 'Claude Code', icon: 'anthropic' },
-  { name: 'Cursor', icon: 'cursor' },
-  { name: 'VS Code' },
-  { name: 'Gemini CLI', icon: 'googlegemini' },
-  { name: 'Windsurf', icon: 'windsurf' },
-];
-
-export const LandingPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ ctx, services }) => {
-  const { t } = ctx;
-  return (
-    <SiteLayout
-      ctx={ctx}
-      title={t('landing.title')}
-      description={t('landing.description')}
-      current="home"
-      canonicalPath="/"
-      jsonLd={[
-        organization(ctx.publicUrl, ctx.supportEmail),
-        website(ctx.publicUrl, t('landing.description'), ctx.lang),
-        productLd(ctx, t('landing.description')),
-        faqPage(faqItems(t, LANDING_FAQ)),
-      ]}
-    >
-      <section class="hero">
-        <div class="wrap">
-          <div>
-            <h1>
-              {t('landing.h1a')} <span class="mark">{t('landing.h1b')}</span> {t('landing.h1c')}
-            </h1>
-            <p class="lead">{t('landing.lead')}</p>
-            <div class="hero-actions">
-              <StartButton ctx={ctx} size="lg" />
-              <a class="btn lg ghost" href="#how">
-                {t('landing.how')}
-              </a>
-            </div>
-            <p class="hero-note">
-              <span>
-                <Icon name="check" /> {t('landing.note.free')}
-              </span>
-              <span>
-                <Icon name="check" /> {t('landing.note.card')}
-              </span>
-              <span>
-                <Icon name="check" /> {t('landing.note.encrypted')}
-              </span>
-            </p>
-          </div>
-          <DemoWindow t={t} />
-        </div>
-      </section>
-
-      <section class="section" id="how">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>{t('landing.how.title')}</h2>
-            <p>{t('landing.how.lead')}</p>
-          </div>
-          <div class="steps">
-            <div class="step-card">
-              <span class="n">01</span>
-              <h3>{t('landing.step1.title')}</h3>
-              <p>{t('landing.step1.text')}</p>
-              <div class="visual">
-                <span class="btn block btn-google" aria-hidden="true">
-                  <GoogleG /> {t('login.google')}
-                </span>
-              </div>
-            </div>
-            <div class="step-card">
-              <span class="n">02</span>
-              <h3>{t('landing.step2.title')}</h3>
-              <p>{t('landing.step2.text')}</p>
-              <div class="visual">
-                <div class="chips">
-                  <span class="chip on">
-                    <BrandIcon slug="gmail" /> gmail:work
-                  </span>
-                  <span class="chip on">
-                    <BrandIcon slug="gmail" /> gmail:personal
-                  </span>
-                  <span class="chip">
-                    <BrandIcon slug="notion" /> notion:wiki
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div class="step-card">
-              <span class="n">03</span>
-              <h3>{t('landing.step3.title')}</h3>
-              <p>{t('landing.step3.text')}</p>
-              <div class="visual stack">
-                <div class="url-pill">
-                  <span class="dot accent" /> {ctx.mcpUrl}
-                </div>
-                <div class="prompt-pill">{t('landing.step3.prompt')}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section border">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>{t('landing.map.title')}</h2>
-            <p>{t('landing.map.lead')}</p>
-          </div>
-          <div class="hubmap">
-            <div class="hubmap-col left">
-              {WORKS_WITH.slice(0, 4).map((c) => (
-                <div class="node">
-                  {c.icon ? <BrandIcon slug={c.icon} /> : <Icon name="zap" />}
-                  {c.name}
-                </div>
-              ))}
-            </div>
-            <div class="hub-core">
-              <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-                <rect class="bm-bg" width="32" height="32" rx="8" />
-                <path
-                  class="bm-fg"
-                  d="M16 7a9 9 0 1 1-9 9"
-                  fill="none"
-                  stroke-width="2.8"
-                  stroke-linecap="round"
-                />
-                <circle class="bm-dot" cx="16" cy="16" r="3.4" />
-                <circle class="bm-dot" cx="7" cy="9.6" r="2" />
-              </svg>
-              <strong>Manyplug</strong>
-              <code>/mcp</code>
-            </div>
-            <div class="hubmap-col right">
-              <div class="node">
-                <BrandIcon slug="gmail" /> Gmail
-                <span class="accs">
-                  <span class="acc">work</span>
-                  <span class="acc">personal</span>
-                </span>
-              </div>
-              <div class="node">
-                <Icon name="mail" /> {t('landing.map.imap')}
-                <span class="accs">
-                  <span class="acc">fastmail</span>
-                </span>
-              </div>
-              <div class="node">
-                <BrandIcon slug="googlecalendar" />{' '}
-                {ctx.lang === 'ru' ? 'Google Календарь' : 'Google Calendar'}
-                <span class="accs">
-                  <span class="acc">team</span>
-                </span>
-              </div>
-              <div class="node">
-                <BrandIcon slug="notion" /> Notion
-              </div>
-              <div class="node">
-                <Icon name="braces" /> {t('landing.map.api')}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section border" id="features">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>{t('landing.features.title')}</h2>
-          </div>
-          <div class="bento">
-            <div class="tile c4">
-              <h3>{t('landing.f.accounts.title')}</h3>
-              <p>{t('landing.f.accounts.text')}</p>
-              <div class="visual stack">
-                <div class="chips">
-                  <span class="chip on">
-                    <BrandIcon slug="gmail" /> gmail:work
-                  </span>
-                  <span class="chip on">
-                    <BrandIcon slug="gmail" /> gmail:personal
-                  </span>
-                  <span class="chip on">
-                    <Icon name="mail" /> imap:fastmail
-                  </span>
-                  <span class="chip">
-                    <BrandIcon slug="googlecalendar" /> gcal:team
-                  </span>
-                  <span class="chip">
-                    <BrandIcon slug="notion" /> notion:wiki
-                  </span>
-                  <span class="chip">
-                    <BrandIcon slug="github" /> github:company
-                  </span>
-                </div>
-                <div class="codebox">
-                  <b>mail_search</b>({'{'} account: <i>"all"</i>, query:{' '}
-                  <i>"{t('landing.f.accounts.query')}"</i> {'}'}) → 3 {t('landing.f.accounts.inboxes')}
-                </div>
-              </div>
-            </div>
-            <div class="tile c2">
-              <h3>{t('landing.f.confirm.title')}</h3>
-              <p>{t('landing.f.confirm.text')}</p>
-              {/* An approval as the dashboard shows it (Telegram is optional, so it is not the picture). */}
-              <div class="visual ask">
-                <div class="who">
-                  <Icon name="bell" /> {BRAND.name}
-                </div>
-                {t('landing.f.confirm.message')}
-                <div class="btns">
-                  <span>{t('landing.f.confirm.no')}</span>
-                  <span class="yes">{t('landing.f.confirm.yes')}</span>
-                </div>
-              </div>
-            </div>
-            <div class="tile c2">
-              <h3>{t('landing.f.context.title')}</h3>
-              <p>{t('landing.f.context.text')}</p>
-              <div class="visual bars">
-                <div class="bar">
-                  <span>{t('landing.f.context.few')}</span>
-                  <div class="meter ok">
-                    <span class="w-35" />
-                  </div>
-                  <span class="mono tiny">{t('landing.f.context.tokens')}</span>
-                </div>
-                <div class="bar">
-                  <span>{t('landing.f.context.many')}</span>
-                  <div class="meter ok">
-                    <span class="w-40" />
-                  </div>
-                  <span class="mono tiny">{t('landing.f.context.tokens')}</span>
-                </div>
-              </div>
-            </div>
-            <div class="tile c2">
-              <h3>{t('landing.f.unified.title')}</h3>
-              <p>{t('landing.f.unified.text')}</p>
-              <div class="visual chips">
-                <span class="chip on">mail_search</span>
-                <span class="chip on">messages_send</span>
-                <span class="chip on">calendar_list_events</span>
-                <span class="chip">tasks_create</span>
-              </div>
-            </div>
-            <div class="tile c2">
-              <h3>{t('landing.f.api.title')}</h3>
-              <p>{t('landing.f.api.text')}</p>
-              <div class="visual codebox">
-                {'{ '}
-                <b>"kind"</b>: <i>"mcp"</i>,{'\n  '}
-                <b>"url"</b>: <i>"https://crm.example/mcp"</i>
-                {' }'}
-              </div>
-            </div>
-            <div class="tile c3">
-              <h3>{t('landing.f.chat.title')}</h3>
-              <p>{t('landing.f.chat.text')}</p>
-              <div class="visual">
-                <div class="prompt-pill">{t('landing.f.chat.prompt')}</div>
-              </div>
-            </div>
-            <div class="tile c3">
-              <h3>{t('landing.f.personas.title')}</h3>
-              <p>{t('landing.f.personas.text')}</p>
-              <div class="visual chips">
-                <span class="chip on">/mcp/work</span>
-                <span class="chip">/mcp/personal</span>
-                <span class="chip">{t('landing.f.personas.read')}</span>
-                <span class="chip">{t('landing.f.personas.confirm')}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section border">
-        <div class="wrap">
-          <div class="section-head row between">
-            <div>
-              <h2>{t('landing.services.title')}</h2>
-              <p>{t('landing.services.lead')}</p>
-            </div>
-          </div>
-          <div class="svc-grid">
-            {services
-              .filter((s) => s.ready)
-              .map((s) => (
-                <ServiceCard ctx={ctx} service={s} />
-              ))}
-          </div>
-          <Roadmap ctx={ctx} services={services} limit={8} />
-          <p class="actions start">
-            <a class="btn" href="/services">
-              {t('landing.services.all')} <Icon name="arrow" />
-            </a>
-          </p>
-        </div>
-      </section>
-
-      <section class="section border" id="security">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>{t('landing.security.title')}</h2>
-            <p>{t('landing.security.lead')}</p>
-          </div>
-          <div class="sec-grid">
-            {(
-              [
-                ['lock', 'encryption'],
-                ['key', 'secrets'],
-                ['bell', 'confirm'],
-                ['users', 'rules'],
-                ['shield', 'injection'],
-                ['activity', 'audit'],
-              ] as const
-            ).map(([icon, key]) => (
-              <div class="sec-item">
-                <h3>
-                  <Icon name={icon} /> {t(`landing.sec.${key}.title`)}
-                </h3>
-                <p>{t(`landing.sec.${key}.text`)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section class="section border" id="pricing">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>{t('landing.pricing.title')}</h2>
-            <p>{t('landing.pricing.lead')}</p>
-          </div>
-          <PlansGrid ctx={ctx} />
-        </div>
-      </section>
-
-      <section class="section border" id="faq">
-        <div class="wrap">
-          <div class="section-head">
-            <h2>{t('landing.faq.title')}</h2>
-          </div>
-          <Faq t={t} keys={LANDING_FAQ} />
-        </div>
-      </section>
-
-      <section class="section tight">
-        <div class="wrap">
-          <div class="cta-band">
-            <div>
-              <h2>{t('landing.cta.title')}</h2>
-              <p>{t('landing.cta.text')}</p>
-            </div>
-            <div class="hero-actions">
-              <StartButton ctx={ctx} size="lg" />
-            </div>
-          </div>
-        </div>
-      </section>
-    </SiteLayout>
-  );
-};
-
-type FaqKey =
+export type FaqKey =
   | 'mcp'
   | 'why'
+  | 'compare'
+  | 'clients'
   | 'secrets'
   | 'action'
   | 'limit'
@@ -914,28 +496,44 @@ type FaqKey =
   | 'jobs'
   | 'teams';
 
-const LANDING_FAQ: FaqKey[] = ['mcp', 'why', 'secrets', 'action', 'limit', 'custom', 'delete'];
 const PRICING_FAQ: FaqKey[] = ['action', 'reset', 'limit', 'upgrade', 'teams', 'many', 'jobs'];
 
-const faqItems = (t: Translate, keys: FaqKey[]) =>
+export const faqItems = (t: Translate, keys: FaqKey[]) =>
   keys.map((key) => ({ q: t(`faq.${key}.q`), a: t(`faq.${key}.a`) }));
 
 /** schema.org data of the product with its plans (landing and pricing pages). */
-const productLd = (ctx: PageCtx, description: string): JsonLd =>
+export const productLd = (ctx: PageCtx, description: string): JsonLd =>
   softwareApplication(ctx.publicUrl, {
     description,
     plans: PLANS,
     planName: (plan) => ctx.t(`plan.${plan.id}.name` as 'plan.free.name'),
   });
 
-const Faq: FC<{ t: Translate; keys: FaqKey[] }> = ({ t, keys }) => (
+/** Answers that point to a page with more: the link goes after the answer's text. */
+const FAQ_LINKS: Partial<Record<FaqKey, { path: string; label: 'faq.compare.link' | 'faq.clients.link' }>> = {
+  compare: { path: '/compare', label: 'faq.compare.link' },
+  clients: { path: '/docs', label: 'faq.clients.link' },
+};
+
+export const Faq: FC<{ t: Translate; lang: Locale; keys: FaqKey[] }> = ({ t, lang, keys }) => (
   <div>
-    {keys.map((key) => (
-      <details>
-        <summary>{t(`faq.${key}.q`)}</summary>
-        <div>{t(`faq.${key}.a`)}</div>
-      </details>
-    ))}
+    {keys.map((key) => {
+      const more = FAQ_LINKS[key];
+      return (
+        <details>
+          <summary>{t(`faq.${key}.q`)}</summary>
+          <div>
+            {t(`faq.${key}.a`)}
+            {more ? (
+              <>
+                {' '}
+                <a href={localizedPath(more.path, lang)}>{t(more.label)}</a>
+              </>
+            ) : null}
+          </div>
+        </details>
+      );
+    })}
   </div>
 );
 
@@ -1027,7 +625,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                             {t('pricing.startCell', {
                               days: p.start.trial.days,
                               plan: t(`plan.${p.start.trial.plan}.name` as 'plan.free.name'),
-                              steps: startText(lang, p).steps,
+                              steps: startText(t, lang, p).steps,
                             })}
                           </div>
                         ) : null}
@@ -1068,7 +666,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div class="section-head">
             <h2>{t('pricing.faq')}</h2>
           </div>
-          <Faq t={t} keys={PRICING_FAQ} />
+          <Faq t={t} lang={ctx.lang} keys={PRICING_FAQ} />
         </div>
       </section>
     </SiteLayout>
@@ -1247,7 +845,7 @@ export const ServiceDetailPage: FC<{
           )}
           <div class="svc-detail-grid">
             <div class="card">
-              <h2 class="h3">{t('service.how')}</h2>
+              <h2>{t('service.how')}</h2>
               {service.guide ? (
                 <SetupGuideView t={t} guide={service.guide} />
               ) : (
@@ -1255,7 +853,7 @@ export const ServiceDetailPage: FC<{
               )}
             </div>
             <div class="card">
-              <h2 class="h3">{t('service.prompts')}</h2>
+              <h2>{t('service.prompts')}</h2>
               {service.prompts.length ? (
                 <PromptList t={t} prompts={service.prompts} idPrefix="ask" />
               ) : (
@@ -1266,7 +864,7 @@ export const ServiceDetailPage: FC<{
           </div>
           <div class="card flush">
             <div class="card-head pad">
-              <h2 class="h3">{t('service.tools', { n: service.actions.length })}</h2>
+              <h2>{t('service.tools', { n: service.actions.length })}</h2>
               <p class="small muted">{t('service.toolsNote')}</p>
             </div>
             <div class="table-wrap">

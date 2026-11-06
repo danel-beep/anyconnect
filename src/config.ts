@@ -215,8 +215,11 @@ export interface AppConfig {
   confirmations: {
     waitMs: number;
     ttlMs: number;
-    /** How often approved calls are checked for the end of their undo window. */
-    runnerIntervalMs: number;
+    /**
+     * Longest sleep of the runner of approved calls. Calls scheduled in this process wake it when
+     * they are due; this only catches calls another instance scheduled and did not run.
+     */
+    runnerBackstopMs: number;
   };
   telegram: { botToken: string | undefined; apiUrl: string };
   /** Sign-in hardening: whether a second factor is mandatory, and the WebAuthn relying party. */
@@ -561,7 +564,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     confirmations: {
       waitMs: env.CONFIRMATION_WAIT_SECONDS * 1000,
       ttlMs: env.CONFIRMATION_TTL_MINUTES * 60_000,
-      runnerIntervalMs: 2000,
+      runnerBackstopMs: 60_000,
     },
     telegram: { botToken: env.TELEGRAM_BOT_TOKEN, apiUrl: env.TELEGRAM_API_URL.replace(/\/+$/, '') },
     auth: {

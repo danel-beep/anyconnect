@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { and, desc, eq, gt, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, lt, min, sql } from 'drizzle-orm';
 import type { Principal } from '../core/principal.js';
 import type { Db } from '../db/client.js';
 import {
@@ -11,6 +11,9 @@ import {
 import type { SecretBox } from '../lib/crypto.js';
 import { notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
+
+/** Postgres NOTIFY channel: a call was scheduled (the runners of all instances listen on it). */
+export const PENDING_CALLS_CHANNEL = 'pending_calls';
 
 export type PendingCallRow = typeof pendingCalls.$inferSelect;
 
@@ -84,6 +87,7 @@ export function principalOf(row: PendingCallRow): Principal {
  * page, the chat) and several hub instances cannot run a call twice.
  */
 export class PendingCallService {
+  private readonly scheduledListeners = new Set<(executeAt: Date) => void>();
   constructor(
     private readonly db: Db,
     private readonly secrets: SecretBox,
@@ -140,8 +144,36 @@ export class PendingCallService {
   }
 
   /** An allowed call that runs after its undo window unless cancelled. */
-  schedule(input: PendingCallInput): Promise<PendingCallRow> {
-    return this.insert(input, 'scheduled', new Date(Date.now() + input.undoWindowSeconds * 1000));
+  async schedule(input: PendingCallInput): Promise<PendingCallRow> {
+    const row = await this.insert(input, 'scheduled', new Date(Date.now() + input.undoWindowSeconds * 1000));
+    await this.scheduled(row);
+    return row;
+  }
+
+  /**
+   * Tells `listener` when a call is scheduled in this process (the runner then wakes exactly when
+   * it is due instead of polling). Returns a function that removes the listener.
+   */
+  onScheduled(listener: (executeAt: Date) => void): () => void {
+    this.scheduledListeners.add(listener);
+    return () => this.scheduledListeners.delete(listener);
+  }
+
+  /** Wakes the runner of this process directly and the runners of other instances by NOTIFY. */
+  private async scheduled(row: PendingCallRow | undefined): Promise<void> {
+    if (row?.status !== 'scheduled' || !row.executeAt) return;
+    for (const listener of this.scheduledListeners) listener(row.executeAt);
+    // Best effort: the call is saved either way, and other instances find it by their backstop.
+    await this.db.execute(sql`select pg_notify(${PENDING_CALLS_CHANNEL}, '')`).catch(() => {});
+  }
+
+  /** When the next scheduled call is due (undefined: none is scheduled). */
+  async nextDue(): Promise<Date | undefined> {
+    const [row] = await this.db
+      .select({ at: min(pendingCalls.executeAt) })
+      .from(pendingCalls)
+      .where(eq(pendingCalls.status, 'scheduled'));
+    return row?.at ?? undefined;
   }
 
   /** The hash a call with this input is stored under (to match a retry to its held-back call). */
@@ -267,6 +299,7 @@ export class PendingCallService {
         ),
       )
       .returning();
+    await this.scheduled(row);
     return row;
   }
 
@@ -371,4 +404,14 @@ export class PendingCallService {
       .delete(pendingCalls)
       .where(and(inArray(pendingCalls.status, FINAL), lt(pendingCalls.updatedAt, new Date(now - DAY))));
   }
+}
+
+/**
+ * The latest time a held-back call can still run: its undo window after the latest approval
+ * (an unanswered confirmation expires at `expiresAt`), plus a minute for the runner's tick.
+ */
+export function latestRunAt(row: PendingCallRow): number {
+  const executeAt = row.executeAt?.getTime() ?? 0;
+  const afterApproval = row.expiresAt.getTime() + row.undoWindowSeconds * 1000;
+  return Math.max(executeAt, afterApproval) + 60_000;
 }

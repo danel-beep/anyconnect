@@ -56,6 +56,8 @@ describe('analytics: traffic, attribution and the admin page', () => {
     // Not pages: 404s, JSON and the admin panel.
     await ad.request('/no-such-page');
     await ad.request('/healthz');
+    // A live update of a page already open (site.js `data-poll`) is not another view.
+    expect((await visitor(hub, CHROME, { 'x-live-update': '1' }).request('/pricing')).status).toBe(200);
     await hub.services.analytics.flush();
 
     const visits = await q(

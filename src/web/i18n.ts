@@ -1,4 +1,5 @@
 import { accountEn, accountRu } from './i18n/account.js';
+import { accountPagesEn, accountPagesRu } from './i18n/account-pages.js';
 import { analyticsEn, analyticsRu } from './i18n/analytics.js';
 import { appEn, appRu } from './i18n/app.js';
 import { appsEn, appsRu } from './i18n/apps.js';
@@ -7,13 +8,16 @@ import { botEn, botRu } from './i18n/bot.js';
 import { confirmEn, confirmRu } from './i18n/confirm.js';
 import { connectEn, connectRu } from './i18n/connect.js';
 import { emailEn, emailRu } from './i18n/email.js';
+import { landingEn, landingRu } from './i18n/landing.js';
 import { messengerLoginEn, messengerLoginRu } from './i18n/messenger-login.js';
+import { planPageEn, planPageRu } from './i18n/plan.js';
 import { problemsEn, problemsRu } from './i18n/problems.js';
 import { profilesEn, profilesRu } from './i18n/profiles.js';
 import { seoEn, seoRu } from './i18n/seo.js';
 import { siteEn, siteRu } from './i18n/site.js';
 import { teamEn, teamRu } from './i18n/team.js';
 import { telegramConnectEn, telegramConnectRu } from './i18n/telegram-connect.js';
+import { vaultEn, vaultRu } from './i18n/vault.js';
 
 export type Locale = 'ru' | 'en';
 
@@ -76,8 +80,6 @@ const coreEn = {
   'security.telegramOn': 'Linked: risky actions can be approved from your phone.',
   'security.telegramOff': 'Not linked: risky actions wait for your OK on the Confirmations page.',
   'security.telegramLink': 'Link Telegram',
-  'security.chat':
-    'You can also ask your AI: “Is my sign-in safe?” It can show these settings, but only you can change them, here.',
   'security.passkeys': 'Passkeys',
   'security.passkeysHint':
     'Sign in with Face ID, Touch ID, Windows Hello or a security key, without a password.',
@@ -222,6 +224,7 @@ const coreEn = {
 const en = {
   ...coreEn,
   ...siteEn,
+  ...landingEn,
   ...seoEn,
   ...appEn,
   ...authEn,
@@ -232,11 +235,14 @@ const en = {
   ...problemsEn,
   ...emailEn,
   ...teamEn,
+  ...planPageEn,
   ...profilesEn,
   ...appsEn,
   ...botEn,
   ...telegramConnectEn,
   ...analyticsEn,
+  ...vaultEn,
+  ...accountPagesEn,
 } as const;
 
 export type Key = keyof typeof en;
@@ -302,8 +308,6 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'security.telegramOn': 'Привязан: рискованные действия можно подтверждать с телефона.',
   'security.telegramOff': 'Не привязан: рискованные действия ждут вашего «да» на странице подтверждений.',
   'security.telegramLink': 'Привязать Telegram',
-  'security.chat':
-    'Можно спросить и свой ИИ: «Мой вход хорошо защищён?» Он покажет эти настройки, но менять их можете только вы, здесь.',
   'security.passkeys': 'Ключи доступа (passkey)',
   'security.passkeysHint': 'Вход по Face ID, Touch ID, Windows Hello или аппаратному ключу — без пароля.',
   'security.passkeysNone':
@@ -449,6 +453,7 @@ const coreRu: Record<keyof typeof coreEn, string> = {
 const ru: Record<Key, string> = {
   ...coreRu,
   ...siteRu,
+  ...landingRu,
   ...seoRu,
   ...appRu,
   ...authRu,
@@ -459,11 +464,14 @@ const ru: Record<Key, string> = {
   ...problemsRu,
   ...emailRu,
   ...teamRu,
+  ...planPageRu,
   ...profilesRu,
   ...appsRu,
   ...botRu,
   ...telegramConnectRu,
   ...analyticsRu,
+  ...vaultRu,
+  ...accountPagesRu,
 };
 
 const dictionaries: Record<Locale, Record<Key, string>> = { en, ru };

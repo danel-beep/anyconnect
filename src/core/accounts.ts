@@ -8,7 +8,7 @@ import {
   type ConnectorLogger,
   type TestResult,
 } from '../connectors/sdk.js';
-import type { Db } from '../db/client.js';
+import type { Db, DbExecutor } from '../db/client.js';
 import {
   type AccountSettings,
   accessRules,
@@ -29,6 +29,7 @@ import type { NetworkPolicy } from '../lib/network.js';
 import { slugify } from '../lib/slug.js';
 import type { AccountKeyring } from './account-keys.js';
 import type { TokenManager } from './oauth-tokens.js';
+import { VaultLockedError, type VaultService } from './vaults.js';
 
 export type AccountRow = typeof accounts.$inferSelect;
 
@@ -153,6 +154,11 @@ export class AccountService {
     private readonly tokens?: TokenManager,
     /** Plan limits on the number of accounts (billing layer); without it any number is allowed. */
     private readonly limits?: AccountLimits,
+    /**
+     * Vault public keys: new accounts of a personal workspace whose owner has a vault are sealed to
+     * it (see `docs/VAULTS.md`). Without it every account is wrapped by the master key.
+     */
+    private readonly vaults?: Pick<VaultService, 'publicKey'>,
   ) {}
 
   /** Throws when the plan that would pay for one more account (see `AccountLimits`) is full. */
@@ -223,7 +229,7 @@ export class AccountService {
     connectorId: string,
     label: string,
     owner: AccountOwnerInput | undefined,
-  ): Promise<{ ownerUserId: string | null; name: string }> {
+  ): Promise<{ ownerUserId: string | null; name: string; sealable: boolean }> {
     const [workspace] = await this.db
       .select({ kind: workspaces.kind })
       .from(workspaces)
@@ -238,11 +244,16 @@ export class AccountService {
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.role, 'owner')))
         .limit(1);
       const name = await this.uniqueName(workspaceId, connectorId, [fromLabel]);
-      return { ownerUserId: owner?.userId ?? member?.userId ?? null, name };
+      // Personal workspaces only: a team's accounts are used by several members (PR 3 of the vault plan).
+      return { ownerUserId: owner?.userId ?? member?.userId ?? null, name, sealable: true };
     }
     if (owner === undefined) throw badRequest('Say whose account this is: a member’s or the team’s');
     if (owner.userId === null) {
-      return { ownerUserId: null, name: await this.uniqueName(workspaceId, connectorId, [fromLabel]) };
+      return {
+        ownerUserId: null,
+        name: await this.uniqueName(workspaceId, connectorId, [fromLabel]),
+        sealable: false,
+      };
     }
     const [member] = await this.db
       .select({ handle: workspaceMembers.handle })
@@ -255,13 +266,21 @@ export class AccountService {
     return {
       ownerUserId: owner.userId,
       name: await this.uniqueName(workspaceId, connectorId, [handle, fromBoth]),
+      sealable: false,
     };
   }
 
+  /**
+   * `opts.secrets` stores more of the new account's secrets (e.g. OAuth tokens) in the same
+   * transaction, encrypted with the fresh data key it is handed. A sealed account needs only its
+   * owner's public key to be created, so this works in a request that cannot open the vault (a
+   * browser not yet approved); without it, opening the key again would fail there.
+   */
   async create(
     workspaceId: string,
     rawInput: CreateAccountInput,
     owner?: AccountOwnerInput,
+    opts: { secrets?: (account: AccountRow, key: DataKey, tx: DbExecutor) => Promise<void> } = {},
   ): Promise<AccountRow> {
     const input = parseWith(CreateAccountInput, rawInput, 'account');
     const connector = await this.connector(workspaceId, input.connectorId);
@@ -274,32 +293,41 @@ export class AccountService {
 
     const id = newId('acc');
     const hasCredentials = Object.keys(connector.credentials.shape).length > 0;
-    const { key, wrapped } = this.keys.createKey(id);
+    // Messengers stay on the master key until their background ingest can seal to the public key
+    // alone (stage 4 in docs/VAULTS.md).
+    const sealTo =
+      placed.sealable && placed.ownerUserId && !connector.messenger
+        ? await this.vaults?.publicKey(placed.ownerUserId)
+        : undefined;
+    const { key, wrapped } = this.keys.createKey(id, sealTo);
     try {
-      const [row] = await this.db
-        .insert(accounts)
-        .values({
-          id,
-          workspaceId,
-          connectorId: connector.id,
-          ownerUserId: placed.ownerUserId,
-          name,
-          label: input.label,
-          description: input.description ?? null,
-          config,
-          dataKeyEncrypted: wrapped,
-          credentialsEncrypted: hasCredentials
-            ? this.keys.encryptCredentials({ id }, key, credentials)
-            : null,
-          enabled: input.enabled ?? true,
-          settings: disabledActions ? { disabledActions } : {},
-          // OAuth services get their tokens from the connect flow; until then the account is unusable.
-          ...(connector.oauth && !(connector.oauth.optional && hasAnyValue(credentials))
-            ? { status: 'needs_reauth' as const, statusMessage: 'Not connected yet: connect the account' }
-            : {}),
-        })
-        .returning();
-      return row!;
+      return await this.db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(accounts)
+          .values({
+            id,
+            workspaceId,
+            connectorId: connector.id,
+            ownerUserId: placed.ownerUserId,
+            name,
+            label: input.label,
+            description: input.description ?? null,
+            config,
+            dataKeyEncrypted: wrapped,
+            credentialsEncrypted: hasCredentials
+              ? this.keys.encryptCredentials({ id }, key, credentials)
+              : null,
+            enabled: input.enabled ?? true,
+            settings: disabledActions ? { disabledActions } : {},
+            // OAuth services get their tokens from the connect flow; until then the account is unusable.
+            ...(connector.oauth && !(connector.oauth.optional && hasAnyValue(credentials))
+              ? { status: 'needs_reauth' as const, statusMessage: 'Not connected yet: connect the account' }
+              : {}),
+          })
+          .returning();
+        await opts.secrets?.(row!, key, tx);
+        return row!;
+      });
     } catch (error) {
       if (isUniqueViolation(error))
         throw conflict(`An account named "${name}" already exists for ${connector.name}`);
@@ -323,6 +351,7 @@ export class AccountService {
       patch.settings = { ...existing.settings, disabledActions: disabledActions ?? [] };
     }
     if (input.credentials !== undefined) {
+      await this.prepareKeys(existing);
       const current = existing.credentialsEncrypted
         ? this.keys.decryptCredentials<Record<string, unknown>>(existing, existing.credentialsEncrypted)
         : {};
@@ -428,6 +457,46 @@ export class AccountService {
       .where(and(eq(accounts.workspaceId, workspaceId), ids ? inArray(accounts.id, ids) : undefined));
   }
 
+  private async oauthAccess(connector: ConnectorDefinition, row: AccountRow, signal: AbortSignal) {
+    try {
+      return this.tokens ? await this.tokens.access(connector, row, signal) : undefined;
+    } catch (error) {
+      if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
+      throw error;
+    }
+  }
+
+  /** True when the account's key is sealed to its owner's vault (only a request can open it). */
+  async isSealed(accountId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: accounts.id, dataKeyEncrypted: accounts.dataKeyEncrypted })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    return row !== undefined && this.keys.isSealed(row);
+  }
+
+  /**
+   * Throws a user-safe 423 when the account is sealed and this request cannot open its vault, e.g.
+   * before sending the user to a provider to reconnect it from a browser that is not approved yet.
+   */
+  async assertCanOpen(row: AccountRow): Promise<void> {
+    await this.prepareKeys(row);
+  }
+
+  /** Opens the caller's vault when the account is sealed; a locked vault is a user-safe error. */
+  private async prepareKeys(row: AccountRow): Promise<void> {
+    await this.keys.prepare(row);
+    if (this.keys.isSealed(row)) {
+      try {
+        this.keys.openKey(row);
+      } catch (error) {
+        if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
+        throw error;
+      }
+    }
+  }
+
   /** The account's data key, creating one for accounts that predate envelope encryption. */
   private dataKeyFor(row: AccountRow): { key: DataKey; dataKeyEncrypted: string } {
     if (row.dataKeyEncrypted) {
@@ -448,6 +517,8 @@ export class AccountService {
     const rows = await this.db.select().from(accounts);
     for (const row of rows) {
       try {
+        // Sealed accounts are already on the newest scheme and cannot be opened here anyway.
+        if (this.keys.isSealed(row)) continue;
         if (!row.dataKeyEncrypted || this.keys.isLegacy(row.credentialsEncrypted)) {
           const { key, dataKeyEncrypted } = this.dataKeyFor(row);
           const credentials = row.credentialsEncrypted
@@ -512,11 +583,13 @@ export class AccountService {
     options: { signal: AbortSignal; logger: ConnectorLogger },
   ): Promise<AccountContext<unknown, unknown>> {
     const config = parseWith(connector.config, row.config, `config of account "${row.name}"`);
+    await this.prepareKeys(row);
     let credentials: unknown = {};
     if (row.credentialsEncrypted) {
       try {
         credentials = this.keys.decryptCredentials(row, row.credentialsEncrypted);
-      } catch {
+      } catch (error) {
+        if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
         throw new AppError(
           500,
           'credentials_unreadable',
@@ -545,7 +618,7 @@ export class AccountService {
       },
       signal: options.signal,
       logger: options.logger,
-      oauth: this.tokens ? await this.tokens.access(connector, row, options.signal) : undefined,
+      oauth: await this.oauthAccess(connector, row, options.signal),
       fetch: this.network.fetch,
       network: { lookup: this.network.lookup, assertHostAllowed: this.network.assertHostAllowed },
     };
@@ -562,6 +635,9 @@ export class AccountService {
       const ctx = await this.buildContext(connector, row, { signal: AbortSignal.timeout(30_000), logger });
       result = await connector.test(ctx);
     } catch (error) {
+      // A sealed account tested without its vault (a background check) says nothing about the connection.
+      if (error instanceof AppError && error.code === 'vault_locked')
+        return { ok: false, message: error.message };
       result = { ok: false, message: error instanceof Error ? error.message : String(error) };
       if (error instanceof ConnectorError && error.kind === 'auth') authFailed = true;
     }
@@ -589,4 +665,9 @@ export class AccountService {
       .set({ lastUsedAt: new Date(), updatedAt: sql`${accounts.updatedAt}` })
       .where(eq(accounts.id, accountId));
   }
+}
+
+/** A sealed account whose owner's vault this request cannot open (423 Locked). */
+function lockedAccount(error: VaultLockedError): AppError {
+  return new AppError(423, 'vault_locked', error.message);
 }

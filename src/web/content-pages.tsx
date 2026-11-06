@@ -65,7 +65,7 @@ export const UseCaseIndexPage: FC<{ ctx: PageCtx; services: PublicService[] }> =
             <p>{t('useCase.index.lead')}</p>
           </div>
           <UseCaseCards ctx={ctx} items={items} />
-          <h2 class="h3 section-sub">{t('persona.index.h2')}</h2>
+          <h2 class="section-sub">{t('persona.index.h2')}</h2>
           <div class="svc-grid wide-cards">
             {PERSONAS.map((p) => (
               <a class="svc" href={localizedPath(personaPath(p.slug), lang)}>
@@ -251,31 +251,31 @@ export const PersonaView: FC<{ ctx: PageCtx; persona: Persona; services: PublicS
             <h1>{body.h1}</h1>
             <p>{body.answer}</p>
           </div>
-          <div class="feature-grid persona-points">
+          <div class="persona-points">
             {body.points.map((x) => (
               <div class="card">
-                <h2 class="h3">{x.h}</h2>
+                <h2>{x.h}</h2>
                 <p class="muted">{x.p}</p>
               </div>
             ))}
           </div>
           {jobs.length ? (
             <>
-              <h2 class="h3 section-sub">{t('persona.jobs')}</h2>
+              <h2 class="section-sub">{t('persona.jobs')}</h2>
               <UseCaseCards ctx={ctx} items={jobs} />
             </>
           ) : null}
           {own.length ? (
             <>
-              <h2 class="h3 section-sub">{t('persona.services')}</h2>
+              <h2 class="section-sub">{t('persona.services')}</h2>
               <ServiceGrid ctx={ctx} services={own} href={(s) => `/services/${s.id}`} />
             </>
           ) : null}
-          <h2 class="h3 section-sub">{t('useCase.clients')}</h2>
+          <h2 class="section-sub">{t('useCase.clients')}</h2>
           <ClientGrid ctx={ctx} clients={COMBO_CLIENTS} href={clientPath} />
-          <h2 class="h3 section-sub">{t('article.faq')}</h2>
+          <h2 class="section-sub">{t('article.faq')}</h2>
           <FaqList items={body.faq} />
-          <h2 class="h3 section-sub">{t('persona.others')}</h2>
+          <h2 class="section-sub">{t('persona.others')}</h2>
           <ul class="link-list">
             {others.map((p) => (
               <li>

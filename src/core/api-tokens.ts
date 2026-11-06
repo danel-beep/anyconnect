@@ -52,8 +52,17 @@ const NO_EXPIRY = new Date('2100-01-01T00:00:00Z');
  * Personal access tokens (`ac_pat_...`): for MCP clients that support static headers
  * (Claude Code, Cursor, scripts) and for the REST API / CLI.
  */
+/** Gives a personal token its own way into its owner's vault (see `VaultGrantLinks`). */
+export interface TokenVaultLinks {
+  linkPersonalToken(userId: string, tokenId: string, token: string): Promise<void>;
+  unlinkPersonalToken(userId: string, tokenId: string): Promise<void>;
+}
+
 export class ApiTokenService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly vaultLinks?: TokenVaultLinks,
+  ) {}
 
   async create(input: {
     workspaceId: string;
@@ -91,6 +100,9 @@ export class ApiTokenService {
         expiresAt: input.expiresInDays ? new Date(Date.now() + input.expiresInDays * 86_400_000) : null,
       })
       .returning();
+    // Created while the owner's vault is open (their browser, or a token that opens it): the new
+    // token can open it too. A team's shared key opens nobody's vault.
+    if (!row!.shared) await this.vaultLinks?.linkPersonalToken(row!.userId, row!.id, token);
     return { token, row: row! };
   }
 
@@ -107,8 +119,9 @@ export class ApiTokenService {
       .update(apiTokens)
       .set({ revokedAt: new Date() })
       .where(and(eq(apiTokens.workspaceId, workspaceId), eq(apiTokens.id, id), isNull(apiTokens.revokedAt)))
-      .returning({ id: apiTokens.id });
+      .returning({ id: apiTokens.id, userId: apiTokens.userId });
     if (rows.length === 0) throw notFound('Token');
+    await this.vaultLinks?.unlinkPersonalToken(rows[0]!.userId, id);
   }
 
   async verify(token: string): Promise<(ApiTokenRow & { effectiveExpiresAt: Date }) | undefined> {

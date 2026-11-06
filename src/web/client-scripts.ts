@@ -21,8 +21,9 @@ $$('[data-theme-toggle]').forEach(function(b){b.hidden=false;b.addEventListener(
 
 /* Copy */
 function flash(btn){btn.setAttribute('data-copied','');setTimeout(function(){btn.removeAttribute('data-copied')},1600)}
-$$('[data-copy]').forEach(function(btn){btn.addEventListener('click',function(){var el=d.querySelector(btn.getAttribute('data-copy'));if(!el)return;var text=('value' in el&&el.value!==undefined)?el.value:el.textContent;
-if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){fallback(el,btn)})}else fallback(el,btn)})});
+/* Delegated, so copy buttons in blocks that live updates replace keep working. */
+d.addEventListener('click',function(e){var btn=e.target&&e.target.closest?e.target.closest('[data-copy]'):null;if(!btn)return;var el=d.querySelector(btn.getAttribute('data-copy'));if(!el)return;var text=('value' in el&&el.value!==undefined)?el.value:el.textContent.trim();
+if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){fallback(el,btn)})}else fallback(el,btn)});
 function fallback(el,btn){try{if(el.select){el.select()}else{var r=d.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r)}d.execCommand('copy');flash(btn)}catch(e){}}
 $$('[data-select-on-focus]').forEach(function(i){i.addEventListener('focus',function(){i.select()})});
 
@@ -33,8 +34,11 @@ tabs.forEach(function(t,i){t.addEventListener('click',function(){show(t.getAttri
 var saved=key&&store('ac-tab-'+key);if(saved&&tabs.some(function(t){return t.getAttribute('data-tab')===saved}))show(saved,false);else if(tabs[0])show(tabs[0].getAttribute('data-tab'),false)});
 
 /* Mobile navigation */
-function setNav(open){root.classList.toggle('nav-open',open);$$('[data-nav-toggle]').forEach(function(b){b.setAttribute('aria-expanded',open?'true':'false')})}
-$$('[data-nav-toggle]').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();setNav(!root.classList.contains('nav-open'))})});
+function setNav(open){root.classList.toggle('nav-open',open);$$('[data-nav-toggle]').forEach(function(b){b.setAttribute('aria-expanded',open?'true':'false')});
+$$('main,footer').forEach(function(el){if(!el.querySelector('.site-nav,.sidebar'))el.inert=open})}
+/* Opening moves focus into the menu; tabbing out of it or Escape closes it (Escape returns to the button) */
+$$('[data-nav-toggle]').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();var open=!root.classList.contains('nav-open');setNav(open);var first=open&&d.querySelector('.site-nav a,.sidebar a');if(first&&first.offsetParent)first.focus()})});
+d.addEventListener('focusin',function(e){if(root.classList.contains('nav-open')&&!(e.target.closest&&e.target.closest('.sidebar,.site-nav,[data-nav-toggle]')))setNav(false)});
 d.addEventListener('click',function(e){if(!root.classList.contains('nav-open'))return;var nav=e.target.closest&&e.target.closest('.sidebar,.site-nav');if(!nav||e.target.closest('a'))setNav(false)});
 
 /* A side-scrolling strip (doc menu, tabs) on a phone shows its current item, not just the first ones */
@@ -43,6 +47,30 @@ var s=strip.getBoundingClientRect(),c=cur.getBoundingClientRect();strip.scrollLe
 
 /* Header shadow on scroll */
 var header=d.querySelector('[data-site-header]');if(header){var onScroll=function(){header.classList.toggle('scrolled',window.scrollY>8)};onScroll();window.addEventListener('scroll',onScroll,{passive:true})}
+
+/* Landing motion (styles/landing.ts): [data-reveal] blocks rise in the first time they scroll into view and
+   [data-live] blocks animate only while visible. Blocks already on screen are marked at once without the
+   rise, so nothing blinks. Nothing happens with reduced motion; without this script every block simply shows. */
+(function(){var els=$$('[data-reveal],[data-live]');if(!els.length||!('IntersectionObserver' in window))return;
+if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+/* A block that plays (the hero chat) counts as on screen only when at least half of it shows */
+var vh=window.innerHeight,now=els.filter(function(el){var r=el.getBoundingClientRect();return el.getAttribute('data-reveal')==='play'?Math.min(r.bottom,vh)-Math.max(r.top,0)>=Math.min(r.height,vh)*0.5:r.top<vh&&r.bottom>0});
+root.classList.add('reveal');
+now.forEach(function(el){if(el.hasAttribute('data-reveal'))el.classList.add('in','now');if(el.hasAttribute('data-live'))el.classList.add('live')});
+var onSeen=function(es,obs){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');obs.unobserve(e.target)}})};
+var seen=new IntersectionObserver(onSeen,{rootMargin:'0px 0px -8% 0px'}),play=new IntersectionObserver(onSeen,{threshold:0.5});
+var live=new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('live',e.isIntersecting)})});
+els.forEach(function(el){if(el.hasAttribute('data-reveal')&&!el.classList.contains('in'))(el.getAttribute('data-reveal')==='play'?play:seen).observe(el);if(el.hasAttribute('data-live'))live.observe(el)})})();
+
+/* Replay: drop the chat's animations for one frame so they start over */
+$$('[data-replay]').forEach(function(b){b.addEventListener('click',function(){var box=b.closest('.demo');if(!box)return;box.classList.add('replay');void box.offsetWidth;box.classList.remove('replay')})});
+
+/* On the landing the header links are anchors: the one for the section in view gets aria-current */
+(function(){var links=$$('.site-nav a[href^="#"]');if(!links.length||!('IntersectionObserver' in window))return;
+var byId={};links.forEach(function(a){var s=d.getElementById(a.getAttribute('href').slice(1));if(s)byId[s.id]=a});
+var vis={},spy=new IntersectionObserver(function(es){es.forEach(function(e){vis[e.target.id]=e.isIntersecting});
+var cur=Object.keys(byId).filter(function(id){return vis[id]})[0];links.forEach(function(x){if(cur&&byId[cur]===x)x.setAttribute('aria-current','true');else x.removeAttribute('aria-current')})},{rootMargin:'-40% 0px -55% 0px'});
+Object.keys(byId).forEach(function(id){spy.observe(d.getElementById(id))})})();
 
 /* Monthly / yearly prices */
 $$('[data-interval-root]').forEach(function(box){$$('[data-interval-set]',box).forEach(function(b){b.addEventListener('click',function(){var v=b.getAttribute('data-interval-set');box.setAttribute('data-interval',v);$$('[data-interval-set]',box).forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false')});$$('[data-interval-input]',box).forEach(function(i){i.value=v})})})});
@@ -62,7 +90,7 @@ function placeOpen(){menus.forEach(function(m){if(m.open)placeMenu(m)})}
 menus.forEach(function(m){m.addEventListener('toggle',function(){if(m.open){menus.forEach(function(o){if(o!==m)o.open=false});placeMenu(m)}})});
 window.addEventListener('resize',placeOpen);window.addEventListener('scroll',placeOpen,{passive:true,capture:true});
 d.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false})});
-d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});setNav(false)});
+d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});if(root.classList.contains('nav-open')){setNav(false);var t=$$('[data-nav-toggle]').filter(function(b){return b.offsetParent})[0];if(t)t.focus()}});
 
 /* Live filter: every word typed must appear in an item's data-search. Optional attributes:
    data-filter-expand opens a <details> while searching (and restores it after), data-filter-hide hides a
@@ -134,7 +162,19 @@ var det=t&&(t.tagName==='DETAILS'?t:t.closest('details'));while(det){det.open=tr
 openTarget();window.addEventListener('hashchange',openTarget);
 
 /* Filter forms apply as soon as a choice changes (the button stays for keyboards and no-JS) */
-$$('form[data-autosubmit]').forEach(function(f){f.addEventListener('change',function(){f.submit()})});
+/* Delegated, so forms in blocks that live updates replace keep submitting on change. */
+d.addEventListener('change',function(e){var f=e.target&&e.target.form;if(f&&f.hasAttribute('data-autosubmit'))f.submit()});
+
+/* Live updates: blocks marked data-poll="<seconds>" (each with an id) refresh from the same address
+   while the tab is visible, so a new confirmation or log row shows up without a reload. A block the
+   user is working in (focus inside) is left alone until they are done; open <details> stay open. */
+(function(){var blocks=$$('[data-poll][id]');if(!blocks.length||!window.fetch||!window.DOMParser)return;
+var every=Math.max(3,Math.min.apply(null,blocks.map(function(b){return Number(b.getAttribute('data-poll'))||10})))*1000,busy=false;
+function swap(html){var next=new DOMParser().parseFromString(html,'text/html');
+$$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===b.innerHTML)return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;
+var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]})})}
+function tick(){if(busy||d.hidden)return;busy=true;fetch(location.pathname+location.search,{credentials:'same-origin',headers:{'x-live-update':'1'}}).then(function(r){return r.ok&&!r.redirected?r.text():null}).then(function(html){busy=false;if(html)swap(html)},function(){busy=false})}
+setInterval(tick,every);d.addEventListener('visibilitychange',function(){if(!d.hidden)tick()})})();
 
 /* Docs: the side menu marks the section being read */
 (function(){var spy=d.querySelector('.doc-nav');

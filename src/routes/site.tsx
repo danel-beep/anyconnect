@@ -4,17 +4,11 @@ import { fontFile } from '../web/assets.js';
 import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
 import { FAVICON_SVG } from '../web/favicon.js';
 import { safeNextPath } from '../web/http.js';
+import { LandingPage } from '../web/landing.js';
 import { LEGAL_KINDS, legalDoc } from '../web/legal.js';
 import { withoutLang } from '../web/seo/urls.js';
 import { UseWith } from '../web/seo-pages.js';
-import {
-  DocsPage,
-  LandingPage,
-  LegalPage,
-  PricingPage,
-  ServiceDetailPage,
-  ServicesPage,
-} from '../web/site.js';
+import { DocsPage, LegalPage, PricingPage, ServiceDetailPage, ServicesPage } from '../web/site.js';
 import { StatusPage } from '../web/status-page.js';
 import { supportDoc } from '../web/support.js';
 import type { AppContext, AppEnv } from './context.js';
