@@ -29,6 +29,8 @@ export interface TriggerInfo {
   when: TriggerWhen;
   /** "all mail", "telegram", "gmail:work"… */
   accounts: string;
+  /** Watches every account of its source (the label then reads "all mail" / "all messages"). */
+  everyAccount: boolean;
   filter: Record<string, string>;
   do: TriggerDo;
   /** Short description of the action, e.g. "telegram_send" or "AI (OpenAI, 3 tools)". */

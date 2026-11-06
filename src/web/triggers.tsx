@@ -21,6 +21,7 @@ export interface TriggerRowView {
   paused: string | null;
   when: 'message' | 'mail';
   accounts: string;
+  everyAccount: boolean;
   filter: Record<string, string>;
   do: TriggerKind;
   action: string;
@@ -96,7 +97,8 @@ const TriggerList: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) =>
                   <span class="badge">{t('triggers.off')}</span>
                 )}
                 <div class="small muted">
-                  {t(`triggers.when.${tr.when}` as Key)} · {tr.accounts} · {filterText(ctx, tr.filter)}
+                  {t(`triggers.when.${tr.when}` as Key)} ·{' '}
+                  {tr.everyAccount ? t('triggers.everyAccount') : tr.accounts} · {filterText(ctx, tr.filter)}
                 </div>
                 <div class="small">
                   <Icon name="arrow" /> {t(`triggers.do.${tr.do}` as Key)}
@@ -479,8 +481,8 @@ export const AiKeysPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiKeysView }
                 <input type="radio" name="provider" value={p.id} checked={i === 0} />
                 <span>
                   <strong>{p.name}</strong>
-                  <span class="small muted">
-                    {t('aikeys.defaultModel', { model: p.defaultModel })} ·{' '}
+                  <span class="small muted">{t('aikeys.defaultModel', { model: p.defaultModel })}</span>
+                  <span class="small">
                     <a href={p.keysUrl} target="_blank" rel="noopener noreferrer">
                       {t('aikeys.getKey')}
                     </a>

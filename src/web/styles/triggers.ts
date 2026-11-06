@@ -6,12 +6,14 @@ export const TRIGGERS_CSS = `
 ul.plain>li.trigger-row,ul.plain>li.trigger-event{align-items:flex-start}
 .trigger-row .grow>div,.trigger-event .grow>div{margin-top:3px}
 .trigger-row code.small{margin-left:6px;overflow-wrap:anywhere}
+.trigger-row>.grow{flex:1 1 220px}
 .trigger-actions{display:flex;gap:8px;flex:none}
 .trigger-actions form{margin:0}
 .trigger-event>.small{flex:none;white-space:nowrap}
 .trigger-event .grow{min-width:0;overflow-wrap:anywhere}
 .trigger-form .grid-2.tight{gap:14px 16px;margin:0}
 .trigger-form .grid-2.tight label{margin-top:0}
+.trigger-form input+.grid-2.tight,.trigger-form .grid-2.tight+.grid-2.tight{margin-top:14px}
 .trigger-filter,.trigger-form .choice-list{border:0;padding:0;margin:18px 0 16px;min-width:0}
 .trigger-filter legend,.trigger-form .choice-list legend{font-weight:560;font-size:14px;padding:0;margin:0 0 4px}
 .trigger-filter>.hint{margin:0 0 10px}
@@ -26,7 +28,7 @@ ul.plain>li.trigger-row,ul.plain>li.trigger-event{align-items:flex-start}
 .trigger-form:has(input[name=do][value=tool]:checked) .trigger-more.for-tool,
 .trigger-form:has(input[name=do][value=ai]:checked) .trigger-more.for-ai{display:block}
 .trigger-nolimit{align-self:end;margin:0 0 12px;font-weight:450}
-ul.plain>li.key-row{display:grid;gap:10px;align-items:stretch}
+ul.plain>li.key-row{display:grid;grid-template-columns:minmax(0,1fr);justify-content:stretch;gap:10px;align-items:stretch}
 .key-head{display:flex;gap:12px;align-items:flex-start}
 .key-head .grow{min-width:0;overflow-wrap:anywhere}
 .key-head form{margin:0}

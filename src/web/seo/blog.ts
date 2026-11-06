@@ -12,6 +12,280 @@ export interface BlogPost extends Article {
 
 export const BLOG_POSTS: BlogPost[] = [
   {
+    slug: 'ai-triggers-new-messages',
+    published: '2026-11-06',
+    updated: '2026-11-06',
+    body: {
+      en: {
+        title: 'Triggers: let your AI react to new messages and emails',
+        description:
+          'An AI assistant only acts when you ask. Triggers make it react to events: a cheap “anything new?” check for scheduled tasks, a notice, one action, or your own AI API key woken the moment a message arrives.',
+        h1: 'Triggers: let your AI react to new messages and emails',
+        answer:
+          'A trigger is a rule: when a new message or email matches a filter, do something. The cheapest version lets a scheduled task in Claude or ChatGPT ask “anything new?” and get an empty answer when nothing matched. For things that cannot wait, the hub can notify you, run one action, or wake an AI with your own API key, which reads the event and acts with only the tools you allowed.',
+        sections: [
+          {
+            h: 'Why assistants need triggers',
+            p: [
+              'Claude and ChatGPT answer when you write to them. They do not watch your inbox. To react to a client’s message you either check yourself, or schedule a task that asks the AI to read everything again every hour, which spends tokens on mail that has nothing to do with the task.',
+              'A trigger moves the watching to the hub, which already syncs your messengers and can read your mail. The AI gets involved only when there is something for it to do.',
+            ],
+          },
+          {
+            h: 'Four things a trigger can do',
+            p: [
+              'You pick a filter (sender, words, chat or subject, several alternatives separated by commas) and one action:',
+            ],
+            list: [
+              'Let your AI app check. Matches wait in the hub. A scheduled task calls one tool and gets {"new": 0} when there is nothing, so a check costs a few dozen tokens instead of reading your inbox.',
+              'Notify you in Telegram with the sender and a preview. No AI involved.',
+              'Run one action, for example forward the message to a chat, with the sender and text filled into its arguments.',
+              'Wake your own AI. Your OpenAI, Anthropic or OpenRouter key receives the event and the instructions you wrote, and may use only the tools you listed.',
+            ],
+          },
+          {
+            h: 'Why the “anything new?” check comes first',
+            p: [
+              'Most events do not need an AI at all, and most of the time nothing new arrives. A check that returns an empty answer is the cheapest possible way to keep an assistant informed: no mail is read until something matches, and each match is handed out once.',
+              'When something matches, the event already carries what the AI needs to start: who wrote, a preview, the chat or message id for replying, and what you asked it to do with such messages.',
+            ],
+          },
+          {
+            h: 'Keeping an AI that acts on its own safe',
+            p: [
+              'An AI woken by a message reads text written by someone else. The hub treats that as the main risk:',
+            ],
+            list: [
+              'The message is marked as untrusted data, and the AI is told never to follow instructions inside it.',
+              'The AI is offered only the tools its trigger lists. A call to anything else is refused by the hub, not just discouraged.',
+              'Sending, deleting and other risky actions wait for your confirmation by default, through the same rules and confirmations as any AI app.',
+              'A trigger can never change the hub’s settings, accounts or other triggers.',
+            ],
+          },
+          {
+            h: 'Limits you choose',
+            p: [
+              'Every trigger has a daily limit of runs, 200 by default. When it is reached the trigger pauses and tells you, so a loop between two bots cannot run up your bill. You can raise it or remove it. Each AI key has its own daily limit too, and the same chat cannot fire an acting trigger more than a few times in ten minutes.',
+              'You pay your AI provider directly with your own key. The hub adds nothing to that bill and never shows the key again after you save it.',
+            ],
+          },
+          {
+            h: 'Setting one up',
+            p: [
+              'Open Triggers in the Manyplug dashboard, or simply ask your AI: “Make a trigger: when an email from my bank arrives, notify me in Telegram.” For a check trigger the AI gets a ready prompt for a scheduled task. AI keys are added only on the AI API page, never in a chat.',
+            ],
+          },
+        ],
+        faq: [
+          {
+            q: 'Does a trigger read all my messages?',
+            a: 'It reads new incoming messages and emails of the accounts you pick, in the hub, and compares them with the filter. Nothing is sent to an AI unless it matches and the action involves one.',
+          },
+          {
+            q: 'Which AI models can I use?',
+            a: 'Any model your OpenAI, Anthropic or OpenRouter key can use. The defaults are small, fast models, because reacting to one message rarely needs more.',
+          },
+          {
+            q: 'How quickly does a trigger react?',
+            a: 'Messenger messages within seconds of arriving in the hub. Mailboxes are checked every couple of minutes.',
+          },
+        ],
+      },
+      ru: {
+        title: 'Триггеры: пусть ИИ реагирует на новые сообщения и письма',
+        description:
+          'ИИ-ассистент действует, только когда вы его просите. Триггеры заставляют его реагировать на события: дешёвая проверка «есть что-то новое?» для задач по расписанию, уведомление, одно действие или ваш собственный ключ ИИ, который просыпается в момент прихода сообщения.',
+        h1: 'Триггеры: пусть ИИ реагирует на новые сообщения и письма',
+        answer:
+          'Триггер — это правило: когда новое сообщение или письмо подходит под фильтр, сделать что-то. Самый дешёвый вариант — задача по расписанию в Claude или ChatGPT спрашивает «есть что-то новое?» и получает пустой ответ, если ничего не совпало. Для того, что не может ждать, хаб может уведомить вас, выполнить одно действие или разбудить ИИ вашим собственным API-ключом: он прочитает событие и будет действовать только разрешёнными инструментами.',
+        sections: [
+          {
+            h: 'Зачем ассистентам триггеры',
+            p: [
+              'Claude и ChatGPT отвечают, когда вы им пишете. За почтой они не следят. Чтобы отреагировать на сообщение клиента, вы либо проверяете сами, либо ставите задачу по расписанию, где ИИ каждый час перечитывает всё заново и тратит токены на письма, которые к задаче не относятся.',
+              'Триггер переносит слежение в хаб, который и так синхронизирует ваши мессенджеры и умеет читать почту. ИИ подключается, только когда ему есть что делать.',
+            ],
+          },
+          {
+            h: 'Четыре действия триггера',
+            p: [
+              'Вы выбираете фильтр (отправитель, слова, чат или тема, несколько вариантов через запятую) и одно действие:',
+            ],
+            list: [
+              'Пусть проверяет ИИ-приложение. Совпадения ждут в хабе. Задача по расписанию вызывает один инструмент и получает {"new": 0}, если ничего нет, поэтому проверка стоит несколько десятков токенов вместо чтения всего ящика.',
+              'Уведомить вас в Telegram: отправитель и начало текста. Без ИИ.',
+              'Выполнить одно действие, например переслать сообщение в чат, подставив отправителя и текст в аргументы.',
+              'Разбудить ваш ИИ. Ваш ключ OpenAI, Anthropic или OpenRouter получает событие и вашу инструкцию и может пользоваться только перечисленными инструментами.',
+            ],
+          },
+          {
+            h: 'Почему сначала — проверка «есть что-то новое?»',
+            p: [
+              'Большинству событий ИИ вообще не нужен, а чаще всего ничего нового и не приходит. Проверка с пустым ответом — самый дешёвый способ держать ассистента в курсе: почта не читается, пока что-то не совпадёт, и каждое совпадение выдаётся один раз.',
+              'Когда совпадение есть, в событии уже лежит всё, с чего ИИ начнёт: кто написал, начало текста, id чата или письма для ответа и что вы просили делать с такими сообщениями.',
+            ],
+          },
+          {
+            h: 'Как сделать безопасным ИИ, который действует сам',
+            p: [
+              'ИИ, разбуженный сообщением, читает текст, написанный кем-то другим. Хаб считает это главным риском:',
+            ],
+            list: [
+              'Сообщение помечается как недоверенные данные, и ИИ получает указание никогда не выполнять инструкции из него.',
+              'ИИ видит только инструменты, перечисленные в триггере. Вызов чего-то другого хаб отклоняет, а не просто не советует.',
+              'Отправка, удаление и другие рискованные действия по умолчанию ждут вашего подтверждения — через те же правила и подтверждения, что и у любого ИИ-приложения.',
+              'Триггер никогда не может менять настройки хаба, аккаунты или другие триггеры.',
+            ],
+          },
+          {
+            h: 'Лимиты выбираете вы',
+            p: [
+              'У каждого триггера есть дневной лимит срабатываний, по умолчанию 200. Когда он достигнут, триггер встаёт на паузу и сообщает вам, так что переписка двух ботов друг с другом не съест ваш бюджет. Лимит можно поднять или убрать. У каждого ключа ИИ свой дневной лимит, а один и тот же чат не может запускать действующий триггер больше нескольких раз за десять минут.',
+              'Провайдеру ИИ вы платите напрямую своим ключом. Хаб ничего не добавляет к этому счёту и больше никогда не показывает ключ после сохранения.',
+            ],
+          },
+          {
+            h: 'Как настроить',
+            p: [
+              'Откройте «Триггеры» в кабинете Manyplug или просто попросите ИИ: «Сделай триггер: когда придёт письмо от моего банка, напиши мне в Telegram». Для триггера с проверкой ИИ получит готовый текст задачи по расписанию. Ключи ИИ добавляются только на странице AI API, никогда в чате.',
+            ],
+          },
+        ],
+        faq: [
+          {
+            q: 'Триггер читает все мои сообщения?',
+            a: 'Он читает новые входящие сообщения и письма выбранных аккаунтов внутри хаба и сравнивает их с фильтром. В ИИ ничего не уходит, если нет совпадения и действие не связано с ИИ.',
+          },
+          {
+            q: 'Какие модели можно использовать?',
+            a: 'Любые, доступные вашему ключу OpenAI, Anthropic или OpenRouter. По умолчанию стоят небольшие быстрые модели: для реакции на одно сообщение больше обычно не нужно.',
+          },
+          {
+            q: 'Как быстро срабатывает триггер?',
+            a: 'На сообщения мессенджеров — через секунды после их прихода в хаб. Почтовые ящики проверяются раз в пару минут.',
+          },
+        ],
+      },
+    },
+  },
+  {
+    slug: 'save-ai-tokens-mcp',
+    published: '2026-11-06',
+    updated: '2026-11-06',
+    body: {
+      en: {
+        title: 'How to spend fewer AI tokens with MCP tools',
+        description:
+          'Tool lists, long results and repeated reads eat an AI’s context and your usage limits. Seven ways an MCP hub keeps token use low without you configuring anything.',
+        h1: 'How to spend fewer AI tokens with MCP tools',
+        answer:
+          'Most tokens in an AI that uses tools go to three things: the list of tools it is shown, the raw results tools return, and reading the same data again. Keep the tool list short and searchable, return only the fields that matter, batch independent calls, check for news before reading, and use small models for routine reactions. A good hub does these by default.',
+        sections: [
+          {
+            h: 'Where the tokens go',
+            p: [
+              'Every tool an AI app is shown is described in its context on every turn: its name, what it does and its inputs. Fifty tools can cost thousands of tokens before you have asked anything.',
+              'Results are the second cost. An API answer for one email can carry headers, ids and formatting that the AI never needs. And scheduled tasks that “check my mail every hour” read the same messages again and again.',
+            ],
+          },
+          {
+            h: 'Seven habits that keep usage low',
+            p: ['These are what Manyplug does for you, without any setting:'],
+            list: [
+              'Show only the tools that fit. With many accounts the hub lists the most used tools and lets the AI find the rest with one search tool, instead of describing every tool on every turn.',
+              'Shape results. Empty values are dropped, the AI can ask for only the fields it needs, and an answer over the size budget is cut down instead of flooding the context.',
+              'Batch calls. Independent calls go in one step (manyplug_call_tools), which saves a round trip and the text around it.',
+              'Read synced copies. Messenger chats are synced into the hub, so reading and searching them is fast and does not repeat work on the service.',
+              'Check before reading. A trigger’s “anything new?” check answers {"new": 0} in a few tokens when nothing matched, so a scheduled task does not reread your inbox.',
+              'Follow with cursors. “What’s new” tools take the cursor from the last answer and return only what came after it.',
+              'Use small models for routine work. When the hub wakes your own AI key on an event, it defaults to a small, fast model, caches the unchanging part of the prompt with providers that support it, and stops after a few steps.',
+            ],
+          },
+          {
+            h: 'What you can do in your prompts',
+            p: ['A few habits on your side help as much as anything the hub does:'],
+            list: [
+              'Ask for the result, not the process: “Summarize unread mail from clients in five lines” instead of “show me my mail”.',
+              'Name the account when you know it, so the AI does not search all of them.',
+              'For recurring work, schedule a check of a trigger rather than a task that reads everything.',
+            ],
+          },
+          {
+            h: 'Limits that protect you',
+            p: [
+              'Saving tokens is also about not spending them by accident. Triggers that act on their own have a daily limit you choose and pause when they hit it; your own AI keys have their own daily limits; and the hub notices when one chat fires the same trigger over and over.',
+            ],
+          },
+        ],
+        faq: [
+          {
+            q: 'Do I need to change any setting?',
+            a: 'No. Tool listing, result shaping and batching work by default. You can switch the tool listing between automatic, all tools and search-only in the settings or from the chat.',
+          },
+          {
+            q: 'Does a short tool list make the AI less capable?',
+            a: 'No. Every tool is still available: the AI finds it with the search tool when it needs one that is not listed.',
+          },
+        ],
+      },
+      ru: {
+        title: 'Как тратить меньше токенов ИИ с инструментами MCP',
+        description:
+          'Списки инструментов, длинные ответы и повторное чтение съедают контекст ИИ и ваши лимиты. Семь способов, которыми MCP-хаб экономит токены без всякой настройки.',
+        h1: 'Как тратить меньше токенов ИИ с инструментами MCP',
+        answer:
+          'У ИИ с инструментами больше всего токенов уходит на три вещи: список инструментов, который ему показывают, сырые ответы инструментов и повторное чтение одних и тех же данных. Держите список коротким и с поиском, возвращайте только нужные поля, объединяйте независимые вызовы, проверяйте, есть ли новое, прежде чем читать, и берите небольшие модели для рутинных реакций. Хороший хаб делает это по умолчанию.',
+        sections: [
+          {
+            h: 'Куда уходят токены',
+            p: [
+              'Каждый инструмент, который видит приложение ИИ, описывается в контексте на каждом ходу: название, что он делает и какие у него входные данные. Пятьдесят инструментов стоят тысячи токенов ещё до первого вопроса.',
+              'Вторая статья расходов — ответы. Ответ API про одно письмо может нести заголовки, id и разметку, которые ИИ не нужны. А задачи по расписанию вроде «проверяй почту каждый час» читают одни и те же письма снова и снова.',
+            ],
+          },
+          {
+            h: 'Семь привычек, которые экономят',
+            p: ['Это Manyplug делает за вас, без настроек:'],
+            list: [
+              'Показывать только то, что помещается. Когда аккаунтов много, хаб показывает самые используемые инструменты, а остальные ИИ находит одним инструментом поиска, вместо того чтобы на каждом ходу описывать все.',
+              'Сокращать ответы. Пустые значения убираются, ИИ может попросить только нужные поля, а слишком большой ответ урезается, а не заливает контекст.',
+              'Объединять вызовы. Независимые вызовы идут одним шагом (manyplug_call_tools): меньше обменов и текста вокруг них.',
+              'Читать синхронизированные копии. Чаты мессенджеров синхронизируются в хаб, поэтому чтение и поиск быстрые и не повторяют работу на стороне сервиса.',
+              'Проверять, прежде чем читать. Проверка триггера «есть что-то новое?» отвечает {"new": 0} за несколько токенов, если ничего не совпало, и задаче по расписанию не нужно перечитывать ящик.',
+              'Идти по курсору. Инструменты «что нового» принимают курсор из прошлого ответа и возвращают только то, что пришло после.',
+              'Небольшие модели для рутины. Когда хаб будит ваш собственный ключ ИИ по событию, по умолчанию берётся небольшая быстрая модель, неизменная часть подсказки кешируется у провайдеров, которые это умеют, и работа останавливается через несколько шагов.',
+            ],
+          },
+          {
+            h: 'Что можно сделать в своих запросах',
+            p: ['Несколько привычек с вашей стороны помогают не меньше, чем хаб:'],
+            list: [
+              'Просите результат, а не процесс: «Кратко, в пять строк, что пишут клиенты в непрочитанном» вместо «покажи мою почту».',
+              'Называйте аккаунт, если знаете его, чтобы ИИ не искал по всем.',
+              'Для повторяющейся работы ставьте по расписанию проверку триггера, а не задачу, которая читает всё.',
+            ],
+          },
+          {
+            h: 'Лимиты, которые защищают',
+            p: [
+              'Экономия токенов — это ещё и защита от случайных трат. У триггеров, которые действуют сами, есть дневной лимит на ваш выбор, и они встают на паузу, когда его достигают; у ваших ключей ИИ свои дневные лимиты; а хаб замечает, когда один чат снова и снова запускает один и тот же триггер.',
+            ],
+          },
+        ],
+        faq: [
+          {
+            q: 'Нужно что-то настраивать?',
+            a: 'Нет. Показ инструментов, сокращение ответов и объединение вызовов работают по умолчанию. Режим показа инструментов (автоматически, все или только поиск) можно переключить в настройках или из чата.',
+          },
+          {
+            q: 'Короткий список инструментов не делает ИИ слабее?',
+            a: 'Нет. Все инструменты остаются доступны: если нужного нет в списке, ИИ находит его поиском.',
+          },
+        ],
+      },
+    },
+  },
+  {
     slug: 'remote-vs-local-mcp-servers',
     published: '2026-11-04',
     updated: '2026-11-04',

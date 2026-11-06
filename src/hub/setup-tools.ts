@@ -483,10 +483,11 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   }),
   ...profileActions(setupAction),
   ...billingActions(setupAction),
-  ...triggerActions(setupAction),
   // Rarely needed: listed after the rest while they fit, always found by search. The team tools
   // show only inside a team (but the overview), where the access profile tools give them room.
+  // A scheduled check that uses `check_triggers` keeps it listed (most used tools stay listed).
   ...appActions(setupAction),
+  ...triggerActions(setupAction),
   ...teamActions(setupAction),
   ...securityActions(setupAction),
   ...referralActions(setupAction),

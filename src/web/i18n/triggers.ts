@@ -22,6 +22,7 @@ export const triggersEn = {
   'triggers.pausedWhy': 'it hit its daily limit; turn it on again or raise the limit',
   'triggers.when.message': 'Messages',
   'triggers.when.mail': 'Mail',
+  'triggers.everyAccount': 'every account',
   'triggers.do.check': 'Let my AI app check',
   'triggers.do.checkHint':
     'Matches wait here. A scheduled task in Claude or ChatGPT asks “anything new?” and gets an empty answer when there is nothing, so checking costs almost no tokens.',
@@ -171,6 +172,7 @@ export const triggersRu: Record<TriggersKey, string> = {
   'triggers.pausedWhy': 'достиг дневного лимита; включите снова или поднимите лимит',
   'triggers.when.message': 'Сообщения',
   'triggers.when.mail': 'Почта',
+  'triggers.everyAccount': 'все аккаунты',
   'triggers.do.check': 'Пусть проверяет моё ИИ-приложение',
   'triggers.do.checkHint':
     'Совпадения ждут здесь. Задача по расписанию в Claude или ChatGPT спрашивает «есть что-то новое?» и получает пустой ответ, если ничего нет, поэтому проверка почти не тратит токены.',

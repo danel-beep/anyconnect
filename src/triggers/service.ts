@@ -294,6 +294,7 @@ export class TriggerService implements WorkspaceTriggers {
       paused: trigger.pausedReason,
       when: trigger.source,
       accounts: accountsLabel(trigger, accounts),
+      everyAccount: !trigger.connectorId && trigger.accountIds.length === 0,
       filter: Object.fromEntries(Object.entries(trigger.spec.filter).filter(([, v]) => v)) as Record<
         string,
         string

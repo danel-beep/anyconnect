@@ -65,7 +65,7 @@ executor, call resolution · `core/` users, accounts, auth, teams, vaults · `co
 `messaging/` + `gateway/` messengers · `db/` schema + listener · `web/` pages (`app.tsx` dashboard,
 `admin*.tsx`, `site.tsx`/`landing.tsx`, `ui.tsx` components, `styles/`, `i18n/`, `seo/`) ·
 `billing/` · `mail/` · `analytics/` · `ops/` errors and health · `jobs/` background jobs ·
-`security/` policies, confirmations, pending calls · `cli/` · `lib/` crypto, network, rate limits.
+`security/` policies, confirmations, pending calls · `triggers/` rules on new messages and mail, the user's own AI keys (docs/TRIGGERS.md) · `cli/` · `lib/` crypto, network, rate limits.
 
 ## Layout and rules
 
@@ -90,7 +90,7 @@ executor, call resolution · `core/` users, accounts, auth, teams, vaults · `co
   Prefer the components in `src/web/ui.tsx` (`Tabs`, `CopyField`, `Meter`…) to hand-made class combos. See `docs/UI.md`.
 - `src/hub/catalog.ts` decides what the AI sees; keep it a pure function and covered by tests.
 - `src/hub/hub.ts` resolves calls; every connector call runs through the stage chain in
-  `src/hub/executor.ts` (audit → meter → quota → policy → risk → confirm → approvals → limits → circuit →
+  `src/hub/executor.ts` (audit → meter → quota → policy → risk → automation → confirm → approvals → limits → circuit →
   idempotency → untrusted → shape → invoke). New cross-cutting rules are new stages, not code in `hub.ts`.
   Connectors throw `ConnectorError` for user-safe errors.
 - Unexpected errors go through `services.ops.errors.capture()` (scrubbed, grouped, shown in the admin
