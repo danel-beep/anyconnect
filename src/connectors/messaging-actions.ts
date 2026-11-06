@@ -112,6 +112,9 @@ const MAX_INLINE_BYTES = 4 * 1024 * 1024;
  * Every tool here is `openWorld`: even the ones that answer from the hub's copy return what other
  * people wrote, so the hub marks their results as third-party content (prompt injection defense).
  */
+/** How many of the newest chats list_chats offers when its query matches none. */
+const RECENT_ON_NO_MATCH = 10;
+
 export function messengerActions<TConfig, TCredentials>(
   action: ActionFactory<TConfig, TCredentials>,
   port: MessagingPort,
@@ -122,7 +125,7 @@ export function messengerActions<TConfig, TCredentials>(
     action({
       name: 'list_chats',
       title: 'List chats',
-      description: `Lists ${serviceName} chats of the account, most recent first, with unread counters. Use it to find a chat id for read_chat or send. Answers from the hub's synced copy, without touching ${serviceName}.`,
+      description: `Lists ${serviceName} chats of the account, most recent first, with unread counters. Use it to find a chat id for read_chat or send. New chats appear as soon as someone writes, so call it again instead of relying on an earlier answer. Answers from the hub's synced copy, without touching ${serviceName}.`,
       input: z.object({
         query: z.string().max(200).optional().describe('Filter by chat title or @username (word prefixes)'),
         unread_only: z.boolean().default(false).describe('Only chats with unread messages'),
@@ -144,6 +147,18 @@ export function messengerActions<TConfig, TCredentials>(
           limit: input.limit,
           ...(input.cursor ? { cursor: input.cursor } : {}),
         });
+        if (input.query && !input.cursor && page.items.length === 0) {
+          // Titles are the names saved in the user's contacts, often a nickname or another script
+          // ("Даня" for Danel): hand the AI the newest chats instead of a dead end.
+          const recent = await port
+            .forAccount(ctx.account.id)
+            .listChats({ unreadOnly: input.unread_only, limit: RECENT_ON_NO_MATCH });
+          return {
+            chats: [],
+            note: `No chat title or @username matches "${input.query}". Titles are the names saved in this account's contacts, so a person may be listed under a nickname or in another alphabet. The newest chats are below: pick the likely one or ask the user.`,
+            recent_chats: recent.items.map(chatItem),
+          };
+        }
         return {
           chats: page.items.map(chatItem),
           ...(page.nextCursor ? { next_cursor: page.nextCursor } : {}),
