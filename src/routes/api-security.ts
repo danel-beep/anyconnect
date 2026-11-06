@@ -5,7 +5,7 @@ import { forbidden, notFound } from '../lib/errors.js';
 import { toAiClientView } from '../security/clients.js';
 import { previewArguments } from '../security/confirmations.js';
 import type { PendingCallRow } from '../security/pending-calls.js';
-import { ACCESS_LEVELS, CONFIRM_LEVELS, DEFAULT_SECURITY } from '../security/policy.js';
+import { ACCESS_LEVELS, CONFIRM_IN, CONFIRM_LEVELS, DEFAULT_SECURITY } from '../security/policy.js';
 import { toRuleView } from '../security/policy-service.js';
 import { json, principal } from './api-helpers.js';
 import type { AppEnv } from './context.js';
@@ -52,6 +52,7 @@ export function securityRoutes(api: Hono<AppEnv>) {
         defaultAccess: z.enum(ACCESS_LEVELS).optional(),
         defaultConfirm: z.enum(CONFIRM_LEVELS).optional(),
         undoWindowSeconds: z.number().int().min(0).max(3600).optional(),
+        confirmIn: z.enum(CONFIRM_IN).optional(),
       }),
     );
     return c.json(await s.admin.updateSecurity(p.workspaceId, body));

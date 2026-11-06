@@ -1,4 +1,4 @@
-import type { AccessLevel, ConfirmLevel, RiskLevel, SecuritySettings } from '../db/schema.js';
+import type { AccessLevel, ConfirmIn, ConfirmLevel, RiskLevel, SecuritySettings } from '../db/schema.js';
 
 /**
  * The access policy as a pure function: (rules, persona, caller, target, risk) → decision.
@@ -10,13 +10,15 @@ import type { AccessLevel, ConfirmLevel, RiskLevel, SecuritySettings } from '../
  * - Scope: one account, a whole service (connector), or everything.
  * - Effect: `access` (highest allowed risk), `confirm` (from which risk the user must confirm),
  *   `undoWindowSeconds` (delay before a changing action runs, so it can be cancelled).
+ * - Where the user confirms (`confirmIn`: a link outside the chat, or the AI chat itself) is a
+ *   workspace default for now; it travels in the decision so rules can set it later.
  *
  * Every field is resolved on its own: the most specific matching rule that sets it wins.
  * Scope specificity dominates subject specificity (an account rule beats a client-wide one); on a
  * tie the more restrictive value wins. Unset everywhere → workspace defaults.
  */
 
-export type { AccessLevel, ConfirmLevel, RiskLevel };
+export type { AccessLevel, ConfirmIn, ConfirmLevel, RiskLevel };
 
 export const RISK_ORDER: Record<RiskLevel, number> = { read: 1, write: 2, dangerous: 3 };
 const ACCESS_ORDER: Record<AccessLevel, number> = { none: 0, read: 1, write: 2, full: 3 };
@@ -30,11 +32,13 @@ export const CONFIRM_LEVELS = [
   'write',
   'always',
 ] as const satisfies readonly ConfirmLevel[];
+export const CONFIRM_IN = ['link', 'chat'] as const satisfies readonly ConfirmIn[];
 
 export const DEFAULT_SECURITY: Required<SecuritySettings> = {
   defaultAccess: 'full',
   defaultConfirm: 'dangerous',
   undoWindowSeconds: 0,
+  confirmIn: 'link',
 };
 
 export interface PolicyRule {
@@ -79,6 +83,8 @@ export interface PolicyDecision {
   access: AccessLevel;
   /** The call must be confirmed by the user before it runs. */
   confirm: boolean;
+  /** Where the user gives a confirmation this call needs. */
+  confirmIn: ConfirmIn;
   undoWindowSeconds: number;
   /** Machine-readable reason when not allowed. */
   reason?: 'persona' | 'member' | 'access';
@@ -137,6 +143,7 @@ export function accountPolicy(
     return {
       access: 'none',
       confirmLevel: defaults.defaultConfirm,
+      confirmIn: defaults.confirmIn,
       undoWindowSeconds: 0,
       reason: 'persona',
       ruleIds: [],
@@ -151,6 +158,7 @@ export function accountPolicy(
     return {
       access: 'none',
       confirmLevel: defaults.defaultConfirm,
+      confirmIn: defaults.confirmIn,
       undoWindowSeconds: 0,
       reason: 'member',
       ruleIds: [],
@@ -182,6 +190,7 @@ export function accountPolicy(
   return {
     access: level,
     confirmLevel: confirm?.value ?? defaults.defaultConfirm,
+    confirmIn: defaults.confirmIn,
     undoWindowSeconds: Math.max(0, undo?.value ?? defaults.undoWindowSeconds),
     ...(level === 'none' ? { reason: 'access' as const } : {}),
     ruleIds: [...new Set([access?.ruleId, confirm?.ruleId, undo?.ruleId].filter((id) => id !== undefined))],
@@ -211,6 +220,7 @@ export function evaluatePolicy(
     allowed,
     access: base.access,
     confirm: allowed && confirmationRequired(base.confirmLevel, risk),
+    confirmIn: base.confirmIn,
     // The undo window only delays actions that change something.
     undoWindowSeconds: allowed && risk !== 'read' ? base.undoWindowSeconds : 0,
     ...(allowed ? {} : { reason: base.reason ?? 'access' }),
@@ -239,6 +249,7 @@ export type RuleChange =
       access?: AccessLevel | undefined;
       confirm?: ConfirmLevel | undefined;
       undoWindowSeconds?: number | undefined;
+      confirmIn?: ConfirmIn | undefined;
     }
   | {
       kind: 'rule';
@@ -280,6 +291,7 @@ export function applyRuleChange(state: PolicyState, change: RuleChange): PolicyS
     if (change.access !== undefined) settings.defaultAccess = change.access;
     if (change.confirm !== undefined) settings.defaultConfirm = change.confirm;
     if (change.undoWindowSeconds !== undefined) settings.undoWindowSeconds = change.undoWindowSeconds;
+    if (change.confirmIn !== undefined) settings.confirmIn = change.confirmIn;
     return { rules: state.rules, settings };
   }
   const existing = state.rules.find((r) => isRuleAt(r, change));
@@ -305,15 +317,18 @@ export interface Loosening {
   personaId: string | undefined;
   target: PolicyTarget;
   risk: RiskLevel;
-  /** `access`: now allowed; `confirm`: no longer asks first; `undo`: shorter undo window. */
-  change: 'access' | 'confirm' | 'undo';
+  /**
+   * `access`: now allowed; `confirm`: no longer asks first; `confirm_in`: asks in the AI chat instead
+   * of outside it (the AI app can then pass the question on itself); `undo`: shorter undo window.
+   */
+  change: 'access' | 'confirm' | 'confirm_in' | 'undo';
 }
 
 const RISKS: readonly RiskLevel[] = ['read', 'write', 'dangerous'];
 
 /**
  * Every place where `after` is more permissive than `before`: an action that becomes allowed,
- * stops asking first, or gets a shorter undo window, for each app (and an app the rules do not
+ * stops asking first, starts asking in the AI chat instead of outside it, or gets a shorter undo window, for each app (and an app the rules do not
  * name), with and without each persona, on each target. Empty means the change only tightens or
  * changes nothing, so it is safe to apply without asking the user.
  */
@@ -339,9 +354,11 @@ export function loosenings(
               ? 'access'
               : was.allowed && now.allowed && was.confirm && !now.confirm
                 ? 'confirm'
-                : was.allowed && now.allowed && now.undoWindowSeconds < was.undoWindowSeconds
-                  ? 'undo'
-                  : undefined;
+                : was.confirm && now.confirm && was.confirmIn === 'link' && now.confirmIn === 'chat'
+                  ? 'confirm_in'
+                  : was.allowed && now.allowed && now.undoWindowSeconds < was.undoWindowSeconds
+                    ? 'undo'
+                    : undefined;
           if (change) found.push({ aiClientId, personaId: persona?.id, target, risk, change });
         }
       }

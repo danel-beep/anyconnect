@@ -206,7 +206,12 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
 
     it('shows the defaults and what applies to this app on each account', async () => {
       const data = json(await call('manyplug_rules'));
-      expect(data.defaults).toEqual({ access: 'full', confirm: 'dangerous', undo_window_seconds: 0 });
+      expect(data.defaults).toEqual({
+        access: 'full',
+        confirm: 'dangerous',
+        confirm_in: 'link',
+        undo_window_seconds: 0,
+      });
       expect(data.for_this_app).toContainEqual({
         account: 'demo:rules',
         label: 'Rules',
@@ -245,7 +250,12 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
 
     it('treats the defaults the same way', async () => {
       const stricter = json(await call('manyplug_set_rule', { confirm: 'write', undo_window_seconds: 20 }));
-      expect(stricter.defaults).toEqual({ access: 'full', confirm: 'write', undo_window_seconds: 20 });
+      expect(stricter.defaults).toEqual({
+        access: 'full',
+        confirm: 'write',
+        confirm_in: 'link',
+        undo_window_seconds: 20,
+      });
       const looser = await call('manyplug_set_rule', { undo_window_seconds: 0 });
       expect(text(looser)).toContain('/confirm/');
       expect((await hub.services.admin.security(workspaceId)).undoWindowSeconds).toBe(20);

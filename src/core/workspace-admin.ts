@@ -38,7 +38,7 @@ function matchAccount(all: AccountRow[], ref: AccountRef, service?: string): Acc
 }
 
 /** Rule levels and changes, for the setup tools (the hub does not depend on the security layer). */
-export { ACCESS_LEVELS, CONFIRM_LEVELS, type RuleChange } from '../security/policy.js';
+export { ACCESS_LEVELS, CONFIRM_IN, CONFIRM_LEVELS, type RuleChange } from '../security/policy.js';
 
 /**
  * Workspace administration as plain operations: what the hub's setup tools (`manyplug_*`) and,
@@ -541,7 +541,7 @@ export class WorkspaceAdmin {
     return workspace.settings;
   }
 
-  /** Default access and confirmation level for the workspace (`DEFAULT_SECURITY` fills the gaps). */
+  /** Default access, confirmation level and where to confirm (`DEFAULT_SECURITY` fills the gaps). */
   async security(workspaceId: string): Promise<Required<SecuritySettings>> {
     return { ...DEFAULT_SECURITY, ...(await this.settings(workspaceId)).security };
   }
@@ -651,6 +651,7 @@ export class WorkspaceAdmin {
         ...(change.access ? { defaultAccess: change.access } : {}),
         ...(change.confirm ? { defaultConfirm: change.confirm } : {}),
         ...(change.undoWindowSeconds !== undefined ? { undoWindowSeconds: change.undoWindowSeconds } : {}),
+        ...(change.confirmIn ? { confirmIn: change.confirmIn } : {}),
       });
       return;
     }

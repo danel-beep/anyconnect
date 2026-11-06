@@ -15,6 +15,7 @@ import { AddMcpServerInput } from '../core/custom-services.js';
 import type { Principal } from '../core/principal.js';
 import {
   ACCESS_LEVELS,
+  CONFIRM_IN,
   CONFIRM_LEVELS,
   type ConnectLink,
   type RuleChange,
@@ -128,6 +129,8 @@ const LEVELS = {
     'none: no access · read: only reading · write: reading and changes · full: everything, including sending and deleting',
   confirm:
     'when the app asks the user first: never · dangerous: before sending, deleting and other risky actions · write: before any change · always: before everything, reading too',
+  confirm_in:
+    'where the user confirms: link: on a Manyplug page or in Telegram, outside the chat · chat: by answering the AI app in the chat (changes to the hub that lower protection still use the link)',
 };
 
 /** The rules for the AI: defaults, rules for apps and accounts, and what applies to the caller. */
@@ -136,6 +139,7 @@ function rulesView(o: RulesOverview) {
     defaults: {
       access: o.defaults.defaultAccess,
       confirm: o.defaults.defaultConfirm,
+      confirm_in: o.defaults.confirmIn,
       undo_window_seconds: o.defaults.undoWindowSeconds,
     },
     rules: o.rules,
@@ -164,22 +168,36 @@ const RuleInput = z.object({
     .min(0)
     .max(3600)
     .optional()
-    .describe('Defaults only: seconds a change waits before it runs, so the user can cancel it'),
+    .describe('Defaults only: seconds before a change runs, to cancel it'),
+  confirm_in: z.enum(CONFIRM_IN).optional(),
 });
 
 /** The change a `set_rule` call asks for; throws a user-safe error for a call that makes no sense. */
 async function ruleChangeOf(input: z.output<typeof RuleInput>, ctx: SetupContext): Promise<RuleChange> {
-  const { app, account, access, confirm, undo_window_seconds } = input;
-  if (access === undefined && confirm === undefined && undo_window_seconds === undefined) {
-    throw badRequest('Set access, confirm or undo_window_seconds.');
+  const { app, account, access, confirm, undo_window_seconds, confirm_in } = input;
+  if (
+    access === undefined &&
+    confirm === undefined &&
+    undo_window_seconds === undefined &&
+    confirm_in === undefined
+  ) {
+    throw badRequest('Set access, confirm, confirm_in or undo_window_seconds.');
   }
   if (!app && !account) {
     if (access === null || confirm === null) throw badRequest('The defaults can be changed, not removed.');
     await ctx.admin.authorize(ctx.principal, 'admin');
-    return { kind: 'defaults', access, confirm, undoWindowSeconds: undo_window_seconds };
+    return {
+      kind: 'defaults',
+      access,
+      confirm,
+      undoWindowSeconds: undo_window_seconds,
+      confirmIn: confirm_in,
+    };
   }
-  if (undo_window_seconds !== undefined) {
-    throw badRequest('The undo window is set for everything at once: leave out app and account.');
+  if (undo_window_seconds !== undefined || confirm_in !== undefined) {
+    throw badRequest(
+      'The undo window and where to confirm are set for everything at once: leave out app and account.',
+    );
   }
   const workspaceId = ctx.principal.workspaceId;
   let aiClientId: string | null = null;
@@ -206,6 +224,7 @@ function looseningReason(input: z.output<typeof RuleInput>, kinds: Set<string>):
   const what = [
     ...(kinds.has('access') ? ['may do more'] : []),
     ...(kinds.has('confirm') ? ['asks before fewer actions'] : []),
+    ...(kinds.has('confirm_in') ? ['asks for confirmation in the chat instead of on a Manyplug page'] : []),
     ...(kinds.has('undo') ? ['gets a shorter undo window'] : []),
   ];
   return `Lowers your protection: ${who.join(' ')} ${what.join(', ')}`;
@@ -403,7 +422,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     name: 'set_rule',
     title: 'Change an access rule',
     description:
-      'Sets what an AI app may do (access: none / read / write / full) and when it asks the user first (confirm: never / dangerous / write / always) for one app and/or one account, or the defaults when neither is given. null returns a value to the default. Tightening applies at once; anything that loosens protection waits for the user’s confirmation.',
+      'Sets what an AI app may do (access), when it asks the user first (confirm) and where: link or in the chat (confirm_in, defaults only) for one app and/or one account, or the defaults when neither is given. null returns a value to the default. Tightening applies at once; anything that loosens protection waits for the user’s confirmation.',
     input: RuleInput,
     risk: 'write',
     hints: { idempotent: true, openWorld: false },

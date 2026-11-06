@@ -193,6 +193,24 @@ describe('rule changes and what they loosen', () => {
     expect(new Set(loosenings(delayed, shorter, universe).map((l) => l.change))).toEqual(new Set(['undo']));
   });
 
+  it('counts confirming in the chat instead of on a page as a loosening, and back as tightening', () => {
+    const inChat = applyRuleChange(empty, { kind: 'defaults', confirmIn: 'chat' });
+    expect(evaluatePolicy(inChat.rules, claude, gmailWork, 'dangerous', inChat.settings)).toMatchObject({
+      confirm: true,
+      confirmIn: 'chat',
+    });
+    const kinds = new Set(loosenings(empty, inChat, universe).map((l) => l.change));
+    expect(kinds).toEqual(new Set(['confirm_in']));
+    expect(
+      loosenings(inChat, applyRuleChange(inChat, { kind: 'defaults', confirmIn: 'link' }), universe),
+    ).toEqual([]);
+    // Nothing asks first: where it would ask does not matter.
+    const never: PolicyState = { rules: [], settings: { defaultConfirm: 'never' } };
+    expect(
+      loosenings(never, applyRuleChange(never, { kind: 'defaults', confirmIn: 'chat' }), universe),
+    ).toEqual([]);
+  });
+
   it('sees a loosening that only shows for a persona once a stricter rule goes away', () => {
     // Default asks before everything; a persona rule says never; an account rule says always.
     const persona = { id: 'per_work', accountIds: ['acc_work'], maxAccess: 'full' as const };
