@@ -188,7 +188,7 @@ export function adminRoutes() {
     '/admin',
     view(async (c, auth) => {
       const s = c.get('services');
-      const warnings = systemChecks(c, auth.actor.ip).filter((x) => x.level === 'warn').length;
+      const warnings = (await systemChecks(c, auth.actor.ip)).filter((x) => x.level === 'warn').length;
       const [overview, recent, requests, shell] = await Promise.all([
         s.adminPanel.overview(),
         s.adminPanel.listUsers({ perPage: 6 }),
@@ -520,7 +520,7 @@ export function adminRoutes() {
         s.ops.errorStore.summary(new Date(Date.now() - DAY)).catch(() => ({ open: 0, recent: 0 })),
       ]);
       const byName = new Map(runs.map((r) => [r.name, r]));
-      const checks = systemChecks(c, auth.actor.ip);
+      const checks = await systemChecks(c, auth.actor.ip);
       return c.html(
         <AdminSystemPage
           ctx={pageCtx(c, auth.user)}
@@ -751,8 +751,11 @@ function paymentsCheck(c: AppContext): SystemCheck {
  * How the hub is set up, line by line, with a level each: `ok`, `warn` (a gap worth fixing on a
  * live site, counted on the overview) or `off` (optional and not used).
  */
-function systemChecks(c: AppContext, actorIp: string | null | undefined): SystemCheck[] {
+async function systemChecks(c: AppContext, actorIp: string | null | undefined): Promise<SystemCheck[]> {
   const s = c.get('services');
+  // Personal Telegram accounts log in through the messenger gateway, with this server's API keys.
+  const telegram = s.connectors.builtin.all().find((x) => x.id === 'telegram');
+  const telegramGap = telegram ? await s.admin.setupGap(telegram) : undefined;
   const cfg = s.config;
   const t = c.get('t');
   const yes = t('admin.sys.on');
@@ -814,6 +817,11 @@ function systemChecks(c: AppContext, actorIp: string | null | undefined): System
       label: t('admin.sys.telegram'),
       level: s.telegramBot ? 'ok' : 'off',
       detail: s.telegramBot ? yes : off('TELEGRAM_BOT_TOKEN'),
+    },
+    {
+      label: t('admin.sys.telegramUser'),
+      level: telegramGap ? 'warn' : 'ok',
+      detail: telegramGap ? off(telegramGap.env.join(' + ') || 'GATEWAY_EMBEDDED') : yes,
     },
     {
       label: t('admin.sys.support'),

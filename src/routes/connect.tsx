@@ -93,6 +93,11 @@ export function connectRoutes() {
     if (!q('account'))
       s.analytics.track('connect.start', s.connectors.builtin.includes(connector) ? connectorId : 'custom');
 
+    // The server lacks something the service needs (the messenger gateway's API keys): say so
+    // before an account is created that could never log in.
+    const gap = await s.admin.setupGap(connector);
+    if (gap) return unavailable(c, user, connector, { reason: 'setup', env: gap.env });
+
     const via = q('via') === 'oauth' ? 'oauth' : await s.admin.connectVia(workspace.id, connector);
     if (via === 'form' || q('via') === 'form') {
       const reconnect = await reconnectTarget(c, user, workspace, connector, q('account'));
@@ -124,22 +129,7 @@ export function connectRoutes() {
     } catch (error) {
       // The hub has no OAuth app for this provider yet: say so in plain words, with another way in.
       if (!(error instanceof AppError) || error.code !== 'oauth_app_missing') throw error;
-      return renderInApp(
-        c,
-        user,
-        'services',
-        <ServiceUnavailablePage
-          t={c.get('t')}
-          lang={c.get('locale')}
-          view={{
-            connectorId,
-            service: connectorText(connector, c.get('locale')).name,
-            isAdmin: user.role === 'admin',
-            alternative: serviceAlternative(connectorId, s.connectors.builtin.all(), c.get('locale')),
-          }}
-        />,
-        400,
-      );
+      return unavailable(c, user, connector, { reason: 'oauth' });
     }
     return c.redirect(authorizationUrl, 302);
   });
@@ -158,6 +148,8 @@ export function connectRoutes() {
     const { workspace, owner } = await connectTarget(c, user, (key) => form[key] || undefined);
     const connector = await s.connectors.get(workspace.id, c.req.param('connectorId'));
     if (!connector) throw badRequest(`Unknown service "${c.req.param('connectorId')}"`);
+    const gap = await s.admin.setupGap(connector);
+    if (gap) return unavailable(c, user, connector, { reason: 'setup', env: gap.env });
 
     const fields = connectFormFields(connector, c.get('locale'));
     const values = readConnectForm(fields, form);
@@ -307,6 +299,35 @@ async function reconnectTarget(
 }
 
 /** Query or form values carried through the connect form. */
+/** The service cannot be connected on this server yet: why, and another way in when there is one. */
+function unavailable(
+  c: AppContext,
+  user: SessionUser,
+  connector: ConnectorDefinition,
+  why: { reason: 'oauth' } | { reason: 'setup'; env: string[] },
+) {
+  const s = c.get('services');
+  const lang = c.get('locale');
+  return renderInApp(
+    c,
+    user,
+    'services',
+    <ServiceUnavailablePage
+      t={c.get('t')}
+      lang={lang}
+      view={{
+        connectorId: connector.id,
+        service: connectorText(connector, lang).name,
+        isAdmin: user.role === 'admin',
+        reason: why.reason,
+        ...(why.reason === 'setup' ? { env: why.env } : {}),
+        alternative: serviceAlternative(connector.id, s.connectors.builtin.all(), lang),
+      }}
+    />,
+    400,
+  );
+}
+
 function hiddenFrom(get: (key: string) => string | undefined): Record<string, string> {
   const hidden: Record<string, string> = {};
   for (const key of ['name', 'account', 'returnTo', 'team', 'owner'] as const) {

@@ -277,7 +277,7 @@ export type MessengerTransport<TConfig = unknown, TCredentials = unknown> =
 
 /** Attached to a ConnectorDefinition: makes the connector a messenger. */
 export interface MessengerSpec<TConfig = unknown, TCredentials = unknown> {
-  /** Picks the transport for an account from its config (e.g. `mode: 'user' | 'bot'`). */
+  /** Picks the transport for an account from its config (e.g. a mode field when one connector has several kinds of accounts). */
   transport(config: TConfig): MessengerTransport<TConfig, TCredentials>;
   /** Default pacing (per account mode); users can override it per account in `config.pacing`. */
   pacing?(config: TConfig): Partial<PacingLimits>;

@@ -169,7 +169,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     hub.services.messaging.start();
     // Sending asks the user first by default; these tests are about delivery, so the user said
     // "do not ask" for both services (the default is checked in its own test).
-    for (const connectorId of ['telegram', 'whatsapp']) {
+    for (const connectorId of ['telegram_bot', 'whatsapp']) {
       await hub.services.policies.createRule(workspace.id, { connectorId, confirm: 'never' });
     }
   });
@@ -181,10 +181,10 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
 
   async function addBot() {
     const account = await hub.services.accounts.create(principal.workspaceId, {
-      connectorId: 'telegram',
+      connectorId: 'telegram_bot',
       name: 'shop',
       label: 'Магазин',
-      config: { mode: 'bot', botApiUrl: apis.url },
+      config: { botApiUrl: apis.url },
       credentials: { botToken: BOT_TOKEN },
     });
     const test = await hub.services.accounts.test(principal.workspaceId, account.id, hub.services.logger);
@@ -237,7 +237,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     ).toBe(200);
     await postTelegram(account.id, botUpdate(2, 'И ещё вопрос про доставку'));
 
-    const chats = json(await call('telegram_list_chats', {}));
+    const chats = json(await call('telegram_bot_list_chats', {}));
     expect(chats.chats).toEqual([
       expect.objectContaining({
         title: 'Анна Петрова',
@@ -247,9 +247,11 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       }),
     ]);
     // What other people wrote reaches the AI marked as third-party data.
-    const marked = await call('telegram_search', { query: 'счета ноябрь' });
-    expect((marked.content[0] as { text: string }).text).toMatch(/^⟦untrusted \w+ source="Telegram · shop"⟧/);
-    const found = json(await call('telegram_search', { query: 'счета ноябрь' }));
+    const marked = await call('telegram_bot_search', { query: 'счета ноябрь' });
+    expect((marked.content[0] as { text: string }).text).toMatch(
+      /^⟦untrusted \w+ source="Telegram Bot · shop"⟧/,
+    );
+    const found = json(await call('telegram_bot_search', { query: 'счета ноябрь' }));
     expect(found.messages).toHaveLength(1);
     expect(found.messages[0]).toMatchObject({
       from: 'Анна Петрова',
@@ -258,11 +260,11 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       chat: 'Анна Петрова',
     });
     // Empty lists are left out of results (hub-wide compaction).
-    expect(json(await call('telegram_search', { query: 'декабрь' })).messages).toBeUndefined();
-    expect(json(await call('telegram_search', { from: 'анна' })).messages).toHaveLength(2);
-    expect(json(await call('telegram_list_chats', { query: 'петров' })).chats).toHaveLength(1);
+    expect(json(await call('telegram_bot_search', { query: 'декабрь' })).messages).toBeUndefined();
+    expect(json(await call('telegram_bot_search', { from: 'анна' })).messages).toHaveLength(2);
+    expect(json(await call('telegram_bot_list_chats', { query: 'петров' })).chats).toHaveLength(1);
 
-    const read = json(await call('telegram_read_chat', { chat: chats.chats[0].id }));
+    const read = json(await call('telegram_bot_read_chat', { chat: chats.chats[0].id }));
     expect(read.messages.map((m: { text: string }) => m.text)).toEqual([
       'Здравствуйте! Когда будет готов счёт за ноябрь?',
       'И ещё вопрос про доставку',
@@ -295,10 +297,10 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
 
     // Another account's key cannot open it either, even with the right context.
     const other = await hub.services.accounts.create(principal.workspaceId, {
-      connectorId: 'telegram',
+      connectorId: 'telegram_bot',
       name: 'other',
       label: 'Другой',
-      config: { mode: 'bot', botApiUrl: apis.url },
+      config: { botApiUrl: apis.url },
       credentials: { botToken: BOT_TOKEN },
     });
     const foreign = await hub.services.messaging.ciphers.forAccount(other.id);
@@ -310,7 +312,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       .update(messengerMessages)
       .set({ bodyEncrypted: hub.services.secrets.encryptJson(body, context) })
       .where(eq(messengerMessages.id, row!.id));
-    const read = json(await call('telegram_read_chat', { account: 'shop', chat: chat!.id }));
+    const read = json(await call('telegram_bot_read_chat', { account: 'shop', chat: chat!.id }));
     expect(read.messages.map((m: { text: string }) => m.text)).toEqual(['Старая запись']);
   });
 
@@ -346,9 +348,9 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       business(12, client, 'Thanks! Also, the contract draft is attached', true),
     );
 
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
     expect(chat).toMatchObject({ title: 'Maria', username: 'maria_k', kind: 'direct' });
-    const read = json(await call('telegram_read_chat', { chat: chat.id }));
+    const read = json(await call('telegram_bot_read_chat', { chat: chat.id }));
     expect(read.messages.map((m: { direction: string; text: string }) => [m.direction, m.text])).toEqual([
       ['in', 'Can we move the call to Friday?'],
       ['out', 'Let me check'],
@@ -357,7 +359,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
 
     // Replies go through the business connection, as the user.
     const sent = json(
-      await call('telegram_send', { chat: chat.id, text: 'Friday works', reply_to: read.messages[2].id }),
+      await call('telegram_bot_send', { chat: chat.id, text: 'Friday works', reply_to: read.messages[2].id }),
     );
     expect(sent.status).toBe('sent');
     const request = apis.calls.filter((c) => c.path === 'sendMessage').at(-1);
@@ -369,7 +371,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     });
 
     // Read receipts work in business chats.
-    await call('telegram_mark_read', { chat: chat.id });
+    await call('telegram_bot_mark_read', { chat: chat.id });
     await new Promise((resolve) => setTimeout(resolve, 300));
     await hub.services.messaging.dispatcher.tick();
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -388,10 +390,10 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
         message_ids: [10],
       },
     });
-    const after = json(await call('telegram_read_chat', { chat: chat.id }));
+    const after = json(await call('telegram_bot_read_chat', { chat: chat.id }));
     expect(after.messages[0]).toMatchObject({ deleted: true });
     expect(after.messages[0].text ?? '').toBe('');
-    expect(json(await call('telegram_search', { query: 'friday call' })).messages).toBeUndefined();
+    expect(json(await call('telegram_bot_search', { query: 'friday call' })).messages).toBeUndefined();
   });
 
   it('asks the user before sending, by default', async () => {
@@ -400,8 +402,8 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     for (const rule of await hub.services.policies.listRules(principal.workspaceId)) {
       await hub.services.policies.deleteRule(principal.workspaceId, rule.id);
     }
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
-    const held = await call('telegram_send', { chat: chat.id, text: 'Отправил' });
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
+    const held = await call('telegram_bot_send', { chat: chat.id, text: 'Отправил' });
     expect(JSON.stringify(held.content)).toContain('/confirm/');
     expect(apis.calls.filter((c) => c.path === 'sendMessage')).toHaveLength(0);
   });
@@ -410,13 +412,13 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     const account = await addBot();
     await postTelegram(account.id, botUpdate(1, 'первое'));
     await new Promise((resolve) => setTimeout(resolve, 1_100));
-    const first = json(await call('telegram_whats_new', {}));
+    const first = json(await call('telegram_bot_whats_new', {}));
     expect(first.messages.map((m: { text: string }) => m.text)).toEqual(['первое']);
     await postTelegram(account.id, botUpdate(2, 'второе'));
     await new Promise((resolve) => setTimeout(resolve, 1_100));
-    const second = json(await call('telegram_whats_new', { cursor: first.cursor }));
+    const second = json(await call('telegram_bot_whats_new', { cursor: first.cursor }));
     expect(second.messages.map((m: { text: string }) => m.text)).toEqual(['второе']);
-    const none = json(await call('telegram_whats_new', { cursor: second.cursor }));
+    const none = json(await call('telegram_bot_whats_new', { cursor: second.cursor }));
     expect(none.messages).toBeUndefined();
     expect(none.cursor).toBe(second.cursor);
   });
@@ -424,7 +426,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   it('tells the dispatchers of other processes about a queued message (Postgres NOTIFY)', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(8, 'Hi'));
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
     // Another process's dispatcher, as far as Postgres is concerned.
     const otherProcess = new PgListener({ connectionString: TEST_DATABASE_URL, logger: hub.services.logger });
     const queued: string[] = [];
@@ -432,7 +434,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     otherProcess.start();
     try {
       await vi.waitFor(() => expect(otherProcess.connected).toBe(true), { timeout: 5_000 });
-      expect(json(await call('telegram_send', { chat: chat.id, text: 'Hello' })).status).toBe('sent');
+      expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Hello' })).status).toBe('sent');
       await vi.waitFor(() => expect(queued).toEqual([account.id]), { timeout: 5_000 });
     } finally {
       await otherProcess.stop();
@@ -442,11 +444,11 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   it('sends through the outbox once, records the message and reports Telegram errors', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(7, 'Можно счёт?'));
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
-    const [incoming] = json(await call('telegram_read_chat', { chat: chat.id })).messages;
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
+    const [incoming] = json(await call('telegram_bot_read_chat', { chat: chat.id })).messages;
 
     const sent = json(
-      await call('telegram_send', { chat: chat.id, text: 'Да, отправлю сегодня', reply_to: incoming.id }),
+      await call('telegram_bot_send', { chat: chat.id, text: 'Да, отправлю сегодня', reply_to: incoming.id }),
     );
     expect(sent).toMatchObject({ status: 'sent', id: expect.stringMatching(/^msg_/) });
     const request = apis.calls.find((c) => c.path === 'sendMessage');
@@ -457,7 +459,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     });
 
     // A retry of the same request by the AI client is caught by the hub's duplicate protection...
-    const again = await call('telegram_send', {
+    const again = await call('telegram_bot_send', {
       chat: chat.id,
       text: 'Да, отправлю сегодня',
       reply_to: incoming.id,
@@ -470,7 +472,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(direct).toMatchObject({ status: 'sent', deduplicated: true, messageId: sent.id });
     expect(apis.calls.filter((c) => c.path === 'sendMessage')).toHaveLength(1);
 
-    const history = json(await call('telegram_read_chat', { chat: chat.id }));
+    const history = json(await call('telegram_bot_read_chat', { chat: chat.id }));
     expect(history.messages.at(-1)).toMatchObject({
       direction: 'out',
       from: 'me',
@@ -484,7 +486,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       error_code: 403,
       description: 'Forbidden: bot was blocked by the user',
     });
-    const blocked = await call('telegram_send', { chat: chat.id, text: 'Ещё одно сообщение' });
+    const blocked = await call('telegram_bot_send', { chat: chat.id, text: 'Ещё одно сообщение' });
     expect(blocked.isError).toBe(true);
     expect(blocked.content[0]).toMatchObject({ text: expect.stringContaining('bot was blocked') });
   });
@@ -492,10 +494,10 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   it('sends files by link, with the text as caption', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(7, 'Пришлите фото товара'));
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
 
     const photo = json(
-      await call('telegram_send', {
+      await call('telegram_bot_send', {
         chat: chat.id,
         text: 'Вот он',
         file_url: 'https://cdn.example.com/items/lamp.JPG?v=2',
@@ -508,7 +510,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       caption: 'Вот он',
     });
     json(
-      await call('telegram_send', {
+      await call('telegram_bot_send', {
         chat: chat.id,
         file_url: 'https://cdn.example.com/docs/price%20list.pdf',
       }),
@@ -517,33 +519,33 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(doc).toEqual({ chat_id: '42', document: 'https://cdn.example.com/docs/price%20list.pdf' });
 
     // The hub's copy shows what was sent.
-    const read = json(await call('telegram_read_chat', { chat: chat.id }));
+    const read = json(await call('telegram_bot_read_chat', { chat: chat.id }));
     expect(read.messages.at(-1).attachments).toEqual([
       expect.objectContaining({ kind: 'document', name: 'price list.pdf' }),
     ]);
 
     // Only https links, captions within the messenger's limit, and something to send.
     expect(
-      (await call('telegram_send', { chat: chat.id, file_url: 'http://example.com/a.pdf' })).isError,
+      (await call('telegram_bot_send', { chat: chat.id, file_url: 'http://example.com/a.pdf' })).isError,
     ).toBe(true);
-    const long = await call('telegram_send', {
+    const long = await call('telegram_bot_send', {
       chat: chat.id,
       text: 'x'.repeat(1100),
       file_url: 'https://example.com/a.pdf',
     });
     expect((long.content[0] as { text: string }).text).toContain('at most 1024');
-    expect((await call('telegram_send', { chat: chat.id })).isError).toBe(true);
+    expect((await call('telegram_bot_send', { chat: chat.id })).isError).toBe(true);
 
     // A file sent by link has no copy in the hub: get_attachment says where it came from.
     const pdf = read.messages.at(-1);
-    const missing = await call('telegram_get_attachment', { message: pdf.id, attachment: 'a0' });
+    const missing = await call('telegram_bot_get_attachment', { message: pdf.id, attachment: 'a0' });
     expect((missing.content[0] as { text: string }).text).toContain('price%20list.pdf');
   });
 
   it('uploads files Telegram cannot fetch by link, with their own name', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(8, 'Send the contract'));
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
     const port = hub.services.messaging.service.forAccount(account.id);
     const sent = await port.send({
       chatId: chat.id,
@@ -586,7 +588,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   it('waits out Telegram flood limits instead of failing', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(3, 'Привет'));
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
     const started = Date.now();
     apis.failNextWith(429, {
       ok: false,
@@ -594,7 +596,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       description: 'Too Many Requests: retry after 600',
       parameters: { retry_after: 600 },
     });
-    const queued = json(await call('telegram_send', { chat: chat.id, text: 'Ответ' }));
+    const queued = json(await call('telegram_bot_send', { chat: chat.id, text: 'Ответ' }));
     expect(queued.status).toBe('queued');
     expect(new Date(queued.eta).getTime()).toBeGreaterThan(Date.now() + 590_000);
     expect(Date.now() - started).toBeLessThan(5_000);
@@ -617,8 +619,8 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
   it('deletes finished outgoing jobs after the retention period (privacy policy)', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(4, 'Привет'));
-    const [chat] = json(await call('telegram_list_chats', {})).chats;
-    expect(json(await call('telegram_send', { chat: chat.id, text: 'Ответ' })).status).toBe('sent');
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
+    expect(json(await call('telegram_bot_send', { chat: chat.id, text: 'Ответ' })).status).toBe('sent');
     const prune = hub.services.messaging.jobs.find((job) => job.name === 'messaging.prune_outbox');
     expect(prune?.cron).toBeDefined();
     const { db } = hub.services;
@@ -631,13 +633,13 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     await db.update(messengerOutbox).set({ updatedAt: new Date(Date.now() - 31 * 86_400_000) });
     await prune!.run({}, {} as never);
     expect(await db.select().from(messengerOutbox)).toHaveLength(0);
-    const read = json(await call('telegram_read_chat', { chat: chat.id }));
+    const read = json(await call('telegram_bot_read_chat', { chat: chat.id }));
     expect(read.messages.map((m: { text: string }) => m.text)).toEqual(['Привет', 'Ответ']);
   });
 
   it('does not let a bot start conversations by phone number', async () => {
     await addBot();
-    const result = await call('telegram_send', { to: '+79991234567', text: 'Привет' });
+    const result = await call('telegram_bot_send', { to: '+79991234567', text: 'Привет' });
     expect(result.isError).toBe(true);
     expect(result.content[0]).toMatchObject({ text: expect.stringContaining('existing chats') });
   });
@@ -911,7 +913,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       // Telegram has no templates: the shared send path refuses them.
       const bot = await addBot();
       await postTelegram(bot.id, botUpdate(5, 'hi'));
-      const [tgChat] = json(await call('telegram_list_chats', {})).chats;
+      const [tgChat] = json(await call('telegram_bot_list_chats', {})).chats;
       await expect(
         hub.services.messaging.service
           .forAccount(bot.id)
@@ -928,7 +930,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       const found = json(await call('messages_search', { query: 'доставка' }));
       expect(found.items).toEqual([
         expect.objectContaining({ service: 'whatsapp', text: 'Доставка сегодня возможна?', from: 'Иван' }),
-        expect.objectContaining({ service: 'telegram', text: 'Когда будет доставка заказа?' }),
+        expect.objectContaining({ service: 'telegram_bot', text: 'Когда будет доставка заказа?' }),
       ]);
 
       const chats = JSON.stringify(json(await call('messages_list_chats', {})));
@@ -940,7 +942,7 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
         .select()
         .from(messengerChats)
         .where(eq(messengerChats.accountId, bot.id));
-      const send = (await hub.services.connectors.get(principal.workspaceId, 'telegram'))!.actions.find(
+      const send = (await hub.services.connectors.get(principal.workspaceId, 'telegram_bot'))!.actions.find(
         (a) => a.name === 'send',
       )!;
       const ctx = { account: { id: bot.id } } as never;

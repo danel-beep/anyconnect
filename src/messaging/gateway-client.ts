@@ -38,6 +38,15 @@ export const LoginStepInput = z.object({
 });
 export type LoginStepInput = z.infer<typeof LoginStepInput>;
 
+/** A session driver of the gateway and whether it can take logins (`GET /v1/drivers`). */
+export const DriverStatus = z.object({
+  connectorId: z.string(),
+  ready: z.boolean(),
+  /** Why it is not ready: words for the server owner and the env vars that fix it. */
+  missing: z.object({ message: z.string(), env: z.array(z.string()) }).optional(),
+});
+export type DriverStatus = z.infer<typeof DriverStatus>;
+
 /** Operations of the messenger gateway that need the live session. */
 export interface GatewayApi {
   resolveRecipient(accountId: string, to: string): Promise<InboundChat>;
@@ -52,6 +61,8 @@ export interface GatewayApi {
   submitLogin(accountId: string, loginId: string, input: LoginStepInput): Promise<LoginView>;
   cancelLogin(accountId: string, loginId: string): Promise<void>;
   logout(accountId: string): Promise<void>;
+  /** The gateway's session drivers and whether each is set up. */
+  drivers(): Promise<DriverStatus[]>;
 }
 
 export class GatewayUnavailableError extends ConnectorError {
@@ -81,7 +92,10 @@ export class HttpGatewayClient implements GatewayApi {
   }
 
   private async request<T>(accountId: string, method: string, path: string, body?: unknown): Promise<T> {
-    const base = await this.target(accountId);
+    return this.send<T>(await this.target(accountId), method, path, body);
+  }
+
+  private async send<T>(base: string, method: string, path: string, body?: unknown): Promise<T> {
     let response: Response;
     try {
       response = await fetch(new URL(path, base), {
@@ -111,6 +125,11 @@ export class HttpGatewayClient implements GatewayApi {
       return { data, mimeType: contentType, ...(name ? { name: decodeURIComponent(name) } : {}) } as T;
     }
     return (await response.json()) as T;
+  }
+
+  async drivers(): Promise<DriverStatus[]> {
+    const body = await this.send<{ drivers: unknown }>(this.options.baseUrl, 'GET', '/v1/drivers');
+    return z.array(DriverStatus).parse(body.drivers);
   }
 
   resolveRecipient(accountId: string, to: string): Promise<InboundChat> {

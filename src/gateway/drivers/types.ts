@@ -92,9 +92,20 @@ export interface LoginFlow {
   done: Promise<LiveSession>;
 }
 
+/** A setup gap of a session driver, in words for the server owner and the env vars that close it. */
+export interface DriverMissing {
+  message: string;
+  env: string[];
+}
+
 export interface SessionDriver {
   /** The connector whose `session` transport this driver serves. */
   connectorId: string;
+  /**
+   * What this gateway still lacks before accounts of the connector can log in (e.g. the service's
+   * API keys); undefined when the driver is ready. The hub shows it instead of a dead login page.
+   */
+  missing?: DriverMissing | undefined;
   /** Connects with saved state; throw `SessionError('logged_out')` when there is none or it is invalid. */
   connect(session: DriverSession): Promise<LiveSession>;
   login?(session: DriverSession, input: StartLoginInput): Promise<LoginFlow>;

@@ -488,6 +488,7 @@ export function createServices(
     policies,
     aiClients,
     teams,
+    availability: messaging.availability,
     publicUrl: config.publicUrl,
     logger,
   });
