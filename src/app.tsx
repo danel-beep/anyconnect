@@ -28,6 +28,7 @@ import { seoRoutes } from './routes/seo.js';
 import { siteRoutes } from './routes/site.js';
 import { teamRoutes } from './routes/team.js';
 import { telegramConnectRoutes } from './routes/telegram-connect.js';
+import { triggerRoutes } from './routes/triggers.js';
 import { webRoutes } from './routes/web.js';
 import { webVault } from './routes/web-vault.js';
 import type { Services } from './services.js';
@@ -108,6 +109,7 @@ export function createApp(services: Services) {
   app.route('/', appRoutes());
   app.route('/', teamRoutes());
   app.route('/', profileRoutes());
+  app.route('/', triggerRoutes());
   app.route('/', aiAppRoutes());
   app.route('/', adminRoutes());
   app.route('/', billingRoutes());

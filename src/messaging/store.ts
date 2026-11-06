@@ -72,7 +72,7 @@ const chatContext = (id: string) => `messenger:chat:${id}`;
 const messageContext = (id: string) => `messenger:message:${id}`;
 
 /** Freshly ingested rows become visible to "what's new" after this delay (see {@link MessageStore.whatsNew}). */
-const VISIBILITY_LAG_MS = 1_000;
+export const VISIBILITY_LAG_MS = 1_000;
 const MAX_SCAN_ROUNDS = 5;
 
 function encodeCursor(parts: (string | number)[]): string {

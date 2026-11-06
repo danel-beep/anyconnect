@@ -65,4 +65,7 @@ export type IdPrefix =
   | 'inc' // status page incident
   | 'dev' // browser device key of a user vault
   | 'tgl' // Telegram link: connects a Telegram account through the hub's bot (Chat Automation)
-  | 'tgc'; // Telegram business connection of the hub's bot (a person added it in Chat Automation)
+  | 'tgc' // Telegram business connection of the hub's bot (a person added it in Chat Automation)
+  | 'trg' // trigger: a rule "when [event matches], do [action]"
+  | 'tev' // trigger event: one event a trigger matched and what came of it
+  | 'aik'; // the user's own AI API key that triggers wake

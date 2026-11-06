@@ -129,6 +129,28 @@ async function seed(): Promise<void> {
   await hub.services.ops.errorStore.flush();
   const teams = TestBrowser.hiddenInputs(await (await owner.request('/app/teams')).text());
   await owner.request('/app/teams', { form: { ...teams, name: 'Acme sales' } });
+  // A trigger and an AI key, so the lists render and not only the empty forms.
+  const page = TestBrowser.hiddenInputs(await (await owner.request('/app/ai')).text());
+  await owner.request('/app/ai', {
+    form: {
+      ...page,
+      provider: 'openai',
+      key: 'sk-visual-0123456789abcdef',
+      label: 'Work OpenAI',
+      dailyRuns: '200',
+    },
+  });
+  await owner.request('/app/triggers', {
+    form: {
+      ...page,
+      name: 'Invoices',
+      account: 'message:',
+      text: 'invoice, receipt',
+      do: 'check',
+      task: 'Summarize it',
+      dailyLimit: '200',
+    },
+  });
   personas.push({
     name: 'owner',
     cookies: owner.cookieEntries(),

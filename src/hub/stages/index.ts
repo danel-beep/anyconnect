@@ -7,6 +7,7 @@ import type { IdempotencyStore } from '../idempotency.js';
 import type { QuotaGate } from '../quota.js';
 import type { UsageMeter } from '../usage.js';
 import { auditStage } from './audit.js';
+import { automationStage } from './automation.js';
 import { circuitStage } from './circuit.js';
 import { confirmFloorStage } from './confirm-floor.js';
 import { idempotencyStage } from './idempotency.js';
@@ -47,6 +48,7 @@ export function defaultStages(deps: {
       : {}),
     ...(deps.quota ? { quota: quotaStage(deps.quota) } : {}),
     risk: riskStage,
+    automation: automationStage,
     confirm: confirmFloorStage,
     limits: limitsStage({ rateLimiter: deps.rateLimiter }),
     ...(deps.circuitBreaker ? { circuit: circuitStage(deps.circuitBreaker) } : {}),

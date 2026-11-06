@@ -35,6 +35,7 @@ async function main() {
   services.analytics.start();
   if (config.jobs.enabled) await services.jobs.start();
   services.messaging.start();
+  services.triggers.start();
   let gateway: EmbeddedGateway | undefined;
   if (embedded) gateway = await startEmbeddedGateway(embedded, logger, { listener: services.listener });
 

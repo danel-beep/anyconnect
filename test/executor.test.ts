@@ -12,6 +12,7 @@ import { buildCatalog } from '../src/hub/catalog.js';
 import { type CallContext, Executor, type Middleware, STAGE_ORDER } from '../src/hub/executor.js';
 import { MemoryIdempotencyStore } from '../src/hub/idempotency.js';
 import { dataResult, type ExecResult, errorResult } from '../src/hub/result.js';
+import { automationStage } from '../src/hub/stages/automation.js';
 import { circuitStage } from '../src/hub/stages/circuit.js';
 import { idempotencyStage } from '../src/hub/stages/idempotency.js';
 import { limitsStage } from '../src/hub/stages/limits.js';
@@ -218,6 +219,42 @@ describe('risk stage', () => {
     const known = call('send', { to: 'bob' });
     await executor.execute(known);
     expect(known.risk).toBe('write');
+  });
+});
+
+describe('automation stage', () => {
+  const automation = (tools: string[], confirmRisky = true) => ({
+    principal: {
+      kind: 'automation' as const,
+      userId: 'u',
+      workspaceId: 'w',
+      scopes: [],
+      credentialId: 'trg_1',
+      automation: { triggerId: 'trg_1', eventId: 'tev_1', tools, confirmRisky },
+    },
+  });
+
+  it('lets a trigger call only the tools its rule lists, and never the setup tools', async () => {
+    const executor = new Executor({ automation: automationStage }, async () => dataResult('ok'));
+    const allowed = call('read', {}, automation(['svc_read']));
+    expect((await executor.execute(allowed)).isError).toBeFalsy();
+    const other = call('send', { to: 'bob' }, automation(['svc_read']));
+    expect((await executor.execute(other)).isError).toBe(true);
+    expect(other.audit.outcome).toBe('denied');
+    const setup = call('read', {}, { ...automation(['svc_read']), scope: 'workspace' });
+    expect((await executor.execute(setup)).isError).toBe(true);
+  });
+
+  it('makes risky calls wait for the user while the rule says so', async () => {
+    const executor = new Executor({ risk: riskStage, automation: automationStage }, async () =>
+      dataResult('ok'),
+    );
+    const asks = call('send', { to: 'new-person' }, automation(['svc_send']));
+    await executor.execute(asks);
+    expect(asks.mustConfirm).toBe(true);
+    const trusted = call('send', { to: 'new-person' }, automation(['svc_send'], false));
+    await executor.execute(trusted);
+    expect(trusted.mustConfirm).toBeFalsy();
   });
 });
 

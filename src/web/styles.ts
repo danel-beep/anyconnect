@@ -7,6 +7,7 @@ import { LANDING_CSS } from './styles/landing.js';
 import { PROFILES_CSS } from './styles/profiles.js';
 import { SITE_CSS } from './styles/site.js';
 import { TEAMS_CSS } from './styles/teams.js';
+import { TRIGGERS_CSS } from './styles/triggers.js';
 import { THEMES, themeCss } from './theme.js';
 
 /** QR codes stay dark-on-light in both themes (not every scanner reads inverted codes). */
@@ -280,6 +281,7 @@ export const APP_CSS = [
   CONNECT_CSS,
   PROFILES_CSS,
   TEAMS_CSS,
+  TRIGGERS_CSS,
   ACCOUNT_CSS,
   BRAND_CSS,
 ].join('\n');

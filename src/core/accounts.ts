@@ -184,6 +184,12 @@ export class AccountService {
     return row;
   }
 
+  /** Any workspace's account by id, for background work that starts from an account (triggers). */
+  async byId(accountId: string): Promise<AccountRow | undefined> {
+    const [row] = await this.db.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+    return row;
+  }
+
   async findByName(workspaceId: string, connectorId: string, name: string): Promise<AccountRow | undefined> {
     const [row] = await this.db
       .select()

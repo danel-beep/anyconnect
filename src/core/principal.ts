@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
+import type { AutomationScope } from '../db/schema.js';
 
 /** Who is calling the hub, resolved from an OAuth token, a personal access token or a browser session. */
 export interface Principal {
-  kind: 'oauth' | 'api_token' | 'session';
+  /** `automation`: one of the user's triggers acting on its own (`credentialId` = the trigger id). */
+  kind: 'oauth' | 'api_token' | 'session' | 'automation';
   userId: string;
   workspaceId: string;
   scopes: string[];
@@ -26,6 +28,11 @@ export interface Principal {
    * multiply free use with several hub sign-ups, and the raw id is never kept.
    */
   aiSubject?: string;
+  /**
+   * A trigger acting on its own: which tools it may call and whether risky ones wait for the user
+   * (enforced by the executor's `automation` stage, see `docs/TRIGGERS.md`).
+   */
+  automation?: AutomationScope;
 }
 
 /** Request `_meta` keys that identify the end user at the AI provider, by provider. */

@@ -476,7 +476,7 @@ export const toolCalls = pgTable(
     connectorId: text(),
     action: text(),
     toolName: text().notNull(),
-    principalType: text().$type<'oauth' | 'api_token' | 'session'>().notNull(),
+    principalType: text().$type<'oauth' | 'api_token' | 'session' | 'automation'>().notNull(),
     principalId: text(),
     clientId: text(),
     /** Hashed end-user id at the AI provider, when the client sends one (see `Principal.aiSubject`). */
@@ -568,7 +568,8 @@ export const aiClients = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     name: text().notNull(),
-    kind: text().$type<'oauth' | 'api_token'>().notNull(),
+    /** `automation`: the hub's own triggers acting on their own (one per workspace). */
+    kind: text().$type<'oauth' | 'api_token' | 'automation'>().notNull(),
     /** Stable identity used to recognise the same app again, e.g. `cimd:<url>` or `app:claude`. */
     matchKey: text().notNull(),
     createdAt: createdAt(),
@@ -641,7 +642,7 @@ export type PendingCallStatus =
 
 /** Who made a pending call, so it can be executed later exactly as that caller. */
 export interface PendingCallPrincipal {
-  kind: 'oauth' | 'api_token' | 'session';
+  kind: 'oauth' | 'api_token' | 'session' | 'automation';
   userId: string;
   scopes: string[];
   clientId?: string;
@@ -650,6 +651,19 @@ export interface PendingCallPrincipal {
   personaId?: string;
   /** A team's shared connection (see `Principal.shared`). */
   shared?: boolean;
+  /** A trigger acting on its own (see `Principal.automation`). */
+  automation?: AutomationScope;
+}
+
+/** What a trigger acting on its own may do (see `docs/TRIGGERS.md`). */
+export interface AutomationScope {
+  triggerId: string;
+  /** The event that woke it. */
+  eventId: string;
+  /** Tools it may call; absent: only the one tool the rule names. */
+  tools: string[];
+  /** Risky actions (sending, deleting) wait for the user's confirmation. */
+  confirmRisky: boolean;
 }
 
 /**
@@ -1322,6 +1336,146 @@ export const telegramConnections = pgTable('telegram_connections', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+// ---------------------------------------------------------------------------
+// Triggers: rules "when [event matches], do [action]" (see docs/TRIGGERS.md)
+// ---------------------------------------------------------------------------
+
+/** What a trigger listens to. */
+export type TriggerSource = 'message' | 'mail';
+/** What a trigger does when an event matches. */
+export type TriggerActionKind = 'check' | 'notify' | 'tool' | 'ai';
+/** Why a trigger stopped on its own. */
+export type TriggerPause = 'limit' | 'error';
+export type TriggerEventStatus =
+  | 'new'
+  | 'delivered'
+  | 'running'
+  | 'done'
+  | 'awaiting_confirmation'
+  | 'failed'
+  | 'skipped';
+export type AiProviderId = 'openai' | 'anthropic' | 'openrouter';
+
+/**
+ * The user's own AI API keys (OpenAI, Anthropic, OpenRouter) that triggers wake on an event. The
+ * key is encrypted (SecretBox, AAD `aikey:<id>`); the user picks how many runs a day it may do.
+ */
+export const aiKeys = pgTable(
+  'ai_keys',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    provider: text().$type<AiProviderId>().notNull(),
+    label: text().notNull(),
+    model: text().notNull(),
+    keyEncrypted: text().notNull(),
+    /** Last four characters, to tell keys apart. */
+    keyHint: text().notNull(),
+    /** Runs a day (UTC) the user allows; null: no limit. */
+    dailyRuns: integer(),
+    lastUsedAt: timestamp({ withTimezone: true }),
+    lastError: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.workspaceId)],
+);
+
+export const triggers = pgTable(
+  'triggers',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** The user it acts for (its notices go to them). */
+    userId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    enabled: boolean().notNull().default(true),
+    source: text().$type<TriggerSource>().notNull(),
+    /** Only accounts of this service; null: every service of the source. */
+    connectorId: text(),
+    /** Only these accounts; empty: every account that matches `connectorId`. */
+    accountIds: text().array().notNull().default(sql`'{}'::text[]`),
+    actionKind: text().$type<TriggerActionKind>().notNull(),
+    /** The AI key an `ai` action runs on. */
+    aiKeyId: text().references(() => aiKeys.id, { onDelete: 'set null' }),
+    /** Encrypted `{ filter, action }` (SecretBox, AAD `trigger:<id>`): names, words and prompts are personal. */
+    specEncrypted: text().notNull(),
+    /** Runs a day (UTC) the user allows; null: no limit. */
+    dailyRuns: integer(),
+    pausedReason: text().$type<TriggerPause>(),
+    pausedAt: timestamp({ withTimezone: true }),
+    lastEventAt: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.workspaceId), index().on(t.source, t.enabled)],
+);
+
+/** Where a trigger stopped reading one account (message seq, or mail time). */
+export const triggerCursors = pgTable(
+  'trigger_cursors',
+  {
+    triggerId: text()
+      .notNull()
+      .references(() => triggers.id, { onDelete: 'cascade' }),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    cursor: text().notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [primaryKey({ columns: [t.triggerId, t.accountId] })],
+);
+
+/**
+ * The event feed: every event a trigger matched and what came of it. Content is encrypted with the
+ * account's data key (AAD `trigger:event:<id>`); the source item and the other side are only keyed
+ * hashes (dedupe, loop protection). Rows are pruned after 30 days.
+ */
+export const triggerEvents = pgTable(
+  'trigger_events',
+  {
+    /** Order of the feed: the cursor of `manyplug_check_triggers`. */
+    seq: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    id: text().notNull().unique(),
+    triggerId: text()
+      .notNull()
+      .references(() => triggers.id, { onDelete: 'cascade' }),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    accountId: text()
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Keyed hash of the source item (message, email): one event per item and trigger. */
+    eventKey: text().notNull(),
+    /** Keyed hash of the other side (chat, sender), for loop protection. */
+    counterpartKey: text().notNull(),
+    status: text().$type<TriggerEventStatus>().notNull(),
+    /** Encrypted `{ event, result }`. */
+    bodyEncrypted: text().notNull(),
+    aiKeyId: text(),
+    /** Tokens the AI used (input + output), for the user's own accounting. */
+    tokens: integer(),
+    createdAt: createdAt(),
+    finishedAt: timestamp({ withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex().on(t.triggerId, t.eventKey),
+    index().on(t.workspaceId, t.seq),
+    index().on(t.triggerId, t.createdAt),
+    index().on(t.triggerId, t.counterpartKey, t.createdAt),
+    index().on(t.aiKeyId, t.createdAt),
+    index().on(t.createdAt),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Plans, limits and the admin panel

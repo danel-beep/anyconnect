@@ -46,5 +46,25 @@ export function renderNotice(t: Translate, notice: OwnerNotice): string {
         '',
         escapeHtml(t('notice.reauth.why', { n: notice.accounts.length })),
       ].join('\n');
+    case 'trigger_fired':
+      return [
+        `<b>${escapeHtml(t('notice.trigger.title', { name: notice.trigger }))}</b>`,
+        `${escapeHtml(notice.service)} · ${escapeHtml(notice.account)}${notice.from ? ` · ${escapeHtml(notice.from)}` : ''}`,
+        ...(notice.title ? [`<i>${escapeHtml(notice.title)}</i>`] : []),
+        '',
+        escapeHtml(notice.preview),
+        ...(notice.summary
+          ? ['', `<b>${escapeHtml(t('notice.trigger.ai'))}</b> ${escapeHtml(notice.summary)}`]
+          : []),
+        '',
+        `<a href="${escapeHtml(notice.url)}">${escapeHtml(t('notice.trigger.open'))}</a>`,
+      ].join('\n');
+    case 'trigger_paused':
+      return [
+        `<b>${escapeHtml(t(notice.reason === 'limit' ? 'notice.trigger.paused' : 'notice.trigger.aiLimit', { name: notice.trigger, n: notice.limit }))}</b>`,
+        '',
+        escapeHtml(t('notice.trigger.pausedWhy')),
+        `<a href="${escapeHtml(notice.url)}">${escapeHtml(t('notice.trigger.change'))}</a>`,
+      ].join('\n');
   }
 }

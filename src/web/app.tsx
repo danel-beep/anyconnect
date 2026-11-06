@@ -43,6 +43,8 @@ export type AppSection =
   | 'activity'
   | 'confirm'
   | 'rules'
+  | 'triggers'
+  | 'ai'
   | 'teams'
   | 'billing'
   | 'security'
@@ -110,6 +112,8 @@ const NAV: {
   { id: 'activity', href: '/app/activity', icon: 'activity', key: 'app.nav.activity', group: 'main' },
   { id: 'confirm', href: '/confirm', icon: 'bell', key: 'app.nav.confirm', group: 'main' },
   { id: 'rules', href: '/app/rules', icon: 'shield', key: 'app.nav.rules', group: 'main' },
+  { id: 'triggers', href: '/app/triggers', icon: 'clock', key: 'app.nav.triggers', group: 'main' },
+  { id: 'ai', href: '/app/ai', icon: 'key', key: 'app.nav.ai', group: 'main' },
   { id: 'teams', href: '/app/teams', icon: 'users', key: 'app.nav.teams', group: 'main' },
   { id: 'billing', href: '/app/billing', icon: 'card', key: 'app.nav.billing', group: 'account' },
   { id: 'security', href: '/security', icon: 'lock', key: 'app.nav.security', group: 'account' },
