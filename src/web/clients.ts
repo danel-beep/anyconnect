@@ -69,7 +69,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
   {
     id: 'chatgpt',
     name: 'ChatGPT',
-    glyph: 'chat',
+    icon: 'openai',
     note: {
       ru: 'Нужен режим разработчика (Plus, Pro, Business, Enterprise, Edu).',
       en: 'Needs developer mode (Plus, Pro, Business, Enterprise, Edu).',
@@ -147,7 +147,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
   {
     id: 'vscode',
     name: 'VS Code',
-    glyph: 'braces',
+    icon: 'visualstudiocode',
     note: { ru: 'GitHub Copilot в режиме агента.', en: 'GitHub Copilot in agent mode.' },
     steps: {
       ru: [
@@ -178,7 +178,7 @@ export const CLIENT_GUIDES: ClientGuide[] = [
   {
     id: 'codex',
     name: 'Codex',
-    glyph: 'code',
+    icon: 'openai',
     note: { ru: 'Codex CLI и расширение для IDE.', en: 'Codex CLI and the IDE extension.' },
     steps: {
       ru: [
