@@ -348,7 +348,8 @@ function capabilityTool(
 
 /**
  * Search-only words of a service tool: the action's own keywords and the service name. (The
- * service description is left out: it lists every action, so it matched every tool of the service.)
+ * service description goes to `about` at a low weight: it lists every action, so at full weight it
+ * matched every tool of the service.)
  */
 function searchKeywords(connector: ConnectorDefinition, action: ActionDefinition): string {
   return action.keywords ? `${connector.name} ${action.keywords}` : connector.name;
@@ -466,6 +467,7 @@ export function buildCatalog(input: {
           risk,
           service: connector.id,
           keywords: searchKeywords(connector, action),
+          about: connector.description,
           ...implementsOf(action),
           target: {
             kind: 'action',
@@ -488,6 +490,7 @@ export function buildCatalog(input: {
             risk,
             service: connector.id,
             keywords: searchKeywords(connector, action),
+            about: connector.description,
             ...implementsOf(action),
             target: {
               kind: 'action',

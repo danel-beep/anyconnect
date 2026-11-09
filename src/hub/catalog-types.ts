@@ -91,6 +91,8 @@ export interface CatalogTool {
   service?: string;
   /** Extra words for search only (service name, action keywords); never sent to clients. */
   keywords?: string;
+  /** Service tools: the service's description, searched at a low weight ("crm" finds HubSpot). */
+  about?: string;
   /** Service tools: the shared capabilities the action implements (e.g. `mail.search`). */
   implements?: string[];
 }

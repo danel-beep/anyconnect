@@ -170,6 +170,12 @@ const SYNONYMS: Record<string, string[]> = {
   person: ['contact'],
   people: ['contact'],
   payment: ['invoice', 'charge'],
+  paid: ['payment', 'pay', 'charge'],
+  money: ['balance', 'payment'],
+  lead: ['contact', 'deal'],
+  bug: ['issue'],
+  remind: ['task', 'reminder'],
+  reminder: ['task'],
   invoice: ['payment', 'bill'],
   delete: ['remove', 'trash'],
   remove: ['delete'],
@@ -208,7 +214,9 @@ const undouble = (t: string) => (/([^aeiouylsz])\1$/.test(t) ? t.slice(0, -1) : 
  */
 export function stem(token: string): string {
   let t = token;
-  if (t.length <= 3) return t;
+  // Short plurals of abbreviations: "prs" → "pr", "dms" → "dm" (not "yes" or "gas").
+  if (t.length === 3) return /^[a-z][^aeiou]s$/.test(t) ? t.slice(0, -1) : t;
+  if (t.length < 3) return t;
   if (t.endsWith('ies') && t.length > 4) t = `${t.slice(0, -3)}y`;
   else if (/(ch|sh|x|z|ss)es$/.test(t)) t = t.slice(0, -2);
   else if (t.endsWith('s') && !/(ss|us|is)$/.test(t)) t = t.slice(0, -1);
@@ -243,6 +251,7 @@ function index(tool: CatalogTool): Indexed {
       field(tool.title, 2),
       field(tool.service ?? '', 3),
       field(tool.keywords ?? '', 2),
+      field(tool.about ?? '', 0.5),
       field(accounts.join(' '), 2),
       field(tool.description, 1),
     ],

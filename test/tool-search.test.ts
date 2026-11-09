@@ -114,6 +114,11 @@ describe('tool search: every built-in service connected', () => {
     ['mark the todoist task done', 'todoist_complete_task'],
     ['deals in the pipeline', ['hubspot_search_deals', 'pipedrive_search_deals', 'pipedrive_list_deals']],
     ['find a file in google drive', ['gdrive_search', 'files_search']],
+    ['my open PRs', 'github_list_pull_requests'],
+    ['assign the bug to Bob', 'github_update_issue'],
+    ['customers who paid this month', 'stripe_search_payments'],
+    ['how much money do we have', 'stripe_get_balance'],
+    ['new lead in the crm', ['hubspot_create_contact', 'hubspot_search_contacts', 'pipedrive_create_person']],
   ];
   it.each(top3)('"%s" → %s in the top 3', (query, accepted) => expectTop(catalog, [query, accepted], 3));
 });
