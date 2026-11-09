@@ -26,7 +26,13 @@ export interface EventSource {
     signal: AbortSignal,
     options?: ReadOptions,
   ): Promise<{ items: TriggerItem[]; cursor: string }>;
+  /** The newest items of about the last day, newest first (to try a trigger on a real one). */
+  recent(account: AccountRow, signal: AbortSignal, options?: ReadOptions): Promise<TriggerItem[]>;
 }
+
+/** How far back `recent` looks, and how many items it returns at most. */
+const RECENT_HOURS = 24;
+const RECENT_ITEMS = 20;
 
 /** What one trigger reads beyond the default (each trigger has its own cursor on each account). */
 export interface ReadOptions {
@@ -58,12 +64,23 @@ export class MessageSource implements EventSource {
   }
 
   async read(account: AccountRow, cursor: string): Promise<{ items: TriggerItem[]; cursor: string }> {
-    const page = await this.deps.store.whatsNew([account.id], {
-      cursor,
-      sinceHours: 1,
-      includeOwn: false,
-      limit: 50,
-    });
+    return this.page(account, { cursor, sinceHours: 1, limit: 50 });
+  }
+
+  async recent(account: AccountRow): Promise<TriggerItem[]> {
+    // The store reads oldest first: the last hour first keeps a busy day's newest messages in reach.
+    for (const sinceHours of [1, RECENT_HOURS]) {
+      const { items } = await this.page(account, { sinceHours, limit: 500 });
+      if (items.length) return items.reverse().slice(0, RECENT_ITEMS);
+    }
+    return [];
+  }
+
+  private async page(
+    account: AccountRow,
+    query: { cursor?: string; sinceHours: number; limit: number },
+  ): Promise<{ items: TriggerItem[]; cursor: string }> {
+    const page = await this.deps.store.whatsNew([account.id], { ...query, includeOwn: false });
     const items: TriggerItem[] = page.messages
       .filter((m) => m.direction === 'in' && !m.deleted)
       .map((m) => ({
@@ -121,6 +138,12 @@ export class MailSource implements EventSource {
   /** `!` marks a cursor no read has moved yet: nothing at or before it is new (no overlap). */
   async start(): Promise<string> {
     return `!${new Date().toISOString()}`;
+  }
+
+  async recent(account: AccountRow, signal: AbortSignal, options: ReadOptions = {}): Promise<TriggerItem[]> {
+    const since = Date.now() - RECENT_HOURS * 3_600_000 + MAIL_OVERLAP_MS;
+    const { items } = await this.read(account, `!${new Date(since).toISOString()}`, signal, options);
+    return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, RECENT_ITEMS);
   }
 
   async read(

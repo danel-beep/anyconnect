@@ -7,7 +7,7 @@ import type { SetupActionSpec, SetupContext } from './setup-tools.js';
 
 /**
  * Triggers from the chat (`manyplug_triggers`, `manyplug_create_trigger`, `manyplug_update_trigger`,
- * `manyplug_delete_trigger`) and the cheap "anything new?" check (`manyplug_check_triggers`) that a
+ * `manyplug_delete_trigger`, `manyplug_test_trigger`, `manyplug_trigger_runs`) and the cheap "anything new?" check (`manyplug_check_triggers`) that a
  * scheduled task in Claude or ChatGPT calls: it answers `{"new":0}` in a few tokens when nothing
  * matched, so the AI only reads mail or chats when there is something to read.
  *
@@ -104,6 +104,39 @@ export interface CheckedEvent {
   task?: string;
 }
 
+/** One run of a trigger as the tools show it: what happened, never the content of tool results. */
+export interface TriggerRun {
+  trigger: string;
+  /** running, done, failed, skipped, awaiting_confirmation, new (waits for a check), delivered. */
+  status: string;
+  at: string;
+  /** Seconds from the match to the end of the run. */
+  seconds?: number;
+  service?: string;
+  account?: string;
+  /** The message or email id, for the service's tools and `manyplug_test_trigger`. */
+  id?: string;
+  from?: string;
+  title?: string;
+  summary?: string;
+  error?: string;
+  /** Why it did not run: limit, ai_limit, loop, paused, no_key. */
+  skipped?: string;
+  calls?: Array<{ tool: string; ok: boolean }>;
+  tokens?: number;
+}
+
+/** What trying a trigger on an item that already arrived found. */
+export interface TriggerTried {
+  /** Messages or emails of the last day it looked at. */
+  looked: number;
+  matched: boolean;
+  ran: boolean;
+  item?: Omit<CheckedEvent, 'trigger' | 'task'>;
+  run?: TriggerRun;
+  note?: string;
+}
+
 /**
  * What the trigger tools need. Defined here, implemented by `TriggerService` (`src/triggers/`), so
  * the hub does not depend on the trigger engine.
@@ -122,6 +155,14 @@ export interface WorkspaceTriggers {
     principal: Principal,
     options: { trigger?: string; limit: number; signal: AbortSignal },
   ): Promise<{ events: CheckedEvent[]; more: boolean }>;
+  /** Tries a trigger on a message or email that already arrived (see `manyplug_test_trigger`). */
+  test(
+    principal: Principal,
+    ref: string,
+    options: { item?: string; run: boolean; force: boolean; signal: AbortSignal },
+  ): Promise<TriggerTried>;
+  /** The latest runs, newest first, optionally of one trigger. */
+  runs(workspaceId: string, options: { trigger?: string; limit: number }): Promise<TriggerRun[]>;
   /** The user's own AI keys (never the key itself), for `ai_key` and the AI key tools. */
   aiKeys(workspaceId: string): Promise<AiKeyInfo[]>;
   /** By id, label or provider name; the key itself is never set here, only on the AI API page. */
@@ -427,6 +468,74 @@ export function triggerActions(
         await ctx.admin.authorize(ctx.principal, 'admin');
         const updated = await service(ctx).update(ctx.principal, trigger, toChange(input));
         return { updated: view(updated) };
+      },
+    }),
+    define({
+      name: 'test_trigger',
+      keywords: 'try run dry test existing email message already arrived',
+      title: 'Try a trigger on a real message',
+      description:
+        'Tries a trigger on a message or email that already arrived (the last day): by default the newest one its filter matches, or the one with "item" (an id from the service’s tools). Says whether the filter matches and runs the action for real, as a new match would (same limits and checks; do=check keeps it for manyplug_check_triggers), then returns the outcome. run false only checks the filter; force true runs it on an item the filter does not match.',
+      input: z.object({
+        trigger: triggerRef,
+        item: z
+          .string()
+          .trim()
+          .min(1)
+          .max(300)
+          .optional()
+          .describe('Message or email id; default the newest match'),
+        run: z.boolean().default(true).describe('false: only say whether the filter matches'),
+        force: z.boolean().default(false).describe('Run even when the filter does not match'),
+      }),
+      risk: 'write',
+      // The item's text and the run's summary are other people's text: marked as untrusted data.
+      hints: { openWorld: true },
+      async assessRisk({ trigger, run, force }, ctx) {
+        if (!run || !force) return undefined;
+        const found = await service(ctx)
+          .find(ctx.principal.workspaceId, trigger)
+          .catch(() => undefined);
+        return found && (found.do === 'tool' || found.do === 'ai')
+          ? {
+              risk: 'dangerous',
+              reason: 'Runs what the trigger does on its own on an item its filter does not match',
+              confirm: true,
+            }
+          : undefined;
+      },
+      async run({ trigger, item, run, force }, ctx) {
+        await ctx.admin.authorize(ctx.principal, 'admin');
+        return service(ctx).test(ctx.principal, trigger, {
+          ...(item ? { item } : {}),
+          run,
+          force,
+          signal: ctx.signal,
+        });
+      },
+    }),
+    define({
+      name: 'trigger_runs',
+      keywords: 'history log journal events why did not fire',
+      title: 'Show trigger runs',
+      description:
+        'The latest runs of the user’s triggers, newest first: what matched (from, title), what happened (done, failed, skipped and why, waiting for confirmation), the AI’s short summary, tools it called, tokens and how long it took. Use it to answer "did my trigger fire?" or "why did it not work?".',
+      input: z.object({
+        trigger: triggerRef.optional().describe('Only this trigger (name or id); default all'),
+        limit: z.number().int().min(1).max(50).default(10),
+      }),
+      risk: 'read',
+      // Senders, subjects and summaries are other people's text: marked as untrusted data.
+      hints: { readOnly: true },
+      async run({ trigger, limit }, ctx) {
+        const runs = await service(ctx).runs(ctx.principal.workspaceId, {
+          ...(trigger ? { trigger } : {}),
+          limit,
+        });
+        return {
+          runs,
+          ...(runs.length ? {} : { hint: 'No runs yet: manyplug_test_trigger tries one now.' }),
+        };
       },
     }),
     define({
