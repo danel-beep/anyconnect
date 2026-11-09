@@ -7,6 +7,7 @@ import type {
   ListingMode,
   ListingSetting,
 } from './catalog-types.js';
+import { translateWord } from './search-lexicon.js';
 import { toolListTokens } from './tokens.js';
 
 /**
@@ -298,13 +299,25 @@ function score(entry: Indexed, query: string[], idf: (token: string) => number):
   return kind === 'capability' ? total * 1.15 : kind === 'workspace' ? total * 0.8 : total;
 }
 
+/** Query words in index form: words of other languages put into English (see `search-lexicon.ts`), stemmed. */
+export function queryTerms(query: string): string[] {
+  const words = tokenize(query).flatMap((word) => translateWord(word) ?? [word]);
+  return [...new Set(words.filter((w) => !STOP.has(w)).map(stem))];
+}
+
+/**
+ * Tools the workspace already uses rank a little higher among comparable matches (up to ×1.3 at
+ * ~8 calls in 30 days): their own habits are the best hint at what an ambiguous query means.
+ */
+const usageBoost = (uses: number) => 1 + Math.min(0.1 * Math.log2(1 + uses), 0.3);
+
 /** Ranks the callable tools for a free-text task description. Hub meta tools are never returned. */
 export function searchTools(
   tools: readonly CatalogTool[],
   query: string,
-  options: { service?: string; limit?: number } = {},
+  options: { service?: string; limit?: number; usage?: Readonly<Record<string, number>> } = {},
 ): CatalogTool[] {
-  const terms = [...new Set(tokenize(query).map(stem))];
+  const terms = queryTerms(query);
   const candidates = tools.filter(
     (t) =>
       t.target.kind !== 'builtin' &&
@@ -318,7 +331,10 @@ export function searchTools(
   const idf = inverseFrequency(entries);
   return (
     entries
-      .map((entry) => ({ tool: entry.tool, score: score(entry, terms, idf) }))
+      .map((entry) => ({
+        tool: entry.tool,
+        score: score(entry, terms, idf) * usageBoost(options.usage?.[entry.tool.name] ?? 0),
+      }))
       .filter((r) => r.score > 0)
       // Ties: reads before writes (safer and more often what is meant), then by name.
       .sort(

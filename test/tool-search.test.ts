@@ -148,3 +148,48 @@ describe('discovery listing of a new workspace', () => {
     expect(names).not.toContain('outlook_search');
   });
 });
+
+describe('tool search in Russian', () => {
+  const catalog = catalogFor(['gmail', 'gcal', 'telegram']);
+
+  const firstHit: Case[] = [
+    ['непрочитанные письма', 'gmail_search'],
+    ['какие у меня встречи на этой неделе', 'gcal_list_events'],
+    ['ответь на письмо Джона', 'gmail_reply'],
+    ['перенеси созвон на 5 вечера', 'gcal_update_event'],
+    ['отмени встречу у стоматолога', 'gcal_delete_event'],
+    ['отправь сообщение Анне в телеграм', 'telegram_send'],
+    ['удали спам', 'gmail_trash'],
+    ['подключи ещё одну почту', 'manyplug_connect_account'],
+  ];
+  it.each(firstHit)('"%s" → %s first', (query, accepted) => expectTop(catalog, [query, accepted], 1));
+
+  const top3: Case[] = [
+    ['кто мне написал сегодня', ['telegram_whats_new', 'gmail_search', 'telegram_search']],
+    ['новые сообщения в телеграме', ['telegram_whats_new', 'telegram_list_chats']],
+    ['когда придёт письмо от начальника, напиши мне в телеграм', 'manyplug_create_trigger'],
+  ];
+  it.each(top3)('"%s" → %s in the top 3', (query, accepted) => expectTop(catalog, [query, accepted], 3));
+});
+
+describe('tool search and the workspace’s habits', () => {
+  const catalog = catalogFor(['gmail', 'gcal', 'telegram']);
+
+  it('ranks a tool the workspace uses above an equally good match', () => {
+    const query = 'show my chats';
+    const [plain] = searchTools(catalog.tools, query, { limit: 2 }).map((t) => t.name);
+    const other = plain === 'telegram_read_chat' ? 'telegram_list_chats' : 'telegram_read_chat';
+    const [boosted] = searchTools(catalog.tools, query, { limit: 2, usage: { [other]: 12 } }).map(
+      (t) => t.name,
+    );
+    expect(boosted).toBe(other);
+  });
+
+  it('does not let habits override a clear request', () => {
+    const found = searchTools(catalog.tools, 'cancel my dentist appointment', {
+      limit: 1,
+      usage: { gmail_search: 500, telegram_send: 500 },
+    });
+    expect(found[0]?.name).toBe('gcal_delete_event');
+  });
+});

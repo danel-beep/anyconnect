@@ -144,6 +144,14 @@ export interface AccountOwnerInput {
   userId: string | null;
 }
 
+/**
+ * The label an account gets from its identity when nobody named it: connecting labels it with the
+ * service name, and the logo already says the service, so "danel@example.com" tells more.
+ */
+export function identityLabel(identity: string): string {
+  return identity.slice(0, 100);
+}
+
 export class AccountService {
   constructor(
     private readonly db: Db,
@@ -653,6 +661,7 @@ export class AccountService {
         status: result.ok ? 'active' : authFailed ? 'needs_reauth' : 'error',
         statusMessage: result.ok ? null : (result.message ?? 'Connection test failed'),
         metadata: result.identity ? { ...row.metadata, identity: result.identity } : row.metadata,
+        ...(result.identity && row.label === connector.name ? { label: identityLabel(result.identity) } : {}),
         checkedAt: new Date(),
         updatedAt: sql`${accounts.updatedAt}`,
       })
@@ -660,12 +669,21 @@ export class AccountService {
     return result;
   }
 
-  /** Stores the account's identity (mailbox address, username) found by a connection test. */
-  async setIdentity(accountId: string, identity: string): Promise<void> {
+  /**
+   * Stores the account's identity (mailbox address, username) found by a connection test. An
+   * account still labelled with the bare service name (`defaultLabel`, what connecting gives it)
+   * is labelled with the identity instead, so two calendars are not both "Google Calendar".
+   */
+  async setIdentity(accountId: string, identity: string, defaultLabel?: string): Promise<void> {
     await this.db
       .update(accounts)
       .set({
         metadata: sql`${accounts.metadata} || ${JSON.stringify({ identity })}::jsonb`,
+        ...(defaultLabel
+          ? {
+              label: sql`case when ${accounts.label} = ${defaultLabel} then ${identityLabel(identity)} else ${accounts.label} end`,
+            }
+          : {}),
         updatedAt: sql`${accounts.updatedAt}`,
       })
       .where(eq(accounts.id, accountId));

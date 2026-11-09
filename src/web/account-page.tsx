@@ -79,7 +79,7 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
         sub={
           <span class="acc-head-sub">
             <AccountStatus t={t} a={a} /> {a.service}
-            {a.identity ? ` · ${a.identity}` : ''}
+            {a.identity && a.identity !== a.label ? ` · ${a.identity}` : ''}
             {' · '}
             {a.lastUsedAt
               ? t('app.account.lastUsed', { ago: fmtAgo(lang, a.lastUsedAt) })

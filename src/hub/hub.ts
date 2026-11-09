@@ -177,7 +177,8 @@ export class Hub {
           idempotency: deps.idempotency,
           idempotencyWindowMs: deps.idempotencyWindowMs,
           maxResultTokens: deps.maxResultTokens,
-          setIdentity: (accountId, identity) => deps.accounts.setIdentity(accountId, identity),
+          setIdentity: (accountId, identity, defaultLabel) =>
+            deps.accounts.setIdentity(accountId, identity, defaultLabel),
           ...(deps.meter ? { meter: deps.meter } : {}),
           ...(deps.quota ? { quota: deps.quota } : {}),
         }),
@@ -418,6 +419,7 @@ export class Hub {
         const limit = typeof args.limit === 'number' ? Math.min(Math.max(Math.trunc(args.limit), 1), 20) : 5;
         const found = searchTools(catalog.tools, query, {
           ...(typeof args.service === 'string' && args.service ? { service: args.service } : {}),
+          ...(catalog.usage ? { usage: catalog.usage } : {}),
           limit,
         });
         const listed = new Set(catalog.listed.map((t) => t.name));

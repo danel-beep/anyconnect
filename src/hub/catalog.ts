@@ -93,15 +93,16 @@ export function ownerText(owner: AccountOwner | undefined): string | undefined {
 
 /** Full description, for instructions and errors: `"work" — Work mail (me@x; use for clients)`. */
 export function describeAccount(account: CatalogAccount): string {
-  const details = [account.identity, account.description, ownerText(account.owner)]
-    .filter(Boolean)
-    .join('; ');
+  // An account labelled with its identity (the default once it is known) shows it once.
+  const identity = account.identity === account.label ? undefined : account.identity;
+  const details = [identity, account.description, ownerText(account.owner)].filter(Boolean).join('; ');
   return `"${account.name}" — ${account.label}${details ? ` (${details})` : ''}`;
 }
 
 /** Compact form for tool schemas, where it is repeated per tool: `work (Work mail, me@x)`. */
 function shortAccount(key: string, account: CatalogAccount): string {
-  const details = [account.label, account.identity, ownerText(account.owner)].filter(Boolean).join(', ');
+  const identity = account.identity === account.label ? undefined : account.identity;
+  const details = [account.label, identity, ownerText(account.owner)].filter(Boolean).join(', ');
   return `${key} (${details})`;
 }
 
@@ -548,5 +549,6 @@ export function buildCatalog(input: {
       team: input.team,
     }),
     stats: { ...stats, totalTools: tools.length },
+    ...(input.usage && Object.keys(input.usage).length > 0 ? { usage: input.usage } : {}),
   };
 }

@@ -36,7 +36,7 @@ export function defaultStages(deps: {
   meter?: UsageMeter;
   quota?: QuotaGate;
   /** Stores an identity the `identity` stage found (see `AccountService.setIdentity`). */
-  setIdentity?: (accountId: string, identity: string) => Promise<void>;
+  setIdentity?: (accountId: string, identity: string, defaultLabel: string) => Promise<void>;
 }): StageMap {
   return {
     audit: auditStage(deps),
