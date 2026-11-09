@@ -1,7 +1,7 @@
 # Manyplug — notes for coding agents
 
 Cloud MCP hub: AI clients (Claude, ChatGPT, Claude Code) connect once over OAuth and get tools for
-every connected service *account* (several accounts per service). TypeScript, Node 22+, Hono,
+every connected service *account* (several accounts per service). TypeScript, Node 26+, Hono,
 Postgres + Drizzle, MCP SDK v2 (`@modelcontextprotocol/server`). The owner speaks Russian,
 but the product targets an international, English-speaking audience: the website, dashboard and
 admin default to English and Russian is a second locale picked with the language switch (RU/EN in

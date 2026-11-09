@@ -80,7 +80,7 @@ ChatGPT / Claude / Claude Code / Cursor
 
 ## Быстрый старт локально
 
-Нужны Node.js 22+ и Postgres (проще всего через Docker).
+Нужны Node.js 26+ и Postgres (проще всего через Docker).
 
 ```bash
 npm install
