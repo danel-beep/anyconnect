@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ------------------------------------------------------------------
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -10,7 +10,7 @@ COPY src ./src
 RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 
 # ---- runtime ----------------------------------------------------------------
-FROM node:24-slim AS runtime
+FROM node:26-slim AS runtime
 ENV NODE_ENV=production
 # pg_dump / pg_restore for database backups, from the PostgreSQL apt repository: they must be at
 # least the server's major version (PostgreSQL 17 on Render), newer than Debian's own.

@@ -1,5 +1,3 @@
-import { MONO } from '../assets.js';
-
 /**
  * Team pages (`/app/teams`, `/app/team/:slug`), the summary of "Plan and limits" (`/app/billing`) and
  * the ready texts to copy (`CopyText`).
