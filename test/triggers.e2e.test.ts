@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import { defineConnector } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import { aiKeys, toolCalls, triggerEvents, triggers as triggerTable } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
@@ -7,6 +9,25 @@ import type { TriggerEvent } from '../src/triggers/store.js';
 import { FakeInternet } from './e2e/fake-internet.js';
 import { registryWithFakeChat } from './fake-messenger.js';
 import { resetDatabase, resultJson, startTestHub, TestBrowser, type TestHub } from './helpers.js';
+
+/** A service with one risky action (posting to a channel), which the default rules ask about. */
+const notes = defineConnector({
+  id: 'notes',
+  name: 'Notes',
+  description: 'Test service that posts notes to channels',
+  version: '1.0.0',
+  config: z.object({}),
+  actions: (action) => [
+    action({
+      name: 'post',
+      title: 'Post a note',
+      description: 'Posts a note to a channel.',
+      input: z.object({ channel: z.string().optional(), text: z.string() }),
+      risk: 'dangerous',
+      run: ({ channel, text }) => ({ posted: `${channel}: ${text}` }),
+    }),
+  ],
+});
 
 /**
  * Triggers end to end: a message arrives in the hub's store, the matching trigger records it, and
@@ -62,7 +83,7 @@ describe('triggers', () => {
     await resetDatabase();
     internet = new FakeInternet();
     hub = await startTestHub({
-      connectors: registryWithFakeChat,
+      connectors: (deps) => registryWithFakeChat(deps).register(notes),
       internet,
       seed: false,
       env: { CONFIRMATION_WAIT_SECONDS: '0' },
@@ -81,6 +102,12 @@ describe('triggers', () => {
         credentials: {},
       })
     ).id;
+    await hub.services.accounts.create(workspaceId, {
+      connectorId: 'notes',
+      name: 'main',
+      label: 'Main',
+      credentials: {},
+    });
     await hub.services.accounts.create(workspaceId, {
       connectorId: 'demo',
       name: 'main',
@@ -274,6 +301,81 @@ describe('triggers', () => {
     );
     expect((await hub.services.triggers.keys.get(workspaceId, key.id)).runsToday).toBe(1);
     await hub.services.triggers.keys.delete(workspaceId, key.id);
+  });
+
+  it('lets an AI approved to act without asking send on its own, only within its limits', async () => {
+    let step = 0;
+    const bodies: any[] = [];
+    const post = (id: string, args: Record<string, unknown>) => ({
+      id,
+      type: 'function',
+      function: { name: 'notes_post', arguments: JSON.stringify({ text: 'Got it', ...args }) },
+    });
+    internet.serve('api.openai.com', async (request) => {
+      bodies.push(await request.json());
+      step++;
+      const usage = { prompt_tokens: 10, completion_tokens: 5 };
+      if (step === 1)
+        return Response.json({
+          choices: [
+            {
+              message: {
+                role: 'assistant',
+                content: null,
+                tool_calls: [
+                  post('ok', { channel: 'team' }),
+                  post('other', { channel: 'public' }),
+                  post('none', {}),
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+          usage,
+        });
+      return Response.json({
+        choices: [{ message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
+        usage,
+      });
+    });
+    const key = await hub.services.triggers.keys.create(workspaceId, {
+      provider: 'openai',
+      key: 'sk-test-0123456789abcdef',
+      dailyRuns: 5,
+    });
+    try {
+      // The account keeps the default rule (ask before risky actions); only the trigger is approved.
+      const trigger = await create({
+        name: 'Auto post',
+        when: 'message',
+        do: 'ai',
+        instructions: 'Post that we got it.',
+        tools: ['notes_post'],
+        askBeforeRisky: false,
+        allow: { notes_post: { channel: ['team'] } },
+        notify: false,
+      });
+      expect(trigger.allow).toEqual({ notes_post: { channel: ['team'] } });
+      await inbound('Did you get my invoice?');
+      const [event] = await settled(trigger.id, 1);
+      expect(event!.status).toBe('done');
+      const results = Object.fromEntries(
+        bodies[1].messages.filter((m: any) => m.role === 'tool').map((m: any) => [m.tool_call_id, m.content]),
+      );
+      expect(results.ok).toContain('team: Got it');
+      expect(results.other).toContain('only with channel: team');
+      expect(results.none).toContain('only with channel: team');
+
+      // Asking again before risky actions brings the account's rule back.
+      step = 0;
+      bodies.length = 0;
+      await hub.services.triggers.service.update(session, trigger.id, { askBeforeRisky: true });
+      await inbound('And the receipt?');
+      const events = await settled(trigger.id, 2);
+      expect(events.map((e) => e.status)).toContain('awaiting_confirmation');
+    } finally {
+      await hub.services.triggers.keys.delete(workspaceId, key.id);
+    }
   });
 
   it('pauses a trigger at its daily limit', async () => {

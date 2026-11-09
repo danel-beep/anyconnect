@@ -1,7 +1,7 @@
 import type { ConnectorResolver } from '../connectors/registry.js';
 import type { AccountRow, AccountService } from '../core/accounts.js';
 import type { Principal } from '../core/principal.js';
-import type { TriggerSource } from '../db/schema.js';
+import type { ArgumentLimits, TriggerSource } from '../db/schema.js';
 import type {
   AiKeyInfo,
   CheckedEvent,
@@ -17,7 +17,13 @@ import { AI_PROVIDER_IDS, AI_PROVIDERS } from './ai/providers.js';
 import type { AiKeyStore, AiKeyView } from './ai-keys.js';
 import type { TriggerEngine } from './engine.js';
 import { clip } from './match.js';
-import { DEFAULT_DAILY_RUNS, type TriggerAction, type TriggerFilter, type TriggerSpec } from './spec.js';
+import {
+  ArgumentLimitsInput,
+  DEFAULT_DAILY_RUNS,
+  type TriggerAction,
+  type TriggerFilter,
+  type TriggerSpec,
+} from './spec.js';
 import type { Trigger, TriggerEvent, TriggerStore } from './store.js';
 
 /** How long a check may spend reading mailboxes before it answers with what it has. */
@@ -90,7 +96,7 @@ export class TriggerService implements WorkspaceTriggers {
     const kind = change.do ?? current.spec.action.kind;
     const actionChanged =
       change.do !== undefined ||
-      ['task', 'tool', 'args', 'instructions', 'tools', 'aiKey', 'askBeforeRisky', 'notify'].some(
+      ['task', 'tool', 'args', 'instructions', 'tools', 'aiKey', 'askBeforeRisky', 'notify', 'allow'].some(
         (k) => change[k as keyof TriggerChange] !== undefined,
       );
     const scope =
@@ -262,6 +268,9 @@ export class TriggerService implements WorkspaceTriggers {
         const key = await this.key(principal.workspaceId, change.aiKey, current?.aiKeyId ?? null);
         const tools = change.tools ?? prev?.tools ?? [];
         await this.assertTools(principal, tools);
+        // Limits kept from before follow the tool list; new ones must name its tools.
+        const allow =
+          change.allow === undefined ? limitsOf(prev?.allow, tools, false) : limitsOf(change.allow, tools);
         return {
           action: {
             kind: 'ai',
@@ -269,6 +278,7 @@ export class TriggerService implements WorkspaceTriggers {
             tools,
             confirmRisky: change.askBeforeRisky ?? prev?.confirmRisky ?? true,
             notify: change.notify ?? prev?.notify ?? true,
+            ...(allow ? { allow } : {}),
           },
           aiKeyId: key.id,
         };
@@ -345,10 +355,34 @@ export class TriggerService implements WorkspaceTriggers {
             : action.kind,
       ...(action.kind === 'check' && action.task ? { task: action.task } : {}),
       ...(action.kind === 'ai' ? { askBeforeRisky: action.confirmRisky } : {}),
+      ...(action.kind === 'ai' && action.allow ? { allow: action.allow } : {}),
       dailyLimit: trigger.dailyRuns,
       runsToday,
     };
   }
+}
+
+/**
+ * Argument limits, checked: only tools the trigger may use (`strict`: others are an error, else
+ * dropped); none (null or empty) is no limit.
+ */
+export function limitsOf(
+  input: TriggerChange['allow'] | undefined,
+  tools: string[],
+  strict = true,
+): ArgumentLimits | undefined {
+  if (!input) return undefined;
+  const parsed = ArgumentLimitsInput.safeParse(input);
+  if (!parsed.success) throw badRequest('allow: {"tool": {"argument": ["allowed value", …]}}');
+  const extra = Object.keys(parsed.data).filter((t) => !tools.includes(t));
+  if (extra.length && strict)
+    throw badRequest(`allow names ${extra.join(', ')}, which is not in the trigger's tools`);
+  const limits = Object.fromEntries(
+    Object.entries(parsed.data).filter(
+      ([tool, args]) => tools.includes(tool) && Object.keys(args).length > 0,
+    ),
+  );
+  return Object.keys(limits).length ? limits : undefined;
 }
 
 export function filterOf(input: TriggerChange['filter']): TriggerFilter {

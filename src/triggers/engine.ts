@@ -3,7 +3,7 @@ import { connectorText, type FetchLike } from '../connectors/sdk.js';
 import type { AccountRow, AccountService } from '../core/accounts.js';
 import type { OwnerNotifier } from '../core/owner-notices.js';
 import type { Principal } from '../core/principal.js';
-import type { TriggerSource } from '../db/schema.js';
+import type { ArgumentLimits, TriggerSource } from '../db/schema.js';
 import type { ToolCallResult } from '../hub/result.js';
 import type { Logger } from '../logger.js';
 import { VISIBILITY_LAG_MS } from '../messaging/store.js';
@@ -301,7 +301,13 @@ export class TriggerEngine {
             await finish('failed', { skipped: 'no_key' });
             return;
           }
-          const principal = await this.principal(trigger, event.id, action.tools, action.confirmRisky);
+          const principal = await this.principal(
+            trigger,
+            event.id,
+            action.tools,
+            action.confirmRisky,
+            action.allow,
+          );
           try {
             const outcome = await runAgent(
               {
@@ -357,12 +363,17 @@ export class TriggerEngine {
     return this.deps.store.get(row.workspaceId, event.triggerId).catch(() => undefined);
   }
 
-  /** The principal a trigger acts as: the workspace's Triggers app, with only the rule's tools. */
+  /**
+   * The principal a trigger acts as: the workspace's Triggers app, with only the rule's tools and
+   * argument values. `confirmRisky: false` (a `tool` action, or an AI the user let act without
+   * asking) makes the user's approval of the trigger stand in for the access rules' "ask first".
+   */
   async principal(
     trigger: Pick<Trigger, 'id' | 'workspaceId' | 'userId'>,
     eventId: string,
     tools: string[],
     confirmRisky: boolean,
+    allow?: ArgumentLimits,
   ): Promise<Principal> {
     let clientId = this.clients.get(trigger.workspaceId);
     if (!clientId) {
@@ -376,7 +387,7 @@ export class TriggerEngine {
       scopes: ['mcp'],
       aiClientId: clientId,
       credentialId: trigger.id,
-      automation: { triggerId: trigger.id, eventId, tools, confirmRisky },
+      automation: { triggerId: trigger.id, eventId, tools, confirmRisky, ...(allow ? { allow } : {}) },
     };
   }
 

@@ -662,9 +662,21 @@ export interface AutomationScope {
   eventId: string;
   /** Tools it may call; absent: only the one tool the rule names. */
   tools: string[];
-  /** Risky actions (sending, deleting) wait for the user's confirmation. */
+  /**
+   * Risky actions (sending, deleting) wait for the user's confirmation. When false, the user's
+   * approval of the trigger itself stands in for the access rules' confirmation (never the floor).
+   */
   confirmRisky: boolean;
+  /** Only these argument values, by tool (see {@link ArgumentLimits}). */
+  allow?: ArgumentLimits;
 }
+
+/**
+ * Argument values a trigger's tools may be called with, checked by the hub, not the AI:
+ * `{ telegram_send: { chat: ["123"] } }`. A limited argument must be given and be one of the values
+ * (every item, for a list); `account` limits the account. Tools not named are not limited.
+ */
+export type ArgumentLimits = Record<string, Record<string, string[]>>;
 
 /**
  * Standing approvals: the user approved a series of calls once (e.g. "carry on this conversation"

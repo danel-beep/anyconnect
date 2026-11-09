@@ -123,6 +123,12 @@ export interface CallContext {
   interaction?: Interaction;
   /** Already approved by the user (e.g. a stored call approved in Telegram): `confirm` lets it pass. */
   preApproved?: boolean;
+  /**
+   * Set by the `automation` stage: the user approved, ahead of time, a trigger that acts without
+   * asking. `confirm` then skips the access rules' "ask first", never the floor (`mustConfirm`,
+   * `requiresConfirmation`) and never an undo window.
+   */
+  ruleApproved?: boolean;
   /** Set when the unit is part of a bigger call (fan-out over accounts, capability tool, batch). */
   group?: { kind: 'fanout' | 'capability' | 'batch'; id: string };
 }

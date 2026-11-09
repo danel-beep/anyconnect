@@ -263,7 +263,8 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
     const undoWindowSeconds = call.risk === 'read' ? 0 : Math.max(decision.undoWindowSeconds, declaredDelay);
     // Actions that delete data or widen access always need the user, whatever the rules say.
     const floor = call.action.requiresConfirmation === true || call.mustConfirm === true;
-    let confirm = decision.confirm || floor;
+    // A trigger the user approved to act without asking: that approval answers the rules' "ask first".
+    let confirm = (decision.confirm && !call.ruleApproved) || floor;
     // A series the user already approved (e.g. replies in a conversation they asked the AI to carry
     // on) needs no new confirmation, never for what the floor guards. Undo windows still apply.
     if (confirm && !floor && deps.approvals && call.account) {
