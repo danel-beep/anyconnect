@@ -245,6 +245,12 @@ export interface ActionDefinition<TConfig = unknown, TCredentials = unknown> {
   title?: string;
   /** Written for the AI: what it does, when to use it, what it returns. */
   description: string;
+  /**
+   * Other words people use for this action, for the hub's tool search only (never sent to the AI,
+   * so they cost no context): e.g. `'reschedule move postpone'` for "update event". Add the words a
+   * user would say that the title and description do not already contain.
+   */
+  keywords?: string;
   /** Input arguments. Use `.describe()` on fields — descriptions are shown to the AI. */
   input: AnyObjectSchema;
   /**

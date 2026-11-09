@@ -147,6 +147,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'list_events',
+        keywords: 'agenda meetings appointments schedule upcoming today tomorrow week',
         title: 'List events',
         description: 'Events in a time range, ordered by start. Optional text search.',
         input: {
@@ -178,6 +179,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'get_event',
+        keywords: 'meeting appointment details',
         title: 'Get event',
         description: 'One event with description, attendees and their responses.',
         input: {
@@ -193,6 +195,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'create_event',
+        keywords: 'schedule book add meeting appointment invite',
         title: 'Create event',
         description: 'Creates an event; invitations are emailed only if sendUpdates is "all".',
         input: {
@@ -213,6 +216,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'quick_add',
+        keywords: 'schedule meeting appointment quickly',
         title: 'Quick add',
         description: 'Creates an event from a short English phrase, e.g. "Lunch with Ann tomorrow 1pm".',
         input: {
@@ -231,6 +235,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'update_event',
+        keywords: 'reschedule move postpone change meeting appointment time',
         title: 'Update event',
         description: 'Changes only the given fields of an event (time, title, place, attendees).',
         input: {
@@ -250,6 +255,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'delete_event',
+        keywords: 'cancel remove meeting appointment',
         title: 'Delete event',
         description: 'Deletes (cancels) an event.',
         input: {
@@ -268,6 +274,7 @@ const manifest = defineManifestConnector(
       },
       {
         name: 'free_busy',
+        keywords: 'available availability free time slot',
         title: 'Free/busy',
         description: 'Busy intervals of one or more calendars in a time range, to find a free slot.',
         input: {

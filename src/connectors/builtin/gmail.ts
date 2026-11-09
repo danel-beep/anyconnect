@@ -299,6 +299,7 @@ export default defineConnector({
   actions: (action) => [
     action({
       name: 'search',
+      keywords: 'find emails inbox unread new letters messages sender subject check mail who wrote',
       title: 'Search mail',
       description: 'Finds messages, newest first, with sender, subject and snippet. Default: inbox.',
       input: z.object({
@@ -350,6 +351,7 @@ export default defineConnector({
     }),
     action({
       name: 'read',
+      keywords: 'open email full text body attachments download attachment',
       title: 'Read message',
       description:
         'Returns a message as plain text (quoted history removed by default) with the attachment list.',
@@ -371,6 +373,7 @@ export default defineConnector({
     }),
     action({
       name: 'send',
+      keywords: 'write compose new email',
       title: 'Send email',
       description: 'Sends a new email. The body is plain text.',
       input: z.object({
@@ -395,6 +398,7 @@ export default defineConnector({
     }),
     action({
       name: 'reply',
+      keywords: 'answer respond email',
       title: 'Reply',
       description: 'Replies in the same thread. replyAll also copies the other recipients.',
       input: z.object({
@@ -415,6 +419,7 @@ export default defineConnector({
     }),
     action({
       name: 'forward',
+      keywords: 'share pass on email',
       title: 'Forward',
       description: 'Forwards a message with all attachments (as the original email) and an optional note.',
       input: z.object({ id: MessageId, to: Addresses.min(1), body: z.string().max(200_000).default('') }),
@@ -429,6 +434,7 @@ export default defineConnector({
     }),
     action({
       name: 'create_draft',
+      keywords: 'draft compose prepare email',
       title: 'Create draft',
       description: 'Saves a draft (optionally a reply in a thread) for the user to review and send.',
       input: z.object({
@@ -458,6 +464,7 @@ export default defineConnector({
     }),
     action({
       name: 'modify',
+      keywords: 'archive mark read unread star label newsletters cleanup',
       title: 'Label / archive / mark',
       description:
         'Changes messages: mark read/unread, star, archive (remove from inbox), add or remove labels by name.',
@@ -487,6 +494,7 @@ export default defineConnector({
     }),
     action({
       name: 'trash',
+      keywords: 'delete remove spam emails bin',
       title: 'Move to trash',
       description: 'Moves messages to Trash (Gmail deletes them after 30 days; restore with untrash).',
       input: z.object({ ids: z.array(MessageId).min(1).max(100), untrash: z.boolean().default(false) }),
@@ -502,6 +510,7 @@ export default defineConnector({
     }),
     action({
       name: 'list_labels',
+      keywords: 'folders labels categories',
       title: 'List labels',
       description: 'Lists Gmail labels (system and user) with unread counts for user labels.',
       input: z.object({}),

@@ -163,6 +163,8 @@ export const ManifestAction = z.object({
   name: z.string().regex(NAME, 'use lowercase snake_case'),
   title: z.string().optional(),
   description: z.string().min(1),
+  /** Extra words for the hub's tool search only (see `ActionDefinition.keywords`). */
+  keywords: z.string().max(300).optional(),
   input: JsonSchemaObject.default({ type: 'object', properties: {} }),
   hints: z
     .object({

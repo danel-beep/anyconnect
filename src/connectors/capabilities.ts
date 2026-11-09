@@ -139,6 +139,8 @@ export interface CapabilityDefinition {
   title: string;
   /** Written for the AI. */
   description: string;
+  /** Extra words for tool search only, like `ActionDefinition.keywords`. */
+  keywords?: string;
   /** `list` capabilities fan out over all accounts by default and merge items; `single` target one. */
   kind: 'list' | 'single';
   risk: 'read' | 'write';
@@ -162,6 +164,7 @@ function capability<const T extends CapabilityDefinition>(definition: T): T {
 export const CAPABILITIES = {
   'messages.search': capability({
     id: 'messages.search',
+    keywords: 'who wrote find messages',
     title: 'Search messages everywhere',
     description:
       'Searches messages across all connected messengers and mailboxes (Telegram, WhatsApp, Slack, email…) in one call. Results are merged, newest first, each tagged with its service and account.',
@@ -182,6 +185,7 @@ export const CAPABILITIES = {
   }),
   'messages.list_chats': capability({
     id: 'messages.list_chats',
+    keywords: 'chats conversations dialogs unread',
     title: 'List chats everywhere',
     description:
       'Lists recent chats across all connected messengers, merged, most recent first, each tagged with its service and account. Use unread_only to see what needs an answer.',
@@ -210,6 +214,7 @@ export const CAPABILITIES = {
   }),
   'messages.send': capability({
     id: 'messages.send',
+    keywords: 'write text dm reply',
     title: 'Send a message',
     description:
       'Sends a chat message from one messenger account (Telegram, WhatsApp, Slack…). Reply from the account the conversation happened on.',
@@ -227,6 +232,7 @@ export const CAPABILITIES = {
   }),
   'mail.search': capability({
     id: 'mail.search',
+    keywords: 'find emails inbox unread new letters check mail who wrote',
     title: 'Search mail in all mailboxes',
     description:
       'Searches email in every connected mailbox at once. Results are merged, newest first, each tagged with its service and account; open one with mail_read.',
@@ -256,6 +262,7 @@ export const CAPABILITIES = {
   }),
   'mail.send': capability({
     id: 'mail.send',
+    keywords: 'write compose email reply',
     title: 'Send an email',
     description: 'Sends an email from one mailbox. To reply, pass reply_to_id so threading is kept.',
     kind: 'single',
@@ -272,6 +279,7 @@ export const CAPABILITIES = {
   }),
   'calendar.list_events': capability({
     id: 'calendar.list_events',
+    keywords: 'agenda meetings appointments schedule upcoming today tomorrow week',
     title: 'List calendar events',
     description: 'Lists events in a time range across all connected calendars, merged and sorted by start.',
     kind: 'list',
@@ -288,6 +296,7 @@ export const CAPABILITIES = {
   }),
   'calendar.create_event': capability({
     id: 'calendar.create_event',
+    keywords: 'schedule book meeting appointment invite',
     title: 'Create a calendar event',
     description: 'Creates an event in one calendar account.',
     kind: 'single',
@@ -304,6 +313,7 @@ export const CAPABILITIES = {
   }),
   'files.search': capability({
     id: 'files.search',
+    keywords: 'find document file drive folder',
     title: 'Search files everywhere',
     description: 'Searches files and documents across all connected drives and note apps in one call.',
     kind: 'list',
@@ -329,6 +339,7 @@ export const CAPABILITIES = {
   }),
   'tasks.list': capability({
     id: 'tasks.list',
+    keywords: 'todos to-do open tasks due',
     title: 'List tasks everywhere',
     description: 'Lists tasks across all connected task managers, merged and sorted by due date.',
     kind: 'list',
@@ -345,6 +356,7 @@ export const CAPABILITIES = {
   }),
   'tasks.create': capability({
     id: 'tasks.create',
+    keywords: 'add todo new task reminder',
     title: 'Create a task',
     description: 'Creates a task in one task manager account.',
     kind: 'single',
@@ -360,6 +372,7 @@ export const CAPABILITIES = {
   }),
   'contacts.search': capability({
     id: 'contacts.search',
+    keywords: 'find person phone number address',
     title: 'Search contacts everywhere',
     description: 'Finds people across address books, CRMs and messengers by name, email, phone or username.',
     kind: 'list',

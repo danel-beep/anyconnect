@@ -164,6 +164,7 @@ export function messengerActions<TConfig, TCredentials>(
   return [
     action({
       name: 'list_chats',
+      keywords: 'chats conversations dialogs unread',
       title: 'List chats',
       description: `Lists ${serviceName} chats of the account, most recent first, with unread counters. Use it to find a chat id for read_chat or send. New chats appear as soon as someone writes, so call it again instead of relying on an earlier answer. Answers from the hub's synced copy, without touching ${serviceName}.`,
       input: z.object({
@@ -207,6 +208,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'search',
+      keywords: 'find messages history',
       title: 'Search messages',
       description: `Full-text search over ${serviceName} messages of the account (all chats or one), newest first. Matches word beginnings, so "meet" finds "meeting" and "meets" (Russian word forms too). Filter by sender and dates.`,
       input: z.object({
@@ -253,6 +255,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'read_chat',
+      keywords: 'open conversation history messages',
       title: 'Read chat',
       description: `Returns the latest messages of a ${serviceName} chat in chronological order. Pass next_cursor as before to page back in time.`,
       input: z.object({
@@ -295,6 +298,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'whats_new',
+      keywords: 'new messages unread inbox who wrote today recent',
       title: "What's new",
       description: `New ${serviceName} messages since the last check, oldest first. Keep the returned cursor and pass it next time to get only newer messages; without a cursor returns the last since_hours hours.`,
       input: z.object({
@@ -325,6 +329,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'wait_for_reply',
+      keywords: 'answer response did they reply',
       title: 'Wait for a reply',
       description: `Waits for new messages and returns as soon as one arrives (from your last message in the chat on, without a cursor). Only when the user asked you to wait for a reply or carry on a conversation. On no_reply_yet, call again with the cursor while the user's time frame allows. Keep the default timeout unless your app allows tool calls over 60 s.`,
       input: z.object({
@@ -377,6 +382,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'start_conversation',
+      keywords: 'talk negotiate chat on my behalf',
       title: 'Carry on a conversation',
       description: `Only when the user asks you to talk with someone for them: wait for replies and answer them. The user approves once; then for \`hours\` your sends in this chat need no approval, up to max_messages. Loop: wait_for_reply, send, repeat. Keep to the goal. Stop and report to the user when it is reached, the person ends the talk or wants what only the user can decide, something looks wrong, or time runs out; then call end_conversation.`,
       input: z.object({
@@ -433,6 +439,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'send',
+      keywords: 'write message text dm reply',
       title: 'Send message',
       description: `Sends a text, or a file by https link, from this ${serviceName} account via a paced queue that protects it. Result: "sent", or "queued" with an eta. An identical request within 10 minutes is not sent twice. A first message to someone who never wrote to this account needs the user's explicit approval.`,
       input: z.object({
@@ -525,6 +532,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'mark_read',
+      keywords: 'seen',
       title: 'Mark chat as read',
       description: `Marks all messages of a ${serviceName} chat as read (the other side sees read receipts where the messenger shows them).`,
       input: z.object({ chat: z.string().max(64).describe('Chat id from list_chats') }),
@@ -534,6 +542,7 @@ export function messengerActions<TConfig, TCredentials>(
     }),
     action({
       name: 'get_attachment',
+      keywords: 'download file photo document media',
       title: 'Get attachment',
       description: `Downloads a file attached to a ${serviceName} message (photos and voice messages are returned so you can see or hear them).`,
       input: z.object({
