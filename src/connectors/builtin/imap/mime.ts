@@ -3,6 +3,8 @@
  * and the attachments in a BODYSTRUCTURE, and decoding a (possibly cut) body part for snippets.
  */
 
+import { snippetText } from '../../shape.js';
+
 export interface StructureNode {
   part?: string | undefined;
   type: string;
@@ -148,11 +150,11 @@ export function htmlToPreviewText(html: string): string {
 
 /** One line of text for result lists: no quotes, no whitespace runs, at most `max` characters. */
 export function toSnippet(text: string, max = 160): string {
-  const line = text
-    .split(/\r?\n/)
-    .filter((l) => !l.trimStart().startsWith('>'))
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+  return snippetText(
+    text
+      .split(/\r?\n/)
+      .filter((l) => !l.trimStart().startsWith('>'))
+      .join(' '),
+    max,
+  );
 }

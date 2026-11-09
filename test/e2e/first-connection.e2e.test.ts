@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
+import { resetDatabase, resultJson, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { AI_CLIENTS, SimulatedAiClient, serveClientDocuments } from './ai-clients.js';
 import { FakeInternet } from './fake-internet.js';
 import { decodeSent, FakeGoogle, type GoogleUser } from './fakes/google.js';
@@ -151,6 +151,24 @@ describe('first connection: Claude, Google sign-up and Gmail', () => {
     const one = await claude.call('gmail_search', { account: 'work', query: 'invoice' });
     expect(textOf(one)).toContain('PO-77');
     expect(textOf(one)).not.toContain('INV-2041');
+  });
+
+  it('marks the mail of every Gmail read tool where Claude reads it', async () => {
+    const marked = /^⟦untrusted ([0-9a-f]{8}) source="[^"]+"⟧\n[\s\S]+\n⟦\/untrusted \1⟧$/;
+    const found = await claude.call('gmail_search', { account: 'work', query: 'invoice' });
+    const id = resultJson(found).messages[0].id as string;
+    const reads: Array<[string, Record<string, unknown>]> = [
+      ['gmail_search', { query: 'invoice' }],
+      ['gmail_search', { account: 'work', query: 'invoice' }],
+      ['gmail_read', { account: 'work', id }],
+    ];
+    for (const [tool, args] of reads) {
+      const result = await claude.call(tool, args);
+      expect(result.isError, `${tool}: ${textOf(result)}`).toBeFalsy();
+      // Claude shows structuredContent instead of the text when there is one; it would skip the markers.
+      expect(result.structuredContent, tool).toBeUndefined();
+      expect(textOf(result), tool).toMatch(marked);
+    }
   });
 
   it('holds an email until the user confirms it, then sends it exactly once', async () => {

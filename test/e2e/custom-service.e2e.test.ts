@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
+import { resetDatabase, resultJson, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { AI_CLIENTS, SimulatedAiClient, serveClientDocuments } from './ai-clients.js';
 import { FakeInternet } from './fake-internet.js';
 import { FakeCrm } from './fakes/crm.js';
@@ -49,7 +49,7 @@ describe('a service without MCP, added from the chat', () => {
     await hub.services.pendingRunner.tick();
     const added = await claude.call('manyplug_add_service', { manifest });
     expect(added.isError, textOf(added)).toBeFalsy();
-    const data = added.structuredContent as { added: { service: string; tools: number }; next: string };
+    const data = resultJson(added) as { added: { service: string; tools: number }; next: string };
     expect(data.added.tools).toBe(3);
     service = data.added.service;
     expect(data.next).toContain('manyplug_connect_account');

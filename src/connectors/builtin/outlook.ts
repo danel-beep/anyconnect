@@ -8,6 +8,7 @@ import {
   defineConnector,
   requireOAuth,
 } from '../sdk.js';
+import { cleanLine, snippetText } from '../shape.js';
 import { day, dayAfter, mailRead, mailSearch, mailSend, quoted } from './email/capability.js';
 import { Addresses, formatAddress, isoDate, ReadOptions, stripQuotedTail } from './email/message.js';
 import { mapLimit } from './shared/concurrency.js';
@@ -123,8 +124,8 @@ function summary(m: GraphMessage) {
     ...(date ? { date } : {}),
     from: address(m.from),
     ...(to.length ? { to } : {}),
-    subject: m.subject || '(no subject)',
-    snippet: (m.bodyPreview ?? '').trim(),
+    subject: cleanLine(m.subject ?? '') || '(no subject)',
+    snippet: snippetText(m.bodyPreview ?? ''),
     ...(m.isRead === false ? { unread: true } : {}),
     ...(m.flag?.flagStatus === 'flagged' ? { flagged: true } : {}),
     ...(m.hasAttachments ? { attachments: true } : {}),

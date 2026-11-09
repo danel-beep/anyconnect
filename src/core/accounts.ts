@@ -660,6 +660,17 @@ export class AccountService {
     return result;
   }
 
+  /** Stores the account's identity (mailbox address, username) found by a connection test. */
+  async setIdentity(accountId: string, identity: string): Promise<void> {
+    await this.db
+      .update(accounts)
+      .set({
+        metadata: sql`${accounts.metadata} || ${JSON.stringify({ identity })}::jsonb`,
+        updatedAt: sql`${accounts.updatedAt}`,
+      })
+      .where(eq(accounts.id, accountId));
+  }
+
   async markStatus(accountId: string, status: AccountRow['status'], message: string | null): Promise<void> {
     await this.db.update(accounts).set({ status, statusMessage: message }).where(eq(accounts.id, accountId));
   }

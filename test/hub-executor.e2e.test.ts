@@ -5,7 +5,7 @@ import { ConnectorRegistry } from '../src/connectors/registry.js';
 import { defineConnector } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import { errorResult } from '../src/hub/result.js';
-import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
+import { resetDatabase, resultJson, startTestHub, type TestHub } from './helpers.js';
 
 let sent = 0;
 const outbox = defineConnector({
@@ -113,7 +113,7 @@ describe('executor in the running hub', () => {
     expect(text.length).toBeLessThan(2000 * 4);
     expect(text).toContain('"truncated"');
     const slim = await run('outbox_list', { fields: ['subject'] });
-    const items = (slim.structuredContent as { items: Array<Record<string, unknown>> }).items;
+    const items = (resultJson(slim) as { items: Array<Record<string, unknown>> }).items;
     expect(Object.keys(items[0]!)).toEqual(['id', 'subject']);
     // The internal executor details never reach the client.
     expect(slim).not.toHaveProperty('data');

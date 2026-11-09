@@ -1,4 +1,4 @@
-import { compact, pickFields, truncateText } from '../connectors/shape.js';
+import { compact, pickFields, stripInvisible, truncateText } from '../connectors/shape.js';
 import { serialize } from './result.js';
 import { charsForTokens, estimateTokens } from './tokens.js';
 
@@ -19,7 +19,17 @@ export interface Shaped {
   truncated: boolean;
 }
 
-const fits = (value: unknown, maxTokens: number) => estimateTokens(serialize(value)) <= maxTokens;
+export const fits = (value: unknown, maxTokens: number) => estimateTokens(serialize(value)) <= maxTokens;
+
+/** Removes characters that render as nothing from every string (see `stripInvisible`). */
+function cleanStrings(value: unknown): unknown {
+  if (typeof value === 'string') return stripInvisible(value);
+  if (Array.isArray(value)) return value.map(cleanStrings);
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, cleanStrings(v)]));
+  }
+  return value;
+}
 
 function capStrings(value: unknown, max: number): unknown {
   if (typeof value === 'string') return value.length > max ? truncateText(value, max) : value;
@@ -46,15 +56,20 @@ function mainList(value: unknown): { key: string | null; items: unknown[] } | un
 function withItems(value: unknown, key: string | null, items: unknown[], omitted: number): unknown {
   const note = {
     omitted,
-    hint: `Showing ${items.length} of ${items.length + omitted} items to stay within the size limit. Narrow the request (filters, a smaller limit, fields) or fetch the next page.`,
+    hint: `Showing ${items.length} of ${items.length + omitted} items to stay within the size limit. To see the others, ask for fewer at a time (a smaller limit, filters or fields).`,
   };
   if (key === null) return { items, truncated: note };
   return { ...(value as Record<string, unknown>), [key]: items, truncated: note };
 }
 
+/** Compaction and invisible-character cleanup without any size cut. */
+export function tidy(value: unknown): unknown {
+  return cleanStrings(compact(value));
+}
+
 export function shapeData(input: unknown, options: ShapeOptions): Shaped {
   let data = options.fields?.length ? pickFields(input, options.fields) : input;
-  data = compact(data);
+  data = tidy(data);
   if (fits(data, options.maxTokens)) return { data, truncated: false };
 
   const maxChars = charsForTokens(options.maxTokens);
