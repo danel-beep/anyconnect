@@ -52,7 +52,7 @@ import {
   type StageMap,
 } from './executor.js';
 import type { IdempotencyStore } from './idempotency.js';
-import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
+import { fitAccounts, listOf, mergeCapabilityList, type UnitOutcome } from './merge.js';
 import type { WorkspaceProfiles } from './profile-tools.js';
 import type { QuotaGate } from './quota.js';
 import {
@@ -176,6 +176,7 @@ export class Hub {
           idempotency: deps.idempotency,
           idempotencyWindowMs: deps.idempotencyWindowMs,
           maxResultTokens: deps.maxResultTokens,
+          setIdentity: (accountId, identity) => deps.accounts.setIdentity(accountId, identity),
           ...(deps.meter ? { meter: deps.meter } : {}),
           ...(deps.quota ? { quota: deps.quota } : {}),
         }),
@@ -636,7 +637,7 @@ export class Hub {
       const result = 'rejected' in unit ? unit.rejected : await this.executor.execute(unit.call);
       return { account: account.name, result };
     });
-    const merged = mergeAccounts(outcomes);
+    const merged = fitAccounts(outcomes, this.deps.maxResultTokens);
     if (merged.data === undefined) {
       return {
         result: errorResult(
@@ -645,10 +646,9 @@ export class Hub {
         ),
       };
     }
-    const result = dataResult(shapeData(merged.data, { maxTokens: this.deps.maxResultTokens }).data);
     return {
       result: carryUntrusted(
-        result,
+        dataResult(merged.data),
         outcomes.map((o) => o.result),
         tool.name,
       ),

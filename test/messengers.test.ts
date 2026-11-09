@@ -276,6 +276,19 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       'И ещё вопрос про доставку',
     ]);
 
+    // Every read tool marks what it returns, and sends nothing unmarked beside it.
+    for (const [tool, args] of [
+      ['telegram_bot_list_chats', {}],
+      ['telegram_bot_search', { query: 'счета ноябрь' }],
+      ['telegram_bot_read_chat', { chat: chats.chats[0].id }],
+    ] as const) {
+      const result = await call(tool, args);
+      expect(result.structuredContent, tool).toBeUndefined();
+      expect((result.content[0] as { text: string }).text, tool).toMatch(
+        /^⟦untrusted (\w+) source="Telegram Bot · shop"⟧\n[\s\S]+\n⟦\/untrusted \1⟧$/,
+      );
+    }
+
     // Nothing readable is stored in clear.
     const raw = JSON.stringify([
       ...(await hub.services.db.select().from(messengerMessages)),

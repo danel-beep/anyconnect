@@ -6,7 +6,7 @@ import type { Principal } from '../src/core/principal.js';
 import { toolCalls } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
 import { base32Decode, totp } from '../src/lib/totp.js';
-import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
+import { resetDatabase, resultJson, startTestHub, type TestHub } from './helpers.js';
 
 /** Managing the hub from the chat: the `manyplug_*` setup tools run on the workspace. */
 describe('setup tools (manage the hub from the AI assistant)', () => {
@@ -18,8 +18,7 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
     const catalog = await hub.services.hub.getCatalog(principal);
     return hub.services.hub.callTool(principal, catalog, tool, args);
   };
-  const json = (result: ToolCallResult): any =>
-    result.structuredContent ?? JSON.parse((result.content[0] as { text: string }).text);
+  const json = (result: ToolCallResult): any => resultJson(result);
   const text = (result: ToolCallResult) => (result.content[0] as { text: string }).text;
 
   beforeAll(async () => {

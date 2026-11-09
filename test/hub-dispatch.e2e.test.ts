@@ -112,6 +112,10 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
     // Fields outside the canonical schema are left out.
     expect(data.items[0].internal).toBeUndefined();
     expect(data.errors).toEqual([{ account: 'alpha:broken', error: expect.stringContaining('No access') }]);
+    // The merged messages stay marked as third-party text, with nothing unmarked beside them.
+    expect(isUntrusted(result)).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(resultText(result)).toMatch(/^⟦untrusted \w+ source="messages_search"⟧/);
   });
 
   it('narrows a unified tool to one service or one account', async () => {

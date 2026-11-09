@@ -6,7 +6,7 @@ import type { ToolCallResult } from '../src/hub/result.js';
 import type { TriggerEvent } from '../src/triggers/store.js';
 import { FakeInternet } from './e2e/fake-internet.js';
 import { registryWithFakeChat } from './fake-messenger.js';
-import { resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
+import { resetDatabase, resultJson, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
 /**
  * Triggers end to end: a message arrives in the hub's store, the matching trigger records it, and
@@ -27,8 +27,7 @@ describe('triggers', () => {
     const catalog = await hub.services.hub.getCatalog(mcp);
     return hub.services.hub.callTool(mcp, catalog, tool, args);
   };
-  const json = (result: ToolCallResult): any =>
-    result.structuredContent ?? JSON.parse((result.content[0] as { text: string }).text);
+  const json = (result: ToolCallResult): any => resultJson(result);
 
   /** A new incoming message, as a messenger sync stores it, then the NOTIFY the engine follows. */
   const inbound = async (text: string, from = 'Alice', chat = 'chat-alice') => {

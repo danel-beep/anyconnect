@@ -97,13 +97,18 @@ export function isUntrusted(result: ToolCallResult): boolean {
  * messages, web pages) in markers with a random id, so a prompt injection inside the content cannot
  * fake the end of the block. The hub's instructions tell the model to treat marked text as data.
  * `data` stays untouched: it is the value other hub steps (merging, shaping) work on.
+ *
+ * `structuredContent` is dropped: clients that support it (Claude among them) show the model the
+ * structured value instead of the text, which would bypass the markers. Hub tools declare no
+ * `outputSchema`, so the marked text is the complete result (MCP: the JSON goes in a text block).
  */
 export function markUntrusted<T extends ToolCallResult>(result: T, source: string): T {
   if (result.isError || result.content.length === 0) return result;
   const id = randomBytes(4).toString('hex');
   const label = source.replace(/[⟦⟧\n]/g, ' ');
+  const { structuredContent: _structured, ...rest } = result;
   return {
-    ...result,
+    ...(rest as T),
     content: result.content.map((block) =>
       block.type === 'text'
         ? {
