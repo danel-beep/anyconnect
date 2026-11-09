@@ -78,6 +78,7 @@
   и `src/web/app.tsx` (`PageHead`, `Meter`, `Tabs`, `CopyField`…). `Tabs variant="tiles"` — выбор
   плитками с логотипом (так выбирается ИИ-приложение в карточке «Подключите ИИ»).
 - Заголовок карточки с иконкой, пояснением и статусом справа — `SectionHead`.
+- Свёрнутая карточка (иконка, заголовок, пояснение) для того, что нужно редко, например ручной формы за «попросите ИИ», — `Fold`; ссылка на её id открывает её.
 - Логотип сервиса — `ServiceLogo` с `icon` из `SERVICE_META` (`src/web/catalog.ts`). Знаки берутся
   из `src/web/brand-icons.ts`, который собирает `node scripts/brand-icons.mjs`: из simple-icons, а
   знаки, которых там нет (Slack, Outlook, Twilio, Zoom…), — из `scripts/brand-icons-extra.json` с

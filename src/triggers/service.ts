@@ -3,6 +3,7 @@ import type { AccountRow, AccountService } from '../core/accounts.js';
 import type { Principal } from '../core/principal.js';
 import type { TriggerSource } from '../db/schema.js';
 import type {
+  AiKeyInfo,
   CheckedEvent,
   TriggerChange,
   TriggerDo,
@@ -12,6 +13,7 @@ import type {
 } from '../hub/trigger-tools.js';
 import { badRequest } from '../lib/errors.js';
 import type { AgentHub } from './ai/agent.js';
+import { AI_PROVIDER_IDS, AI_PROVIDERS } from './ai/providers.js';
 import type { AiKeyStore, AiKeyView } from './ai-keys.js';
 import type { TriggerEngine } from './engine.js';
 import { clip } from './match.js';
@@ -148,12 +150,47 @@ export class TriggerService implements WorkspaceTriggers {
     };
   }
 
-  async aiKeys(workspaceId: string) {
-    return (await this.deps.keys.list(workspaceId)).map((k) => ({
-      label: k.label,
-      provider: k.providerName,
-      model: k.model,
+  async aiKeys(workspaceId: string): Promise<AiKeyInfo[]> {
+    return (await this.deps.keys.list(workspaceId)).map(keyInfo);
+  }
+
+  async findAiKey(workspaceId: string, ref: string): Promise<AiKeyInfo | undefined> {
+    const found = await this.deps.keys.find(workspaceId, ref);
+    return found ? keyInfo(found) : undefined;
+  }
+
+  async updateAiKey(
+    workspaceId: string,
+    ref: string,
+    patch: { label?: string; model?: string; dailyRuns?: number | null },
+  ): Promise<AiKeyInfo> {
+    const found = await this.aiKeyByRef(workspaceId, ref);
+    return keyInfo(await this.deps.keys.update(workspaceId, found.id, patch));
+  }
+
+  async deleteAiKey(workspaceId: string, ref: string): Promise<AiKeyInfo> {
+    const found = await this.aiKeyByRef(workspaceId, ref);
+    await this.deps.keys.delete(workspaceId, found.id);
+    return keyInfo(found);
+  }
+
+  get aiProviders(): Array<{ id: string; name: string; defaultModel: string }> {
+    return AI_PROVIDER_IDS.map((id) => ({
+      id,
+      name: AI_PROVIDERS[id].name,
+      defaultModel: AI_PROVIDERS[id].defaultModel,
     }));
+  }
+
+  private async aiKeyByRef(workspaceId: string, ref: string): Promise<AiKeyView> {
+    const found = await this.deps.keys.find(workspaceId, ref);
+    if (found) return found;
+    const keys = await this.deps.keys.list(workspaceId);
+    throw badRequest(
+      keys.length
+        ? `Unknown AI key "${ref}". Use one of: ${keys.map((k) => k.label).join(', ')}`
+        : `No AI key yet: the user adds one on ${this.deps.aiPageUrl}.`,
+    );
   }
 
   /** The accounts each source can watch, for the dashboard's picker. */
@@ -351,5 +388,19 @@ function checked(event: TriggerEvent, trigger: Trigger): CheckedEvent {
     preview: clip(item.text, 280),
     at: item.at,
     ...(action.kind === 'check' && action.task ? { task: action.task } : {}),
+  };
+}
+
+function keyInfo(k: AiKeyView): AiKeyInfo {
+  return {
+    id: k.id,
+    label: k.label,
+    provider: k.providerName,
+    model: k.model,
+    dailyRuns: k.dailyRuns,
+    runsToday: k.runsToday,
+    tokensToday: k.tokensToday,
+    lastUsedAt: k.lastUsedAt,
+    lastError: k.lastError,
   };
 }

@@ -274,6 +274,33 @@ export const SectionHead: FC<{ icon: IconName; title: string; hint?: string; asi
   </div>
 );
 
+/**
+ * A folded card: an icon, a title and a one-line explanation, opened on demand. For what most
+ * people never need (a manual form behind the "ask your AI" way), so it does not crowd the page.
+ * A link to its id, or to anything inside it, opens it (client script `openTarget`).
+ */
+export const Fold: FC<{
+  id: string;
+  icon: IconName;
+  title: string;
+  sub?: string;
+  open?: boolean;
+  children?: Child;
+}> = ({ id, icon, title, sub, open, children }) => (
+  <details class="card fold" id={id} open={open}>
+    <summary>
+      <span class="fold-icon" aria-hidden="true">
+        <Icon name={icon} />
+      </span>
+      <span class="grow">
+        <span class="fold-title">{title}</span>
+        {sub ? <span class="muted small fold-sub">{sub}</span> : null}
+      </span>
+    </summary>
+    <div class="fold-body">{children}</div>
+  </details>
+);
+
 /** Width class for a 0–100 % value in 5 % steps (no inline styles under the CSP). */
 export const pctClass = (prefix: 'w' | 'h', used: number, limit: number | null): string => {
   if (limit === null || limit <= 0) return `${prefix}-0`;

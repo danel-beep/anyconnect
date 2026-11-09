@@ -33,5 +33,21 @@ ul.plain>li.key-row{display:grid;grid-template-columns:minmax(0,1fr);justify-con
 .key-head .grow{min-width:0;overflow-wrap:anywhere}
 .key-head form{margin:0}
 .key-error{color:var(--danger);margin-top:3px}
+.trigger-kinds-title{margin:20px 0 10px;font-size:14.5px;font-weight:600}
+.trigger-kinds{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.trigger-kinds li{display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg-subtle);min-width:0}
+.trigger-kinds li strong{font-size:14.5px}
+.key-paste{display:flex;gap:10px;align-items:stretch}
+.key-paste input{flex:1;min-width:0}
+.key-paste button{flex:none}
+.trigger-form .key-paste+.hint{margin:10px 0 0}
+.key-change{margin:0}
+details.key-edit{border:0;margin:0}
+details.key-edit summary{padding:0 0 0 18px;font-size:13px;font-weight:560;color:var(--accent-ink)}
+details.key-edit summary::after{left:2px;right:auto;width:7px;height:7px;transform:translateY(-50%) rotate(-45deg)}
+details.key-edit[open] summary::after{transform:translateY(-70%) rotate(45deg)}
+details.key-edit .inline-form{margin-top:12px}
+details.key-edit .hint{margin:8px 0 0}
+@media (max-width:640px){.trigger-kinds{grid-template-columns:1fr}.key-paste{flex-direction:column}}
 @media (max-width:640px){ul.plain>li.trigger-row,ul.plain>li.trigger-event{flex-wrap:wrap}.trigger-event>.small{white-space:normal}}
 `;
