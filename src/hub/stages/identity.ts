@@ -13,7 +13,8 @@ const TEST_TIMEOUT_MS = 5_000;
  * (credentials already open), so it works for sealed accounts too. Never changes the result.
  */
 export function identityStage(deps: {
-  setIdentity: (accountId: string, identity: string) => Promise<void>;
+  /** `defaultLabel`: the service name, which a never renamed account still carries as its label. */
+  setIdentity: (accountId: string, identity: string, defaultLabel: string) => Promise<void>;
   /** Clock for tests. */
   now?: () => number;
 }): Middleware {
@@ -33,7 +34,7 @@ export function identityStage(deps: {
         new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), TEST_TIMEOUT_MS).unref()),
       ]);
       if (test?.ok && test.identity) {
-        await deps.setIdentity(account.id, test.identity);
+        await deps.setIdentity(account.id, test.identity, connector.name);
         account.identity = test.identity;
         tried.delete(account.id);
       }

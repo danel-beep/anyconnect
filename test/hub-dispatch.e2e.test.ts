@@ -190,7 +190,7 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
   });
 
   it('asks for English words when a search in another language finds nothing', async () => {
-    const data = json(await call('manyplug_search_tools', { query: 'непрочитанные письма' }));
+    const data = json(await call('manyplug_search_tools', { query: '未读邮件' }));
     expect(data.tools).toEqual([]);
     expect(data.hint).toContain('search again in English');
     const plain = json(await call('manyplug_search_tools', { query: 'zzzz qqqq' }));

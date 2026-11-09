@@ -164,4 +164,17 @@ describe('mail results on several mailboxes', () => {
     await call('mailbox_search', { account: 'steve', limit: 1 });
     expect(tests).toBe(1);
   });
+
+  it('relabels an account still named after its service with the identity it finds, never a renamed one', async () => {
+    await hub.services.db
+      .update(accounts)
+      .set({ metadata: {}, label: 'Mailbox' })
+      .where(eq(accounts.name, 'steve'));
+    await hub.services.db.update(accounts).set({ metadata: {} }).where(eq(accounts.name, 'work'));
+    await call('mailbox_search', { account: 'steve', limit: 1 });
+    await call('mailbox_search', { account: 'work', limit: 1 });
+    const after = await hub.services.accounts.list(principal.workspaceId);
+    expect(after.find((a) => a.name === 'steve')!.label).toBe('steve@example.com');
+    expect(after.find((a) => a.name === 'work')!.label).toBe('work');
+  });
 });

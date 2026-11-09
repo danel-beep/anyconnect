@@ -723,7 +723,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
                           </a>
                         </div>
                         <div class="sub">
-                          {a.service} · {a.identity ?? a.name}
+                          {a.service} · {a.identity && a.identity !== a.label ? a.identity : a.name}
                         </div>
                       </div>
                       <div class="ops inline">
@@ -992,7 +992,7 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
           </a>{' '}
           <AccountStatus t={t} a={a} />
         </div>
-        <div class="sub">{a.identity ?? a.name}</div>
+        <div class="sub">{a.identity && a.identity !== a.label ? a.identity : a.name}</div>
         {broken ? (
           <div class="sub error">
             <ProblemText t={t} message={a.statusMessage} status={a.status} />

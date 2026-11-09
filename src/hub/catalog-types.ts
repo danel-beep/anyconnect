@@ -146,4 +146,6 @@ export interface Catalog {
   services: CatalogService[];
   instructions: string;
   stats: CatalogStats;
+  /** Recent call counts per tool name (30 days), so search ranks the workspace's habits higher. */
+  usage?: Readonly<Record<string, number>>;
 }
