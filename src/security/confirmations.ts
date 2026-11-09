@@ -1,3 +1,4 @@
+import type { OwnerNotifier } from '../core/owner-notices.js';
 import type { RiskLevel } from '../db/schema.js';
 import type { Logger } from '../logger.js';
 import { DEFAULT_LOCALE, type Locale, type Translate } from '../web/i18n.js';
@@ -104,6 +105,11 @@ export class ConfirmationCenter {
        * Without it, or when it declines, the bot says the link is invalid.
        */
       onOtherStart?: BotStartHandler;
+      /**
+       * Where to tell an owner without Telegram that a trigger waits for them (email). A trigger has
+       * no chat to ask in, so without it the request would wait unseen until it expires.
+       */
+      fallback?: OwnerNotifier;
     },
   ) {}
 
@@ -170,13 +176,18 @@ export class ConfirmationCenter {
     return [];
   }
 
-  /** Sends the call to the owner's Telegram (if linked). Never throws: the web link always works. */
+  /**
+   * Sends the call to the owner's Telegram (if linked); a trigger's request goes by email instead
+   * when Telegram is not linked. Never throws: the web link always works.
+   */
   async notify(row: PendingCallRow): Promise<void> {
     const { bot, channels, pending, logger } = this.deps;
-    if (!bot) return;
     try {
-      const target = await channels.telegram(row.principal.userId);
-      if (!target) return;
+      const target = bot ? await channels.telegram(row.principal.userId) : undefined;
+      if (!bot || !target) {
+        await this.notifyElsewhere(row);
+        return;
+      }
       const locale = pickLocale(target.locale);
       const message = await bot.sendMessage(
         target.chat,
@@ -187,6 +198,20 @@ export class ConfirmationCenter {
     } catch (error) {
       logger.warn({ err: error, pendingCall: row.id }, 'telegram confirmation not delivered');
     }
+  }
+
+  private async notifyElsewhere(row: PendingCallRow): Promise<void> {
+    const { fallback } = this.deps;
+    if (!fallback || row.principal.kind !== 'automation' || row.status !== 'awaiting_confirmation') return;
+    const d = await this.deps.describe(row, DEFAULT_LOCALE);
+    await fallback.notify(row.principal.userId, {
+      kind: 'confirmation_waiting',
+      action: d.action,
+      service: d.service,
+      account: d.account,
+      url: this.confirmUrl(row.id),
+      expiresMinutes: Math.max(1, Math.round((row.expiresAt.getTime() - Date.now()) / 60_000)),
+    });
   }
 
   /** Updates the Telegram message after the call changed state (decided, ran, cancelled). */

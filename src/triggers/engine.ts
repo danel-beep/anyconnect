@@ -163,7 +163,9 @@ export class TriggerEngine {
     await this.deps.store.exclusive(trigger.id, account.id, async () => {
       // An account connected after the trigger was made starts where its feed is now.
       const cursor = (await this.deps.store.cursor(trigger.id, account.id)) ?? (await source.start(account));
-      const page = await source.read(account, cursor, signal ?? AbortSignal.timeout(30_000));
+      const page = await source.read(account, cursor, signal ?? AbortSignal.timeout(30_000), {
+        ...(trigger.spec.filter.spam ? { spam: true } : {}),
+      });
       for (const item of page.items) {
         if (matchesFilter(trigger.spec.filter, item)) await this.handle(trigger, account, item);
       }

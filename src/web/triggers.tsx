@@ -24,7 +24,7 @@ export interface TriggerRowView {
   when: 'message' | 'mail';
   accounts: string;
   everyAccount: boolean;
-  filter: Record<string, string>;
+  filter: Record<string, string | boolean>;
   do: TriggerKind;
   action: string;
   dailyLimit: number | null;
@@ -72,8 +72,12 @@ const STATUS_CLASS: Record<TriggerEventStatus, string> = {
   skipped: 'badge',
 };
 
-const filterText = (ctx: PageCtx, filter: Record<string, string>): string => {
-  const parts = Object.entries(filter).map(([k, v]) => `${ctx.t(`triggers.filter.${k}` as Key)}: ${v}`);
+const filterText = (ctx: PageCtx, filter: Record<string, string | boolean>): string => {
+  const parts = Object.entries(filter).map(([k, v]) =>
+    typeof v === 'boolean'
+      ? ctx.t(`triggers.filter.${k}` as Key)
+      : `${ctx.t(`triggers.filter.${k}` as Key)}: ${v}`,
+  );
   return parts.length ? parts.join(' · ') : ctx.t('triggers.filter.any');
 };
 

@@ -35,6 +35,18 @@ export type OwnerNotice =
       url: string;
     }
   | {
+      /** A trigger's action waits for the owner's confirmation and they have no Telegram linked. */
+      kind: 'confirmation_waiting';
+      /** What it wants to do, e.g. "Send message". */
+      action: string;
+      service: string;
+      account: string;
+      /** The confirmation page. */
+      url: string;
+      /** It is cancelled after this long without an answer. */
+      expiresMinutes: number;
+    }
+  | {
       /** A trigger reached the daily limit the user set (`limit`) or its AI key did (`ai_limit`). */
       kind: 'trigger_paused';
       trigger: string;

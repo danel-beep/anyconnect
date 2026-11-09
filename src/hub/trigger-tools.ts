@@ -32,7 +32,7 @@ export interface TriggerInfo {
   accounts: string;
   /** Watches every account of its source (the label then reads "all mail" / "all messages"). */
   everyAccount: boolean;
-  filter: Record<string, string>;
+  filter: Record<string, string | boolean>;
   do: TriggerDo;
   /** Short description of the action, e.g. "telegram_send" or "AI (OpenAI, 3 tools)". */
   action: string;
@@ -48,7 +48,18 @@ export interface TriggerChange {
   name?: string;
   when?: TriggerWhen;
   account?: string;
-  filter?: { from?: string; chat?: string; subject?: string; text?: string };
+  filter?: {
+    from?: string;
+    chat?: string;
+    subject?: string;
+    text?: string;
+    not_from?: string;
+    not_chat?: string;
+    not_subject?: string;
+    not_text?: string;
+    skip_bulk?: boolean;
+    spam?: boolean;
+  };
   do?: TriggerDo;
   task?: string;
   tool?: string;
@@ -135,9 +146,15 @@ const FilterInput = z
     chat: z.string().trim().max(300).optional(),
     subject: z.string().trim().max(300).optional(),
     text: z.string().trim().max(300).optional(),
+    not_from: z.string().trim().max(300).optional(),
+    not_chat: z.string().trim().max(300).optional(),
+    not_subject: z.string().trim().max(300).optional(),
+    not_text: z.string().trim().max(300).optional(),
+    skip_bulk: z.boolean().optional(),
+    spam: z.boolean().optional(),
   })
   .describe(
-    'Every field set must match (case-insensitive "contains"; commas separate alternatives): from = sender name, @username, phone or email; chat = chat title (messages); subject = email subject (mail); text = words in the message or the email subject and preview. Empty: every new item.',
+    'Every field set must match (case-insensitive "contains"; commas separate alternatives): from = sender name, @username, phone or email; chat = chat title (messages); subject = email subject (mail); text = words in the message or the email subject and preview. not_from / not_chat / not_subject / not_text skip an item that contains any of their words. Mail: skip_bulk skips newsletters, notifications and no-reply senders for free, before any action or AI runs (recommend it for "important mail"); spam also watches the spam folder. Mail triggers watch the inbox. Empty: every new item.',
   );
 
 const ChangeFields = {

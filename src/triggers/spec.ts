@@ -37,6 +37,15 @@ export const TriggerFilter = z.object({
   chat: words('Chat or group title contains (messages only)'),
   subject: words('Email subject contains (mail only)'),
   text: words('Message text or email subject and preview contains'),
+  /** Exclusions: an event matching any of their alternatives is skipped, before any action runs. */
+  not_from: words('Skip when the sender contains'),
+  not_chat: words('Skip when the chat title contains (messages only)'),
+  not_subject: words('Skip when the email subject contains (mail only)'),
+  not_text: words('Skip when the text or email subject and preview contains'),
+  /** Mail: skip newsletters, notifications and automatic mail (list headers, noreply senders…). */
+  skip_bulk: z.boolean().optional(),
+  /** Mail: also watch the spam folder (an important email can land there). */
+  spam: z.boolean().optional(),
 });
 export type TriggerFilter = z.output<typeof TriggerFilter>;
 
@@ -103,6 +112,8 @@ export interface TriggerItem {
   subject?: string;
   /** Message text, or the email's preview. */
   text: string;
+  /** Mail sent to many by a machine (newsletter, notification), when the service tells. */
+  bulk?: boolean;
   /** ISO time it was sent. */
   at: string;
 }

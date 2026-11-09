@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { outsideLimits } from '../src/hub/stages/automation.js';
 import { narrows } from '../src/hub/trigger-tools.js';
 import { AI_PROVIDERS, AiProviderError, takesEffort } from '../src/triggers/ai/providers.js';
-import { alternatives, matchesFilter, renderArgs } from '../src/triggers/match.js';
+import { alternatives, isBulk, matchesFilter, renderArgs } from '../src/triggers/match.js';
 import { limitsOf } from '../src/triggers/service.js';
 import { counterpartOf, type TriggerItem, TriggerSpec } from '../src/triggers/spec.js';
 
@@ -36,6 +36,43 @@ describe('trigger filters', () => {
 
   it('groups events by account and chat for loop protection', () => {
     expect(counterpartOf(item)).toBe('telegram:main|chat_9');
+  });
+});
+
+describe('filter exclusions and bulk mail', () => {
+  const mail: TriggerItem = {
+    source: 'mail',
+    service: 'gmail',
+    account: 'work',
+    id: 'm1',
+    from: 'Acme <billing@acme.example>',
+    subject: 'Invoice 42',
+    text: 'Please pay by Friday',
+    at: '2026-11-09T10:00:00Z',
+  };
+
+  it('skips an item that contains any excluded word', () => {
+    expect(matchesFilter({ text: 'invoice' }, mail)).toBe(true);
+    expect(matchesFilter({ text: 'invoice', not_from: 'acme' }, mail)).toBe(false);
+    expect(matchesFilter({ not_subject: 'receipt, invoice' }, mail)).toBe(false);
+    expect(matchesFilter({ not_text: 'unsubscribe' }, mail)).toBe(true);
+  });
+
+  it('skips mail sent to many: flagged by the service or from a no-reply address', () => {
+    expect(isBulk(mail)).toBe(false);
+    expect(isBulk({ ...mail, bulk: true })).toBe(true);
+    for (const from of [
+      'GitHub <notifications@github.com>',
+      'no-reply@bank.example',
+      'Shop <newsletter@shop.example>',
+      'MAILER-DAEMON@mx.example',
+    ])
+      expect(isBulk({ ...mail, from }), from).toBe(true);
+    expect(isBulk({ ...mail, from: 'Noreen <noreen@acme.example>' })).toBe(false);
+    expect(matchesFilter({ skip_bulk: true }, { ...mail, bulk: true })).toBe(false);
+    expect(matchesFilter({ skip_bulk: true }, mail)).toBe(true);
+    // Messengers have no bulk mail.
+    expect(isBulk({ ...item, from: 'noreply@x.example' })).toBe(false);
   });
 });
 

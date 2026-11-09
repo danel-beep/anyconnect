@@ -25,12 +25,35 @@ const containsAny = (haystack: string | undefined, needles: string[]) => {
 
 /** Whether the item matches every field the filter sets (an empty filter matches everything). */
 export function matchesFilter(filter: TriggerFilter, item: TriggerItem): boolean {
+  const text = [item.subject, item.text].filter(Boolean).join('\n');
+  const excluded = (haystack: string | undefined, value: string | undefined) => {
+    const needles = alternatives(value);
+    return needles.length > 0 && containsAny(haystack, needles);
+  };
+  if (
+    excluded(item.from, filter.not_from) ||
+    excluded(item.chatTitle, filter.not_chat) ||
+    excluded(item.subject, filter.not_subject) ||
+    excluded(text, filter.not_text)
+  )
+    return false;
+  if (filter.skip_bulk && isBulk(item)) return false;
   return (
     containsAny(item.from, alternatives(filter.from)) &&
     containsAny(item.chatTitle, alternatives(filter.chat)) &&
     containsAny(item.subject, alternatives(filter.subject)) &&
-    containsAny([item.subject, item.text].filter(Boolean).join('\n'), alternatives(filter.text))
+    containsAny(text, alternatives(filter.text))
   );
+}
+
+/** Addresses machines send from: nobody reads replies to them. */
+const AUTOMATED_SENDER =
+  /(^|[<\s"'])(no[-_.]?reply|do[-_.]?not[-_.]?reply|mailer-daemon|postmaster|bounces?|newsletters?|notifications?|notify)[-_.+\w]*@/i;
+
+/** Mail sent to many by a machine: the service said so, or the sender is a no-reply address. */
+export function isBulk(item: TriggerItem): boolean {
+  if (item.source !== 'mail') return false;
+  return Boolean(item.bulk) || (item.from !== undefined && AUTOMATED_SENDER.test(item.from));
 }
 
 /** Text fields a filter or a template can refer to. */

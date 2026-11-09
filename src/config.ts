@@ -119,6 +119,11 @@ const EnvSchema = z.object({
   REQUIRE_2FA: bool(false),
   /** Background jobs: account health checks, token refresh, later schedules and triggers. */
   JOBS_ENABLED: bool(true),
+  /**
+   * How often mailboxes with an active mail trigger are checked, in seconds (0: only the 2-minute
+   * background job). Only mailboxes some trigger watches are read.
+   */
+  TRIGGERS_MAIL_POLL_SECONDS: z.coerce.number().int().min(0).max(600).default(30),
   /** Token budget for the tool list; above it the hub lists search/call meta tools instead (auto mode). */
   TOOL_LIST_TOKEN_BUDGET: z.coerce.number().int().min(500).default(3000),
   /** Internal URL of the messenger gateway (Render private service), e.g. http://anyconnect-gateway:10000. */
@@ -214,6 +219,8 @@ export interface AppConfig {
   /** Connectors may connect to private addresses (see ALLOW_PRIVATE_NETWORK). */
   allowPrivateNetwork: boolean;
   tools: { maxResultTokens: number; idempotencyWindowMs: number; listTokenBudget: number };
+  /** Triggers: how often watched mailboxes are read (0: only by the background job). */
+  triggers: { mailPollMs: number };
   confirmations: {
     waitMs: number;
     ttlMs: number;
@@ -566,6 +573,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       idempotencyWindowMs: env.IDEMPOTENCY_WINDOW_SECONDS * 1000,
       listTokenBudget: env.TOOL_LIST_TOKEN_BUDGET,
     },
+    triggers: { mailPollMs: env.TRIGGERS_MAIL_POLL_SECONDS * 1000 },
     confirmations: {
       waitMs: env.CONFIRMATION_WAIT_SECONDS * 1000,
       ttlMs: env.CONFIRMATION_TTL_MINUTES * 60_000,

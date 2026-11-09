@@ -6,6 +6,7 @@ import type { Db } from '../db/client.js';
 import type { DbListener } from '../db/listener.js';
 import type { JobDefinition, JobQueue } from '../jobs/queue.js';
 import type { SecretBox } from '../lib/crypto.js';
+import { DueLoop } from '../lib/due-loop.js';
 import type { Logger } from '../logger.js';
 import { INBOUND_CHANNEL } from '../messaging/inbound-signal.js';
 import type { Messaging } from '../messaging/index.js';
@@ -24,7 +25,10 @@ export interface Triggers {
   engine: TriggerEngine;
   service: TriggerService;
   jobs: JobDefinition[];
-  /** Follows new messages (Postgres NOTIFY from every process that stores them). */
+  /**
+   * Follows new messages (Postgres NOTIFY from every process that stores them) and reads watched
+   * mailboxes every `mailPollMs` (mail has no push without paid infrastructure).
+   */
   start(): void;
   stop(): void;
 }
@@ -45,6 +49,8 @@ export function createTriggers(deps: {
   publicUrl: string;
   logger: Logger;
   onError?: (error: unknown, context: Record<string, string | number | boolean | undefined>) => void;
+  /** How often `start()` reads watched mailboxes (0 or absent: only the `triggers.scan` job). */
+  mailPollMs?: number;
 }): Triggers {
   const store = new TriggerStore(deps.db, deps.secrets, deps.messaging.ciphers);
   const keys = new AiKeyStore(deps.db, deps.secrets);
@@ -94,6 +100,9 @@ export function createTriggers(deps: {
     aiPageUrl,
   });
   let unlisten: (() => void) | undefined;
+  let mailLoop: DueLoop | undefined;
+  const scanMail = (timeoutMs = 90_000) =>
+    engine.scanAll('mail', { background: true, signal: AbortSignal.timeout(timeoutMs) });
   return {
     store,
     keys,
@@ -115,7 +124,8 @@ export function createTriggers(deps: {
         expectEveryMs: 10 * 60_000,
         run: async () => {
           await engine.scanAll('message', { background: true });
-          await engine.scanAll('mail', { background: true, signal: AbortSignal.timeout(90_000) });
+          // The poll loop of `start()` reads mail more often; this is the backstop without it.
+          if (!mailLoop) await scanMail();
           await engine.failStale();
         },
       },
@@ -128,6 +138,19 @@ export function createTriggers(deps: {
       },
     ],
     start: () => {
+      const every = deps.mailPollMs ?? 0;
+      if (every > 0 && !mailLoop) {
+        mailLoop = new DueLoop({
+          work: async () => {
+            await scanMail(Math.max(every * 3, 60_000));
+            return new Date(Date.now() + every);
+          },
+          idleMs: () => every,
+          onError: (error) => deps.onError?.(error, { step: 'mail_poll' }),
+          minGapMs: Math.min(every, 5_000),
+        });
+        mailLoop.start();
+      }
       unlisten ??= deps.listener?.listen(
         INBOUND_CHANNEL,
         (accountId) => void engine.onInbound(accountId),
@@ -138,6 +161,8 @@ export function createTriggers(deps: {
     stop: () => {
       unlisten?.();
       unlisten = undefined;
+      void mailLoop?.stop();
+      mailLoop = undefined;
     },
   };
 }

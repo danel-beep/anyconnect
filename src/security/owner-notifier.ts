@@ -59,6 +59,13 @@ export function renderNotice(t: Translate, notice: OwnerNotice): string {
         '',
         `<a href="${escapeHtml(notice.url)}">${escapeHtml(t('notice.trigger.open'))}</a>`,
       ].join('\n');
+    case 'confirmation_waiting':
+      return [
+        `<b>${escapeHtml(t('email.confirm.subject'))}</b>`,
+        '',
+        escapeHtml(t('email.confirm.body', { ...notice, minutes: notice.expiresMinutes })),
+        `<a href="${escapeHtml(notice.url)}">${escapeHtml(t('email.confirm.cta'))}</a>`,
+      ].join('\n');
     case 'trigger_paused':
       return [
         `<b>${escapeHtml(t(notice.reason === 'limit' ? 'notice.trigger.paused' : 'notice.trigger.aiLimit', { name: notice.trigger, n: notice.limit }))}</b>`,

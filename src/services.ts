@@ -65,6 +65,7 @@ import { createMessaging, type Messaging } from './messaging/index.js';
 import { TelegramAutomation } from './messaging/telegram-automation.js';
 import { BillingNotices } from './notices/billing-notices.js';
 import { NoticeService } from './notices/notices.js';
+import { EmailOwnerNotifier, FallbackOwnerNotifier } from './notices/owner-email.js';
 import { ClientRegistry } from './oauth/clients.js';
 import { OAuthServer } from './oauth/server.js';
 import { BackupService, type DumpTools } from './ops/backups.js';
@@ -327,6 +328,8 @@ export function createServices(
   const mailer =
     overrides.mailer ?? createMailer(config.mail, { log: (fields, msg) => logger.info(fields, msg) });
   const notices = new NoticeService({ db, mailer, publicUrl: config.publicUrl, logger });
+  // Owner notices for owners without Telegram (and triggers' confirmations): by email.
+  const emailOwnerNotifier = new EmailOwnerNotifier({ db, mailer, publicUrl: config.publicUrl, logger });
   const billingNotices = new BillingNotices({ db, notices, entitlements, publicUrl: config.publicUrl });
   const referrals = new ReferralService({ db, entitlements, notices, publicUrl: config.publicUrl });
   entitlements.listen(billingNotices);
@@ -483,6 +486,7 @@ export function createServices(
     t: translator,
     logger,
     ...(telegramLanding ? { onOtherStart: telegramLanding.handle } : {}),
+    fallback: emailOwnerNotifier,
   });
   // People connect their own Telegram by adding the hub's bot under Chat Automation.
   telegramAutomation = telegramBot
@@ -557,12 +561,10 @@ export function createServices(
       owners: view.access.owners,
     };
   };
-  const ownerNotifier = new TelegramOwnerNotifier({
-    channels: notificationChannels,
-    bot: telegramBot,
-    t: translator,
-    logger,
-  });
+  const ownerNotifier = new FallbackOwnerNotifier([
+    new TelegramOwnerNotifier({ channels: notificationChannels, bot: telegramBot, t: translator, logger }),
+    emailOwnerNotifier,
+  ]);
   const alerts = new AccountAlerts({
     db,
     connectors,
@@ -591,6 +593,7 @@ export function createServices(
     publicUrl: config.publicUrl,
     logger,
     onError: (error, context) => ops.errors.capture(error, { source: 'trigger', context }),
+    mailPollMs: config.triggers.mailPollMs,
   });
   for (const job of [
     ...builtinJobs({
