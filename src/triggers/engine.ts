@@ -21,6 +21,8 @@ export const LOOP_RUNS = 5;
 export const LOOP_WINDOW_MS = 10 * 60_000;
 /** An event still `running` after this was left by a process that stopped. */
 const STALE_MS = 15 * 60_000;
+/** How often a test run is checked for its outcome. */
+const TEST_POLL_MS = 500;
 /** How long one run may take (an AI wake with a few tool calls). */
 const RUN_TIMEOUT_MS = 120_000;
 /** Identity of the AI app every trigger of a workspace acts as (one entry in the AI apps list). */
@@ -29,6 +31,18 @@ export const AUTOMATION_CLIENT = {
   name: 'Triggers',
   kind: 'automation',
 } as const;
+
+/** What trying a trigger on an item that already arrived found (see {@link TriggerEngine.test}). */
+export interface TriggerTest {
+  /** Items of the last day it looked at. */
+  looked: number;
+  item?: TriggerItem;
+  matched: boolean;
+  /** Whether the action ran (an event was recorded). */
+  ran: boolean;
+  /** The run's event: still `running` when the wait ran out. */
+  event?: TriggerEvent;
+}
 
 export interface TriggerEngineDeps {
   store: TriggerStore;
@@ -175,23 +189,41 @@ export class TriggerEngine {
 
   // --- Deciding what to do with a match --------------------------------------------
 
-  private async handle(trigger: Trigger, account: AccountRow, item: TriggerItem): Promise<void> {
+  /**
+   * Records a matched item and starts its action; returns the event's id (none for a repeat). A
+   * test run (`test`) has its own key, so an item already handled can be tried again.
+   */
+  private async handle(
+    trigger: Trigger,
+    account: AccountRow,
+    item: TriggerItem,
+    options: { test?: boolean } = {},
+  ): Promise<string | undefined> {
     const { store } = this.deps;
     const action = trigger.spec.action;
+    const key = `${item.service}:${item.account}|${item.id}`;
     const base = {
       trigger,
       accountId: account.id,
       item,
-      eventKey: store.hash(`${item.service}:${item.account}|${item.id}`),
+      eventKey: store.hash(options.test ? `test:${crypto.randomUUID()}:${key}` : key),
       counterpartKey: store.hash(counterpartOf(item)),
     };
-    const skip = (skipped: NonNullable<EventResult['skipped']>, aiKeyId?: string) =>
-      store.recordEvent({ ...base, status: 'skipped', result: { skipped }, ...(aiKeyId ? { aiKeyId } : {}) });
+    const skip = async (skipped: NonNullable<EventResult['skipped']>, aiKeyId?: string) =>
+      (
+        await store.recordEvent({
+          ...base,
+          status: 'skipped',
+          result: { skipped },
+          ...(aiKeyId ? { aiKeyId } : {}),
+        })
+      )?.id;
 
     // The user's daily limit: the trigger stops and the user is told once.
     if (trigger.dailyRuns !== null && (await store.runsToday(trigger.id)) >= trigger.dailyRuns) {
-      await skip('limit');
-      if (await store.pause(trigger.id, 'limit')) {
+      const id = await skip('limit');
+      // A test run reports the limit; only real events stop the trigger.
+      if (!options.test && (await store.pause(trigger.id, 'limit'))) {
         await this.notify(trigger, {
           kind: 'trigger_paused',
           trigger: trigger.name,
@@ -200,7 +232,7 @@ export class TriggerEngine {
           url: this.deps.pageUrl,
         });
       }
-      return;
+      return id;
     }
     // Loop protection: an auto-reply ping-pong (or a flood from one sender) stops here. Collecting
     // events for the AI's next check costs nothing, so it is not limited this way.
@@ -209,18 +241,14 @@ export class TriggerEngine {
       (await store.recentFrom(trigger.id, base.counterpartKey, new Date(Date.now() - LOOP_WINDOW_MS))) >=
         LOOP_RUNS
     ) {
-      await skip('loop');
-      return;
+      return skip('loop');
     }
     let aiKeyId: string | undefined;
     if (action.kind === 'ai') {
       const key = trigger.aiKeyId
         ? await this.deps.keys.get(trigger.workspaceId, trigger.aiKeyId).catch(() => undefined)
         : undefined;
-      if (!key) {
-        await skip('no_key');
-        return;
-      }
+      if (!key) return skip('no_key');
       if (key.dailyRuns !== null && key.runsToday >= key.dailyRuns) {
         const first = await skip('ai_limit', key.id);
         // Told once a day: the first skipped run of the day is the moment the limit was reached.
@@ -233,7 +261,7 @@ export class TriggerEngine {
             url: this.deps.pageUrl.replace(/\/triggers$/, '/ai'),
           });
         }
-        return;
+        return first;
       }
       aiKeyId = key.id;
     }
@@ -242,8 +270,54 @@ export class TriggerEngine {
       status: action.kind === 'check' ? 'new' : 'running',
       ...(aiKeyId ? { aiKeyId } : {}),
     });
-    if (!event || action.kind === 'check') return;
-    await this.dispatch(event.id);
+    if (!event) return undefined;
+    if (action.kind !== 'check') await this.dispatch(event.id);
+    return event.id;
+  }
+
+  // --- Trying a trigger on a real item -----------------------------------------------
+
+  /**
+   * Tries a trigger on an item that already arrived (the newest match of the last day, or the one
+   * with `itemId`): says whether the filter matches and, unless `run` is false, runs the action as
+   * a real event would (same limits and checks) and waits for the outcome. `force` runs it on an
+   * item the filter does not match. Reads the accounts in this request, so sealed ones work too.
+   */
+  async test(
+    trigger: Trigger,
+    options: { itemId?: string; run: boolean; force: boolean; signal: AbortSignal },
+  ): Promise<TriggerTest> {
+    const source = this.source(trigger.source);
+    const readOptions = trigger.spec.filter.spam ? { spam: true } : {};
+    const found: Array<{ account: AccountRow; item: TriggerItem }> = [];
+    for (const account of await source.accounts(trigger.workspaceId)) {
+      if (!this.watches(trigger, account) || options.signal.aborted) continue;
+      const items = await source.recent(account, options.signal, readOptions).catch((error) => {
+        this.deps.onError?.(error, { source: 'trigger', step: 'test', service: account.connectorId });
+        return [];
+      });
+      for (const item of items) found.push({ account, item });
+    }
+    found.sort((a, b) => b.item.at.localeCompare(a.item.at));
+    const pick = options.itemId
+      ? found.find((f) => f.item.id === options.itemId)
+      : (found.find((f) => matchesFilter(trigger.spec.filter, f.item)) ?? found[0]);
+    if (!pick) return { looked: found.length, matched: false, ran: false };
+    const matched = matchesFilter(trigger.spec.filter, pick.item);
+    const base = { looked: found.length, item: pick.item, matched };
+    if (!options.run || (!matched && !options.force)) return { ...base, ran: false };
+    const eventId = await this.handle(trigger, pick.account, pick.item, { test: true });
+    const event = eventId ? await this.settled(eventId, options.signal) : undefined;
+    return { ...base, ran: true, ...(event ? { event } : {}) };
+  }
+
+  /** Waits (polling, bounded by the signal) until a run is over and returns the event. */
+  private async settled(eventId: string, signal: AbortSignal): Promise<TriggerEvent | undefined> {
+    for (;;) {
+      const event = await this.deps.store.getEvent(eventId);
+      if (event?.status !== 'running' || signal.aborted) return event;
+      await new Promise((resolve) => setTimeout(resolve, TEST_POLL_MS));
+    }
   }
 
   private async dispatch(eventId: string): Promise<void> {

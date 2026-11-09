@@ -519,6 +519,7 @@ const TEAM_ADMIN_TOOLS: ReadonlySet<string> = new Set([
   'create_trigger',
   'update_trigger',
   'delete_trigger',
+  'test_trigger',
 ]);
 /**
  * Setup tools for what teams do not have yet: access profiles (`/mcp/<profile>` addresses belong

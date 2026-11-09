@@ -501,6 +501,76 @@ describe('triggers', () => {
     mailbox.length = 0;
   });
 
+  it('tries a trigger on mail that already arrived and shows its runs', async () => {
+    const trigger = await create({
+      name: 'Invoices',
+      when: 'mail',
+      do: 'tool',
+      tool: 'demo_echo',
+      filter: { subject: 'invoice' },
+      args: { account: 'main', message: 'Got {{subject}}' },
+    });
+    const ago = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    mailbox.push(
+      {
+        id: 'i1',
+        folder: 'inbox',
+        from: 'Ann <ann@acme.example>',
+        subject: 'Invoice 12',
+        snippet: 'Due',
+        date: ago(40),
+      },
+      {
+        id: 'h1',
+        folder: 'inbox',
+        from: 'Bob <bob@acme.example>',
+        subject: 'Hello',
+        snippet: 'Hi',
+        date: ago(30),
+      },
+    );
+    const only = json(await call('manyplug_test_trigger', { trigger: 'Invoices', run: false }));
+    expect(only).toMatchObject({
+      looked: 2,
+      matched: true,
+      ran: false,
+      item: { id: 'i1', title: 'Invoice 12' },
+    });
+
+    const tried = json(await call('manyplug_test_trigger', { trigger: 'Invoices' }));
+    expect(tried).toMatchObject({ matched: true, ran: true, run: { status: 'done', id: 'i1' } });
+    expect(tried.run.summary).toContain('Got Invoice 12');
+    // The same call again at once is duplicate protection's; the engine itself can try an item again.
+    const again = await call('manyplug_test_trigger', { trigger: 'Invoices' });
+    expect(JSON.stringify(again.content)).toContain('Not repeated');
+    const direct = await hub.services.triggers.service.test(mcp, 'Invoices', {
+      run: true,
+      force: false,
+      signal: AbortSignal.timeout(10_000),
+    });
+    expect(direct.run?.status).toBe('done');
+
+    const miss = json(await call('manyplug_test_trigger', { trigger: 'Invoices', item: 'h1' }));
+    expect(miss).toMatchObject({ matched: false, ran: false });
+    expect(miss.note).toContain('force');
+    // Running a trigger that acts on its own on an item its filter skips waits for the user.
+    const forced = await call('manyplug_test_trigger', { trigger: 'Invoices', item: 'h1', force: true });
+    expect(JSON.stringify(forced.structuredContent ?? forced.content)).toMatch(/confirm/i);
+
+    const { runs } = json(await call('manyplug_trigger_runs', { trigger: 'Invoices' }));
+    expect(runs).toHaveLength(2);
+    expect(runs[0]).toMatchObject({ trigger: 'Invoices', status: 'done', from: 'Ann <ann@acme.example>' });
+    expect(runs[0].calls).toEqual([{ tool: 'demo_echo', ok: true }]);
+    expect(typeof runs[0].seconds).toBe('number');
+
+    // A trigger the user turned off does not act, not even as a test.
+    await hub.services.triggers.service.update(session, trigger.id, { enabled: false });
+    const off = json(await call('manyplug_test_trigger', { trigger: 'Invoices', item: 'i1' }));
+    expect(off).toMatchObject({ matched: true, ran: false });
+    expect(off.note).toContain('off');
+    mailbox.length = 0;
+  });
+
   it('pauses a trigger at its daily limit', async () => {
     const trigger = await create({ name: 'Limited', when: 'message', do: 'check', dailyLimit: 1 });
     await inbound('one');

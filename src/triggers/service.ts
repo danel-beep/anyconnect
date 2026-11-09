@@ -8,6 +8,8 @@ import type {
   TriggerChange,
   TriggerDo,
   TriggerInfo,
+  TriggerRun,
+  TriggerTried,
   TriggerWhen,
   WorkspaceTriggers,
 } from '../hub/trigger-tools.js';
@@ -22,12 +24,15 @@ import {
   DEFAULT_DAILY_RUNS,
   type TriggerAction,
   type TriggerFilter,
+  type TriggerItem,
   type TriggerSpec,
 } from './spec.js';
 import type { Trigger, TriggerEvent, TriggerStore } from './store.js';
 
 /** How long a check may spend reading mailboxes before it answers with what it has. */
 const CHECK_SCAN_MS = 20_000;
+/** How long a test waits for its run before answering (it goes on; `manyplug_trigger_runs` shows it). */
+const TEST_WAIT_MS = 45_000;
 
 /**
  * The workspace-facing side of triggers: create and change them from the chat tools and the
@@ -154,6 +159,53 @@ export class TriggerService implements WorkspaceTriggers {
       }),
       more,
     };
+  }
+
+  async test(
+    principal: Principal,
+    ref: string,
+    options: { item?: string; run: boolean; force: boolean; signal: AbortSignal },
+  ): Promise<TriggerTried> {
+    const trigger = await this.deps.store.find(principal.workspaceId, ref);
+    // A trigger the user turned off does not act, not even as a test.
+    const run = options.run && trigger.enabled;
+    const tried = await this.deps.engine.test(trigger, {
+      ...(options.item ? { itemId: options.item } : {}),
+      run,
+      force: options.force,
+      signal: AbortSignal.any([options.signal, AbortSignal.timeout(TEST_WAIT_MS)]),
+    });
+    const note = !tried.item
+      ? options.item
+        ? `No message or email "${options.item}" among the last day's ${tried.looked} on the accounts this trigger watches.`
+        : 'Nothing arrived on the accounts this trigger watches in the last day.'
+      : options.run && !trigger.enabled
+        ? 'The trigger is off, so it did not run. Turn it on to try its action.'
+        : !tried.matched && !tried.ran
+          ? options.item
+            ? 'The filter does not match this item, so the trigger would skip it. force: true runs it anyway.'
+            : 'None of the last day’s items match the filter; this is the newest. force: true runs it anyway.'
+          : tried.event?.status === 'running'
+            ? 'Still running: manyplug_trigger_runs shows the outcome.'
+            : undefined;
+    return {
+      looked: tried.looked,
+      matched: tried.matched,
+      ran: tried.ran,
+      ...(tried.item ? { item: itemView(tried.item) } : {}),
+      ...(tried.event ? { run: runOf(tried.event, trigger.name) } : {}),
+      ...(note ? { note } : {}),
+    };
+  }
+
+  async runs(workspaceId: string, options: { trigger?: string; limit: number }): Promise<TriggerRun[]> {
+    const only = options.trigger ? await this.deps.store.find(workspaceId, options.trigger) : undefined;
+    const [events, all] = await Promise.all([
+      this.deps.store.events(workspaceId, { limit: options.limit, ...(only ? { triggerId: only.id } : {}) }),
+      only ? Promise.resolve([only]) : this.deps.store.list(workspaceId),
+    ]);
+    const names = new Map(all.map((t) => [t.id, t.name]));
+    return events.map((e) => runOf(e, names.get(e.triggerId) ?? e.triggerId));
   }
 
   async aiKeys(workspaceId: string): Promise<AiKeyInfo[]> {
@@ -422,10 +474,16 @@ export function accountsLabel(
 }
 
 function checked(event: TriggerEvent, trigger: Trigger): CheckedEvent {
-  const item = event.item!;
   const action = trigger.spec.action;
   return {
     trigger: trigger.name,
+    ...itemView(event.item!),
+    ...(action.kind === 'check' && action.task ? { task: action.task } : {}),
+  };
+}
+
+function itemView(item: TriggerItem): Omit<CheckedEvent, 'trigger' | 'task'> {
+  return {
     service: item.service,
     account: item.account,
     id: item.id,
@@ -434,7 +492,33 @@ function checked(event: TriggerEvent, trigger: Trigger): CheckedEvent {
     ...(item.subject || item.chatTitle ? { title: (item.subject ?? item.chatTitle)! } : {}),
     preview: clip(item.text, 280),
     at: item.at,
-    ...(action.kind === 'check' && action.task ? { task: action.task } : {}),
+  };
+}
+
+/** One event as `manyplug_trigger_runs` shows it. */
+export function runOf(event: TriggerEvent, trigger: string): TriggerRun {
+  const { item, result } = event;
+  return {
+    trigger,
+    status: event.status,
+    at: event.createdAt.toISOString(),
+    ...(event.finishedAt
+      ? { seconds: Math.round((event.finishedAt.getTime() - event.createdAt.getTime()) / 100) / 10 }
+      : {}),
+    ...(item
+      ? {
+          service: item.service,
+          account: item.account,
+          id: item.id,
+          ...(item.from ? { from: item.from } : {}),
+          ...(item.subject || item.chatTitle ? { title: clip((item.subject ?? item.chatTitle)!, 120) } : {}),
+        }
+      : {}),
+    ...(result.summary ? { summary: result.summary } : {}),
+    ...(result.error ? { error: result.error } : {}),
+    ...(result.skipped ? { skipped: result.skipped } : {}),
+    ...(result.calls?.length ? { calls: result.calls } : {}),
+    ...(event.tokens ? { tokens: event.tokens } : {}),
   };
 }
 
