@@ -52,6 +52,7 @@ import {
   type StageMap,
 } from './executor.js';
 import type { IdempotencyStore } from './idempotency.js';
+import { parseToolInput } from './input.js';
 import { listOf, mergeAccounts, mergeCapabilityList, type UnitOutcome } from './merge.js';
 import type { WorkspaceProfiles } from './profile-tools.js';
 import type { QuotaGate } from './quota.js';
@@ -391,7 +392,7 @@ export class Hub {
         return errorResult('This action is no longer available, so nothing was done.', 'permission');
       }
       const { [FIELDS_ARGUMENT]: fields, ...input } = args;
-      const parsed = action.input.safeParse(input);
+      const parsed = parseToolInput(action.input, input);
       if (!parsed.success) return errorResult(`Invalid arguments: ${issuesOf(parsed.error)}`);
       const unit = await this.unit(principal, catalog, tool, connector, action, account, parsed.data, {
         options: Array.isArray(fields) ? { fields: fields.filter((f) => typeof f === 'string') } : {},
@@ -607,7 +608,7 @@ export class Hub {
     const connector = await this.deps.connectors.get(principal.workspaceId, connectorId);
     const action = connector?.actions.find((a) => a.name === actionName);
     if (!connector || !action) return reject('This tool is no longer available.', targets[0]!.id);
-    const parsed = action.input.safeParse(args);
+    const parsed = parseToolInput(action.input, args);
     if (!parsed.success) return reject(`Invalid arguments: ${issuesOf(parsed.error)}`, targets[0]!.id);
     const callOptions = Array.isArray(fields) ? { fields: fields.filter((f) => typeof f === 'string') } : {};
 
@@ -668,7 +669,7 @@ export class Hub {
     const capability = getCapability(tool.target.capabilityId);
     if (!capability) return { rejected: errorResult('This tool is no longer available.') };
     const { [ACCOUNT_ARGUMENT]: requested, ...args } = rawArgs;
-    const parsed = capability.input.safeParse(args);
+    const parsed = parseToolInput(capability.input, args);
     if (!parsed.success) return { rejected: errorResult(`Invalid arguments: ${issuesOf(parsed.error)}`) };
     const canonical = parsed.data as Record<string, unknown>;
 
@@ -800,7 +801,7 @@ export class Hub {
     const { action: actionName } = tool.target;
     const action = setup?.connector.actions.find((a) => a.name === actionName);
     if (!setup || !action) return { rejected: errorResult('This tool is no longer available.') };
-    const parsed = action.input.safeParse(args);
+    const parsed = parseToolInput(action.input, args);
     if (!parsed.success) return { rejected: errorResult(`Invalid arguments: ${issuesOf(parsed.error)}`) };
 
     const now = Date.now();
