@@ -40,6 +40,21 @@ export const TriggerFilter = z.object({
 });
 export type TriggerFilter = z.output<typeof TriggerFilter>;
 
+/** Tools and arguments named in limits: at most this many of each, and of values per argument. */
+export const MAX_LIMIT_VALUES = 50;
+
+/** `{ tool: { argument: [allowed values] } }`; numbers are taken as their text (chat ids). */
+export const ArgumentLimitsInput = z.record(
+  z.string().trim().min(1).max(100),
+  z.record(
+    z.string().trim().min(1).max(100),
+    z
+      .array(z.union([z.string().trim().min(1).max(300), z.number()]).transform(String))
+      .min(1)
+      .max(MAX_LIMIT_VALUES),
+  ),
+);
+
 export const CheckAction = z.object({
   kind: z.literal('check'),
   /** What the AI app that checks should do with a match, handed back with each event. */
@@ -63,6 +78,8 @@ export const AiAction = z.object({
   confirmRisky: z.boolean().default(true),
   /** Send the AI's final answer to the user (Telegram). */
   notify: z.boolean().default(true),
+  /** Only these argument values, checked by the hub (see `ArgumentLimits`). */
+  allow: ArgumentLimitsInput.optional(),
 });
 export const TriggerAction = z.discriminatedUnion('kind', [CheckAction, NotifyAction, ToolAction, AiAction]);
 export type TriggerAction = z.output<typeof TriggerAction>;

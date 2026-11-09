@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActionDefinition, AnyObjectSchema } from '../connectors/sdk.js';
 import type { Principal } from '../core/principal.js';
+import type { ArgumentLimits } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 import type { SetupActionSpec, SetupContext } from './setup-tools.js';
 
@@ -37,6 +38,8 @@ export interface TriggerInfo {
   action: string;
   task?: string;
   askBeforeRisky?: boolean;
+  /** do=ai: the only argument values its tools may be called with (checked by the hub). */
+  allow?: ArgumentLimits;
   dailyLimit: number | null;
   runsToday: number;
 }
@@ -55,6 +58,8 @@ export interface TriggerChange {
   aiKey?: string;
   askBeforeRisky?: boolean;
   notify?: boolean;
+  /** do=ai: argument limits by tool; null removes them. */
+  allow?: Record<string, Record<string, Array<string | number>>> | null;
   dailyLimit?: number | null;
   enabled?: boolean;
 }
@@ -178,7 +183,25 @@ const ChangeFields = {
   ask_before_risky: z
     .boolean()
     .optional()
-    .describe('do=ai: risky actions (sending, deleting) wait for the user’s confirmation (default true)'),
+    .describe(
+      'do=ai: risky actions (sending, deleting) wait for the user’s confirmation (default true). false: the user’s approval of this trigger lets it act without asking, whatever the account’s rules say; pair it with allow',
+    ),
+  allow: z
+    .record(
+      z.string().trim().min(1).max(100),
+      z.record(
+        z.string().trim().min(1).max(100),
+        z
+          .array(z.union([z.string().trim().min(1).max(300), z.number()]))
+          .min(1)
+          .max(50),
+      ),
+    )
+    .nullable()
+    .optional()
+    .describe(
+      'do=ai: the only argument values its tools may be called with, checked by the hub, e.g. {"telegram_send":{"account":["uliana"],"chat":["123456"]}} so it can message only that chat. A limited argument must be given and match; tools not named are not limited; null removes the limits',
+    ),
   notify: z
     .boolean()
     .optional()
@@ -216,6 +239,21 @@ const toChange = (input: Record<string, unknown>): TriggerChange => {
   };
 };
 
+/**
+ * Whether new argument limits allow nothing the old ones did not: every old limit is kept, with
+ * a subset of its values (new limits may be added). No old limits: anything narrows.
+ */
+export function narrows(before: ArgumentLimits | undefined, next: TriggerChange['allow']): boolean {
+  if (!before) return true;
+  if (!next) return false;
+  return Object.entries(before).every(([tool, args]) =>
+    Object.entries(args).every(([arg, values]) => {
+      const now = next[tool]?.[arg];
+      return now !== undefined && now.length > 0 && now.every((v) => values.includes(String(v)));
+    }),
+  );
+}
+
 /** A ready prompt for the user's scheduled task: check, and only read on when something matched. */
 const scheduleFor = (name?: string) => ({
   every: 'hour (or as often as the app allows)',
@@ -242,6 +280,8 @@ export function triggerActions(
     do: t.do,
     action: t.action,
     ...(t.task ? { task: t.task } : {}),
+    ...(t.askBeforeRisky !== undefined ? { ask_before_risky: t.askBeforeRisky } : {}),
+    ...(t.allow ? { allow: t.allow } : {}),
     daily_limit: t.dailyLimit,
     runs_today: t.runsToday,
   });
@@ -258,6 +298,8 @@ export function triggerActions(
       return 'Changes what the trigger does on its own';
     if (change.askBeforeRisky === false && before.askBeforeRisky !== false)
       return 'The trigger’s AI will send and delete without asking';
+    if (change.allow !== undefined && !narrows(before.allow, change.allow))
+      return 'Lets the trigger’s AI use its tools with more argument values';
     if (change.account !== undefined || change.filter) return 'Changes which events make the trigger act';
     return undefined;
   };

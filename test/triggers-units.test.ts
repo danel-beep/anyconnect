@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { outsideLimits } from '../src/hub/stages/automation.js';
+import { narrows } from '../src/hub/trigger-tools.js';
 import { AI_PROVIDERS, AiProviderError, takesEffort } from '../src/triggers/ai/providers.js';
 import { alternatives, matchesFilter, renderArgs } from '../src/triggers/match.js';
+import { limitsOf } from '../src/triggers/service.js';
 import { counterpartOf, type TriggerItem, TriggerSpec } from '../src/triggers/spec.js';
 
 const item: TriggerItem = {
@@ -51,6 +54,47 @@ describe('action templates', () => {
   it('defaults a woken AI to asking before risky actions', () => {
     const spec = TriggerSpec.parse({ filter: {}, action: { kind: 'ai', instructions: 'Summarize' } });
     expect(spec.action).toMatchObject({ kind: 'ai', tools: [], confirmRisky: true, notify: true });
+  });
+});
+
+describe('argument limits', () => {
+  const call = (input: Record<string, unknown>, account = 'uliana') =>
+    ({ input, account: { name: account }, connector: { id: 'telegram' } }) as any;
+  const limits = { chat: ['123', '456'] };
+
+  it('lets through only the allowed values, every item of a list, and needs the argument', () => {
+    expect(outsideLimits(undefined, call({ chat: '999' }))).toBeUndefined();
+    expect(outsideLimits(limits, call({ chat: '123' }))).toBeUndefined();
+    expect(outsideLimits(limits, call({ chat: 456 }))).toBeUndefined();
+    expect(outsideLimits(limits, call({ chat: ['123', '456'] }))).toBeUndefined();
+    expect(outsideLimits(limits, call({ chat: ['123', '999'] }))?.argument).toBe('chat');
+    expect(outsideLimits(limits, call({ to: '@someone' }))?.argument).toBe('chat');
+    expect(outsideLimits(limits, call({ chat: { id: '123' } }))?.argument).toBe('chat');
+  });
+
+  it('limits the account by name or service:name', () => {
+    expect(outsideLimits({ account: ['uliana'] }, call({}))).toBeUndefined();
+    expect(outsideLimits({ account: ['telegram:uliana'] }, call({}))).toBeUndefined();
+    expect(outsideLimits({ account: ['uliana'] }, call({}, 'work'))?.argument).toBe('account');
+  });
+
+  it('tells a narrowing change from one that allows more', () => {
+    const before = { telegram_send: { chat: ['1', '2'] } };
+    expect(narrows(undefined, { telegram_send: { chat: ['1'] } })).toBe(true);
+    expect(narrows(before, { telegram_send: { chat: ['1'] } })).toBe(true);
+    expect(narrows(before, { telegram_send: { chat: [1], account: ['a'] } })).toBe(true);
+    expect(narrows(before, { telegram_send: { chat: ['1', '3'] } })).toBe(false);
+    expect(narrows(before, { gmail_send: { to: ['a@b.com'] } })).toBe(false);
+    expect(narrows(before, null)).toBe(false);
+  });
+
+  it('keeps limits to the trigger’s tools and reads numbers as text', () => {
+    expect(limitsOf({ telegram_send: { chat: [123] } }, ['telegram_send'])).toEqual({
+      telegram_send: { chat: ['123'] },
+    });
+    expect(() => limitsOf({ gmail_send: { to: ['a@b.com'] } }, ['telegram_send'])).toThrow(/not in/);
+    expect(limitsOf({ gmail_send: { to: ['a@b.com'] } }, ['telegram_send'], false)).toBeUndefined();
+    expect(limitsOf(null, ['telegram_send'])).toBeUndefined();
   });
 });
 
