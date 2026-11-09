@@ -342,7 +342,22 @@ function capabilityTool(
     }),
     target: { kind: 'capability', capabilityId: capability.id, implementations },
     risk: capability.risk,
+    ...(capability.keywords ? { keywords: capability.keywords } : {}),
   };
+}
+
+/**
+ * Search-only words of a service tool: the action's own keywords and the service name. (The
+ * service description goes to `about` at a low weight: it lists every action, so at full weight it
+ * matched every tool of the service.)
+ */
+function searchKeywords(connector: ConnectorDefinition, action: ActionDefinition): string {
+  return action.keywords ? `${connector.name} ${action.keywords}` : connector.name;
+}
+
+function implementsOf(action: ActionDefinition): { implements?: string[] } {
+  const ids = actionCapabilities(action).map((binding) => binding.id);
+  return ids.length > 0 ? { implements: ids } : {};
 }
 
 /** Unified tools for capabilities that at least two services implement (one service needs none). */
@@ -451,7 +466,9 @@ export function buildCatalog(input: {
           annotations: annotationsFor(`${connector.name}: ${title}`, action),
           risk,
           service: connector.id,
-          keywords: `${connector.name} ${connector.description}`,
+          keywords: searchKeywords(connector, action),
+          about: connector.description,
+          ...implementsOf(action),
           target: {
             kind: 'action',
             connectorId: connector.id,
@@ -472,7 +489,9 @@ export function buildCatalog(input: {
             annotations: annotationsFor(fullTitle, action),
             risk,
             service: connector.id,
-            keywords: `${connector.name} ${connector.description}`,
+            keywords: searchKeywords(connector, action),
+            about: connector.description,
+            ...implementsOf(action),
             target: {
               kind: 'action',
               connectorId: connector.id,
@@ -500,7 +519,7 @@ export function buildCatalog(input: {
         inputSchema: action.inputSchema ?? toJsonSchema(action.input),
         annotations: annotationsFor(title, action),
         risk: actionRisk(action),
-        keywords: 'setup settings hub manyplug',
+        keywords: action.keywords ? `${action.keywords} setup settings` : 'setup settings',
         target: { kind: 'workspace', connectorId: connector.id, action: action.name },
       });
     }

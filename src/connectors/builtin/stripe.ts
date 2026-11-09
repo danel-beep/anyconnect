@@ -42,6 +42,7 @@ const manifest = defineManifestConnector({
   actions: [
     {
       name: 'get_balance',
+      keywords: 'money funds cash available how much revenue',
       title: 'Balance',
       description: 'Available and pending balance per currency.',
       hints: { readOnly: true, idempotent: true },

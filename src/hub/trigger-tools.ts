@@ -310,6 +310,7 @@ export function triggerActions(
     }),
     define({
       name: 'create_trigger',
+      keywords: 'automation when arrives whenever comes in notify ping alert watch',
       title: 'Create a trigger',
       description:
         'Creates a trigger (an automation): when a new message or email matches the filter, the hub does something. Use it when the user asks "when X happens, do Y"; fill the filter and action from their words and ask only what is unclear. Prefer do=check for things the AI should handle (no cost until something matches) or do=notify; do=tool and do=ai make the hub act on its own and wait for the user’s confirmation. Returns a ready scheduled-task prompt for do=check.',

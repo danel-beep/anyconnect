@@ -431,7 +431,7 @@ export class Hub {
           })),
           hint:
             found.length === 0
-              ? `Nothing matched. Connected services: ${catalog.services.map((s) => s.connector.id).join(', ') || 'none'}.`
+              ? `Nothing matched.${/[^\p{ASCII}]/u.test(query) ? ' Tools are described in English: search again in English words.' : ''} Connected services: ${catalog.services.map((s) => s.connector.id).join(', ') || 'none'}.`
               : `Call with ${BUILTIN_TOOLS.call_tool.name} (several at once: ${BUILTIN_TOOLS.call_tools.name}); ${BUILTIN_TOOLS.describe_tool.name} gives other schemas.`,
         });
       }

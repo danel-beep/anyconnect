@@ -89,8 +89,12 @@ export interface CatalogTool {
   risk: RiskLevel;
   /** Service id for connector tools; used by search. */
   service?: string;
-  /** Extra words for search only (service name and description); never sent to clients. */
+  /** Extra words for search only (service name, action keywords); never sent to clients. */
   keywords?: string;
+  /** Service tools: the service's description, searched at a low weight ("crm" finds HubSpot). */
+  about?: string;
+  /** Service tools: the shared capabilities the action implements (e.g. `mail.search`). */
+  implements?: string[];
 }
 
 /**

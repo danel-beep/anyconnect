@@ -122,6 +122,7 @@ const manifest = defineManifestConnector({
     },
     {
       name: 'update_issue',
+      keywords: 'assign close reopen label bug',
       title: 'Update issue',
       description: 'Changes title, body, state (open/closed), labels or assignees of an issue or PR.',
       input: {
@@ -163,6 +164,7 @@ const manifest = defineManifestConnector({
     },
     {
       name: 'list_pull_requests',
+      keywords: 'pr prs open code review merge',
       title: 'List pull requests',
       description: 'Lists pull requests of a repository, recently updated first.',
       input: {

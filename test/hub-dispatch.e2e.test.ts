@@ -189,6 +189,14 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
     expect(data.tools[0].inputSchema).toBeDefined();
   });
 
+  it('asks for English words when a search in another language finds nothing', async () => {
+    const data = json(await call('manyplug_search_tools', { query: 'непрочитанные письма' }));
+    expect(data.tools).toEqual([]);
+    expect(data.hint).toContain('search again in English');
+    const plain = json(await call('manyplug_search_tools', { query: 'zzzz qqqq' }));
+    expect(plain.hint).not.toContain('English');
+  });
+
   it('lets only a single unit ask the user in the chat', async () => {
     const interaction = { answers: {}, canAsk: true };
     asked.length = 0;

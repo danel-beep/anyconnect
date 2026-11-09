@@ -545,6 +545,7 @@ export default defineConnector({
   actions: (action) => [
     action({
       name: 'search',
+      keywords: 'find emails inbox unread new letters messages sender subject check mail who wrote',
       title: 'Search mail',
       description: 'Finds messages, newest first, with sender, subject and preview. Default: inbox.',
       input: z.object({
@@ -600,6 +601,7 @@ export default defineConnector({
     }),
     action({
       name: 'read',
+      keywords: 'open email full text body attachments download attachment',
       title: 'Read message',
       description:
         'Returns a message as plain text (quoted history removed by default) with the attachment list.',
@@ -662,6 +664,7 @@ export default defineConnector({
     }),
     action({
       name: 'send',
+      keywords: 'write compose new email',
       title: 'Send email',
       description:
         'Sends an email (plain text), optionally as a reply in a conversation; saved to Sent Items.',
@@ -702,6 +705,7 @@ export default defineConnector({
     }),
     action({
       name: 'reply',
+      keywords: 'answer respond email',
       title: 'Reply',
       description:
         'Replies in the same conversation; the original is quoted below. replyAll copies everyone.',
@@ -724,6 +728,7 @@ export default defineConnector({
     }),
     action({
       name: 'forward',
+      keywords: 'share pass on email',
       title: 'Forward',
       description: 'Forwards a message with its attachments and an optional note.',
       input: z.object({ id: MessageId, to: Addresses.min(1), body: z.string().max(200_000).default('') }),
@@ -738,6 +743,7 @@ export default defineConnector({
     }),
     action({
       name: 'create_draft',
+      keywords: 'draft compose prepare email',
       title: 'Create draft',
       description: 'Saves a draft (optionally a reply to a message) in Drafts for the user to review.',
       input: z.object({
@@ -770,6 +776,7 @@ export default defineConnector({
     }),
     action({
       name: 'move',
+      keywords: 'archive folder delete trash spam',
       title: 'Move messages',
       description:
         'Moves messages to a folder: archive, trash, junk, inbox or a folder id. Ids stay the same.',
@@ -788,6 +795,7 @@ export default defineConnector({
     }),
     action({
       name: 'mark',
+      keywords: 'read unread flag star seen',
       title: 'Mark read / flag',
       description: 'Marks messages read or unread and flags or unflags them.',
       input: z.object({
@@ -854,6 +862,7 @@ export default defineConnector({
     }),
     action({
       name: 'list_events',
+      keywords: 'agenda meetings appointments schedule upcoming today tomorrow week',
       title: 'List events',
       description: 'Events in a time range (recurring ones expanded), ordered by start.',
       input: z.object({
@@ -927,6 +936,7 @@ export default defineConnector({
     }),
     action({
       name: 'create_event',
+      keywords: 'schedule book add meeting appointment invite',
       title: 'Create event',
       description: 'Creates an event; attendees get invitations.',
       input: z.object({ ...EventFields, calendarId: CalendarId }),
@@ -951,6 +961,7 @@ export default defineConnector({
     }),
     action({
       name: 'update_event',
+      keywords: 'reschedule move postpone change meeting appointment time',
       title: 'Update event',
       description: 'Changes only the given fields of an event; attendees get an update.',
       input: z.object({
@@ -974,6 +985,7 @@ export default defineConnector({
     }),
     action({
       name: 'delete_event',
+      keywords: 'cancel remove meeting appointment',
       title: 'Delete / cancel event',
       description:
         'Deletes an event. For a meeting you organize, cancel sends attendees a cancellation note.',

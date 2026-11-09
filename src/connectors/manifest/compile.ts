@@ -348,6 +348,7 @@ function compileAction(
     name: action.name,
     ...(action.title ? { title: action.title } : {}),
     description: action.description,
+    ...(action.keywords ? { keywords: action.keywords } : {}),
     input,
     inputSchema,
     ...(action.hints ? { hints: action.hints } : {}),

@@ -77,6 +77,8 @@ export interface SetupActionSpec<TInput extends AnyObjectSchema> {
   name: string;
   title: string;
   description: string;
+  /** Extra words for tool search only (see `ActionDefinition.keywords`). */
+  keywords?: string;
   input: TInput;
   risk: RiskLevel;
   requiresConfirmation?: boolean;
@@ -264,6 +266,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   }),
   setupAction({
     name: 'connect_account',
+    keywords: 'add another account link sign in',
     title: 'Connect an account',
     description:
       'Returns a link for the user to connect (or reconnect) an account of a service. Never ask for passwords or keys in the chat.',
@@ -424,6 +427,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   }),
   setupAction({
     name: 'set_rule',
+    keywords: 'permission ask before confirm allow block forbid',
     title: 'Change an access rule',
     description:
       'Sets what an AI app may do (access), when it asks the user first (confirm) and where: link or in the chat (confirm_in, defaults only) for one app and/or one account, or the defaults when neither is given. null returns a value to the default. Tightening applies at once; anything that loosens protection waits for the user’s confirmation.',

@@ -301,6 +301,7 @@ oauth: { provider: 'google', scopes: ['https://www.googleapis.com/auth/gmail.mod
 
 | Поле | Зачем | По умолчанию |
 | --- | --- | --- |
+| `keywords` | Слова, которыми люди называют это действие, только для поиска инструментов (`manyplug_search_tools`); ИИ их не видит, контекст они не тратят. Пишите то, чего нет в названии и описании: у `gcal.update_event` — `'reschedule move postpone change meeting appointment time'`. В HTTP-манифесте — то же поле у действия | — |
 | `hints` | Подсказки MCP-клиентам (`readOnly`, `destructive`, `idempotent`, `openWorld`) | — |
 | `risk` | `read` / `write` / `dangerous`: для политики доступа, подтверждений и журнала | `read`, если `hints.readOnly`; `dangerous`, если `hints.destructive`; иначе `write` |
 | `assessRisk(input, ctx)` | Повысить риск конкретного вызова, например первое сообщение новому собеседнику → `dangerous` с причиной. С `confirm: true` вызов спросит пользователя при любых правилах (как `requiresConfirmation`, но для одного вызова). Понизить нельзя; если проверка упала, вызов считается `dangerous` | — |

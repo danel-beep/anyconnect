@@ -99,6 +99,7 @@ const TASKS: HttpManifestInput = {
     {
       name: 'list_tasks',
       description: 'Lists tasks of a project.',
+      keywords: 'todos backlog',
       input: {
         type: 'object',
         properties: {
@@ -201,6 +202,9 @@ describe('HTTP manifest connectors', () => {
     expect(Object.keys(props)).toEqual(['account', 'project_id', 'done', 'cursor']);
     expect(props.project_id?.description).toBe('Project id');
     expect(list.annotations.readOnlyHint).toBe(true);
+    // Search-only keywords reach the catalog, never the tool the AI sees.
+    expect(list.keywords).toContain('backlog');
+    expect(JSON.stringify(list.inputSchema) + list.description).not.toContain('backlog');
     expect(catalog.tools.find((t) => t.name === 'tracker_delete_task')!.annotations.destructiveHint).toBe(
       true,
     );
