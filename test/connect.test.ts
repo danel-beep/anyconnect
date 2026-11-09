@@ -8,7 +8,7 @@ import { defineManifestConnector } from '../src/connectors/manifest/compile.js';
 import { ConnectorRegistry } from '../src/connectors/registry.js';
 import type { ConnectorDefinition } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
-import { resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
+import { resetDatabase, resultJson, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
 /**
  * A fake OAuth provider + API: issues codes, checks PKCE and client authentication, rotates
@@ -246,7 +246,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
 
     const result = await callMe();
     expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toEqual({ email: 'user@fake.example', name: 'User' });
+    expect(resultJson(result)).toEqual({ email: 'user@fake.example', name: 'User' });
 
     // The state is single use.
     const { code, state } = provider.approve(authorizationUrl);
@@ -329,7 +329,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     // Where the vault is open (the AI app, the laptop) the account works with those tokens.
     const result = await callMe();
     expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toEqual({ email: 'user@fake.example', name: 'User' });
+    expect(resultJson(result)).toEqual({ email: 'user@fake.example', name: 'User' });
 
     // Reconnecting needs the account's key: refused before the provider's consent screen.
     const again = await phone.request(`/connect/fake?account=${account!.id}`);
@@ -565,7 +565,7 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     });
     expect(account.status).toBe('active');
     provider.accessToken = 'personal';
-    expect((await callMe()).structuredContent).toEqual({ email: 'user@fake.example', name: 'User' });
+    expect(resultJson(await callMe())).toEqual({ email: 'user@fake.example', name: 'User' });
 
     const unconnected = await hub.services.accounts.create(principal.workspaceId, {
       connectorId: 'fake',

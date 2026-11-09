@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cleanLine,
   compact,
   decodeCursor,
   encodeCursor,
   htmlToText,
   page,
   pickFields,
+  snippetText,
+  stripInvisible,
   truncateText,
 } from '../src/connectors/sdk.js';
 import { shapeData } from '../src/hub/shaping.js';
@@ -107,5 +110,43 @@ describe('result size budget (hub)', () => {
     expect(tokens).toBeGreaterThan(100);
     expect(tokens).toBeLessThan(130);
     expect(estimateTokens('привет')).toBe(3);
+  });
+});
+
+describe('invisible characters (marketing preview padding)', () => {
+  // A preview line as a newsletter sends it: text, then hundreds of characters that render as nothing.
+  const padding = '͏ ‌ ͏ ‌ ﻿‍ '.repeat(60);
+  const sample = `Your November statement is ready.${padding}Questions? Reply to this email.`;
+
+  it('removes them and leaves one space where the padding was', () => {
+    expect(stripInvisible(sample)).toBe('Your November statement is ready. Questions? Reply to this email.');
+    expect(stripInvisible('soft­hyphen and zero​width')).toBe('softhyphen and zerowidth');
+    expect(stripInvisible('﻿Hello')).toBe('Hello');
+  });
+
+  it('keeps joiners inside emoji and words, code indentation and plain line breaks', () => {
+    const family = '👨‍👩‍👧';
+    expect(stripInvisible(`Family ${family} photo`)).toBe(`Family ${family} photo`);
+    expect(stripInvisible('می‌خواهم')).toBe('می‌خواهم');
+    const code = 'if (x) {\n    return 1;\n}';
+    expect(stripInvisible(code)).toBe(code);
+    expect(stripInvisible('line one ‌\n‌line two')).toBe('line one\nline two');
+  });
+
+  it('makes one short clean line for snippets', () => {
+    const snippet = snippetText(`${sample} ${'More text follows here. '.repeat(20)}`);
+    expect(snippet.length).toBeLessThanOrEqual(200);
+    expect(snippet.startsWith('Your November statement is ready. Questions? Reply')).toBe(true);
+    expect(snippet.endsWith('…')).toBe(true);
+    expect(snippet).not.toMatch(/͏|‌|‍|﻿| |\s{2}/);
+    expect(cleanLine('  Re:\u00A0\u00A0Invoice\n  #42 ')).toBe('Re: Invoice #42');
+    expect(snippetText('Short one.')).toBe('Short one.');
+  });
+
+  it('is applied to every tool result by the hub', () => {
+    const shaped = shapeData({ items: [{ id: 'a1', text: sample }] }, { maxTokens: 2000 });
+    expect(shaped.data).toEqual({
+      items: [{ id: 'a1', text: 'Your November statement is ready. Questions? Reply to this email.' }],
+    });
   });
 });

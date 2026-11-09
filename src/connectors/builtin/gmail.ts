@@ -2,6 +2,7 @@ import type Mail from 'nodemailer/lib/mailer/index.js';
 import { z } from 'zod';
 import { HttpClient } from '../http/client.js';
 import { type AccountContext, ConnectorError, defineConnector, requireOAuth } from '../sdk.js';
+import { cleanLine, snippetText } from '../shape.js';
 import { mailRead, mailSearch, mailSend, quoted } from './email/capability.js';
 import {
   Addresses,
@@ -56,9 +57,9 @@ const header = (message: GmailMessage, name: string) =>
   message.payload?.headers?.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" };
-/** Gmail snippets are HTML-escaped. */
-const unescapeSnippet = (snippet: string | undefined) =>
-  (snippet ?? '').replace(/&(amp|lt|gt|quot|#39|apos);/g, (_m, e: string) => ENTITIES[e] ?? _m).trim();
+/** Gmail snippets are HTML-escaped and, in marketing mail, padded with invisible characters. */
+const cleanSnippet = (snippet: string | undefined) =>
+  snippetText((snippet ?? '').replace(/&(amp|lt|gt|quot|#39|apos);/g, (_m, e: string) => ENTITIES[e] ?? _m));
 
 function hasAttachments(message: GmailMessage): boolean {
   const visit = (parts: { filename?: string; parts?: unknown[] }[] | undefined): boolean =>
@@ -69,17 +70,17 @@ function hasAttachments(message: GmailMessage): boolean {
 const SUMMARY_HEADERS = ['From', 'To', 'Subject', 'Date'];
 
 function summary(message: GmailMessage) {
-  const to = header(message, 'To');
+  const to = cleanLine(header(message, 'To') ?? '');
   const date = isoDate(message.internalDate ? Number(message.internalDate) : header(message, 'Date'));
   const labels = message.labelIds ?? [];
   return {
     id: message.id,
     threadId: message.threadId,
     ...(date ? { date } : {}),
-    from: header(message, 'From') ?? '',
+    from: cleanLine(header(message, 'From') ?? ''),
     ...(to ? { to } : {}),
-    subject: header(message, 'Subject') || '(no subject)',
-    snippet: unescapeSnippet(message.snippet),
+    subject: cleanLine(header(message, 'Subject') ?? '') || '(no subject)',
+    snippet: cleanSnippet(message.snippet),
     ...(labels.includes('UNREAD') ? { unread: true } : {}),
     ...(labels.includes('STARRED') ? { starred: true } : {}),
     ...(hasAttachments(message) ? { attachments: true } : {}),

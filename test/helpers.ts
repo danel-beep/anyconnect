@@ -333,6 +333,19 @@ export function unwrapUntrusted(text: string): string {
 }
 
 /**
+ * The JSON value of a tool result: `structuredContent`, or the text, unwrapped from the untrusted
+ * markers (marked results carry no `structuredContent`, see `markUntrusted`).
+ */
+export function resultJson(result: { content?: unknown; structuredContent?: unknown }): any {
+  if (result.structuredContent) return result.structuredContent;
+  const text = ((result.content ?? []) as { type: string; text?: string }[])
+    .filter((c) => c.type === 'text')
+    .map((c) => c.text ?? '')
+    .join('\n');
+  return JSON.parse(unwrapUntrusted(text));
+}
+
+/**
  * Turns on TOTP for the signed-in user of `browser`; confirming it upgrades the current session
  * (pwd + otp), which the admin panel requires. Returns the TOTP secret.
  */

@@ -11,6 +11,7 @@ import { automationStage } from './automation.js';
 import { circuitStage } from './circuit.js';
 import { confirmFloorStage } from './confirm-floor.js';
 import { idempotencyStage } from './idempotency.js';
+import { identityStage } from './identity.js';
 import { limitsStage } from './limits.js';
 import { meterStage } from './meter.js';
 import { quotaStage } from './quota.js';
@@ -34,6 +35,8 @@ export function defaultStages(deps: {
   maxResultTokens: number;
   meter?: UsageMeter;
   quota?: QuotaGate;
+  /** Stores an identity the `identity` stage found (see `AccountService.setIdentity`). */
+  setIdentity?: (accountId: string, identity: string) => Promise<void>;
 }): StageMap {
   return {
     audit: auditStage(deps),
@@ -52,6 +55,7 @@ export function defaultStages(deps: {
     confirm: confirmFloorStage,
     limits: limitsStage({ rateLimiter: deps.rateLimiter }),
     ...(deps.circuitBreaker ? { circuit: circuitStage(deps.circuitBreaker) } : {}),
+    ...(deps.setIdentity ? { identity: identityStage({ setIdentity: deps.setIdentity }) } : {}),
     idempotency: idempotencyStage({ store: deps.idempotency, windowMs: deps.idempotencyWindowMs }),
     shape: shapeStage(deps),
   };

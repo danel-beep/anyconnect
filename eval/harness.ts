@@ -2,7 +2,7 @@ import type { Principal } from '../src/core/principal.js';
 import type { Catalog } from '../src/hub/catalog.js';
 import type { ToolCallResult } from '../src/hub/result.js';
 import { toolListTokens } from '../src/hub/tokens.js';
-import { startTestHub, type TestHub } from '../test/helpers.js';
+import { resultJson, startTestHub, type TestHub } from '../test/helpers.js';
 import { ACCOUNTS, evalRegistry, resetOutbox } from './fixtures.js';
 
 /**
@@ -87,7 +87,7 @@ export interface Session {
 
 export function data(result: ToolCallResult): any {
   if (result.isError) throw new Error(`tool failed: ${JSON.stringify(result.content)}`);
-  return result.structuredContent ?? JSON.parse((result.content[0] as { text: string }).text);
+  return resultJson(result);
 }
 
 export async function session(evalHub: EvalHub): Promise<Session> {

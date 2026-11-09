@@ -17,7 +17,7 @@ import type { ExecResult } from './result.js';
  * account) through the same ordered chain of stages:
  *
  *   audit → meter → quota → policy → risk → automation → confirm → approvals → limits → circuit →
- *   idempotency → untrusted → shape → invoke
+ *   identity → idempotency → untrusted → shape → invoke
  *
  * Each stage is a middleware `(call, next) => result`: it may inspect the call, short-circuit with
  * its own result (a policy denial), call `next()` more than once (a retry) or post-process the
@@ -44,6 +44,8 @@ export const STAGE_ORDER = [
   'limits',
   /** Fails fast while a service keeps failing for an account (circuit breaker). */
   'circuit',
+  /** Fills in a missing account identity (mailbox address) after a successful call. */
+  'identity',
   /** Suppresses accidental duplicates of non-idempotent writes. */
   'idempotency',
   /** Marks third-party content (emails, messages) as data, not instructions (security layer). */

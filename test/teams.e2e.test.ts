@@ -16,7 +16,7 @@ import { createUser } from '../src/core/identity.js';
 import type { Principal } from '../src/core/principal.js';
 import { accountShares, oauthGrants, users } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
-import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
+import { ADMIN, resetDatabase, resultJson, startTestHub, TestBrowser, type TestHub } from './helpers.js';
 
 /** A notebook per account: one action that reads and one that writes, to see access levels at work. */
 const notes = defineConnector({
@@ -132,8 +132,7 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
   const catalogOf = (principal: Principal) => hub.services.hub.getCatalog(principal);
   const call = async (principal: Principal, tool: string, args: Record<string, unknown> = {}) =>
     hub.services.hub.callTool(principal, await catalogOf(principal), tool, args);
-  const json = (result: ToolCallResult): any =>
-    result.structuredContent ?? JSON.parse((result.content[0] as { text: string }).text);
+  const json = (result: ToolCallResult): any => resultJson(result);
   const text = (result: ToolCallResult) => (result.content[0] as { text: string }).text;
   /** The account names a tool offers in its `account` argument. */
   const accountChoices = async (principal: Principal, tool: string): Promise<string[]> => {
@@ -471,11 +470,9 @@ describe('teams: one connector address, everyone signs in as themselves', () => 
     for (const hidden of ['manyplug_invite_member', 'manyplug_access_profiles', 'manyplug_rename_app'])
       expect(listed).not.toContain(hidden);
     const mine = await client.callTool({ name: 'notes_read', arguments: { account: 'mine' } });
-    expect(mine.structuredContent ?? JSON.parse((mine.content as { text: string }[])[0]!.text)).toMatchObject(
-      {
-        notebook: 'bob',
-      },
-    );
+    expect(resultJson(mine)).toMatchObject({
+      notebook: 'bob',
+    });
     await client.close();
 
     const [grant] = await hub.services.db

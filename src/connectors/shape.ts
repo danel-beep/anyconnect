@@ -66,6 +66,54 @@ export function htmlToText(html: string, options: { maxLength?: number } = {}): 
   return options.maxLength ? truncateText(text, options.maxLength) : text;
 }
 
+// Characters that render as nothing: format controls, joiners, fillers, soft hyphens, bidi controls.
+// Marketing mail pads its preview text with long runs of them (often mixed with no-break spaces),
+// which costs tokens and says nothing. Zero-width joiners (U+200C, U+200D) are kept between two
+// visible characters, where they shape emoji sequences and some scripts.
+const INVISIBLE = '­͏؜ᅟᅠ឴឵᠋-᠏​‎‏‪-‮⁠-⁤⁦-⁯ㅤ﻿ﾠ';
+const JOINERS = '‌‍';
+// Spaces other than the plain one: no-break, figure, thin, ideographic…
+const ODD_SPACES = '   -   　';
+/** A run of blank characters that holds at least one invisible character or odd space. */
+const BLANK_RUN = new RegExp(
+  `[\\s${INVISIBLE}${JOINERS}]*[${INVISIBLE}${JOINERS}${ODD_SPACES}][\\s${INVISIBLE}${JOINERS}]*`,
+  'gu',
+);
+const LONE_JOINER = new RegExp(`^[${JOINERS}]$`);
+
+/**
+ * Removes characters that render as nothing and turns runs of odd spaces into one plain space (a
+ * newline when the run held one). Plain spaces and indentation are left alone, so code keeps its
+ * layout. The hub applies it to every result (`src/hub/shaping.ts`).
+ */
+export function stripInvisible(text: string): string {
+  if (!BLANK_RUN.test(text)) return text;
+  BLANK_RUN.lastIndex = 0;
+  return text.replace(BLANK_RUN, (run: string, offset: number) => {
+    const atEdge = offset === 0 || offset + run.length === text.length;
+    if (LONE_JOINER.test(run)) return atEdge ? '' : run;
+    const lines = run.split('\n').length - 1;
+    if (lines > 0) return '\n'.repeat(Math.min(lines, 2));
+    const blank = [...run].some((c) => /\s/u.test(c) && c !== '﻿');
+    return blank && !atEdge ? ' ' : '';
+  });
+}
+
+/** One clean line: invisible characters removed, all whitespace collapsed to single spaces. */
+export function cleanLine(text: string): string {
+  return stripInvisible(text).replace(/\s+/g, ' ').trim();
+}
+
+/** A short preview of a message (search results): one clean line, at most `max` characters. */
+export function snippetText(text: string, max = 200): string {
+  const line = cleanLine(text);
+  if (line.length <= max) return line;
+  let cut = line.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  if (space > max * 0.8) cut = cut.slice(0, space);
+  return `${cut.trimEnd()}…`;
+}
+
 /** Cuts text to `max` characters on a word boundary and says how much was left out. */
 export function truncateText(text: string, max: number): string {
   if (text.length <= max) return text;

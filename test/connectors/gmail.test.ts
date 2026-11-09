@@ -71,6 +71,33 @@ const sentRaw = async (req: RecordedRequest) =>
   simpleParser(Buffer.from(JSON.parse(req.body!).raw ?? JSON.parse(req.body!).message.raw, 'base64url'));
 
 describe('gmail', () => {
+  it('cleans marketing previews: no invisible padding, one line of at most 200 characters', async () => {
+    // As Gmail returns a newsletter's snippet: the preheader, then a padding of invisible characters.
+    const padding = '\u034F\u00A0\u200C\u00A0\u034F\u00A0\u200C\u00A0\uFEFF\u200D'.repeat(30);
+    const snippet = `Last chance: 30% off ends tonight${padding}Shop now &gt; ${'New arrivals every week. '.repeat(12)}`;
+    const service = fakeRoutes({
+      [`GET ${B}/messages`]: { messages: [{ id: 'n1', threadId: 't-n1' }] },
+      [`GET ${B}/messages/n1`]: {
+        ...meta('n1', ['INBOX']),
+        snippet,
+        payload: {
+          headers: [
+            { name: 'From', value: 'Shop\u200C <news@shop.example>' },
+            { name: 'Subject', value: '\u034FSale\u00A0\u00A0today' },
+          ],
+        },
+      },
+    });
+    const acc = testAccount(gmail, { fetch: service.fetch, oauth: { accessToken: 'ya29.token' } });
+    const { messages } = (await acc.run('search', {})) as { messages: Record<string, string>[] };
+    const [first] = messages as unknown as [{ snippet: string; from: string; subject: string }];
+    expect(first.snippet.startsWith('Last chance: 30% off ends tonight Shop now > New arrivals')).toBe(true);
+    expect(first.snippet.length).toBeLessThanOrEqual(200);
+    expect(first.snippet).not.toMatch(/͏|‌|‍|﻿| |\s{2}/);
+    expect(first.from).toBe('Shop <news@shop.example>');
+    expect(first.subject).toBe('Sale today');
+  });
+
   it('needs an OAuth connection', async () => {
     const acc = testAccount(gmail, {});
     await expect(acc.run('search', {})).rejects.toMatchObject({ kind: 'auth' });
