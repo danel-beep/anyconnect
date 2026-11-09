@@ -4,7 +4,7 @@ import { connectorText } from '../connectors/sdk.js';
 import type { Principal } from '../core/principal.js';
 import type { TriggerChange, TriggerDo, TriggerWhen } from '../hub/trigger-tools.js';
 import { AI_PROVIDER_IDS, AI_PROVIDERS } from '../triggers/ai/providers.js';
-import { MAX_DAILY_RUNS } from '../triggers/spec.js';
+import { DEFAULT_DAILY_RUNS, MAX_DAILY_RUNS } from '../triggers/spec.js';
 import type { TriggerEvent } from '../triggers/store.js';
 import type { Key } from '../web/i18n.js';
 import { type AccountOption, AiKeysPage, type TriggerEventView, TriggersPage } from '../web/triggers.js';
@@ -219,7 +219,11 @@ export function triggerRoutes() {
     appPage('/app/ai', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [keys, shell] = await Promise.all([s.triggers.keys.list(ws), shellInfo(c, ws)]);
+      const [keys, triggers, shell] = await Promise.all([
+        s.triggers.keys.list(ws),
+        s.triggers.service.list(ws),
+        shellInfo(c, ws),
+      ]);
       return c.html(
         <AiKeysPage
           ctx={pageCtx(c, auth.user)}
@@ -230,6 +234,8 @@ export function triggerRoutes() {
               const p = AI_PROVIDERS[id];
               return { id, name: p.name, defaultModel: p.defaultModel, keysUrl: p.keysUrl };
             }),
+            aiTriggers: triggers.filter((tr) => tr.do === 'ai').length,
+            defaultRuns: DEFAULT_DAILY_RUNS,
             flash: takeFlash(c),
           }}
         />,
@@ -253,7 +259,9 @@ export function triggerRoutes() {
         key: input.key,
         label: input.label || undefined,
         model: input.model || undefined,
-        dailyRuns: dailyLimit(form, 'dailyRuns'),
+        // The page asks only for the key: the limit starts at the default, and the AI changes it.
+        dailyRuns:
+          'dailyRuns' in form || 'noLimit' in form ? dailyLimit(form, 'dailyRuns') : DEFAULT_DAILY_RUNS,
       });
       setFlash(c, 'ok', 'aikeys.flash.saved');
       return undefined;

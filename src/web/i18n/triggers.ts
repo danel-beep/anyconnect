@@ -4,17 +4,21 @@
  */
 export const triggersEn = {
   'triggers.title': 'Triggers',
-  'triggers.sub': 'When a message or email matches, the hub does something right away, without you asking.',
-  'triggers.how': 'How it works',
-  'triggers.how1':
-    'Pick what to watch (messages or mail, all accounts or one) and what to look for: a sender, words, a chat.',
-  'triggers.how2':
-    'Pick what happens: your AI app checks for news on a schedule, you get a Telegram notice, the hub runs one action, or your own AI key wakes up and handles it.',
-  'triggers.how3':
-    'Every action goes through your rules and confirmations. A daily limit you choose stops runaway loops.',
-  'triggers.ask': 'Or ask your AI',
-  'triggers.askPrompt1': 'Make a trigger: when an email from my bank arrives, notify me in Telegram.',
-  'triggers.askPrompt2': 'Every hour, check my triggers and summarize what is new.',
+  'triggers.sub':
+    'Automations: when a message or email matches, something happens on its own. Your AI app sets them up for you.',
+  'triggers.askTitle': 'Set one up by asking your AI',
+  'triggers.askText':
+    'Tell Claude or ChatGPT (connected to Manyplug) what should happen, in one sentence: “When …, …”. It picks what to watch, the filter and the action, and asks you to confirm anything that acts on its own.',
+  'triggers.ask': 'Try one of these',
+  'triggers.askHint': 'Tap to copy, then paste into your AI app.',
+  'triggers.askPrompt1': 'When an email from my bank arrives, notify me in Telegram.',
+  'triggers.askPrompt2':
+    'When a client writes to me in Telegram, save it so you can draft a reply when I check in.',
+  'triggers.askPrompt3':
+    'When someone asks about prices in Telegram, have my AI reply with our price list, but ask me before sending.',
+  'triggers.askPrompt4': 'Every hour, check my triggers and tell me only if something is new.',
+  'triggers.kinds': 'What a trigger can do',
+  'triggers.kindAiNoKey': 'Needs your AI key: add it on the AI API page.',
   'triggers.list': 'Your triggers',
   'triggers.on': 'On',
   'triggers.off': 'Off',
@@ -55,7 +59,8 @@ export const triggersEn = {
   'triggers.skip.no_key': 'The AI key was removed.',
   'triggers.tokens': '{n} tokens',
   'triggers.noEvents': 'Nothing matched yet. New events show up here as they arrive.',
-  'triggers.new': 'New trigger',
+  'triggers.manual': 'Create one by hand',
+  'triggers.manualSub': 'The same settings your AI fills in for you, as a form.',
   'triggers.name': 'Name',
   'triggers.namePlaceholder': 'For example, Bank emails',
   'triggers.source': 'Watch',
@@ -107,25 +112,55 @@ export const triggersEn = {
   'triggers.flash.badArgs': 'The arguments must be a JSON object, like {"text": "{{text}}"}.',
   'aikeys.title': 'AI API',
   'aikeys.sub':
-    'Your own AI keys, for triggers that wake an AI. You pay your provider directly; the hub never sees your bill.',
+    'Paste your key once. Everything else, from the model to the automations that run on it, your AI app sets up when you ask.',
+  'aikeys.steps': 'How automation works',
+  'aikeys.step1': 'Paste your AI key',
+  'aikeys.step1Text': 'OpenAI, Anthropic or OpenRouter. This is the only thing you do on the site.',
+  'aikeys.step1Cta': 'Paste a key',
+  'aikeys.step2': 'Tell your AI what to automate',
+  'aikeys.step2Text':
+    'In Claude or ChatGPT: “When a client asks about prices in Telegram, reply with my price list.” It sets up the automation and asks you to confirm.',
+  'aikeys.step2Cta': 'See examples',
+  'aikeys.step3': 'It runs on its own',
+  'aikeys.step3Text':
+    'The hub watches your messages and mail around the clock and wakes your AI on your key, within a daily limit. Results show up under Triggers.',
+  'aikeys.step3Cta': 'Open Triggers',
   'aikeys.list': 'Your keys',
   'aikeys.lastUsed': 'used {when}',
   'aikeys.delete': 'Delete {name}',
   'aikeys.runsToday': '{n} runs today, {tokens} tokens, no daily limit',
   'aikeys.runsTodayOf': '{n} of {max} runs today, {tokens} tokens',
-  'aikeys.label': 'Name',
-  'aikeys.labelPlaceholder': 'Optional, for example Work OpenAI',
+  'aikeys.changeHint':
+    'To change the model or the daily limit, ask your AI, for example: “Switch my {name} key to a cheaper model.”',
+  'aikeys.editHere': 'Or change it here',
   'aikeys.model': 'Model',
   'aikeys.limit': 'Runs per day',
   'aikeys.noLimitShort': 'No limit',
   'aikeys.save': 'Save',
-  'aikeys.add': 'Add a key',
+  'aikeys.add': 'Paste your key',
+  'aikeys.addHint':
+    'Pick the provider your key is from. If the key does not work, the error shows here after its first run.',
+  'aikeys.addAnother': 'Add another key',
+  'aikeys.addAnotherSub': 'For example a second provider, or a separate key for work.',
   'aikeys.provider': 'Provider',
   'aikeys.defaultModel': 'default {model}',
   'aikeys.getKey': 'Get a key',
   'aikeys.key': 'API key',
-  'aikeys.modelPlaceholder': 'Leave empty for the default',
-  'aikeys.noLimit': 'No daily limit',
+  'aikeys.keyPlaceholder': 'sk-…',
+  'aikeys.saveKey': 'Save key',
+  'aikeys.defaults':
+    'A new key starts on the provider’s low-cost model shown above, with up to {n} runs a day. Your AI can change both when you ask.',
+  'aikeys.askTitle': 'Then ask your AI',
+  'aikeys.askText':
+    'Your AI app sets up the rest through Manyplug: which model to use, how many runs a day, and what to automate. Anything that acts on its own waits for your OK.',
+  'aikeys.ask': 'Try one of these',
+  'aikeys.askHint': 'Tap to copy, then paste into your AI app.',
+  'aikeys.askPrompt1':
+    'When someone asks about prices in my Telegram, have my AI reply with our price list, but ask me before sending.',
+  'aikeys.askPrompt2':
+    'When an email with an invoice arrives, have my AI summarize it and send me the summary in Telegram.',
+  'aikeys.askPrompt3': 'Switch my AI key to a cheaper model and allow at most 50 runs a day.',
+  'aikeys.askPrompt4': 'Show my automations and how much my AI key was used today.',
   'aikeys.limitHint':
     'The most times a day triggers may wake the AI with this key. Over the limit, runs are skipped and you get one notice.',
   'aikeys.safe': 'How your key is kept',
@@ -135,8 +170,8 @@ export const triggersEn = {
     'Paste keys only here, never in a chat. The AI can pick a key by name but can never read it.',
   'aikeys.safe3':
     'A woken AI gets only the tools its trigger allows, sees messages marked as untrusted, and asks you before risky actions.',
-  'aikeys.toTriggers': 'Set up a trigger that uses your key',
-  'aikeys.flash.saved': 'Key saved. Pick it in a trigger’s “Wake my AI” action.',
+  'aikeys.flash.saved':
+    'Key saved. Now ask your AI what to automate, for example: “When a client asks about prices in Telegram, reply with my price list.”',
   'aikeys.flash.updated': 'Key settings saved.',
   'aikeys.flash.deleted': 'Key deleted. Triggers that used it stop running the AI.',
   'notice.trigger.title': 'Trigger “{name}”',
@@ -154,17 +189,20 @@ type TriggersKey = keyof typeof triggersEn;
 export const triggersRu: Record<TriggersKey, string> = {
   'triggers.title': 'Триггеры',
   'triggers.sub':
-    'Когда сообщение или письмо подходит под условие, хаб сразу что-то делает, без вашего запроса.',
-  'triggers.how': 'Как это работает',
-  'triggers.how1':
-    'Выберите, за чем следить (сообщения или почта, все аккаунты или один) и что искать: отправителя, слова, чат.',
-  'triggers.how2':
-    'Выберите, что произойдёт: ваше ИИ-приложение проверяет новое по расписанию, вам приходит уведомление в Telegram, хаб выполняет одно действие или просыпается ваш собственный ключ ИИ и разбирается сам.',
-  'triggers.how3':
-    'Каждое действие проходит через ваши правила и подтверждения. Дневной лимит, который вы выбираете, останавливает зацикливание.',
-  'triggers.ask': 'Или попросите ИИ',
-  'triggers.askPrompt1': 'Сделай триггер: когда придёт письмо от моего банка, напиши мне в Telegram.',
-  'triggers.askPrompt2': 'Каждый час проверяй мои триггеры и коротко рассказывай, что нового.',
+    'Автоматизации: когда сообщение или письмо подходит под условие, что-то происходит само. Настраивает их ваше ИИ-приложение.',
+  'triggers.askTitle': 'Настройте, просто попросив свой ИИ',
+  'triggers.askText':
+    'Скажите Claude или ChatGPT (подключённому к Manyplug) одной фразой, что должно происходить: «Когда …, …». Он сам выберет, за чем следить, условие и действие, а всё, что действует само, отправит вам на подтверждение.',
+  'triggers.ask': 'Попробуйте одну из фраз',
+  'triggers.askHint': 'Нажмите, чтобы скопировать, и вставьте в ИИ-приложение.',
+  'triggers.askPrompt1': 'Когда придёт письмо от моего банка, напиши мне в Telegram.',
+  'triggers.askPrompt2':
+    'Когда клиент пишет мне в Telegram, сохраняй это, чтобы ты подготовил ответ, когда я загляну.',
+  'triggers.askPrompt3':
+    'Когда в Telegram спрашивают про цены, пусть мой ИИ отвечает нашим прайсом, но спрашивает меня перед отправкой.',
+  'triggers.askPrompt4': 'Каждый час проверяй мои триггеры и пиши, только если появилось что-то новое.',
+  'triggers.kinds': 'Что умеет триггер',
+  'triggers.kindAiNoKey': 'Нужен ваш ключ ИИ: добавьте его на странице AI API.',
   'triggers.list': 'Ваши триггеры',
   'triggers.on': 'Включён',
   'triggers.off': 'Выключен',
@@ -205,7 +243,8 @@ export const triggersRu: Record<TriggersKey, string> = {
   'triggers.skip.no_key': 'Ключ ИИ удалён.',
   'triggers.tokens': 'токенов: {n}',
   'triggers.noEvents': 'Пока ничего не поймано. Новые события появятся здесь сразу.',
-  'triggers.new': 'Новый триггер',
+  'triggers.manual': 'Создать вручную',
+  'triggers.manualSub': 'Те же настройки, что заполняет за вас ИИ, в виде формы.',
   'triggers.name': 'Название',
   'triggers.namePlaceholder': 'Например, Письма из банка',
   'triggers.source': 'Следить за',
@@ -257,25 +296,55 @@ export const triggersRu: Record<TriggersKey, string> = {
   'triggers.flash.badArgs': 'Аргументы должны быть JSON-объектом, например {"text": "{{text}}"}.',
   'aikeys.title': 'AI API',
   'aikeys.sub':
-    'Ваши собственные ключи ИИ для триггеров, которые будят ИИ. Вы платите провайдеру напрямую, хаб не видит ваш счёт.',
+    'Вставьте ключ один раз. Всё остальное, от модели до автоматизаций на этом ключе, ваше ИИ-приложение настроит по вашей просьбе.',
+  'aikeys.steps': 'Как работает автоматизация',
+  'aikeys.step1': 'Вставьте ключ ИИ',
+  'aikeys.step1Text': 'OpenAI, Anthropic или OpenRouter. Это единственное, что нужно сделать на сайте.',
+  'aikeys.step1Cta': 'Вставить ключ',
+  'aikeys.step2': 'Скажите ИИ, что автоматизировать',
+  'aikeys.step2Text':
+    'В Claude или ChatGPT: «Когда клиент спрашивает в Telegram про цены, отвечай моим прайсом». Он настроит автоматизацию и попросит подтвердить.',
+  'aikeys.step2Cta': 'Примеры',
+  'aikeys.step3': 'Дальше всё работает само',
+  'aikeys.step3Text':
+    'Хаб круглосуточно следит за сообщениями и почтой и будит ваш ИИ на вашем ключе в пределах дневного лимита. Результаты видны в разделе «Триггеры».',
+  'aikeys.step3Cta': 'Открыть триггеры',
   'aikeys.list': 'Ваши ключи',
   'aikeys.lastUsed': 'использован {when}',
   'aikeys.delete': 'Удалить {name}',
   'aikeys.runsToday': 'Сегодня запусков: {n}, токенов: {tokens}, без дневного лимита',
   'aikeys.runsTodayOf': 'Сегодня запусков: {n} из {max}, токенов: {tokens}',
-  'aikeys.label': 'Название',
-  'aikeys.labelPlaceholder': 'Необязательно, например Рабочий OpenAI',
+  'aikeys.changeHint':
+    'Чтобы поменять модель или дневной лимит, попросите ИИ, например: «Переключи ключ {name} на модель подешевле».',
+  'aikeys.editHere': 'Или поменяйте здесь',
   'aikeys.model': 'Модель',
   'aikeys.limit': 'Запусков в день',
   'aikeys.noLimitShort': 'Без лимита',
   'aikeys.save': 'Сохранить',
-  'aikeys.add': 'Добавить ключ',
+  'aikeys.add': 'Вставьте ключ',
+  'aikeys.addHint':
+    'Выберите провайдера, от которого ключ. Если ключ не работает, ошибка появится здесь после первого запуска.',
+  'aikeys.addAnother': 'Добавить ещё ключ',
+  'aikeys.addAnotherSub': 'Например, другого провайдера или отдельный ключ для работы.',
   'aikeys.provider': 'Провайдер',
   'aikeys.defaultModel': 'по умолчанию {model}',
   'aikeys.getKey': 'Получить ключ',
   'aikeys.key': 'API-ключ',
-  'aikeys.modelPlaceholder': 'Пусто — модель по умолчанию',
-  'aikeys.noLimit': 'Без дневного лимита',
+  'aikeys.keyPlaceholder': 'sk-…',
+  'aikeys.saveKey': 'Сохранить ключ',
+  'aikeys.defaults':
+    'Новый ключ начинает с недорогой модели провайдера, указанной выше, и не больше {n} запусков в день. ИИ поменяет и то и другое по вашей просьбе.',
+  'aikeys.askTitle': 'Потом попросите свой ИИ',
+  'aikeys.askText':
+    'Остальное ваше ИИ-приложение настроит через Manyplug: какую модель брать, сколько запусков в день и что автоматизировать. Всё, что действует само, ждёт вашего подтверждения.',
+  'aikeys.ask': 'Попробуйте одну из фраз',
+  'aikeys.askHint': 'Нажмите, чтобы скопировать, и вставьте в ИИ-приложение.',
+  'aikeys.askPrompt1':
+    'Когда в моём Telegram спрашивают про цены, пусть мой ИИ отвечает нашим прайсом, но спрашивает меня перед отправкой.',
+  'aikeys.askPrompt2':
+    'Когда придёт письмо со счётом, пусть мой ИИ коротко перескажет его и пришлёт мне в Telegram.',
+  'aikeys.askPrompt3': 'Переключи мой ключ ИИ на модель подешевле и поставь не больше 50 запусков в день.',
+  'aikeys.askPrompt4': 'Покажи мои автоматизации и сколько сегодня израсходовал мой ключ ИИ.',
   'aikeys.limitHint':
     'Сколько раз в день триггеры могут будить ИИ этим ключом. Сверх лимита запуски пропускаются, а вам приходит одно уведомление.',
   'aikeys.safe': 'Как хранится ключ',
@@ -285,8 +354,8 @@ export const triggersRu: Record<TriggersKey, string> = {
     'Вставляйте ключи только здесь, никогда в чат. ИИ может выбрать ключ по названию, но не может его прочитать.',
   'aikeys.safe3':
     'Разбуженный ИИ получает только инструменты своего триггера, видит сообщения помеченными как недоверенные и спрашивает вас перед рискованными действиями.',
-  'aikeys.toTriggers': 'Настроить триггер с вашим ключом',
-  'aikeys.flash.saved': 'Ключ сохранён. Выберите его в действии «Разбудить мой ИИ» у триггера.',
+  'aikeys.flash.saved':
+    'Ключ сохранён. Теперь скажите ИИ, что автоматизировать, например: «Когда клиент спрашивает в Telegram про цены, отвечай моим прайсом».',
   'aikeys.flash.updated': 'Настройки ключа сохранены.',
   'aikeys.flash.deleted': 'Ключ удалён. Триггеры с ним перестанут запускать ИИ.',
   'notice.trigger.title': 'Триггер «{name}»',

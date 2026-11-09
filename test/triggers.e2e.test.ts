@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Principal } from '../src/core/principal.js';
-import { toolCalls, triggerEvents, triggers as triggerTable } from '../src/db/schema.js';
+import { aiKeys, toolCalls, triggerEvents, triggers as triggerTable } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
 import type { TriggerEvent } from '../src/triggers/store.js';
 import { FakeInternet } from './e2e/fake-internet.js';
@@ -141,6 +141,53 @@ describe('triggers', () => {
     });
     expect(JSON.stringify(result.structuredContent ?? result.content)).toMatch(/confirm/i);
     expect(await hub.services.triggers.service.list(workspaceId)).toEqual([]);
+  });
+
+  it('lets the AI app see and change the user’s AI keys, never the key itself', async () => {
+    const empty = json(await call('manyplug_ai_keys'));
+    // Empty lists are left out of results to save tokens.
+    expect(empty.keys).toBeUndefined();
+    expect(empty.add_key).toContain('/app/ai');
+    expect(empty.providers.map((p: { id: string }) => p.id)).toContain('openrouter');
+
+    const key = await hub.services.triggers.keys.create(workspaceId, {
+      provider: 'openrouter',
+      key: 'sk-or-secret-0123456789abcdef',
+      dailyRuns: 200,
+    });
+    try {
+      const listed = json(await call('manyplug_ai_keys'));
+      expect(listed.keys).toEqual([
+        expect.objectContaining({ name: 'OpenRouter', model: 'openai/gpt-5-mini', daily_runs: 200 }),
+      ]);
+      expect(JSON.stringify(listed)).not.toContain('sk-or-secret');
+
+      // Model and a lower limit apply at once.
+      const updated = json(
+        await call('manyplug_update_ai_key', {
+          key: 'openrouter',
+          model: 'openai/gpt-6-luna',
+          daily_runs: 50,
+        }),
+      );
+      expect(updated.updated).toMatchObject({ model: 'openai/gpt-6-luna', daily_runs: 50 });
+
+      // Raising or removing the limit lets triggers spend more: it waits for the user.
+      const raised = await call('manyplug_update_ai_key', { key: 'OpenRouter', daily_runs: null });
+      expect(JSON.stringify(raised.structuredContent ?? raised.content)).toMatch(/confirm/i);
+      expect((await hub.services.triggers.keys.get(workspaceId, key.id)).dailyRuns).toBe(50);
+
+      const unknown = await call('manyplug_update_ai_key', { key: 'nope', model: 'x' });
+      expect(unknown.isError).toBe(true);
+      expect(JSON.stringify(unknown.content)).toContain('OpenRouter');
+
+      expect(json(await call('manyplug_remove_ai_key', { key: 'OpenRouter' }))).toEqual({
+        removed: 'OpenRouter',
+      });
+      expect(await hub.services.triggers.keys.list(workspaceId)).toEqual([]);
+    } finally {
+      await hub.services.db.delete(aiKeys);
+    }
   });
 
   it('runs a hub tool with the event filled into its arguments', async () => {
@@ -293,19 +340,20 @@ describe('triggers', () => {
     const keysHtml = await keys.text();
     expect(keysHtml).toContain('OpenRouter');
     expect(keysHtml).toContain('action="/app/ai"');
+    // The page asks only for the provider and the key; the rest starts at the defaults.
+    expect(keysHtml).not.toContain('name="model"');
+    expect(keysHtml).toContain('id="aikeys-ask"');
     await browser.request('/app/ai', {
-      form: {
-        csrf,
-        provider: 'anthropic',
-        key: 'sk-ant-test-0123456789',
-        label: 'Mine',
-        model: '',
-        noLimit: 'on',
-      },
+      form: { csrf, provider: 'anthropic', key: 'sk-ant-test-0123456789' },
     });
-    const saved = (await hub.services.triggers.keys.list(workspaceId)).find((k) => k.label === 'Mine');
-    expect(saved).toMatchObject({ label: 'Mine', provider: 'anthropic', dailyRuns: null });
-    expect(await (await browser.request('/app/ai')).text()).not.toContain('sk-ant-test-0123456789');
+    const saved = (await hub.services.triggers.keys.list(workspaceId)).find(
+      (k) => k.provider === 'anthropic',
+    );
+    expect(saved).toMatchObject({ label: 'Anthropic', model: 'claude-haiku-5-5', dailyRuns: 200 });
+    const withKey = await (await browser.request('/app/ai')).text();
+    expect(withKey).not.toContain('sk-ant-test-0123456789');
+    // With a key, the edit form is there but folded behind "ask your AI".
+    expect(withKey).toContain('class="key-edit"');
     await hub.services.db.delete(triggerEvents);
   });
 });

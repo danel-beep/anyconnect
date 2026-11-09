@@ -1,15 +1,17 @@
 import type { FC } from 'hono/jsx';
 import type { AiProviderId, TriggerEventStatus } from '../db/schema.js';
-import { AppShell, Flash, PageHead, type ShellInfo } from './app.js';
+import { AppShell, Flash, PageHead, type SetupStep, SetupSteps, type ShellInfo } from './app.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
-import { AskAi, fmtAgo, fmtNumber, Hidden, Icon, Meter } from './ui.js';
+import { AskAi, Fold, fmtAgo, fmtNumber, Hidden, Icon, Meter, SectionHead } from './ui.js';
 
 /**
  * Triggers in the dashboard (`/app/triggers`): the rules "when a message or email matches, do…",
- * the form for a new one, and the live feed of what they matched. The separate AI API page
- * (`/app/ai`) holds the user's own keys that `ai` triggers wake. Both mirror the chat tools
- * (`manyplug_*_trigger`), see `docs/TRIGGERS.md`.
+ * and the live feed of what they matched. The separate AI API page (`/app/ai`) holds the user's
+ * own keys that `ai` triggers wake. The user's AI app sets both up through the chat tools
+ * (`manyplug_*_trigger`, `manyplug_*ai_key*`), so the pages lead with what to ask it; pasting a key
+ * is the only step that has to happen here. The manual form stays folded as a fallback. See
+ * `docs/TRIGGERS.md`.
  */
 
 export type TriggerKind = 'check' | 'notify' | 'tool' | 'ai';
@@ -176,12 +178,12 @@ const EventFeed: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) => {
   );
 };
 
+const KINDS: TriggerKind[] = ['check', 'notify', 'tool', 'ai'];
+
 const NewTrigger: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) => {
   const { t } = ctx;
-  const kinds: TriggerKind[] = ['check', 'notify', 'tool', 'ai'];
   return (
-    <div class="card" id="new">
-      <h2>{t('triggers.new')}</h2>
+    <Fold id="new" icon="pen" title={t('triggers.manual')} sub={t('triggers.manualSub')}>
       <form method="post" action="/app/triggers" class="trigger-form">
         <Hidden values={{ csrf: ctx.csrf }} />
         <div class="grid-2 tight">
@@ -227,7 +229,7 @@ const NewTrigger: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) => 
         </fieldset>
         <fieldset class="choice-list">
           <legend>{t('triggers.action')}</legend>
-          {kinds.map((kind) => (
+          {KINDS.map((kind) => (
             <label class="choice">
               <input type="radio" name="do" value={kind} checked={kind === 'check'} />
               <span>
@@ -329,7 +331,7 @@ const NewTrigger: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) => 
           </button>
         </div>
       </form>
-    </div>
+    </Fold>
   );
 };
 
@@ -343,20 +345,38 @@ export const TriggersPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: TriggersVi
     <AppShell ctx={ctx} shell={shell} section="triggers" title={t('triggers.title')}>
       <PageHead title={t('triggers.title')} sub={t('triggers.sub')} />
       <Flash flash={view.flash} />
-      <div class="card">
-        <h2>{t('triggers.how')}</h2>
-        <ul class="trigger-how">
-          <li>{t('triggers.how1')}</li>
-          <li>{t('triggers.how2')}</li>
-          <li>{t('triggers.how3')}</li>
-        </ul>
+      <section class="card" id="ask">
+        <SectionHead icon="chat" title={t('triggers.askTitle')} hint={t('triggers.askText')} />
         <AskAi
           t={t}
           id="triggers-ask"
           title={t('triggers.ask')}
-          prompts={[t('triggers.askPrompt1'), t('triggers.askPrompt2')]}
+          hint={t('triggers.askHint')}
+          prompts={[
+            t('triggers.askPrompt1'),
+            t('triggers.askPrompt2'),
+            t('triggers.askPrompt3'),
+            t('triggers.askPrompt4'),
+          ]}
         />
-      </div>
+        <h3 class="trigger-kinds-title">{t('triggers.kinds')}</h3>
+        <ul class="trigger-kinds">
+          {KINDS.map((kind) => (
+            <li>
+              <strong>{t(`triggers.do.${kind}` as Key)}</strong>
+              <span class="small muted">
+                {t(`triggers.do.${kind}Hint` as Key)}
+                {kind === 'ai' && !view.keys.length ? (
+                  <>
+                    {' '}
+                    <a href="/app/ai">{t('triggers.kindAiNoKey')}</a>
+                  </>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
       {view.triggers.length ? <TriggerList ctx={ctx} view={view} /> : null}
       <EventFeed ctx={ctx} view={view} />
       <NewTrigger ctx={ctx} view={view} />
@@ -385,16 +405,59 @@ export interface AiKeyRowView {
 export interface AiKeysView {
   keys: AiKeyRowView[];
   providers: Array<{ id: AiProviderId; name: string; defaultModel: string; keysUrl: string }>;
+  /** Triggers that wake an AI on a key: the "tell your AI" step is done once there is one. */
+  aiTriggers: number;
+  defaultRuns: number;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
 
-export const AiKeysPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiKeysView }> = ({
-  ctx,
-  shell,
-  view,
-}) => {
+/** Pasting a key: the one step that cannot happen in a chat (keys never pass through one). */
+const AddKeyForm: FC<{ ctx: PageCtx; view: AiKeysView }> = ({ ctx, view }) => {
   const { t, lang } = ctx;
-  const runs = (k: AiKeyRowView) =>
+  return (
+    <form method="post" action="/app/ai" class="trigger-form" autocomplete="off">
+      <Hidden values={{ csrf: ctx.csrf }} />
+      <fieldset class="choice-list">
+        <legend>{t('aikeys.provider')}</legend>
+        {view.providers.map((p, i) => (
+          <label class="choice">
+            <input type="radio" name="provider" value={p.id} checked={i === 0} />
+            <span>
+              <strong>{p.name}</strong>
+              <span class="small muted">{t('aikeys.defaultModel', { model: p.defaultModel })}</span>
+              <span class="small">
+                <a href={p.keysUrl} target="_blank" rel="noopener noreferrer">
+                  {t('aikeys.getKey')}
+                </a>
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <label for="k-key">{t('aikeys.key')}</label>
+      <div class="key-paste">
+        <input
+          id="k-key"
+          type="password"
+          name="key"
+          required
+          maxlength={500}
+          autocomplete="off"
+          spellcheck={false}
+          placeholder={t('aikeys.keyPlaceholder')}
+        />
+        <button type="submit" class="primary">
+          <Icon name="check" /> {t('aikeys.saveKey')}
+        </button>
+      </div>
+      <p class="hint">{t('aikeys.defaults', { n: fmtNumber(lang, view.defaultRuns) })}</p>
+    </form>
+  );
+};
+
+const KeyRow: FC<{ ctx: PageCtx; k: AiKeyRowView }> = ({ ctx, k }) => {
+  const { t, lang } = ctx;
+  const runs =
     k.dailyRuns === null
       ? t('aikeys.runsToday', { n: fmtNumber(lang, k.runsToday), tokens: fmtNumber(lang, k.tokensToday) })
       : t('aikeys.runsTodayOf', {
@@ -403,144 +466,136 @@ export const AiKeysPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiKeysView }
           tokens: fmtNumber(lang, k.tokensToday),
         });
   return (
+    <li class="key-row">
+      <div class="key-head">
+        <span class="grow">
+          <strong>{k.label}</strong> <span class="badge">{k.providerName}</span>
+          <div class="small muted">
+            <code class="small">{k.model}</code> · ••••{k.keyHint}
+            {k.lastUsedAt ? ` · ${t('aikeys.lastUsed', { when: fmtAgo(lang, k.lastUsedAt) })}` : ''}
+          </div>
+          {k.lastError ? <div class="small key-error">{k.lastError}</div> : null}
+        </span>
+        <form method="post" action={`/app/ai/${encodeURIComponent(k.id)}/delete`}>
+          <Hidden values={{ csrf: ctx.csrf }} />
+          <button type="submit" class="sm danger" aria-label={t('aikeys.delete', { name: k.label })}>
+            <Icon name="trash" />
+          </button>
+        </form>
+      </div>
+      <div class="small muted">{runs}</div>
+      <Meter used={k.runsToday} limit={k.dailyRuns} label={runs} />
+      <p class="small muted key-change">{t('aikeys.changeHint', { name: k.label })}</p>
+      <details class="key-edit">
+        <summary>{t('aikeys.editHere')}</summary>
+        <form method="post" action={`/app/ai/${encodeURIComponent(k.id)}`} class="inline-form">
+          <Hidden values={{ csrf: ctx.csrf }} />
+          <div>
+            <label for={`m-${k.id}`}>{t('aikeys.model')}</label>
+            <input
+              id={`m-${k.id}`}
+              type="text"
+              name="model"
+              maxlength={100}
+              value={k.model}
+              spellcheck={false}
+            />
+          </div>
+          <div>
+            <label for={`l-${k.id}`}>{t('aikeys.limit')}</label>
+            <input
+              id={`l-${k.id}`}
+              type="number"
+              name="dailyRuns"
+              min={1}
+              max={100000}
+              value={k.dailyRuns === null ? '' : String(k.dailyRuns)}
+              placeholder={t('aikeys.noLimitShort')}
+            />
+          </div>
+          <button type="submit" class="sm">
+            {t('aikeys.save')}
+          </button>
+        </form>
+        <p class="hint">{t('aikeys.limitHint')}</p>
+      </details>
+    </li>
+  );
+};
+
+export const AiKeysPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiKeysView }> = ({
+  ctx,
+  shell,
+  view,
+}) => {
+  const { t } = ctx;
+  const hasKey = view.keys.length > 0;
+  const steps: SetupStep[] = [
+    {
+      done: hasKey,
+      title: t('aikeys.step1'),
+      text: t('aikeys.step1Text'),
+      cta: t('aikeys.step1Cta'),
+      href: '#new',
+    },
+    {
+      done: hasKey && view.aiTriggers > 0,
+      title: t('aikeys.step2'),
+      text: t('aikeys.step2Text'),
+      cta: t('aikeys.step2Cta'),
+      href: '#ask',
+    },
+    {
+      done: view.keys.some((k) => k.lastUsedAt),
+      title: t('aikeys.step3'),
+      text: t('aikeys.step3Text'),
+      cta: t('aikeys.step3Cta'),
+      href: '/app/triggers',
+    },
+  ];
+  return (
     <AppShell ctx={ctx} shell={shell} section="ai" title={t('aikeys.title')}>
       <PageHead title={t('aikeys.title')} sub={t('aikeys.sub')} />
       <Flash flash={view.flash} />
-      {view.keys.length ? (
+      <SetupSteps ctx={ctx} steps={steps} title={t('aikeys.steps')} />
+      {hasKey ? null : (
+        <section class="card" id="new">
+          <SectionHead icon="key" title={t('aikeys.add')} hint={t('aikeys.addHint')} />
+          <AddKeyForm ctx={ctx} view={view} />
+        </section>
+      )}
+      <section class="card" id="ask">
+        <SectionHead icon="chat" title={t('aikeys.askTitle')} hint={t('aikeys.askText')} />
+        <AskAi
+          t={t}
+          id="aikeys-ask"
+          title={t('aikeys.ask')}
+          hint={t('aikeys.askHint')}
+          prompts={[
+            t('aikeys.askPrompt1'),
+            t('aikeys.askPrompt2'),
+            t('aikeys.askPrompt3'),
+            t('aikeys.askPrompt4'),
+          ]}
+        />
+      </section>
+      {hasKey ? (
         <div class="card flush">
           <div class="card-head pad">
             <h2>{t('aikeys.list')}</h2>
           </div>
           <ul class="plain pad-x">
             {view.keys.map((k) => (
-              <li class="key-row">
-                <div class="key-head">
-                  <span class="grow">
-                    <strong>{k.label}</strong> <span class="badge">{k.providerName}</span>
-                    <div class="small muted">
-                      <code class="small">{k.model}</code> · ••••{k.keyHint}
-                      {k.lastUsedAt ? ` · ${t('aikeys.lastUsed', { when: fmtAgo(lang, k.lastUsedAt) })}` : ''}
-                    </div>
-                    {k.lastError ? <div class="small key-error">{k.lastError}</div> : null}
-                  </span>
-                  <form method="post" action={`/app/ai/${encodeURIComponent(k.id)}/delete`}>
-                    <Hidden values={{ csrf: ctx.csrf }} />
-                    <button
-                      type="submit"
-                      class="sm danger"
-                      aria-label={t('aikeys.delete', { name: k.label })}
-                    >
-                      <Icon name="trash" />
-                    </button>
-                  </form>
-                </div>
-                <div class="small muted">{runs(k)}</div>
-                <Meter used={k.runsToday} limit={k.dailyRuns} label={runs(k)} />
-                <form method="post" action={`/app/ai/${encodeURIComponent(k.id)}`} class="inline-form">
-                  <Hidden values={{ csrf: ctx.csrf }} />
-                  <div>
-                    <label for={`m-${k.id}`}>{t('aikeys.model')}</label>
-                    <input
-                      id={`m-${k.id}`}
-                      type="text"
-                      name="model"
-                      maxlength={100}
-                      value={k.model}
-                      spellcheck={false}
-                    />
-                  </div>
-                  <div>
-                    <label for={`l-${k.id}`}>{t('aikeys.limit')}</label>
-                    <input
-                      id={`l-${k.id}`}
-                      type="number"
-                      name="dailyRuns"
-                      min={1}
-                      max={100000}
-                      value={k.dailyRuns === null ? '' : String(k.dailyRuns)}
-                      placeholder={t('aikeys.noLimitShort')}
-                    />
-                  </div>
-                  <button type="submit" class="sm">
-                    {t('aikeys.save')}
-                  </button>
-                </form>
-              </li>
+              <KeyRow ctx={ctx} k={k} />
             ))}
           </ul>
         </div>
       ) : null}
-      <div class="card" id="new">
-        <h2>{t('aikeys.add')}</h2>
-        <form method="post" action="/app/ai" class="trigger-form" autocomplete="off">
-          <Hidden values={{ csrf: ctx.csrf }} />
-          <fieldset class="choice-list">
-            <legend>{t('aikeys.provider')}</legend>
-            {view.providers.map((p, i) => (
-              <label class="choice">
-                <input type="radio" name="provider" value={p.id} checked={i === 0} />
-                <span>
-                  <strong>{p.name}</strong>
-                  <span class="small muted">{t('aikeys.defaultModel', { model: p.defaultModel })}</span>
-                  <span class="small">
-                    <a href={p.keysUrl} target="_blank" rel="noopener noreferrer">
-                      {t('aikeys.getKey')}
-                    </a>
-                  </span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-          <label for="k-key">{t('aikeys.key')}</label>
-          <input
-            id="k-key"
-            type="password"
-            name="key"
-            required
-            maxlength={500}
-            autocomplete="off"
-            spellcheck={false}
-          />
-          <div class="grid-2 tight">
-            <div>
-              <label for="k-label">{t('aikeys.label')}</label>
-              <input
-                id="k-label"
-                type="text"
-                name="label"
-                maxlength={60}
-                placeholder={t('aikeys.labelPlaceholder')}
-              />
-            </div>
-            <div>
-              <label for="k-model">{t('aikeys.model')}</label>
-              <input
-                id="k-model"
-                type="text"
-                name="model"
-                maxlength={100}
-                spellcheck={false}
-                placeholder={t('aikeys.modelPlaceholder')}
-              />
-            </div>
-          </div>
-          <div class="grid-2 tight">
-            <div>
-              <label for="k-limit">{t('aikeys.limit')}</label>
-              <input id="k-limit" type="number" name="dailyRuns" min={1} max={100000} value="200" />
-            </div>
-            <label class="check-label trigger-nolimit" for="k-nolimit">
-              <input id="k-nolimit" type="checkbox" name="noLimit" /> {t('aikeys.noLimit')}
-            </label>
-          </div>
-          <p class="hint">{t('aikeys.limitHint')}</p>
-          <div class="actions start">
-            <button type="submit" class="primary">
-              <Icon name="plus" /> {t('aikeys.save')}
-            </button>
-          </div>
-        </form>
-      </div>
+      {hasKey ? (
+        <Fold id="new" icon="plus" title={t('aikeys.addAnother')} sub={t('aikeys.addAnotherSub')}>
+          <AddKeyForm ctx={ctx} view={view} />
+        </Fold>
+      ) : null}
       <div class="card">
         <h2>{t('aikeys.safe')}</h2>
         <ul class="trigger-how">
@@ -548,9 +603,6 @@ export const AiKeysPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AiKeysView }
           <li>{t('aikeys.safe2')}</li>
           <li>{t('aikeys.safe3')}</li>
         </ul>
-        <p class="hint">
-          <a href="/app/triggers">{t('aikeys.toTriggers')}</a>
-        </p>
       </div>
     </AppShell>
   );

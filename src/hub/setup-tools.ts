@@ -23,6 +23,7 @@ import {
   type WorkspaceAdmin,
 } from '../core/workspace-admin.js';
 import { AppError, badRequest } from '../lib/errors.js';
+import { aiKeyActions } from './ai-key-tools.js';
 import { appActions, type WorkspaceApps } from './app-tools.js';
 import { billingActions, referralActions, type WorkspaceBilling } from './billing-tools.js';
 import type { CatalogAllow } from './catalog-types.js';
@@ -491,6 +492,8 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
   ...teamActions(setupAction),
   ...securityActions(setupAction),
   ...referralActions(setupAction),
+  // Changed once or twice after the key is pasted: last, so they never push team tools out.
+  ...aiKeyActions(setupAction),
 ];
 
 /** Setup tools a team's shared connection still sees: reading only (it cannot change the setup). */

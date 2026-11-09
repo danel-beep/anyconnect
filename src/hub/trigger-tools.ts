@@ -59,6 +59,21 @@ export interface TriggerChange {
   enabled?: boolean;
 }
 
+/** One of the user's AI keys as the tools show it: never the key itself. */
+export interface AiKeyInfo {
+  id: string;
+  label: string;
+  /** Provider name: OpenAI, Anthropic, OpenRouter. */
+  provider: string;
+  model: string;
+  /** Null: no daily limit. */
+  dailyRuns: number | null;
+  runsToday: number;
+  tokensToday: number;
+  lastUsedAt: Date | null;
+  lastError: string | null;
+}
+
 export interface CheckedEvent {
   trigger: string;
   service: string;
@@ -91,8 +106,18 @@ export interface WorkspaceTriggers {
     principal: Principal,
     options: { trigger?: string; limit: number; signal: AbortSignal },
   ): Promise<{ events: CheckedEvent[]; more: boolean }>;
-  /** The user's AI keys by label, for `ai_key`. */
-  aiKeys(workspaceId: string): Promise<Array<{ label: string; provider: string; model: string }>>;
+  /** The user's own AI keys (never the key itself), for `ai_key` and the AI key tools. */
+  aiKeys(workspaceId: string): Promise<AiKeyInfo[]>;
+  /** By id, label or provider name; the key itself is never set here, only on the AI API page. */
+  updateAiKey(
+    workspaceId: string,
+    ref: string,
+    patch: { label?: string; model?: string; dailyRuns?: number | null },
+  ): Promise<AiKeyInfo>;
+  deleteAiKey(workspaceId: string, ref: string): Promise<AiKeyInfo>;
+  findAiKey(workspaceId: string, ref: string): Promise<AiKeyInfo | undefined>;
+  /** The providers a key can be added for, with the model a new key starts on. */
+  aiProviders: Array<{ id: string; name: string; defaultModel: string }>;
   pageUrl: string;
   aiPageUrl: string;
 }
@@ -287,7 +312,7 @@ export function triggerActions(
       name: 'create_trigger',
       title: 'Create a trigger',
       description:
-        'Creates a trigger: when a new message or email matches the filter, the hub does something. Prefer do=check for things the AI should handle (no cost until something matches) or do=notify; do=tool and do=ai make the hub act on its own and wait for the user’s confirmation. Returns a ready scheduled-task prompt for do=check.',
+        'Creates a trigger (an automation): when a new message or email matches the filter, the hub does something. Use it when the user asks "when X happens, do Y"; fill the filter and action from their words and ask only what is unclear. Prefer do=check for things the AI should handle (no cost until something matches) or do=notify; do=tool and do=ai make the hub act on its own and wait for the user’s confirmation. Returns a ready scheduled-task prompt for do=check.',
       input: z.object({
         name: z.string().trim().min(1).max(80).describe('Short name, e.g. "Invoices from Acme"'),
         when: z.enum(['message', 'mail']).describe('message: messengers (Telegram, WhatsApp…) · mail: email'),

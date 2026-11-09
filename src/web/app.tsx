@@ -576,16 +576,21 @@ export interface SetupStep {
  * "Getting started": numbered steps with progress; the first step left to do is highlighted.
  * Shared by the overview and a team's page.
  */
-export const SetupSteps: FC<{ ctx: PageCtx; steps: SetupStep[] }> = ({ ctx, steps }) => {
+export const SetupSteps: FC<{ ctx: PageCtx; steps: SetupStep[]; title?: string }> = ({
+  ctx,
+  steps,
+  title,
+}) => {
   const { t } = ctx;
+  const heading = title ?? t('app.onb.title');
   const done = steps.filter((s) => s.done).length;
   const current = steps.findIndex((s) => !s.done);
   return (
     <section class="onboard" aria-labelledby="onboard-title">
       <div class="onboard-head">
-        <h2 id="onboard-title">{t('app.onb.title')}</h2>
+        <h2 id="onboard-title">{heading}</h2>
         <span class="onboard-count">{t('app.onb.progress', { done, total: steps.length })}</span>
-        <Meter used={done} limit={steps.length} label={t('app.onb.title')} />
+        <Meter used={done} limit={steps.length} label={heading} />
       </div>
       <div class={`onboard-steps${steps.length === 2 ? ' two' : ''}`}>
         {steps.map((s, i) => (
