@@ -48,7 +48,7 @@ export const BUILTIN_TOOLS: Record<BuiltinToolId, CatalogTool> = {
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'What you want to do, in a few words' },
+        query: { type: 'string', description: 'What you want to do, in a few English words' },
         service: { type: 'string', description: 'Only tools of this service id' },
         limit: { type: 'integer', minimum: 1, maximum: 20, description: 'Default 5' },
       },
