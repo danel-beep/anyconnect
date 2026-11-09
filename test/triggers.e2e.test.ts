@@ -1,10 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { mailSearch } from '../src/connectors/builtin/email/capability.js';
 import { defineConnector } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import { aiKeys, toolCalls, triggerEvents, triggers as triggerTable } from '../src/db/schema.js';
 import type { ToolCallResult } from '../src/hub/result.js';
+import { MemoryMailer } from '../src/mail/mailer.js';
 import type { TriggerEvent } from '../src/triggers/store.js';
 import { FakeInternet } from './e2e/fake-internet.js';
 import { registryWithFakeChat } from './fake-messenger.js';
@@ -29,6 +31,48 @@ const notes = defineConnector({
   ],
 });
 
+/** A mailbox with an inbox and a spam folder, searched through the shared `mail.search`. */
+interface TestMail {
+  id: string;
+  folder: 'inbox' | 'junk' | 'sent';
+  from: string;
+  subject: string;
+  snippet: string;
+  date: string;
+  bulk?: boolean;
+}
+const mailbox: TestMail[] = [];
+const folderReads: string[] = [];
+const testmail = defineConnector({
+  id: 'testmail',
+  name: 'TestMail',
+  description: 'Test mailbox',
+  version: '1.0.0',
+  config: z.object({}),
+  actions: (action) => [
+    action({
+      name: 'search',
+      title: 'Search mail',
+      description: 'Searches the test mailbox.',
+      input: z.object({ folder: z.string().default('all'), since: z.string().optional() }),
+      hints: { readOnly: true },
+      capability: mailSearch((input) => ({
+        ...(input.folder ? { folder: input.folder } : {}),
+        ...(input.since ? { since: input.since } : {}),
+      })),
+      run: ({ folder, since }) => {
+        folderReads.push(folder);
+        return {
+          messages: mailbox
+            .filter((m) => folder === 'all' || m.folder === folder)
+            .filter((m) => !since || m.date >= since)
+            .map(({ folder: _f, ...m }) => m),
+        };
+      },
+    }),
+  ],
+});
+
 /**
  * Triggers end to end: a message arrives in the hub's store, the matching trigger records it, and
  * its action runs (a check by the AI app, a hub tool call, or the user's own AI woken through a
@@ -43,6 +87,7 @@ describe('triggers', () => {
   let mcp: Principal;
   let session: Principal;
   let seq = 0;
+  const mailer = new MemoryMailer();
 
   const call = async (tool: string, args: Record<string, unknown> = {}) => {
     const catalog = await hub.services.hub.getCatalog(mcp);
@@ -83,10 +128,11 @@ describe('triggers', () => {
     await resetDatabase();
     internet = new FakeInternet();
     hub = await startTestHub({
-      connectors: (deps) => registryWithFakeChat(deps).register(notes),
+      connectors: (deps) => registryWithFakeChat(deps).register(notes).register(testmail),
       internet,
       seed: false,
       env: { CONFIRMATION_WAIT_SECONDS: '0' },
+      mailer,
     });
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
     const user = (await hub.services.db.query.users.findFirst())!;
@@ -102,6 +148,12 @@ describe('triggers', () => {
         credentials: {},
       })
     ).id;
+    await hub.services.accounts.create(workspaceId, {
+      connectorId: 'testmail',
+      name: 'work',
+      label: 'Work',
+      credentials: {},
+    });
     await hub.services.accounts.create(workspaceId, {
       connectorId: 'notes',
       name: 'main',
@@ -373,9 +425,80 @@ describe('triggers', () => {
       await inbound('And the receipt?');
       const events = await settled(trigger.id, 2);
       expect(events.map((e) => e.status)).toContain('awaiting_confirmation');
+      // The owner has no Telegram linked: the waiting request reaches them by email.
+      const email = mailer.sent.find((m) => m.tag === 'notice.confirmation_waiting');
+      expect(email?.subject).toBe('Your trigger waits for your OK');
+      expect(email?.text).toContain('/confirm/');
     } finally {
       await hub.services.triggers.keys.delete(workspaceId, key.id);
     }
+  });
+
+  it('watches the inbox (and spam when asked) and skips newsletters for free', async () => {
+    const trigger = await create({
+      name: 'Important mail',
+      when: 'mail',
+      do: 'check',
+      filter: { skip_bulk: true, spam: true, not_subject: 'receipt' },
+    });
+    const at = (s: number) => new Date(Date.now() + s * 1000).toISOString();
+    mailbox.push(
+      {
+        id: 'a',
+        folder: 'inbox',
+        from: 'Ann <ann@acme.example>',
+        subject: 'Need your decision',
+        snippet: 'By Friday?',
+        date: at(1),
+      },
+      {
+        id: 'b',
+        folder: 'junk',
+        from: 'Bob <bob@acme.example>',
+        subject: 'Contract',
+        snippet: 'Please sign',
+        date: at(2),
+      },
+      {
+        id: 'c',
+        folder: 'inbox',
+        from: 'Shop <news@shop.example>',
+        subject: 'Sale',
+        snippet: '30% off',
+        date: at(3),
+        bulk: true,
+      },
+      {
+        id: 'd',
+        folder: 'inbox',
+        from: 'GitHub <noreply@github.com>',
+        subject: 'New issue',
+        snippet: '#12',
+        date: at(4),
+      },
+      {
+        id: 'e',
+        folder: 'sent',
+        from: 'Me <me@acme.example>',
+        subject: 'My own mail',
+        snippet: 'Sent by me',
+        date: at(5),
+      },
+      {
+        id: 'f',
+        folder: 'inbox',
+        from: 'Ann <ann@acme.example>',
+        subject: 'Your receipt',
+        snippet: 'Paid',
+        date: at(6),
+      },
+    );
+    await hub.services.triggers.engine.scanAll('mail', { background: false });
+    const events = await hub.services.triggers.service.events(workspaceId, { triggerId: trigger.id });
+    expect(events.map((e) => e.item?.subject).sort()).toEqual(['Contract', 'Need your decision']);
+    expect(folderReads).toEqual(expect.arrayContaining(['inbox', 'junk']));
+    expect(folderReads).not.toContain('all');
+    mailbox.length = 0;
   });
 
   it('pauses a trigger at its daily limit', async () => {

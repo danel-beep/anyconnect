@@ -34,6 +34,7 @@ interface NativeSummary {
   snippet?: string;
   unread?: boolean;
   attachments?: boolean | number;
+  bulk?: boolean;
   url?: string;
 }
 
@@ -49,6 +50,7 @@ export function toMailSummary(m: NativeSummary): Summary {
     ...(m.snippet ? { snippet: m.snippet } : {}),
     unread: Boolean(m.unread),
     has_attachments: Boolean(m.attachments),
+    ...(m.bulk ? { bulk: true } : {}),
     ...(m.url ? { url: m.url } : {}),
   };
 }

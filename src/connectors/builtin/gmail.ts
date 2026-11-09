@@ -67,7 +67,21 @@ function hasAttachments(message: GmailMessage): boolean {
   return visit(message.payload?.parts);
 }
 
-const SUMMARY_HEADERS = ['From', 'To', 'Subject', 'Date'];
+const SUMMARY_HEADERS = ['From', 'To', 'Subject', 'Date', 'List-Unsubscribe', 'Precedence', 'Auto-Submitted'];
+/** Gmail's own tabs for mail sent to many (Promotions, Social, Updates, Forums). */
+const BULK_LABELS = ['CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'];
+/** Folder roles other mail connectors take, in Gmail's words. */
+const GMAIL_FOLDERS: Record<string, string> = { junk: 'spam', trash: 'trash', sent: 'sent', inbox: 'inbox' };
+
+/** Newsletters, notifications and automatic mail: list headers, bulk precedence or a Gmail tab. */
+function isBulk(message: GmailMessage, labels: string[]): boolean {
+  if (labels.some((l) => BULK_LABELS.includes(l))) return true;
+  if (header(message, 'List-Unsubscribe')) return true;
+  const precedence = header(message, 'Precedence')?.toLowerCase();
+  if (precedence === 'bulk' || precedence === 'list' || precedence === 'junk') return true;
+  const auto = header(message, 'Auto-Submitted')?.toLowerCase();
+  return Boolean(auto && auto !== 'no');
+}
 
 function summary(message: GmailMessage) {
   const to = cleanLine(header(message, 'To') ?? '');
@@ -84,6 +98,7 @@ function summary(message: GmailMessage) {
     ...(labels.includes('UNREAD') ? { unread: true } : {}),
     ...(labels.includes('STARRED') ? { starred: true } : {}),
     ...(hasAttachments(message) ? { attachments: true } : {}),
+    ...(isBulk(message, labels) ? { bulk: true } : {}),
   };
 }
 
@@ -322,7 +337,7 @@ export default defineConnector({
           input.since && `after:${Math.floor(Date.parse(input.since) / 1000)}`,
           input.until && `before:${Math.ceil(Date.parse(input.until) / 1000)}`,
           input.unread_only && 'is:unread',
-          input.folder && `in:${quoted(input.folder)}`,
+          input.folder && `in:${quoted(GMAIL_FOLDERS[input.folder.toLowerCase()] ?? input.folder)}`,
         ]
           .filter(Boolean)
           .join(' '),

@@ -98,6 +98,44 @@ describe('gmail', () => {
     expect(first.subject).toBe('Sale today');
   });
 
+  it('marks mail sent to many (list headers, Gmail tabs) and maps folder roles to Gmail', async () => {
+    const withHeaders = (id: string, labels: string[], extra: Array<{ name: string; value: string }>) => ({
+      ...meta(id, labels),
+      payload: { headers: [...meta(id, labels).payload.headers, ...extra] },
+    });
+    const service = fakeRoutes({
+      [`GET ${B}/messages`]: {
+        messages: ['p1', 'p2', 'p3', 'p4'].map((id) => ({ id, threadId: `t-${id}` })),
+      },
+      [`GET ${B}/messages/p1`]: withHeaders(
+        'p1',
+        ['INBOX'],
+        [{ name: 'List-Unsubscribe', value: '<mailto:u@x>' }],
+      ),
+      [`GET ${B}/messages/p2`]: withHeaders('p2', ['INBOX', 'CATEGORY_UPDATES'], []),
+      [`GET ${B}/messages/p3`]: withHeaders(
+        'p3',
+        ['INBOX'],
+        [{ name: 'Auto-Submitted', value: 'auto-replied' }],
+      ),
+      [`GET ${B}/messages/p4`]: withHeaders('p4', ['INBOX'], [{ name: 'Auto-Submitted', value: 'no' }]),
+    });
+    const acc = testAccount(gmail, { fetch: service.fetch, oauth: { accessToken: 'ya29.token' } });
+    const { messages } = (await acc.run('search', {})) as { messages: Array<{ id: string; bulk?: boolean }> };
+    expect(messages.map((m) => [m.id, Boolean(m.bulk)])).toEqual([
+      ['p1', true],
+      ['p2', true],
+      ['p3', true],
+      ['p4', false],
+    ]);
+    const search = gmail.actions.find((a) => a.name === 'search')!;
+    const binding = (Array.isArray(search.capability) ? search.capability[0] : search.capability) as {
+      mapInput: (input: Record<string, unknown>) => Record<string, unknown>;
+    };
+    expect(binding.mapInput({ folder: 'junk', limit: 5 })).toMatchObject({ query: 'in:spam' });
+    expect(binding.mapInput({ folder: 'inbox', limit: 5 })).toMatchObject({ query: 'in:inbox' });
+  });
+
   it('needs an OAuth connection', async () => {
     const acc = testAccount(gmail, {});
     await expect(acc.run('search', {})).rejects.toMatchObject({ kind: 'auth' });
@@ -123,7 +161,15 @@ describe('gmail', () => {
     });
     expect(result.messages[1]).toMatchObject({ id: 'm2', starred: true });
     const metaCall = service.calls.find((c) => c.url.pathname.endsWith('/m2'))!;
-    expect(metaCall.url.searchParams.getAll('metadataHeaders')).toEqual(['From', 'To', 'Subject', 'Date']);
+    expect(metaCall.url.searchParams.getAll('metadataHeaders')).toEqual([
+      'From',
+      'To',
+      'Subject',
+      'Date',
+      'List-Unsubscribe',
+      'Precedence',
+      'Auto-Submitted',
+    ]);
     expect(metaCall.headers.get('authorization')).toBe('Bearer ya29.token');
   });
 

@@ -1,6 +1,6 @@
 import { getCapability } from '../connectors/capabilities.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
-import { actionCapabilities, type ConnectorDefinition } from '../connectors/sdk.js';
+import { actionCapabilities, type ConnectorDefinition, ConnectorError } from '../connectors/sdk.js';
 import type { AccountRow, AccountService } from '../core/accounts.js';
 import { listOf } from '../hub/merge.js';
 import { isSetupConnector } from '../hub/setup-tools.js';
@@ -24,7 +24,14 @@ export interface EventSource {
     account: AccountRow,
     cursor: string,
     signal: AbortSignal,
+    options?: ReadOptions,
   ): Promise<{ items: TriggerItem[]; cursor: string }>;
+}
+
+/** What one trigger reads beyond the default (each trigger has its own cursor on each account). */
+export interface ReadOptions {
+  /** Mail: the spam folder too. */
+  spam?: boolean;
 }
 
 /** Incoming messenger messages (Telegram, WhatsApp, bots…) from the hub's message store. */
@@ -120,22 +127,33 @@ export class MailSource implements EventSource {
     account: AccountRow,
     cursor: string,
     signal: AbortSignal,
+    options: ReadOptions = {},
   ): Promise<{ items: TriggerItem[]; cursor: string }> {
     const found = await this.searchAction(account.workspaceId, account.connectorId);
     if (!found) return { items: [], cursor };
     const strict = cursor.startsWith('!');
     const after = Date.parse(strict ? cursor.slice(1) : cursor) || Date.now();
     const since = new Date(after - MAIL_OVERLAP_MS);
-    const canonical = { since: since.toISOString(), limit: MAIL_PAGE };
-    const capability = getCapability('mail.search');
-    const input = found.binding.mapInput ? found.binding.mapInput(canonical) : canonical;
     const ctx = await this.deps.accounts.buildContext(found.connector as ConnectorDefinition, account, {
       signal,
       logger: this.deps.logger.child({ connector: account.connectorId, account: account.id }),
     });
-    const raw = await found.action.run(found.action.input.parse(input), ctx);
-    const output = found.binding.mapOutput ? found.binding.mapOutput(raw, canonical) : raw;
-    const list = (listOf(output)?.items ?? []) as Array<Record<string, unknown>>;
+    // New mail is what lands in the inbox (not the user's own sent mail), and in spam when asked.
+    const list: Array<Record<string, unknown>> = [];
+    for (const folder of options.spam ? ['inbox', 'junk'] : ['inbox']) {
+      const canonical = { since: since.toISOString(), limit: MAIL_PAGE, folder };
+      const input = found.binding.mapInput ? found.binding.mapInput(canonical) : canonical;
+      try {
+        const raw = await found.action.run(found.action.input.parse(input), ctx);
+        const output = found.binding.mapOutput ? found.binding.mapOutput(raw, canonical) : raw;
+        list.push(...((listOf(output)?.items ?? []) as Array<Record<string, unknown>>));
+      } catch (error) {
+        // A mailbox without a spam folder still delivers its inbox.
+        if (folder === 'inbox' || !(error instanceof ConnectorError && error.kind === 'not_found'))
+          throw error;
+      }
+    }
+    const capability = getCapability('mail.search');
     let newest = after;
     const items: TriggerItem[] = [];
     for (const entry of list) {
@@ -146,6 +164,7 @@ export class MailSource implements EventSource {
         subject?: string;
         snippet?: string;
         date?: string;
+        bulk?: boolean;
       };
       if (!mail.id) continue;
       const at = Date.parse(mail.date ?? '') || Date.now();
@@ -161,6 +180,7 @@ export class MailSource implements EventSource {
         ...(mail.from ? { from: mail.from } : {}),
         ...(mail.subject ? { subject: mail.subject } : {}),
         text: mail.snippet ?? '',
+        ...(mail.bulk ? { bulk: true } : {}),
         at: new Date(at).toISOString(),
       });
     }

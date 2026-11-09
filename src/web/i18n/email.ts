@@ -32,6 +32,25 @@ export const emailEn = {
   'email.referral.bodyLimits':
     'Someone you invited just started a paid plan. Thank you! Your workspace gets Pro limits until {date}.',
   'email.referral.cta': 'Open my plan',
+
+  'email.notice.telegramTip':
+    'Link Telegram on the Confirmations page to get these as a message and approve with one tap.',
+  'email.confirm.subject': 'Your trigger waits for your OK',
+  'email.confirm.body': 'A trigger wants to: {action} ({service} · {account}).',
+  'email.confirm.expires':
+    'Nothing happens until you approve it. Without an answer it is cancelled in {minutes} minutes.',
+  'email.confirm.cta': 'Review and approve',
+  'email.trigger.subject': 'Trigger “{trigger}”',
+  'email.trigger.what': '{service} · {account} · from {from}',
+  'email.trigger.titleLine': '{title}',
+  'email.trigger.preview': '“{preview}”',
+  'email.trigger.ai': 'AI: {summary}',
+  'email.trigger.cta': 'Open triggers',
+  'email.paused.subject': 'Trigger “{trigger}” paused after {n} runs today',
+  'email.aiLimit.subject': 'The AI key of “{trigger}” reached {n} runs today',
+  'email.paused.body':
+    'It starts again tomorrow (UTC), or now if you raise the limit. Nothing is lost: new events wait in the log.',
+  'email.paused.cta': 'Change the limit',
 } as const;
 
 export type EmailKey = keyof typeof emailEn;
@@ -66,4 +85,23 @@ export const emailRu: Record<EmailKey, string> = {
   'email.referral.bodyLimits':
     'Человек, которого вы пригласили, оформил платный тариф. Спасибо! Ваше пространство получает лимиты Pro до {date}.',
   'email.referral.cta': 'Открыть тариф',
+
+  'email.notice.telegramTip':
+    'Подключите Telegram на странице подтверждений, чтобы получать это сообщением и подтверждать одной кнопкой.',
+  'email.confirm.subject': 'Триггер ждёт вашего подтверждения',
+  'email.confirm.body': 'Триггер хочет: {action} ({service} · {account}).',
+  'email.confirm.expires':
+    'Пока вы не подтвердите, ничего не произойдёт. Без ответа запрос отменится через {minutes} мин.',
+  'email.confirm.cta': 'Посмотреть и подтвердить',
+  'email.trigger.subject': 'Триггер «{trigger}»',
+  'email.trigger.what': '{service} · {account} · от {from}',
+  'email.trigger.titleLine': '{title}',
+  'email.trigger.preview': '«{preview}»',
+  'email.trigger.ai': 'ИИ: {summary}',
+  'email.trigger.cta': 'Открыть триггеры',
+  'email.paused.subject': 'Триггер «{trigger}» на паузе после {n} запусков за сегодня',
+  'email.aiLimit.subject': 'Ключ ИИ у «{trigger}» достиг {n} запусков за сегодня',
+  'email.paused.body':
+    'Он снова заработает завтра (по UTC) или сразу, если поднять лимит. Ничего не теряется: новые события ждут в журнале.',
+  'email.paused.cta': 'Изменить лимит',
 };

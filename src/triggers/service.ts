@@ -344,7 +344,7 @@ export class TriggerService implements WorkspaceTriggers {
       everyAccount: !trigger.connectorId && trigger.accountIds.length === 0,
       filter: Object.fromEntries(Object.entries(trigger.spec.filter).filter(([, v]) => v)) as Record<
         string,
-        string
+        string | boolean
       >,
       do: action.kind,
       action:
@@ -385,12 +385,25 @@ export function limitsOf(
   return Object.keys(limits).length ? limits : undefined;
 }
 
+const FILTER_WORDS = [
+  'from',
+  'chat',
+  'subject',
+  'text',
+  'not_from',
+  'not_chat',
+  'not_subject',
+  'not_text',
+] as const;
+
 export function filterOf(input: TriggerChange['filter']): TriggerFilter {
   const out: TriggerFilter = {};
-  for (const key of ['from', 'chat', 'subject', 'text'] as const) {
+  for (const key of FILTER_WORDS) {
     const value = input?.[key]?.trim();
     if (value) out[key] = value;
   }
+  if (input?.skip_bulk) out.skip_bulk = true;
+  if (input?.spam) out.spam = true;
   return out;
 }
 

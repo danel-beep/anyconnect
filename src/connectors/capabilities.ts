@@ -75,6 +75,8 @@ export const MailSummary = z.object({
   snippet: z.string().optional(),
   unread: z.boolean().optional(),
   has_attachments: z.boolean().optional(),
+  /** Sent to many by a machine: newsletter, notification, mailing list (when the service tells). */
+  bulk: z.boolean().optional(),
   url,
 });
 
@@ -245,7 +247,12 @@ export const CAPABILITIES = {
       since: isoDateTime('Received after').optional(),
       until: isoDateTime('Received before').optional(),
       unread_only: z.boolean().optional(),
-      folder: z.string().optional().describe('Folder or label; default: all mail except spam and trash'),
+      folder: z
+        .string()
+        .optional()
+        .describe(
+          'Folder or label (inbox, sent, junk, trash or a name); default: all mail except spam and trash',
+        ),
       limit: limit(50, 20),
     }),
     output: MailSummary,
