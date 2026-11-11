@@ -36,6 +36,22 @@ export function newId(prefix: IdPrefix): string {
   return `${prefix}_${encodeBase32(bytes)}`;
 }
 
+/** What `newId` produces after the prefix: 26 Crockford base32 characters. */
+const ID_BODY = /^[0-9a-hjkmnp-tv-z]{26}$/;
+
+/**
+ * Whether `value` has the shape of an id made by `newId(prefix)`. Check ids that arrive from outside
+ * (a URL path, a webhook address) before they are looked up or placed in another URL.
+ */
+export function isId(prefix: IdPrefix, value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length === prefix.length + 27 &&
+    value.startsWith(`${prefix}_`) &&
+    ID_BODY.test(value.slice(prefix.length + 1))
+  );
+}
+
 export type IdPrefix =
   | 'usr' // hub user
   | 'wsp' // workspace

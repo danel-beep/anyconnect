@@ -72,6 +72,18 @@ export class GatewayUnavailableError extends ConnectorError {
 }
 
 /**
+ * One path segment of a gateway URL. Ids reach this client from request paths, so they are encoded
+ * (a `/` or `?` inside one stays inside its segment) and a dot segment, which a URL parser would
+ * resolve to another account's endpoint, is refused.
+ */
+function segment(value: string): string {
+  if (!value || value === '.' || value === '..') throw new ConnectorError('not_found', 'Not found');
+  return encodeURIComponent(value);
+}
+
+const accountPath = (accountId: string) => `/v1/accounts/${segment(accountId)}`;
+
+/**
  * HTTP client of the gateway's internal API (private network, bearer token). Requests for an
  * account go to the gateway instance that holds its session, as recorded in its lease.
  */
@@ -133,41 +145,41 @@ export class HttpGatewayClient implements GatewayApi {
   }
 
   resolveRecipient(accountId: string, to: string): Promise<InboundChat> {
-    return this.request(accountId, 'POST', `/v1/accounts/${accountId}/resolve`, { to });
+    return this.request(accountId, 'POST', `${accountPath(accountId)}/resolve`, { to });
   }
 
   download(
     accountId: string,
     ref: { chatExternalId: string; messageExternalId: string; attachment: StoredAttachment },
   ): Promise<DownloadedFile> {
-    return this.request(accountId, 'POST', `/v1/accounts/${accountId}/download`, ref);
+    return this.request(accountId, 'POST', `${accountPath(accountId)}/download`, ref);
   }
 
   backfill(accountId: string, chatExternalId: string, limit: number): Promise<{ ingested: number }> {
-    return this.request(accountId, 'POST', `/v1/accounts/${accountId}/backfill`, { chatExternalId, limit });
+    return this.request(accountId, 'POST', `${accountPath(accountId)}/backfill`, { chatExternalId, limit });
   }
 
   async startLogin(accountId: string, input: StartLoginInput): Promise<LoginView> {
-    return LoginView.parse(await this.request(accountId, 'POST', `/v1/accounts/${accountId}/login`, input));
+    return LoginView.parse(await this.request(accountId, 'POST', `${accountPath(accountId)}/login`, input));
   }
 
   async getLogin(accountId: string, loginId: string): Promise<LoginView> {
     return LoginView.parse(
-      await this.request(accountId, 'GET', `/v1/accounts/${accountId}/login/${loginId}`),
+      await this.request(accountId, 'GET', `${accountPath(accountId)}/login/${segment(loginId)}`),
     );
   }
 
   async submitLogin(accountId: string, loginId: string, input: LoginStepInput): Promise<LoginView> {
     return LoginView.parse(
-      await this.request(accountId, 'POST', `/v1/accounts/${accountId}/login/${loginId}`, input),
+      await this.request(accountId, 'POST', `${accountPath(accountId)}/login/${segment(loginId)}`, input),
     );
   }
 
   async cancelLogin(accountId: string, loginId: string): Promise<void> {
-    await this.request(accountId, 'DELETE', `/v1/accounts/${accountId}/login/${loginId}`);
+    await this.request(accountId, 'DELETE', `${accountPath(accountId)}/login/${segment(loginId)}`);
   }
 
   async logout(accountId: string): Promise<void> {
-    await this.request(accountId, 'POST', `/v1/accounts/${accountId}/logout`);
+    await this.request(accountId, 'POST', `${accountPath(accountId)}/logout`);
   }
 }

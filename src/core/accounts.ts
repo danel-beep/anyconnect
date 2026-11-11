@@ -37,6 +37,12 @@ export const ACCOUNT_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 /** Names that select accounts in tool calls (`account: "all"`, `"mine"`), never given to one. */
 const RESERVED_NAMES = new Set(['all', 'mine']);
 
+/** A name the user (or their AI) picks for an account: the short key tool calls address it by. */
+export const AccountName = z
+  .string()
+  .regex(ACCOUNT_NAME, 'use 1-32 lowercase letters, digits, "-" or "_"')
+  .refine((name) => !RESERVED_NAMES.has(name), 'this name is reserved, pick another one');
+
 /** Account as returned by the API: never contains credentials. */
 export interface AccountView {
   id: string;
@@ -80,7 +86,7 @@ export function toAccountView(row: AccountRow): AccountView {
 
 export const CreateAccountInput = z.object({
   connectorId: z.string().min(1),
-  name: z.string().regex(ACCOUNT_NAME, 'use 1-32 lowercase letters, digits, "-" or "_"').optional(),
+  name: AccountName.optional(),
   label: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
@@ -91,7 +97,7 @@ export const CreateAccountInput = z.object({
 export type CreateAccountInput = z.infer<typeof CreateAccountInput>;
 
 export const UpdateAccountInput = z.object({
-  name: z.string().regex(ACCOUNT_NAME, 'use 1-32 lowercase letters, digits, "-" or "_"').optional(),
+  name: AccountName.optional(),
   label: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(500).nullable().optional(),
   /** Replaces the whole config. */

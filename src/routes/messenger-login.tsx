@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { ConnectorError, connectorText } from '../connectors/sdk.js';
 import { notFound } from '../lib/errors.js';
+import { isId } from '../lib/ids.js';
 import { MessengerAccounts } from '../messaging/accounts.js';
 import { GatewayUnavailableError, type LoginView, StartLoginInput } from '../messaging/gateway-client.js';
 import { csrfToken, verifyCsrf } from '../web/http.js';
@@ -31,6 +32,13 @@ export function messengerLoginRoutes() {
     const connector = await s.connectors.get(workspace.id, account.connectorId);
     if (!connector || !messengerLoginPath(connector, account)) throw notFound('Account');
     return { account, connector, team };
+  };
+
+  /** The login flow of the address. Only ids the gateway issues are passed on to it. */
+  const loginIdOf = (c: AppContext): string => {
+    const loginId = c.req.param('loginId');
+    if (!isId('lgn', loginId)) throw notFound('Login');
+    return loginId;
   };
 
   const page = async (
@@ -137,10 +145,11 @@ export function messengerLoginRoutes() {
     const user = await currentUser(c);
     if (!user) return signIn(c, 302);
     const loaded = await load(c, user);
+    const loginId = loginIdOf(c);
     const gateway = c.get('services').messaging.gateway;
     if (!gateway) return page(c, user, loaded);
     try {
-      const login = await gateway.getLogin(loaded.account.id, c.req.param('loginId'));
+      const login = await gateway.getLogin(loaded.account.id, loginId);
       return page(c, user, loaded, { login });
     } catch (error) {
       return page(c, user, loaded, { error: gatewayMessage(c, error) });
@@ -153,9 +162,9 @@ export function messengerLoginRoutes() {
     const form = await bodyParams(c);
     if (!checkCsrf(c, form)) return csrfFailed(c);
     const loaded = await load(c, user);
+    const loginId = loginIdOf(c);
     const gateway = c.get('services').messaging.gateway;
     if (!gateway) return page(c, user, loaded);
-    const loginId = c.req.param('loginId');
     try {
       const login = await gateway.submitLogin(loaded.account.id, loginId, {
         ...(form.code ? { code: form.code.trim().slice(0, 32) } : {}),
@@ -175,9 +184,10 @@ export function messengerLoginRoutes() {
     const form = await bodyParams(c);
     if (!checkCsrf(c, form)) return csrfFailed(c);
     const loaded = await load(c, user);
+    const loginId = loginIdOf(c);
     await c
       .get('services')
-      .messaging.gateway?.cancelLogin(loaded.account.id, c.req.param('loginId'))
+      .messaging.gateway?.cancelLogin(loaded.account.id, loginId)
       .catch(() => {});
     return c.redirect(here(loaded.account.id, loaded.team), 303);
   });

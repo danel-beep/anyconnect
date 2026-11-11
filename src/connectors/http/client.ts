@@ -87,11 +87,27 @@ export function appendQuery(url: URL, query: Record<string, QueryValue> | undefi
   }
 }
 
+/**
+ * A path under `baseUrl` stays where the connector put it. Ids from tool inputs end up in paths, so
+ * a `..` (plain or as `%2e`) that a URL parser would resolve to another endpoint is refused, and so
+ * is a path that would leave the service's host (`\\other.example`).
+ */
+function assertStaysInPlace(path: string, url: URL, base: string): void {
+  const end = path.search(/[?#]/);
+  const segments = (end === -1 ? path : path.slice(0, end)).split(/[/\\]/);
+  const climbs = segments.some((part) => /^(?:\.|%2e){1,2}$/i.test(part));
+  if (climbs || url.origin !== new URL(base).origin) {
+    throw new ConnectorError('invalid_input', 'Invalid id: it cannot contain "." or ".." path segments.');
+  }
+}
+
 function resolveUrl(baseUrl: string | undefined, path: string): URL {
   if (/^https?:\/\//i.test(path)) return new URL(path);
   if (!baseUrl) throw new Error(`Relative URL "${path}" needs a baseUrl`);
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  return new URL(path.replace(/^\//, ''), base);
+  const url = new URL(path.replace(/^\//, ''), base);
+  assertStaysInPlace(path, url, base);
+  return url;
 }
 
 function retryAfterMs(headers: Headers): number | undefined {

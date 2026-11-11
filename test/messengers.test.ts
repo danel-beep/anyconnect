@@ -220,6 +220,16 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     });
   }
 
+  it('turns away webhook calls for unknown accounts without keeping a counter for them', async () => {
+    const counters = hub.services.rateLimiter.size;
+    for (const id of ['nope', 'acc_x', 'acc_01j9z3k6m4q8v2w7x5y1z3a4b6', `acc_${'a'.repeat(5000)}`]) {
+      const response = await fetch(`${hub.baseUrl}/hooks/messenger/${id}`, { method: 'POST', body: '{}' });
+      expect(response.status).toBe(404);
+    }
+    // Made-up ids must not fill the limiter and push out the counters that guard sign-in.
+    expect(hub.services.rateLimiter.size).toBe(counters);
+  });
+
   it('registers the webhook, stores incoming messages encrypted and answers from the store', async () => {
     const account = await addBot();
     const setWebhook = apis.calls.find((c) => c.path === 'setWebhook');

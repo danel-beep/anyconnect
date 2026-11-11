@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { isId } from '../lib/ids.js';
 import type { AppEnv } from './context.js';
 
 /** Webhook bodies larger than this are rejected (Telegram and Meta send a few KB). */
@@ -15,15 +16,18 @@ export function hookRoutes() {
   app.on(['GET', 'POST'], '/hooks/messenger/:accountId', async (c) => {
     const s = c.get('services');
     const accountId = c.req.param('accountId');
-    const limited = s.rateLimiter.consume(`hook:${accountId}`, 600, 60_000);
-    if (!limited.allowed)
-      return c.text('Too many requests', 429, { 'retry-after': String(limited.retryAfterSeconds) });
-
+    // The address is public: anything that is not an account id is turned away before any lookup.
+    if (!isId('acc', accountId)) return c.text('Not found', 404);
     const resolved = await s.messaging.service.resolve(accountId);
     const transport = resolved?.transport;
     if (!resolved?.row.enabled || transport?.kind !== 'direct' || !transport.webhook) {
       return c.text('Not found', 404);
     }
+    // Counted per account only once the account is known to exist, so made-up ids cannot fill the
+    // rate limiter and push out the counters that guard sign-in.
+    const limited = s.rateLimiter.consume(`hook:${accountId}`, 600, 60_000);
+    if (!limited.allowed)
+      return c.text('Too many requests', 429, { 'retry-after': String(limited.retryAfterSeconds) });
     const length = Number(c.req.header('content-length') ?? 0);
     if (length > MAX_BODY_BYTES) return c.text('Payload too large', 413);
     const body = c.req.method === 'POST' ? await c.req.text() : '';

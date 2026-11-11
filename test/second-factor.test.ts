@@ -105,9 +105,14 @@ describe('second factors: TOTP, recovery codes, passkeys', () => {
     const browser = new TestBrowser(hub.baseUrl);
     await browser.login();
     expect(await sessionAmr(hub)).toEqual([['pwd']]);
+    // A session opened elsewhere with the password alone (a forgotten browser, a stolen cookie).
+    const elsewhere = new TestBrowser(hub.baseUrl);
+    await elsewhere.login();
+    expect((await elsewhere.request('/app')).status).toBe(200);
     const { secret } = await enableTotp(browser);
-    // Confirming the code upgrades the current session.
-    expect((await sessionAmr(hub))[0]).toEqual(['pwd', 'otp']);
+    // Confirming the code upgrades the current session and ends the ones opened without it.
+    expect(await sessionAmr(hub)).toEqual([['pwd', 'otp']]);
+    expect((await elsewhere.request('/app')).headers.get('location')).toBe('/login?next=%2Fapp');
     await logout(browser);
 
     const password = await browser.login(ADMIN.email, ADMIN.password, '/security');

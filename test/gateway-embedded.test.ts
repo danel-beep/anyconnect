@@ -1,9 +1,38 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import { planEmbeddedGateway, startEmbeddedGateway } from '../src/gateway/embedded.js';
 import { createLogger } from '../src/logger.js';
 import { HttpGatewayClient } from '../src/messaging/gateway-client.js';
 import { freePort, resetDatabase, TEST_DATABASE_URL, TEST_KEY } from './helpers.js';
+
+describe('gateway client', () => {
+  it('sends each id as one path segment, whatever characters it has', async () => {
+    const seen: string[] = [];
+    const server = http.createServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      res.writeHead(204).end();
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const client = new HttpGatewayClient({
+        baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+        token: 'x'.repeat(32),
+        messengerAccounts: { get: async () => undefined } as never,
+      });
+      // What a signed-in user could put in the address of the login page to reach another account.
+      await client.cancelLogin('acc_mine', '../../acc_victim/logout');
+      await client.cancelLogin('acc_mine', 'lgn_1?x=1#y');
+      expect(seen).toEqual([
+        'DELETE /v1/accounts/acc_mine/login/..%2F..%2Facc_victim%2Flogout',
+        'DELETE /v1/accounts/acc_mine/login/lgn_1%3Fx%3D1%23y',
+      ]);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
 
 describe('embedded messenger gateway', () => {
   it('is off by default and refuses to run next to a separate gateway', () => {
@@ -43,6 +72,9 @@ describe('embedded messenger gateway', () => {
         messengerAccounts: gateway.runtime.messaging.accounts,
       });
       await expect(client.getLogin('acc_x', 'lgn_x')).rejects.toThrow(/not found/i);
+      // An id is one path segment: it cannot lead to another account's endpoint.
+      await expect(client.cancelLogin('acc_x', '..')).rejects.toThrow(/not found/i);
+      await expect(client.getLogin('..', 'lgn_x')).rejects.toThrow(/not found/i);
     } finally {
       await gateway.stop();
     }
