@@ -437,6 +437,19 @@ export const Hidden: FC<{ values: Record<string, string> }> = ({ values }) => (
 export const fmtNumber = (lang: string, n: number) =>
   new Intl.NumberFormat(lang === 'ru' ? 'ru-RU' : 'en-US').format(n);
 
+/** How long something took: "9 ms" up to a second, then "1.5 sec", "40 sec" («1,5 с», «40 с»). */
+export function fmtDuration(lang: string, ms: number): string {
+  const unit = (value: number, name: 'millisecond' | 'second', digits = 0) =>
+    new Intl.NumberFormat(lang === 'ru' ? 'ru-RU' : 'en-US', {
+      style: 'unit',
+      unit: name,
+      unitDisplay: 'short',
+      maximumFractionDigits: digits,
+    }).format(value);
+  if (ms < 1000) return unit(ms, 'millisecond');
+  return unit(ms / 1000, 'second', ms < 10_000 ? 1 : 0);
+}
+
 export const fmtDate = (lang: string, date: Date, withTime = false) =>
   new Intl.DateTimeFormat(lang === 'ru' ? 'ru-RU' : 'en-GB', {
     day: 'numeric',

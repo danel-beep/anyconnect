@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { Principal } from '../../src/core/principal.js';
 import { FakeOidc } from '../fake-oidc.js';
 import { enableTotp, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { SoftwareAuthenticator } from '../webauthn-authenticator.js';
@@ -151,6 +152,57 @@ async function seed(): Promise<void> {
       dailyLimit: '200',
     },
   });
+  // A day of real use: an AI app, things it did (one failed) and requests that wait for an answer,
+  // with the long texts and addresses real requests carry.
+  const s = hub.services;
+  const workspaceId = (await s.db.query.workspaces.findFirst())!.id;
+  const userId = (await s.db.query.users.findFirst())!.id;
+  for (const [connectorId, name, label, credentials] of [
+    ['gmail', 'work', 'Work mail', undefined],
+    ['gcal', 'calendar', 'Team calendar', undefined],
+    ['cloudflare', 'dns', 'Company domains', { token: 'visual-check-token-0123456789abcdefghij' }],
+  ] as const) {
+    await s.accounts.create(workspaceId, {
+      connectorId,
+      name,
+      label,
+      ...(credentials ? { credentials } : {}),
+    });
+  }
+  const caller: Principal = {
+    kind: 'oauth',
+    userId,
+    workspaceId,
+    scopes: ['mcp'],
+    clientId: 'client_visual',
+    credentialId: 'grant_visual',
+    aiClientId: (await s.aiClients.createUnique(workspaceId, 'Claude', 'oauth')).id,
+  };
+  const call = async (tool: string, args: Record<string, unknown>) =>
+    s.hub.callTool({ ...caller }, await s.hub.getCatalog({ ...caller }), tool, args).catch(() => undefined);
+  await call('demo_echo', { account: 'main', message: 'Hello from the visual check' });
+  await call('demo_echo', { account: 'second', message: 'Second account' });
+  await call('demo_fail', { account: 'main' });
+  await call('gmail_send', {
+    account: 'work',
+    to: ['anna.kowalski@northwind-trading.example', 'finance-team@northwind-trading.example'],
+    subject: 'Q3 numbers and the updated forecast for the board meeting on Thursday',
+    body: `Hi Anna,\n\n${'Here are the Q3 numbers you asked for, with the forecast for next quarter. '.repeat(8)}\n\nhttps://docs.example.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit\n\nBest,\nDanel`,
+  });
+  await call('gcal_create_event', {
+    account: 'calendar',
+    summary: 'Quarterly review with Northwind',
+    start: { dateTime: '2026-12-01T15:00:00+01:00' },
+    end: { dateTime: '2026-12-01T16:00:00+01:00' },
+    attendees: [{ email: 'anna.kowalski@northwind-trading.example' }],
+  });
+  await call('cloudflare_create_dns_record', {
+    account: 'dns',
+    zone_id: '023e105f4ecef8ad9ca31a8372d0c353',
+    type: 'CNAME',
+    name: 'shop',
+    content: 'shops.myshopify.com',
+  });
   personas.push({
     name: 'owner',
     cookies: owner.cookieEntries(),
@@ -234,7 +286,11 @@ async function crawl(context: BrowserContext, persona: Persona): Promise<string[
 describe('every page keeps its layout', () => {
   beforeAll(async () => {
     await resetDatabase();
-    hub = await startTestHub({ loginProviders: [google.provider] });
+    hub = await startTestHub({
+      loginProviders: [google.provider],
+      // Seeded requests that need an answer return at once instead of waiting for it.
+      env: { CONFIRMATION_WAIT_SECONDS: '0' },
+    });
     browser = await chromium.launch(
       process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {},
     );

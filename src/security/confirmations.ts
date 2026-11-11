@@ -55,29 +55,45 @@ export function previewArguments(args: Record<string, unknown>): string {
 const FIELD_VALUE = 4000;
 const FIELDS = 30;
 
+const plain = (v: unknown): v is string | number | boolean =>
+  typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+
+/**
+ * A small object of plain values as its values alone: `{ email: "ann@example.com" }` reads as the
+ * address and `{ dateTime, timeZone }` as "2026-12-01T15:00:00 · Europe/Berlin". Undefined for
+ * anything deeper or wider, which stays JSON.
+ */
+function brief(value: unknown): string | undefined {
+  if (plain(value)) return String(value);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const values = Object.values(value).filter((v) => v !== undefined && v !== null && v !== '');
+  return values.length > 0 && values.length <= 4 && values.every(plain) ? values.join(' · ') : undefined;
+}
+
 /**
  * The arguments as name and value pairs for the confirmation page, so a person reads the email
  * they approve rather than JSON: text keeps its line breaks, a list of plain values becomes one
- * line, anything else is pretty JSON. Long values are cut; the page is a preview, not the call.
+ * line, small objects show their values (a guest is an address, not `{"email": …}`), anything else
+ * is pretty JSON. Long values are cut; the page is a preview, not the call.
  */
 export function argumentFields(args: Record<string, unknown>): { name: string; value: string }[] {
   const cut = (text: string) => (text.length > FIELD_VALUE ? `${text.slice(0, FIELD_VALUE)}…` : text);
-  const plain = (v: unknown) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean';
+  const show = (value: unknown): string => {
+    const one = brief(value);
+    if (one !== undefined) return one;
+    if (Array.isArray(value) && value.length > 0) {
+      const items = value.map(brief);
+      if (items.every((item) => item !== undefined)) {
+        // One line while every item is a single value; a line each once items have several.
+        return items.join(value.every(plain) || items.every((item) => !item.includes(' · ')) ? ', ' : '\n');
+      }
+    }
+    return JSON.stringify(value, null, 2);
+  };
   return Object.entries(args)
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
     .slice(0, FIELDS)
-    .map(([name, value]) => ({
-      name,
-      value: cut(
-        typeof value === 'string'
-          ? value
-          : plain(value)
-            ? String(value)
-            : Array.isArray(value) && value.every(plain)
-              ? value.join(', ')
-              : JSON.stringify(value, null, 2),
-      ),
-    }));
+    .map(([name, value]) => ({ name, value: cut(show(value)) }));
 }
 
 const CALLBACK = /^pc:(pcl_[0-9a-z]{26}):([adc])$/;

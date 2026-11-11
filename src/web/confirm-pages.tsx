@@ -28,13 +28,45 @@ export interface PendingCallView {
   executeAt: Date | null;
 }
 
-/** "subjectLine" / "subject_line" → "Subject line". */
-const fieldLabel = (name: string) => {
+/** Argument names people meet in most requests, shown as words in the reader's language. */
+const KNOWN_FIELDS = new Set([
+  'to',
+  'cc',
+  'bcc',
+  'subject',
+  'body',
+  'text',
+  'message',
+  'title',
+  'summary',
+  'description',
+  'location',
+  'start',
+  'end',
+  'attendees',
+  'name',
+  'type',
+  'content',
+  'amount',
+  'reason',
+  'query',
+  'date',
+  'time',
+  'phone',
+  'email',
+  'url',
+  'comment',
+] as const);
+type KnownField = typeof KNOWN_FIELDS extends Set<infer F> ? F : never;
+
+/** "to" → "To" / «Кому» for the well-known names; otherwise "subjectLine" / "subject_line" → "Subject line". */
+const fieldLabel = (t: Translate, name: string) => {
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, ' ')
     .trim()
     .toLowerCase();
+  if ((KNOWN_FIELDS as Set<string>).has(words)) return t(`confirm.field.${words as KnownField}`);
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
@@ -119,7 +151,7 @@ const PendingCall: FC<{
           <dl class="arg-list">
             {call.fields.map((f) => (
               <div>
-                <dt>{fieldLabel(f.name)}</dt>
+                <dt>{fieldLabel(t, f.name)}</dt>
                 <dd>{f.value}</dd>
               </div>
             ))}

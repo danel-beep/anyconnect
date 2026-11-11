@@ -73,7 +73,9 @@ describe('live updates', () => {
       credentialId: 'grant_test',
       aiClientId,
     };
-    browser = await chromium.launch();
+    browser = await chromium.launch(
+      process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {},
+    );
   }, 60_000);
 
   afterAll(async () => {

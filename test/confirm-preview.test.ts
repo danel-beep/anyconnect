@@ -24,6 +24,24 @@ describe('arguments on the confirmation page', () => {
     ]);
   });
 
+  it('shows small objects by their values: a guest is an address, a time is a time', () => {
+    expect(
+      argumentFields({
+        start: { dateTime: '2026-12-01T15:00:00+01:00' },
+        end: { dateTime: '2026-12-01T16:00:00', timeZone: 'Europe/Berlin' },
+        attendees: [{ email: 'ann@example.com' }, { email: 'lee@example.com' }],
+        people: [{ email: 'ann@example.com', name: 'Ann' }, { email: 'lee@example.com' }],
+        none: [],
+      }),
+    ).toEqual([
+      { name: 'start', value: '2026-12-01T15:00:00+01:00' },
+      { name: 'end', value: '2026-12-01T16:00:00 · Europe/Berlin' },
+      { name: 'attendees', value: 'ann@example.com, lee@example.com' },
+      { name: 'people', value: 'ann@example.com · Ann\nlee@example.com' },
+      { name: 'none', value: '[]' },
+    ]);
+  });
+
   it('cuts very long values and very many fields', () => {
     const [long] = argumentFields({ body: 'a'.repeat(5000) });
     expect(long!.value).toHaveLength(4001);

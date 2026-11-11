@@ -541,6 +541,21 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
     expect(second).toContain('title="demo_call_35"');
     expect(second).not.toContain('title="demo_call_30"');
     expect(second).not.toContain('?before=');
+
+    // A call the hub held back for the user's answer did nothing yet: it is not shown as done,
+    // and the time the hub waited is not shown as the action's duration. Durations read in seconds.
+    await hub.services.database.pool.query(
+      `INSERT INTO tool_calls (workspace_id, connector_id, tool_name, principal_type, status, outcome, duration_ms)
+       VALUES ($1, 'demo', 'demo_held_back', 'api_token', 'ok', 'awaiting_confirmation', 40163),
+              ($1, 'demo', 'demo_slow', 'api_token', 'ok', NULL, 2500)`,
+      [ws.id],
+    );
+    const latest = await (await browser.request('/app/activity')).text();
+    const row = (tool: string) => latest.slice(latest.indexOf(`title="${tool}"`)).split('</tr>')[0]!;
+    expect(row('demo_held_back')).toContain('Спросил вас');
+    expect(row('demo_held_back')).not.toContain('class="took"');
+    expect(row('demo_slow')).toMatch(/за 2,5\sс</);
+    expect(row('demo_call_1')).toMatch(/за 5\sмс</);
   });
 
   it("shows an account's own page: actions on and off, its rule and its own activity", async () => {

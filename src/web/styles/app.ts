@@ -405,11 +405,11 @@ button.try-chip svg.copy-done{color:var(--ok)}
 .pending-head p{margin:0}
 .pending-meta{margin:0}
 .pending-args summary{cursor:pointer;font-size:13px;color:var(--muted)}
-.arg-list{margin:8px 0 0;border:1px solid var(--border);border-radius:10px;background:var(--code-bg);max-height:420px;overflow:auto}
+.arg-list{margin:8px 0 0;border:1px solid var(--border);border-radius:10px;background:var(--code-bg);overflow:hidden}
 .arg-list>div{display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px;padding:10px 14px;border-top:1px solid var(--border)}
 .arg-list>div:first-child{border-top:0}
 .arg-list dt{font-size:13px;color:var(--muted)}
-.arg-list dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.arg-list dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;max-height:320px;overflow:auto}
 @media (max-width:560px){.arg-list>div{grid-template-columns:1fr;gap:2px}}
 .pending-actions{margin:0}
 .pending-head .pending-who{margin:0 0 2px}

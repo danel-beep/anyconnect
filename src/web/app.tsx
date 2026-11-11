@@ -17,6 +17,7 @@ import {
   fmtAgo,
   fmtDate,
   fmtDay,
+  fmtDuration,
   fmtNumber,
   GoogleG,
   Hidden,
@@ -347,6 +348,10 @@ export const AccountStatus: FC<{
   );
 
 const CallStatus: FC<{ t: Translate; call: CallView }> = ({ t, call }) => {
+  // The hub answered the AI "ask the user first": nothing was done in the service yet.
+  if (call.outcome === 'awaiting_confirmation')
+    return <span class="badge accent">{t('app.call.asked')}</span>;
+  if (call.outcome === 'scheduled') return <span class="badge accent">{t('app.call.scheduled')}</span>;
   if (call.status === 'ok') return <span class="badge ok">{t('app.call.ok')}</span>;
   if (call.outcome === 'denied') return <span class="badge">{t('app.call.denied')}</span>;
   if (call.outcome === 'quota_exceeded') return <span class="badge warn">{t('app.call.quota')}</span>;
@@ -405,9 +410,12 @@ export const CallsTable: FC<{
                 </td>
                 <td class="right small muted nowrap when" title={fmtDate(ctx.lang, call.createdAt, true)}>
                   {fmtAgo(ctx.lang, call.createdAt)}
-                  <span class="took">
-                    {ctx.t('app.call.took', { ms: fmtNumber(ctx.lang, call.durationMs) })}
-                  </span>
+                  {/* How long the hub waited for an answer says nothing about the action. */}
+                  {call.outcome === 'awaiting_confirmation' || call.outcome === 'scheduled' ? null : (
+                    <span class="took">
+                      {ctx.t('app.call.took', { time: fmtDuration(ctx.lang, call.durationMs) })}
+                    </span>
+                  )}
                 </td>
               </tr>
             );
