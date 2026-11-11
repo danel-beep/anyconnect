@@ -531,6 +531,25 @@ export class MessageStore {
   }
 
   /**
+   * Which accounts got an incoming message after sequence number `after`, and the newest sequence
+   * number now. One range read of the newest rows, whatever the number of accounts; without
+   * `after` only the newest number is returned. Callers keep `after` a pass behind, so a row that
+   * commits late (see {@link whatsNew}) is still seen.
+   */
+  async arrivedSince(after: number | undefined): Promise<{ latest: number; accountIds?: string[] }> {
+    const [newest] = await this.db
+      .select({ seq: sql<number>`coalesce(max(${messengerMessages.seq}), 0)` })
+      .from(messengerMessages);
+    const latest = Number(newest?.seq ?? 0);
+    if (after === undefined || !Number.isFinite(after)) return { latest };
+    const rows = await this.db
+      .selectDistinct({ accountId: messengerMessages.accountId })
+      .from(messengerMessages)
+      .where(and(gt(messengerMessages.seq, after), eq(messengerMessages.direction, 'in')));
+    return { latest, accountIds: rows.map((r) => r.accountId) };
+  }
+
+  /**
    * A "what's new" cursor for waiting on replies in one chat: right after the account's own last
    * message there, so a reply that came in before the wait started is not missed; without one, the
    * current end of the account's feed.

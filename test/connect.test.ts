@@ -288,6 +288,28 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     expect(provider.accessToken).not.toBe(before);
   });
 
+  it('refreshes ahead of time only for accounts in use; idle ones once a week', async () => {
+    provider.accessExpiresIn = 600; // inside the job's 15-minute window
+    await connect('?label=Work');
+    const { pool } = hub.services.database;
+    // An account the hub may open in the background (not sealed in a vault); only the list is read.
+    await pool.query('update accounts set data_key_encrypted = null');
+    const due = async () => (await hub.services.tokens.expiring(new Date(Date.now() + 15 * 60_000))).length;
+    // Connected a moment ago: in use.
+    expect(await due()).toBe(1);
+    // Nobody called it for weeks: its token is left to lapse, the next call refreshes it.
+    await pool.query("update accounts set created_at = now() - interval '30 days', last_used_at = null");
+    expect(await due()).toBe(0);
+    // A call makes it an account in use again.
+    await pool.query('update accounts set last_used_at = now()');
+    expect(await due()).toBe(1);
+    await pool.query("update accounts set last_used_at = now() - interval '30 days'");
+    expect(await due()).toBe(0);
+    // Idle and lapsed for over a week: refreshed once, so the grant stays alive.
+    await pool.query("update account_oauth set expires_at = now() - interval '8 days'");
+    expect(await due()).toBe(1);
+  });
+
   it('refreshes on a 401 from the service and retries the call', async () => {
     await connect('?label=Work');
     provider.accessToken = 'rotated-elsewhere'; // the provider invalidated our access token

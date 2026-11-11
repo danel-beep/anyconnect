@@ -20,6 +20,7 @@ import {
 } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { accounts, customConnectors } from '../db/schema.js';
+import { mapLimit } from '../lib/concurrency.js';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 import type { Logger } from '../logger.js';
@@ -469,11 +470,16 @@ export class CustomServiceManager {
   }
 
   /** Refreshes every remote MCP server (daily job). */
-  async refreshAll(): Promise<void> {
-    const rows = await this.deps.db.select().from(customConnectors).where(eq(customConnectors.kind, 'mcp'));
-    for (const row of rows) {
+  async refreshAll(signal?: AbortSignal): Promise<void> {
+    const rows = await this.deps.db
+      .select({ workspaceId: customConnectors.workspaceId, connectorId: customConnectors.connectorId })
+      .from(customConnectors)
+      .where(eq(customConnectors.kind, 'mcp'));
+    // A few servers at a time: one that answers slowly does not hold up everyone else's.
+    await mapLimit(rows, 4, async (row) => {
+      if (signal?.aborted) return;
       await this.refreshTools(row.workspaceId, row.connectorId).catch(() => {});
-    }
+    });
   }
 
   /** Edits a service; the change is validated by compiling it, exactly like on add. */

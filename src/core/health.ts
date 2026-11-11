@@ -31,13 +31,21 @@ export class AccountHealthService {
     },
   ) {}
 
-  async refreshExpiringTokens(windowMs = 15 * 60_000): Promise<{ refreshed: number; failed: number }> {
+  /**
+   * Refreshes tokens about to expire, for accounts in use (see `TokenManager.expiring`); `signal`
+   * ends the pass early (the job's deadline, a shutdown) and the next run takes what is left.
+   */
+  async refreshExpiringTokens(
+    windowMs = 15 * 60_000,
+    signal?: AbortSignal,
+  ): Promise<{ refreshed: number; failed: number }> {
     const due = await this.deps.tokens.expiring(new Date(Date.now() + windowMs));
     let refreshed = 0;
     let failed = 0;
     // Two at a time: a slow provider does not hold up the others, and the refreshes that tool
     // calls need right now still find a free slot (`TokenManager.refresh`).
     await mapLimit(due, 2, async (item) => {
+      if (signal?.aborted) return;
       const connector = await this.deps.connectors.get(item.workspaceId, item.connectorId);
       if (!connector?.oauth) return;
       try {
@@ -45,7 +53,7 @@ export class AccountHealthService {
           { id: item.accountId, workspaceId: item.workspaceId },
           resolveProvider(connector.oauth),
           undefined,
-          AbortSignal.timeout(20_000),
+          signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
           connector,
         );
         refreshed += 1;
@@ -53,7 +61,7 @@ export class AccountHealthService {
         failed += 1; // already recorded on the account by the token manager
       }
     });
-    if (due.length) this.deps.logger.info({ refreshed, failed }, 'OAuth tokens refreshed');
+    if (due.length) this.deps.logger.info({ due: due.length, refreshed, failed }, 'OAuth tokens refreshed');
     return { refreshed, failed };
   }
 
@@ -65,6 +73,7 @@ export class AccountHealthService {
   async checkStaleAccounts(
     maxAgeMs = 24 * 3_600_000,
     limit?: number,
+    signal?: AbortSignal,
   ): Promise<{ checked: number; failing: number }> {
     const cutoff = new Date(Date.now() - maxAgeMs);
     const checkable = and(eq(accounts.enabled, true), notSealedAccount());
@@ -75,14 +84,18 @@ export class AccountHealthService {
       .where(and(checkable, or(isNull(accounts.checkedAt), lt(accounts.checkedAt, cutoff))))
       .orderBy(sql`${accounts.checkedAt} asc nulls first`)
       .limit(batch);
-    const results = await mapLimit(rows, HEALTH_CONCURRENCY, (row) =>
-      this.deps.accounts
+    // Accounts a pass did not get to (its time ran out) keep their old check time and come first
+    // in the next one.
+    const results = await mapLimit(rows, HEALTH_CONCURRENCY, async (row) => {
+      if (signal?.aborted) return undefined;
+      return this.deps.accounts
         .test(row.workspaceId, row.id, this.deps.logger)
-        .catch((error: Error) => ({ ok: false, message: error.message })),
-    );
-    const failing = results.filter((result) => !result.ok).length;
-    if (rows.length) this.deps.logger.info({ checked: rows.length, failing }, 'account health checked');
-    return { checked: rows.length, failing };
+        .catch((error: Error) => ({ ok: false, message: error.message }));
+    });
+    const done = results.filter((result) => result !== undefined);
+    const failing = done.filter((result) => !result.ok).length;
+    if (done.length) this.deps.logger.info({ checked: done.length, failing }, 'account health checked');
+    return { checked: done.length, failing };
   }
 }
 

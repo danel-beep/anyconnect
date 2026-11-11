@@ -1477,9 +1477,16 @@ export const triggerEvents = pgTable(
     /** Tokens the AI used (input + output), for the user's own accounting. */
     tokens: integer(),
     createdAt: createdAt(),
+    /**
+     * When a runner took the event's action. Taken once: a second runner (a retried job, a second
+     * instance) leaves it alone, so an action never runs twice.
+     */
+    startedAt: timestamp({ withTimezone: true }),
     finishedAt: timestamp({ withTimezone: true }),
   },
   (t) => [
+    // The few runs in flight, for the recovery pass (every other event is finished).
+    index('trigger_events_running_idx').on(t.createdAt).where(sql`${t.status} = 'running'`),
     uniqueIndex().on(t.triggerId, t.eventKey),
     index().on(t.workspaceId, t.seq),
     index().on(t.triggerId, t.createdAt),

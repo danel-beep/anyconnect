@@ -21,13 +21,30 @@ import type { EventResult, Trigger, TriggerEvent, TriggerStore } from './store.j
 export const LOOP_RUNS = 5;
 export const LOOP_WINDOW_MS = 10 * 60_000;
 /** Accounts one pass reads at a time (a mailbox read is a request to the service). */
-const SCAN_CONCURRENCY = 4;
-/** An event still `running` after this was left by a process that stopped. */
-const STALE_MS = 15 * 60_000;
+const SCAN_CONCURRENCY = 8;
+/** A run not taken by any runner for this long is handed to the queue again (its job was lost). */
+const REDISPATCH_AFTER_MS = 15 * 60_000;
+/** …and after this long it is given up. */
+const GIVE_UP_AFTER_MS = 24 * 3_600_000;
+/** Runs started in place (no job queue) at a time; the rest wait for the recovery pass. */
+const LOCAL_RUNS = 4;
 /** How often a test run is checked for its outcome. */
 const TEST_POLL_MS = 500;
 /** How long one run may take (an AI wake with a few tool calls). */
-const RUN_TIMEOUT_MS = 120_000;
+export const RUN_TIMEOUT_MS = 120_000;
+/** A run still not over this long after it started was left by a process that stopped. */
+const INTERRUPTED_AFTER_MS = RUN_TIMEOUT_MS + 60_000;
+
+/**
+ * A run was stopped by a shutdown before it did anything: the event is free again and the job
+ * queue should try it once more (in the next process).
+ */
+export class RunInterrupted extends Error {
+  constructor() {
+    super('Trigger run interrupted before it acted');
+    this.name = 'RunInterrupted';
+  }
+}
 /** What the event says when a call that waited for the user's OK did not go through. */
 const CONFIRMATION_OUTCOMES: Record<string, string> = {
   denied: 'You declined the action',
@@ -65,8 +82,12 @@ export interface TriggerEngineDeps {
   notifier: OwnerNotifier;
   /** Outbound network for the AI providers (the hub's network policy). */
   fetch: FetchLike;
-  /** Hands a run to the job queue; without it (a process without jobs) runs happen in place. */
-  enqueue?: (eventId: string) => Promise<boolean>;
+  /**
+   * Hands a run to the job queue; without it (a process without jobs) runs happen in place. The
+   * queue shares its workers fairly between workspaces and drops a repeated hand-over of the same
+   * event within the hour.
+   */
+  enqueue?: (eventId: string, workspaceId: string) => Promise<boolean>;
   /** Where the user manages triggers, for notices. */
   pageUrl: string;
   logger: Logger;
@@ -91,6 +112,12 @@ export class TriggerEngine {
   private readonly scanned = new Map<TriggerSource, Map<string, number>>();
   /** Shared reads in flight, by source and account (see {@link scanAccount}). */
   private readonly reading = new Set<string>();
+  /** Per source: where the last two catch-up passes stood (see {@link scanAll}, `changedOnly`). */
+  private readonly marks = new Map<TriggerSource, { previous?: string; last?: string }>();
+  /** Accounts whose read failed in a catch-up pass: read again in the next one. */
+  private readonly retry = new Map<TriggerSource, Set<string>>();
+  /** Runs in flight that were started in place (see {@link dispatch}). */
+  private localRuns = 0;
 
   constructor(private readonly deps: TriggerEngineDeps) {}
 
@@ -143,39 +170,77 @@ export class TriggerEngine {
    * (`background: true`) accounts sealed in their owner's vault are skipped: only a request of the
    * owner can open them, which `manyplug_check_triggers` does for its own workspace.
    *
-   * Built for many mailboxes: a few accounts are read at a time, the ones read longest ago first,
-   * so when a pass runs out of time (`signal`) the next one starts with what this one left, and a
-   * mailbox is fetched once however many triggers watch it.
+   * Built for many accounts: the work list costs two queries however many workspaces there are, a
+   * few accounts are read at a time, the ones read longest ago first, so when a pass runs out of
+   * time (`signal`) the next one starts with what this one left, and a mailbox is fetched once
+   * however many triggers watch it.
+   *
+   * `changedOnly` is for the regular catch-up of a source that can tell where something arrived
+   * (`EventSource.changes`): after the first pass of the process, only accounts that got something
+   * since the pass before last are read, plus those whose read failed. New items normally reach
+   * their triggers through notifications, so this pass finds nothing; it should cost nothing too.
    */
   async scanAll(
     source: TriggerSource,
-    options: { workspaceId?: string; background: boolean; signal?: AbortSignal },
+    options: { workspaceId?: string; background: boolean; signal?: AbortSignal; changedOnly?: boolean },
   ) {
+    const reader = this.source(source);
     const active = await this.deps.store.active(source, options.workspaceId);
     const byWorkspace = new Map<string, Trigger[]>();
     for (const t of active) byWorkspace.set(t.workspaceId, [...(byWorkspace.get(t.workspaceId) ?? []), t]);
-    const work: Array<{ account: AccountRow; triggers: Trigger[] }> = [];
-    for (const [workspaceId, list] of byWorkspace) {
-      for (const account of await this.source(source).accounts(workspaceId)) {
-        const triggers = list.filter((t) => this.watches(t, account));
-        if (triggers.length) work.push({ account, triggers });
-      }
+
+    // Which accounts to look at: all of them, or only those the source says got something.
+    let only: Set<string> | undefined;
+    let mark: string | undefined;
+    const marks = this.marks.get(source) ?? {};
+    if (options.changedOnly && reader.changes && !options.workspaceId) {
+      const changes = await reader.changes(marks.previous);
+      mark = changes.mark;
+      if (changes.accountIds) only = new Set([...changes.accountIds, ...(this.retry.get(source) ?? [])]);
     }
-    const scanned = this.scannedAt(source, work);
+    const failed = new Set<string>();
+
+    const rows = only
+      ? await this.deps.accounts.byIds([...only])
+      : await this.deps.accounts.listMany([...byWorkspace.keys()]);
+    const work: Array<{ account: AccountRow; triggers: Trigger[] }> = [];
+    for (const account of rows) {
+      if (!account.enabled || !(await reader.reads(account))) continue;
+      if (options.background && this.deps.accounts.sealed(account)) continue;
+      const triggers = (byWorkspace.get(account.workspaceId) ?? []).filter((t) => this.watches(t, account));
+      if (triggers.length) work.push({ account, triggers });
+    }
+    const scanned = this.scannedAt(source, work, only !== undefined);
     work.sort((a, b) => (scanned.get(a.account.id) ?? 0) - (scanned.get(b.account.id) ?? 0));
+    let complete = true;
     await mapLimit(work, SCAN_CONCURRENCY, async ({ account, triggers }) => {
-      if (options.signal?.aborted) return;
-      if (options.background && (await this.deps.accounts.isSealed(account.id))) return;
+      if (options.signal?.aborted) {
+        complete = false;
+        failed.add(account.id);
+        return;
+      }
       scanned.set(account.id, Date.now());
-      await this.scanAccount(triggers, account, options.signal).catch((error) =>
-        this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId }),
-      );
+      await this.scanAccount(triggers, account, options.signal).catch((error) => {
+        failed.add(account.id);
+        this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId });
+      });
     });
+    if (options.changedOnly && mark !== undefined) {
+      // A full pass that ran out of time has not looked everywhere: the next one is full again.
+      if (only || complete) this.marks.set(source, { previous: marks.last ?? mark, last: mark });
+      this.retry.set(source, only || complete ? failed : new Set());
+    }
   }
 
   /** When each account of a source was last read by this process; accounts no longer watched go. */
-  private scannedAt(source: TriggerSource, work: Array<{ account: AccountRow }>): Map<string, number> {
+  private scannedAt(
+    source: TriggerSource,
+    work: Array<{ account: AccountRow }>,
+    partial: boolean,
+  ): Map<string, number> {
     const previous = this.scanned.get(source);
+    // A pass over only some accounts says nothing about which ones are still watched.
+    if (partial && previous) return previous;
     const current = new Map<string, number>();
     for (const { account } of work) {
       const at = previous?.get(account.id);
@@ -189,11 +254,14 @@ export class TriggerEngine {
   private async scanAccount(triggers: Trigger[], account: AccountRow, signal?: AbortSignal): Promise<void> {
     const source = this.source(triggers[0]!.source);
     if (!source.readMany) {
+      let failure: unknown;
       for (const trigger of triggers) {
-        await this.scan(trigger, account, signal).catch((error) =>
-          this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId }),
-        );
+        await this.scan(trigger, account, signal).catch((error) => {
+          failure ??= error;
+        });
       }
+      // One trigger's failure does not stop the others; the caller reports it and reads again later.
+      if (failure) throw failure;
       return;
     }
     // The fetch is a request to the service (seconds): no database lock or connection is held
@@ -346,7 +414,7 @@ export class TriggerEngine {
       ...(aiKeyId ? { aiKeyId } : {}),
     });
     if (!event) return undefined;
-    if (action.kind !== 'check') await this.dispatch(event.id);
+    if (action.kind !== 'check') await this.dispatch(event.id, trigger.workspaceId);
     return event.id;
   }
 
@@ -395,35 +463,82 @@ export class TriggerEngine {
     }
   }
 
-  private async dispatch(eventId: string): Promise<void> {
-    if (this.deps.enqueue && (await this.deps.enqueue(eventId).catch(() => false))) return;
-    // No job queue in this process: run here, after the scan that found it.
-    void this.run(eventId);
+  private async dispatch(eventId: string, workspaceId: string): Promise<void> {
+    if (this.deps.enqueue && (await this.deps.enqueue(eventId, workspaceId).catch(() => false))) return;
+    // No job queue in this process: run here, after the scan that found it. Only a few at a time:
+    // a burst waits as `running` events and the recovery pass hands them over again.
+    if (this.localRuns >= LOCAL_RUNS) return;
+    this.localRuns += 1;
+    void this.run(eventId)
+      .catch(() => {})
+      .finally(() => {
+        this.localRuns -= 1;
+      });
   }
 
   // --- Running actions -------------------------------------------------------------
 
-  /** Runs the action of one event (the `triggers.run` job). Never throws. */
-  async run(eventId: string): Promise<void> {
+  /**
+   * Runs the action of one event (the `triggers.run` job), exactly once: the event is taken first,
+   * and a second runner (a job retried after its process stopped, a job delivered twice) leaves it
+   * alone, because the action may already have sent something.
+   *
+   * `stop` is the process shutting down. A run that has not acted yet gives the event back and
+   * throws {@link RunInterrupted}, so the queue runs it again in the next process; one that has
+   * acted gets to finish. Nothing else is thrown.
+   */
+  async run(eventId: string, stop?: AbortSignal): Promise<void> {
     const { store } = this.deps;
     const event = await store.getEvent(eventId);
-    if (event?.status !== 'running' || !event.item) return;
-    const trigger = await this.triggerOf(event);
-    if (!trigger) return;
+    if (event?.status !== 'running') return;
+    if (!event.item) {
+      // The account's key cannot be opened here (sealed in its owner's vault): nothing can run.
+      await store.setStatus(eventId, 'failed', { from: 'running' });
+      return;
+    }
+    if (!(await store.claim(eventId))) return;
+    const trigger = await store.get(event.workspaceId, event.triggerId).catch(() => undefined);
+    if (!trigger) {
+      await store.setStatus(eventId, 'failed', { from: 'running' });
+      return;
+    }
     const finish = (status: TriggerEvent['status'], result: EventResult, tokens?: number) =>
       store.setStatus(eventId, status, {
         from: 'running',
         result,
         ...(tokens !== undefined ? { tokens } : {}),
       });
-    const signal = AbortSignal.timeout(RUN_TIMEOUT_MS);
+    // Whether the run has started something outside (a tool call, a notice): from then on it is
+    // neither stopped by a shutdown nor safe to repeat.
+    let acted = false;
+    const control = new AbortController();
+    const timer = setTimeout(
+      () => control.abort(new DOMException('The run took too long', 'TimeoutError')),
+      RUN_TIMEOUT_MS,
+    );
+    const onStop = () => {
+      if (!acted) control.abort(new RunInterrupted());
+    };
+    if (stop?.aborted) onStop();
+    else stop?.addEventListener('abort', onStop, { once: true });
+    const interrupted = () => !acted && stop?.aborted === true;
+    const signal = control.signal;
+    const hub: AgentHub = {
+      getCatalog: (principal) => this.deps.hub.getCatalog(principal),
+      callTool: (principal, catalog, tool, args, options) => {
+        acted = true;
+        return this.deps.hub.callTool(principal, catalog, tool, args, options);
+      },
+    };
     try {
       const action = trigger.spec.action;
+      if (interrupted()) throw new RunInterrupted();
       switch (action.kind) {
         case 'check':
           await store.setStatus(eventId, 'new', { from: 'running' });
           return;
         case 'notify': {
+          acted = true;
           const delivery = await this.notifyFired(trigger, event.item, null);
           await finish(delivery === 'failed' ? 'failed' : 'done', {
             summary: delivery === 'no_channel' ? 'no_channel' : 'notified',
@@ -432,7 +547,6 @@ export class TriggerEngine {
         }
         case 'tool': {
           const principal = await this.principal(trigger, event.id, [action.tool], false);
-          const hub = this.deps.hub;
           const catalog = await hub.getCatalog(principal);
           const args = renderArgs(action.args, event.item, trigger.name) as Record<string, unknown>;
           const result = await hub.callTool(principal, catalog, action.tool, args, { signal });
@@ -471,7 +585,7 @@ export class TriggerEngine {
                 trigger: trigger.name,
                 signal,
               },
-              this.deps.hub,
+              hub,
               this.deps.fetch,
             );
             await this.deps.keys.recordUse(opened.row.id, null);
@@ -484,6 +598,7 @@ export class TriggerEngine {
             if (action.notify && (summary || outcome.awaiting))
               await this.notifyFired(trigger, event.item, summary ?? null);
           } catch (error) {
+            if (interrupted()) throw error;
             const message = error instanceof AiProviderError ? error.message : 'The AI could not be reached';
             await this.deps.keys.recordUse(opened.row.id, message);
             if (!(error instanceof AiProviderError)) throw error;
@@ -493,8 +608,15 @@ export class TriggerEngine {
         }
       }
     } catch (error) {
+      if (interrupted()) {
+        await store.release(eventId);
+        throw new RunInterrupted();
+      }
       this.deps.onError?.(error, { source: 'trigger', step: 'run', action: trigger.spec.action.kind });
       await finish('failed', { error: 'Internal error' }).catch(() => {});
+    } finally {
+      clearTimeout(timer);
+      stop?.removeEventListener('abort', onStop);
     }
   }
 
@@ -527,20 +649,26 @@ export class TriggerEngine {
     }
   }
 
-  /** Marks runs a stopped process left behind as failed, so they do not look busy forever. */
-  async failStale(): Promise<void> {
-    for (const id of await this.deps.store.stale(STALE_MS)) {
-      await this.deps.store.setStatus(id, 'failed', {
-        from: 'running',
-        result: { error: 'Interrupted by a restart' },
-      });
+  /**
+   * Settles runs that did not end by themselves (the `triggers.scan` job):
+   *
+   * - taken by a runner whose process stopped: failed, not repeated (it may have acted);
+   * - never taken, because the hand-over to the queue was lost or the process ran them in place
+   *   and was busy: handed over again (the queue drops a repeat within the hour, so a long queue
+   *   is not flooded), and given up after a day.
+   *
+   * A run that only waits in a long queue is left alone: it is not late, the queue is.
+   */
+  async recover(now = Date.now()): Promise<void> {
+    const { store } = this.deps;
+    for (const id of await store.interrupted(new Date(now - INTERRUPTED_AFTER_MS))) {
+      await store.setStatus(id, 'failed', { from: 'running', result: { error: 'Interrupted by a restart' } });
     }
-  }
-
-  private async triggerOf(event: TriggerEvent): Promise<Trigger | undefined> {
-    const row = await this.deps.accounts.byId(event.accountId);
-    if (!row) return undefined;
-    return this.deps.store.get(row.workspaceId, event.triggerId).catch(() => undefined);
+    for (const run of await store.waiting(new Date(now - REDISPATCH_AFTER_MS))) {
+      if (run.createdAt.getTime() < now - GIVE_UP_AFTER_MS) {
+        await store.setStatus(run.id, 'failed', { from: 'running' });
+      } else await this.dispatch(run.id, run.workspaceId);
+    }
   }
 
   /**

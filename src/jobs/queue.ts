@@ -15,9 +15,38 @@ import type { JobMonitor } from './runs.js';
  */
 
 const HOUSEKEEPING_SECONDS = 300;
+/** How long a run may take unless its job says otherwise. */
+const DEFAULT_TIMEOUT_MS = 10 * 60_000;
+/** What pg-boss waits past a job's own deadline before it takes the job back. */
+const EXPIRE_MARGIN_SECONDS = 30;
 
 export interface JobContext {
   logger: Logger;
+  /**
+   * Aborted when the run must end: its time is up (`timeoutMs`) or the process is shutting down.
+   * Long jobs pass it to what they wait for and stop between items, so no run outlives its
+   * deadline and a deploy does not wait for (or cut through) a pass over every account.
+   */
+  signal: AbortSignal;
+  /** True once the process is shutting down (as opposed to the run's time being up). */
+  stopping(): boolean;
+  /** 0 for the first try of this job, 1 for its first retry… */
+  attempt: number;
+}
+
+/** How a job is enqueued (see {@link JobQueue.send}). */
+export interface SendOptions {
+  /**
+   * Whose work this is (a workspace id). With the job's `groupConcurrency`, one group takes only
+   * that many of the job's slots, so a busy workspace cannot hold up everyone else's runs.
+   */
+  group?: string;
+  /**
+   * At most one job with this key is accepted per `dedupeSeconds` window (default one hour): a
+   * second `send` in the window is dropped. For "make sure this is queued" calls that may repeat.
+   */
+  dedupeKey?: string;
+  dedupeSeconds?: number;
 }
 
 export interface JobDefinition<TData extends object = Record<string, unknown>> {
@@ -36,6 +65,16 @@ export interface JobDefinition<TData extends object = Record<string, unknown>> {
    * for another service (an AI answering a trigger), so one slow run does not hold up the queue.
    */
   concurrency?: number;
+  /** Of `concurrency`, how many runs one group (see {@link SendOptions.group}) may take at a time. */
+  groupConcurrency?: number;
+  /**
+   * How long one run may take (default 10 minutes). When it is up, `ctx.signal` aborts; shortly
+   * after, the queue gives the job up as failed. Every job has a deadline: a run that hangs on a
+   * service would otherwise block its queue (recurring jobs never overlap) until a restart.
+   */
+  timeoutMs?: number;
+  /** How many times a failed run is tried again (default 2). */
+  retryLimit?: number;
   run(data: TData, ctx: JobContext): Promise<void>;
 }
 
@@ -64,6 +103,8 @@ export interface JobQueueOptions {
 export class JobQueue {
   private readonly definitions = new Map<string, JobDefinition<any>>();
   private boss: PgBoss | undefined;
+  /** Aborted by `stop()`: tells running jobs to wrap up. */
+  private shutdown = new AbortController();
 
   constructor(private readonly options: JobQueueOptions) {}
 
@@ -113,15 +154,23 @@ export class JobQueue {
     boss.on('warning', (warning) => this.options.logger.warn({ warning }, 'job queue warning'));
     await boss.start();
     this.boss = boss;
+    this.shutdown = new AbortController();
     for (const definition of this.definitions.values()) {
+      const limits = {
+        notify: true,
+        retryDelay,
+        // pg-boss aborts the run's signal and fails the job at this point; the job's own deadline
+        // comes first, so a run normally ends by itself and reports what it got done.
+        expireInSeconds: Math.ceil(timeoutOf(definition) / 1000) + EXPIRE_MARGIN_SECONDS,
+        ...(definition.retryLimit !== undefined ? { retryLimit: definition.retryLimit } : {}),
+      };
       // Singleton: at most one active job per queue, so a slow run never overlaps the next tick.
       await boss.createQueue(definition.name, {
         policy: definition.cron ? 'singleton' : 'standard',
-        notify: true,
-        retryDelay,
+        ...limits,
       });
       // createQueue leaves an existing queue as it is: update queues made by older releases.
-      await boss.updateQueue(definition.name, { notify: true, retryDelay });
+      await boss.updateQueue(definition.name, limits);
       if (definition.cron) await boss.schedule(definition.name, definition.cron, {}, { tz: 'UTC' });
       let workerId: string | undefined;
       workerId = await boss.work<object>(
@@ -132,12 +181,13 @@ export class JobQueue {
           ...(definition.concurrency && definition.concurrency > 1
             ? { localConcurrency: definition.concurrency }
             : {}),
+          ...(definition.groupConcurrency ? { localGroupConcurrency: definition.groupConcurrency } : {}),
         },
         async (jobs) => {
           try {
             for (const job of jobs) {
               await runWithContext({ requestId: `job-${newRequestId()}`, job: definition.name }, () =>
-                this.runOne(definition, job.id, job.data),
+                this.runOne(definition, job.id, job.data, { signal: job.signal, attempt: job.retryCount }),
               );
             }
           } catch (err) {
@@ -152,18 +202,36 @@ export class JobQueue {
           }
         },
       );
+      // Jobs the previous process gave back when it shut down become due again after the retry
+      // delay, without a NOTIFY: look once then instead of at the backstop.
+      setTimeout(
+        () => workerId && this.boss === boss && boss.notifyWorker(workerId),
+        retryDelay * 1000 + 2_000,
+      ).unref();
     }
     this.options.logger.info({ jobs: this.names }, 'background jobs started');
   }
 
-  private async runOne(definition: JobDefinition<any>, jobId: string, data: object): Promise<void> {
+  private async runOne(
+    definition: JobDefinition<any>,
+    jobId: string,
+    data: object,
+    run: { signal?: AbortSignal; attempt?: number } = {},
+  ): Promise<void> {
     const logger = this.options.logger.child({ job: definition.name, jobId });
     const monitor = this.options.monitor;
     const started = Date.now();
+    const shutdown = this.shutdown.signal;
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(timeoutOf(definition)),
+      shutdown,
+      ...(run.signal ? [run.signal] : []),
+    ]);
+    const ctx: JobContext = { logger, signal, stopping: () => shutdown.aborted, attempt: run.attempt ?? 0 };
     // Monitoring is best effort: a failed status write must not fail the job itself.
     await monitor?.started(definition.name).catch((err) => logger.warn({ err }, 'job monitor failed'));
     try {
-      await definition.run(data, { logger });
+      await definition.run(data, ctx);
       const ms = Date.now() - started;
       logger.debug({ ms }, 'job done');
       await monitor
@@ -171,7 +239,9 @@ export class JobQueue {
         .catch((err) => logger.warn({ err }, 'job monitor failed'));
     } catch (err) {
       const ms = Date.now() - started;
-      if (this.options.onError) this.options.onError(err, definition.name);
+      // A run cut short by a shutdown is not a fault: the queue hands it to the next process.
+      if (shutdown.aborted) logger.info({ ms }, 'job interrupted by shutdown, it will be retried');
+      else if (this.options.onError) this.options.onError(err, definition.name);
       else logger.warn({ err }, 'job failed');
       await monitor
         ?.failed(definition.name, err, ms)
@@ -190,15 +260,26 @@ export class JobQueue {
   }
 
   /** Enqueues a job now (e.g. "check this account" after the user changed it). */
-  async send(name: string, data: object = {}): Promise<string | null> {
+  async send(name: string, data: object = {}, options: SendOptions = {}): Promise<string | null> {
     if (!this.boss) throw new Error('The job queue is not running');
     if (!this.definitions.has(name)) throw new Error(`Unknown job "${name}"`);
-    return this.boss.send(name, data);
+    return this.boss.send(name, data, {
+      ...(options.group ? { group: { id: options.group } } : {}),
+      ...(options.dedupeKey
+        ? { singletonKey: options.dedupeKey, singletonSeconds: options.dedupeSeconds ?? 3600 }
+        : {}),
+    });
   }
 
+  /** Tells running jobs to wrap up (`ctx.signal`), waits for them a little, then stops the queue. */
   async stop(): Promise<void> {
     const boss = this.boss;
     this.boss = undefined;
+    this.shutdown.abort();
     await boss?.stop({ graceful: true, timeout: 8000 });
   }
+}
+
+function timeoutOf(definition: JobDefinition<any>): number {
+  return Math.max(1_000, definition.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 }

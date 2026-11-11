@@ -14,13 +14,20 @@ import type { Messaging } from '../messaging/index.js';
 import type { AiClientService } from '../security/clients.js';
 import type { AgentHub } from './ai/agent.js';
 import { AiKeyStore } from './ai-keys.js';
-import { TriggerEngine } from './engine.js';
+import { RUN_TIMEOUT_MS, TriggerEngine } from './engine.js';
 import { TriggerService } from './service.js';
 import { MailSource, MessageSource } from './sources.js';
 import { TriggerStore } from './store.js';
 
-/** Trigger actions one process runs at a time (the `triggers.run` job). */
-const RUN_CONCURRENCY = 4;
+/**
+ * Trigger actions one process runs at a time (the `triggers.run` job). A run mostly waits for
+ * another service, so the cost of a slot is small.
+ */
+const RUN_CONCURRENCY = 8;
+/** …of which one workspace takes at most this many, so a busy one cannot hold up everyone else. */
+const RUN_CONCURRENCY_PER_WORKSPACE = 2;
+/** The catch-up pass ends before the next one is due. */
+const SCAN_TIMEOUT_MS = 110_000;
 
 /** The trigger subsystem, wired once (see docs/TRIGGERS.md). */
 export interface Triggers {
@@ -85,10 +92,11 @@ export function createTriggers(deps: {
     aiClients: deps.aiClients,
     notifier: deps.notifier,
     fetch: deps.fetch,
-    enqueue: async (eventId) => {
+    enqueue: async (eventId, workspaceId) => {
       const queue = deps.jobs();
       if (!queue?.running) return false;
-      await queue.send('triggers.run', { eventId });
+      // The same event handed over again (the recovery pass) is dropped within the hour.
+      await queue.send('triggers.run', { eventId }, { group: workspaceId, dedupeKey: eventId });
       return true;
     },
     pageUrl,
@@ -107,8 +115,11 @@ export function createTriggers(deps: {
   });
   let unlisten: (() => void) | undefined;
   let mailLoop: DueLoop | undefined;
-  const scanMail = (timeoutMs = 90_000) =>
-    engine.scanAll('mail', { background: true, signal: AbortSignal.timeout(timeoutMs) });
+  const scanMail = (timeoutMs = 90_000, stop?: AbortSignal) =>
+    engine.scanAll('mail', {
+      background: true,
+      signal: stop ? AbortSignal.any([stop, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
+    });
   return {
     store,
     keys,
@@ -121,9 +132,21 @@ export function createTriggers(deps: {
         // A run mostly waits (for the user's AI, for a service), up to two minutes: several at a
         // time, so one slow answer does not delay every other user's trigger.
         concurrency: RUN_CONCURRENCY,
-        run: async (data) => {
-          if (typeof (data as { eventId?: unknown }).eventId === 'string')
-            await engine.run((data as { eventId: string }).eventId);
+        groupConcurrency: RUN_CONCURRENCY_PER_WORKSPACE,
+        timeoutMs: RUN_TIMEOUT_MS + 30_000,
+        run: async (data, ctx) => {
+          if (typeof (data as { eventId?: unknown }).eventId !== 'string') return;
+          // Only a shutdown stops a run early (and only one that has not acted yet); the run keeps
+          // its own time limit.
+          const stop = new AbortController();
+          const onAbort = () => ctx.stopping() && stop.abort();
+          if (ctx.signal.aborted) onAbort();
+          else ctx.signal.addEventListener('abort', onAbort, { once: true });
+          try {
+            await engine.run((data as { eventId: string }).eventId, stop.signal);
+          } finally {
+            ctx.signal.removeEventListener('abort', onAbort);
+          }
         },
       },
       {
@@ -131,11 +154,13 @@ export function createTriggers(deps: {
         description: 'Check mailboxes for triggers and catch up on messages a lost notification missed',
         cron: '*/2 * * * *',
         expectEveryMs: 10 * 60_000,
-        run: async () => {
-          await engine.scanAll('message', { background: true });
+        timeoutMs: SCAN_TIMEOUT_MS,
+        run: async (_data, ctx) => {
+          // Runs first: it is cheap, and must not wait behind a long pass over mailboxes.
+          await engine.recover();
+          await engine.scanAll('message', { background: true, signal: ctx.signal, changedOnly: true });
           // The poll loop of `start()` reads mail more often; this is the backstop without it.
-          if (!mailLoop) await scanMail();
-          await engine.failStale();
+          if (!mailLoop) await scanMail(90_000, ctx.signal);
         },
       },
       {

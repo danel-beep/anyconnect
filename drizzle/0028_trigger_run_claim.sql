@@ -1,0 +1,2 @@
+ALTER TABLE "trigger_events" ADD COLUMN "started_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "trigger_events_running_idx" ON "trigger_events" USING btree ("created_at") WHERE "trigger_events"."status" = 'running';
