@@ -2,6 +2,7 @@ import { and, eq, gt, isNull, lt, notExists, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   apiTokens,
+  emailLogins,
   loginStates,
   oauthAuthorizationCodes,
   oauthClients,
@@ -62,6 +63,7 @@ export async function runMaintenance(db: Db): Promise<void> {
   await db.delete(vaultRequests).where(lt(vaultRequests.createdAt, new Date(now - 7 * DAY)));
   await db.delete(webSessions).where(lt(webSessions.expiresAt, new Date(now)));
   await db.delete(pendingLogins).where(lt(pendingLogins.expiresAt, new Date(now)));
+  await db.delete(emailLogins).where(lt(emailLogins.expiresAt, new Date(now)));
   await db.delete(webauthnChallenges).where(lt(webauthnChallenges.expiresAt, new Date(now)));
   // Abandoned "connect an account" OAuth flows.
   await db.delete(oauthConnectStates).where(lt(oauthConnectStates.expiresAt, new Date(now)));

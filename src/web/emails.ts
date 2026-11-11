@@ -16,6 +16,8 @@ export interface EmailContent {
   dates?: Record<string, Date>;
   /** A plan id whose localized name fills `{plan}`. */
   plan?: string;
+  /** The small print, when the default ("you have an account, manage your plan") does not fit. */
+  footer?: Key;
 }
 
 /**
@@ -43,7 +45,7 @@ export function composeEmail(
   const paragraphs = content.paragraphs.map((key) => t(key, vars));
   const cta = t(content.cta.label, vars);
   const signoff = t('email.signoff', vars);
-  const footer = t('email.footer', { ...vars, url: opts.billingUrl });
+  const footer = t(content.footer ?? 'email.footer', { ...vars, url: opts.billingUrl });
   const text = [hello, ...paragraphs, `${cta}: ${content.cta.url}`, signoff, '', footer].join('\n\n');
   const p = (s: string) => `<p style="margin:0 0 16px;line-height:1.5">${esc(s)}</p>`;
   const html = [

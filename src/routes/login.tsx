@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthMethod } from '../core/auth-methods.js';
 import { ExternalLoginError } from '../core/external-login.js';
-import { authenticate } from '../core/identity.js';
+import { authenticate, normalizeEmail, type User } from '../core/identity.js';
 import { PasskeyError } from '../core/passkeys.js';
 import { type ExternalProfile, SignInRefused } from '../core/users.js';
+import { EMAIL_LOGIN_TTL_SECONDS } from '../web/email-logins.js';
+import { composeEmail } from '../web/emails.js';
 import {
   clearCookie,
   clientIp,
@@ -15,7 +17,13 @@ import {
   setSecureCookie,
   verifyCsrf,
 } from '../web/http.js';
-import { ErrorPage, type LoginMode, LoginPage } from '../web/pages.js';
+import {
+  EmailLinkConfirmPage,
+  EmailLinkSentPage,
+  ErrorPage,
+  type LoginMode,
+  LoginPage,
+} from '../web/pages.js';
 import { PENDING_LOGIN_TTL_SECONDS } from '../web/pending-logins.js';
 import { VerifyPage } from '../web/security-pages.js';
 import { analyticsRequest } from './analytics.js';
@@ -71,6 +79,44 @@ async function finishSignIn(c: AppContext, userId: string, amr: AuthMethod[]): P
   s.logger.info({ userId, ip, amr }, 'user signed in');
 }
 
+/**
+ * After the first factor (an external sign-in or an email link) is proven: counts a new sign-up,
+ * then asks for the second factor if the user has one, or signs them in.
+ */
+async function completeFirstFactor(
+  c: AppContext,
+  result: { user: User; created: boolean },
+  via: { source: string; method: AuthMethod; next: string; status: 302 | 303 },
+) {
+  const s = c.get('services');
+  const { user, created } = result;
+  const { next, status } = via;
+  if (created) {
+    s.logger.info({ userId: user.id, provider: via.source }, 'user signed up');
+    await attachReferral(c, user.id);
+    s.analytics.track('signup', via.source);
+    // Where they came from: the visit of the same browser today or yesterday (docs/ANALYTICS.md).
+    await s.analytics.attributeSignup(user.id, analyticsRequest(c));
+  }
+  if (await s.secondFactors.hasAny(user.id)) {
+    const pending = await s.pendingLogins.create(user.id, [via.method]);
+    setSecureCookie(c, PENDING_LOGIN_COOKIE, pending, {
+      ...cookieOpts(c),
+      maxAge: PENDING_LOGIN_TTL_SECONDS,
+    });
+    return c.redirect(`/login/verify?next=${encodeURIComponent(next)}`, status);
+  }
+  await finishSignIn(c, user.id, [via.method]);
+  return c.redirect(created && next === '/app' ? '/app?welcome=1' : next, status);
+}
+
+/** Sign-in links: per client, per address, and for the whole hub (the mail provider's quota). */
+const EMAIL_LINK_LIMITS = {
+  ip: { max: 10, windowMs: 15 * 60_000 },
+  address: { max: 3, windowMs: 15 * 60_000 },
+  hub: { max: 120, windowMs: 60 * 60_000 },
+} as const;
+
 /** Holds the external sign-in state in the browser that started it (checked on the callback). */
 const EXTERNAL_STATE_COOKIE = 'ac_login';
 
@@ -81,6 +127,8 @@ const LOGIN_ERRORS = {
   expired: 'login.expired',
   suspended: 'login.refused.suspended',
   signups_closed: 'login.refused.signups_closed',
+  signups_closed_email: 'login.refused.signups_closed_email',
+  linkExpired: 'login.linkExpired',
   email_unverified: 'login.refused.email_unverified',
 } as const;
 type LoginError = keyof typeof LOGIN_ERRORS;
@@ -124,6 +172,7 @@ export function loginRoutes() {
         next={opts.next}
         mode={opts.mode}
         google={s.externalLogin.get('google') !== undefined}
+        emailLink={s.emailLogins.enabled}
         signupsOpen={s.config.site.signups === 'open'}
         fromApp={opts.next.startsWith('/oauth/authorize')}
         {...(opts.email ? { email: opts.email } : {})}
@@ -199,25 +248,110 @@ export function loginRoutes() {
     }
     const next = nextOf(result.next);
     try {
-      const { user, created } = await s.users.signInExternal(result.profile);
-      if (created) {
-        s.logger.info({ userId: user.id, provider: providerId }, 'user signed up');
-        await attachReferral(c, user.id);
-        s.analytics.track('signup', providerId);
-        // Where they came from: the visit of the same browser today or yesterday (docs/ANALYTICS.md).
-        await s.analytics.attributeSignup(user.id, analyticsRequest(c));
-      }
-      if (await s.secondFactors.hasAny(user.id)) {
-        const pending = await s.pendingLogins.create(user.id, ['fed']);
-        setSecureCookie(c, PENDING_LOGIN_COOKIE, pending, { ...opts, maxAge: PENDING_LOGIN_TTL_SECONDS });
-        return c.redirect(`/login/verify?next=${encodeURIComponent(next)}`, 302);
-      }
-      await finishSignIn(c, user.id, ['fed']);
-      return c.redirect(created && next === '/app' ? '/app?welcome=1' : next, 302);
+      const signedIn = await s.users.signInExternal(result.profile);
+      return await completeFirstFactor(c, signedIn, {
+        source: providerId,
+        method: 'fed',
+        next,
+        status: 302,
+      });
     } catch (error) {
       if (!(error instanceof SignInRefused)) throw error;
       s.logger.warn({ provider: providerId, reason: error.reason }, 'external sign-in refused');
       return back(error.reason, next);
+    }
+  });
+
+  // --- Sign-in link by email ------------------------------------------------
+  // Ask for a link → the mail → a confirmation page → the button signs in. The answer to "send me
+  // a link" is the same for every address, so it does not tell who has an account.
+  app.post('/login/email', async (c) => {
+    const s = c.get('services');
+    const t = c.get('t');
+    if (!s.emailLogins.enabled || !s.mailer) return c.notFound();
+    const form = await bodyParams(c);
+    const next = nextOf(form.next);
+    const render = (error: string, status: 400 | 403 | 429) =>
+      renderLogin(c, { mode: 'login', next, email: form.email ?? '', error, status });
+    if (!verifyCsrf(c, form.csrf, { ...cookieOpts(c), publicUrl: s.config.publicUrl }))
+      return render(t('error.csrf'), 403);
+    const address = z.string().trim().max(254).email().safeParse(form.email);
+    if (!address.success) return render(t('login.link.invalid'), 400);
+    const email = normalizeEmail(address.data);
+    const limits = EMAIL_LINK_LIMITS;
+    const ipKey = `email-link:ip:${clientRateKey(c, s.config.trustProxy)}`;
+    if (!s.rateLimiter.consume(ipKey, limits.ip.max, limits.ip.windowMs).allowed)
+      return render(t('login.rateLimited'), 429);
+    // Past the per-address or hub-wide limit nothing is sent, quietly: the page stays the same.
+    const send =
+      s.rateLimiter.consume(`email-link:to:${email}`, limits.address.max, limits.address.windowMs).allowed &&
+      s.rateLimiter.consume('email-link:hub', limits.hub.max, limits.hub.windowMs).allowed &&
+      (await s.users.canSignInByEmail(email));
+    if (send) {
+      const token = await s.emailLogins.create(email, next);
+      try {
+        await s.mailer.send(
+          composeEmail(
+            { email, name: null, locale: c.get('locale') },
+            {
+              tag: 'auth.sign_in_link',
+              subject: 'email.signIn.subject',
+              paragraphs: ['email.signIn.body', 'email.signIn.ignore'],
+              cta: {
+                label: 'email.signIn.cta',
+                url: `${s.config.publicUrl}/login/email/confirm?token=${encodeURIComponent(token)}`,
+              },
+              vars: { minutes: EMAIL_LOGIN_TTL_SECONDS / 60 },
+              footer: 'email.signIn.footer',
+            },
+            { billingUrl: `${s.config.publicUrl}/app/billing` },
+          ),
+        );
+      } catch (error) {
+        s.ops.errors.capture(error, { source: 'email-login' });
+      }
+    }
+    return c.html(<EmailLinkSentPage t={t} lang={c.get('locale')} email={email} next={next} />);
+  });
+
+  app.get('/login/email/confirm', async (c) => {
+    const s = c.get('services');
+    const token = c.req.query('token');
+    const link = await s.emailLogins.get(token);
+    if (!link || !token) return c.redirect('/login?error=linkExpired', 302);
+    return c.html(
+      <EmailLinkConfirmPage
+        t={c.get('t')}
+        lang={c.get('locale')}
+        csrf={csrfToken(c, cookieOpts(c))}
+        token={token}
+        email={link.email}
+      />,
+    );
+  });
+
+  app.post('/login/email/confirm', async (c) => {
+    const s = c.get('services');
+    const t = c.get('t');
+    const form = await bodyParams(c);
+    const refuse = (message: string, status: 403 | 429) =>
+      c.html(<ErrorPage t={t} lang={c.get('locale')} message={message} />, status);
+    if (!verifyCsrf(c, form.csrf, { ...cookieOpts(c), publicUrl: s.config.publicUrl }))
+      return refuse(t('error.csrf'), 403);
+    const ipKey = `email-link:confirm:${clientRateKey(c, s.config.trustProxy)}`;
+    if (!s.rateLimiter.consume(ipKey, 30, 15 * 60_000).allowed) return refuse(t('login.rateLimited'), 429);
+    const link = await s.emailLogins.consume(form.token);
+    if (!link) return c.redirect('/login?error=linkExpired', 303);
+    const next = nextOf(link.next);
+    try {
+      const signedIn = await s.users.signInEmail(link.email);
+      return await completeFirstFactor(c, signedIn, { source: 'email', method: 'eml', next, status: 303 });
+    } catch (error) {
+      if (!(error instanceof SignInRefused)) throw error;
+      s.logger.warn({ reason: error.reason }, 'email sign-in refused');
+      const code: LoginError = error.reason === 'signups_closed' ? 'signups_closed_email' : error.reason;
+      const query = next === '/app' ? '' : `&next=${encodeURIComponent(next)}`;
+      return c.redirect(`/login?error=${code}${query}`, 303);
     }
   });
 
