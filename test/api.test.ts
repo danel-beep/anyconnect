@@ -132,6 +132,15 @@ describe('REST API, personal tokens and account management', () => {
       body: { connectorId: 'demo', name: 'main', label: 'Dup', credentials: { secret: 's' } },
     });
     expect(duplicate.status).toBe(409);
+
+    // "all" and "mine" select accounts in tool calls, so no account can be called that.
+    for (const name of ['all', 'mine']) {
+      const reserved = await api('/accounts', {
+        method: 'POST',
+        body: { connectorId: 'demo', name, label: 'Reserved', credentials: { secret: 's' } },
+      });
+      expect(reserved.status).toBe(400);
+    }
   });
 
   it('updates, disables and deletes accounts, and the catalog follows', async () => {

@@ -540,6 +540,31 @@ describe('HTTP client helpers', () => {
     await limiter.acquire('b', limit); // other accounts are not affected
   });
 
+  it('keeps ids from tool inputs inside the path the connector built', async () => {
+    const seen: string[] = [];
+    const client = new HttpClient(
+      context(async (input) => {
+        seen.push(String(input));
+        return new Response('{}', { headers: { 'content-type': 'application/json' } });
+      }),
+      { baseUrl: 'https://api.example.test/v1' },
+    );
+    // A ".." would turn "trash this message" into a call to another endpoint.
+    for (const id of ['..', '../drafts', 'a/../../b', '%2e%2e', '.%2E/x', '..\\x']) {
+      await expect(client.post(`messages/${id}/trash`)).rejects.toMatchObject({ kind: 'invalid_input' });
+    }
+    // A path cannot move the request (and the account's token) to another host.
+    await expect(client.get('\\\\evil.example/steal')).rejects.toMatchObject({ kind: 'invalid_input' });
+    expect(seen).toEqual([]);
+    // Dots inside a name and in the query are ordinary characters.
+    await client.get('files/report..final.pdf', { q: '../x' });
+    await client.get('/messages/abc?fields=a..b');
+    expect(seen).toEqual([
+      'https://api.example.test/v1/files/report..final.pdf?q=..%2Fx',
+      'https://api.example.test/v1/messages/abc?fields=a..b',
+    ]);
+  });
+
   it('turns network failures into upstream errors', async () => {
     const client = new HttpClient(
       context(async () => {

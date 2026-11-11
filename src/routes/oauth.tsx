@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getDefaultWorkspace, type Workspace } from '../core/identity.js';
 import type { MemberRole } from '../db/schema.js';
-import { OAuthProtocolError } from '../oauth/clients.js';
+import { isMetadataDocumentClientId, OAuthProtocolError } from '../oauth/clients.js';
 import { isLoopbackRedirect, knownClientName } from '../oauth/redirect.js';
 import type { AuthorizationRequest } from '../oauth/server.js';
 import { suggestClientIdentity } from '../security/clients.js';
@@ -16,6 +16,9 @@ import {
   loginUrl,
   secondFactorRedirect,
 } from './context.js';
+
+/** Authorization requests one address may open per minute for clients named by a metadata URL. */
+const AUTHORIZE_DOCUMENTS_PER_MINUTE = 60;
 
 const OAUTH_PARAMS = [
   'response_type',
@@ -231,6 +234,22 @@ export function oauthRoutes() {
   app.get('/oauth/authorize', async (c) => {
     const s = c.get('services');
     const params = pickOAuthParams(c.req.query());
+    // A client id that is a URL makes the hub fetch its metadata document, so one address cannot
+    // ask for many of them (the request needs no sign-in).
+    if (isMetadataDocumentClientId(params.client_id ?? '')) {
+      const limited = s.rateLimiter.consume(
+        `authorize:${clientRateKey(c, s.config.trustProxy)}`,
+        AUTHORIZE_DOCUMENTS_PER_MINUTE,
+        60_000,
+      );
+      if (!limited.allowed) {
+        return c.html(
+          <ErrorPage t={c.get('t')} lang={c.get('locale')} message={c.get('t')('login.rateLimited')} />,
+          429,
+          { 'Retry-After': String(limited.retryAfterSeconds) },
+        );
+      }
+    }
     const validation = await s.oauth.validateAuthorizationRequest(params);
     if (validation.kind === 'error_page') {
       return c.html(

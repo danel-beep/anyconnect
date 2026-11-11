@@ -9,7 +9,7 @@ import { oauthConnectStates } from '../db/schema.js';
 import { hashToken, type SecretBox } from '../lib/crypto.js';
 import { AppError, badRequest, forbidden } from '../lib/errors.js';
 import type { Logger } from '../logger.js';
-import { ACCOUNT_NAME, type AccountOwnerInput, type AccountRow, type AccountService } from './accounts.js';
+import { AccountName, type AccountOwnerInput, type AccountRow, type AccountService } from './accounts.js';
 import type { OAuthAppService } from './oauth-apps.js';
 import { buildAuthorizationUrl, exchangeCode, OAuthProtocolError, pkcePair } from './oauth-client.js';
 import type { TokenManager } from './oauth-tokens.js';
@@ -30,7 +30,7 @@ export const StartConnectInput = z.object({
   connectorId: z.string().min(1),
   /** Re-connect this account instead of creating a new one. */
   accountId: z.string().min(1).optional(),
-  name: z.string().regex(ACCOUNT_NAME, 'use 1-32 lowercase letters, digits, "-" or "_"').optional(),
+  name: AccountName.optional(),
   label: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(500).optional(),
   config: z.record(z.string(), z.unknown()).optional(),

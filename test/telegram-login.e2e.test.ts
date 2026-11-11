@@ -191,4 +191,19 @@ describe('Telegram personal account: connect on the website, log in, use from th
     );
     expect((await browser.request('/connect/messenger/acc_missing')).status).toBe(404);
   });
+
+  it('passes only its own login ids to the gateway', async () => {
+    const [row] = await hub.services.db.query.accounts.findMany({ limit: 1 });
+    const page = `/connect/messenger/${row!.id}`;
+    const csrf = TestBrowser.hiddenInputs(await (await browser.request(page)).text()).csrf!;
+    expect((await hub.services.messaging.accounts.get(row!.id))?.state).toBe('online');
+    // "../../<account>/logout" in place of a login id would reach the gateway's logout endpoint of
+    // any account whose id the user knows.
+    const climb = `..%2F..%2F${row!.id}%2Flogout`;
+    expect((await browser.request(`${page}/login/${climb}`, { form: { csrf } })).status).toBe(404);
+    expect((await browser.request(`${page}/login/${climb}/cancel`, { form: { csrf } })).status).toBe(404);
+    expect((await browser.request(`${page}/login/${climb}`)).status).toBe(404);
+    expect((await browser.request(`${page}/login/lgn_x`)).status).toBe(404);
+    expect((await hub.services.messaging.accounts.get(row!.id))?.state).toBe('online');
+  });
 });

@@ -10,7 +10,7 @@ import type {
   RiskAssessment,
   RiskLevel,
 } from '../connectors/sdk.js';
-import { ACCOUNT_NAME } from '../core/accounts.js';
+import { AccountName } from '../core/accounts.js';
 import { AddMcpServerInput } from '../core/custom-services.js';
 import type { Principal } from '../core/principal.js';
 import {
@@ -273,7 +273,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
     input: z.object({
       service: z.string().min(1).describe('Service id, e.g. "gmail"'),
       label: z.string().trim().min(1).max(100).optional().describe('e.g. "Work mail"'),
-      name: z.string().regex(ACCOUNT_NAME).optional().describe('Short key, e.g. "work"'),
+      name: AccountName.optional().describe('Short key, e.g. "work"'),
       reconnect: accountRef.optional().describe('Existing account to reconnect'),
       for_team: z
         .boolean()
@@ -303,7 +303,7 @@ export const SETUP_ACTIONS: ActionDefinition[] = [
       account: accountRef,
       label: z.string().trim().min(1).max(100).optional(),
       description: z.string().trim().max(500).nullable().optional(),
-      rename: z.string().regex(ACCOUNT_NAME).optional(),
+      rename: AccountName.optional(),
       enabled: z.boolean().optional(),
       disable_tools: z.array(z.string()).optional().describe('Action names, e.g. ["send"]'),
       enable_tools: z.array(z.string()).optional(),

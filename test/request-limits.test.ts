@@ -104,6 +104,26 @@ describe('request limits', () => {
     expect(small.status).toBe(201);
   });
 
+  it('limits how many client metadata documents one address can make the hub fetch', async () => {
+    const authorize = (n: number, ip: string) =>
+      fetch(
+        `${hub.baseUrl}/oauth/authorize?response_type=code&client_id=${encodeURIComponent(
+          `https://client${n}.example/oauth/client.json`,
+        )}`,
+        { headers: { 'x-forwarded-for': ip } },
+      );
+    for (let i = 0; i < 60; i++) expect((await authorize(i, '203.0.113.9')).status).toBe(400);
+    const blocked = await authorize(61, '203.0.113.9');
+    expect(blocked.status).toBe(429);
+    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
+    // Another address, and clients registered with the hub, are not held back.
+    expect((await authorize(62, '203.0.113.10')).status).toBe(400);
+    const registered = await fetch(`${hub.baseUrl}/oauth/authorize?response_type=code&client_id=cli_x`, {
+      headers: { 'x-forwarded-for': '203.0.113.9' },
+    });
+    expect(registered.status).toBe(400);
+  });
+
   it('does not let a blocked address use up the attempts of an account', async () => {
     const attacker = new TestBrowser(hub.baseUrl);
     const attempt = async (browser: TestBrowser, ip: string, email: string, password: string) => {

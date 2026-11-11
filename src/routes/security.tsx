@@ -171,6 +171,17 @@ async function guardJson(
   return { session, body };
 }
 
+/**
+ * The first second factor ends the user's other sessions: they were opened with the password alone,
+ * and whoever holds one (a stolen cookie, a forgotten browser) should not stay in once the user has
+ * turned the second step on.
+ */
+async function endSessionsOpenedWithoutFactor(c: AppContext, session: Session): Promise<void> {
+  const s = c.get('services');
+  const ended = await s.sessions.destroyOthers(session.user.id, session.token);
+  if (ended) s.logger.info({ userId: session.user.id, ended }, 'other sessions ended: second factor enabled');
+}
+
 /** /security: authenticator app, recovery codes and passkeys of the signed-in user. */
 export function securityRoutes() {
   const app = new Hono<AppEnv>();
@@ -200,12 +211,14 @@ export function securityRoutes() {
     if (!s.rateLimiter.consume(`mfa:user:${userId}`, 5, 5 * 60_000).allowed) {
       return renderSecurity(c, session, next, { totpError: t('login.rateLimited'), status: 429 });
     }
+    const first = !(await s.secondFactors.hasAny(userId));
     if (!(await s.secondFactors.totp.confirm(userId, form.code ?? ''))) {
       return renderSecurity(c, session, next, { totpError: t('security.totpInvalid'), status: 400 });
     }
     s.rateLimiter.reset(`mfa:user:${userId}`);
     // The code just proved the factor: this session now counts as signed in with it.
     await s.sessions.addAuthMethod(session.token, 'otp');
+    if (first) await endSessionsOpenedWithoutFactor(c, session);
     s.logger.info({ userId }, 'authenticator app enabled');
     if ((await s.secondFactors.recoveryCodes.remaining(userId)) === 0) {
       const codes = await s.secondFactors.recoveryCodes.regenerate(userId);
@@ -368,6 +381,7 @@ export function securityRoutes() {
     const { session, body } = guard;
     const name = PasskeyName.safeParse(body.name ?? '');
     let passkeyId: string;
+    const first = !(await s.secondFactors.hasAny(session.user.id));
     try {
       ({ id: passkeyId } = await s.secondFactors.passkeys.register(
         session.user.id,
@@ -386,6 +400,7 @@ export function securityRoutes() {
     }
     await s.sessions.addAuthMethod(session.token, 'hwk');
     s.logger.info({ userId: session.user.id }, 'passkey added');
+    if (first) await endSessionsOpenedWithoutFactor(c, session);
     // The anchor points at the new row, which the page highlights.
     return c.json({ redirect: `${securityUrl(optionalNext(body.next))}#pk-${passkeyId}` });
   });

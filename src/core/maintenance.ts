@@ -84,6 +84,22 @@ export async function runMaintenance(db: Db): Promise<void> {
         ),
       ),
     );
+  // Clients known by a metadata document that never completed an authorization: the cached copy
+  // goes a month after it was last fetched (anyone can make the hub fetch one).
+  await db
+    .delete(oauthClients)
+    .where(
+      and(
+        sql`${oauthClients.registrationType} = 'metadata_document'`,
+        lt(oauthClients.updatedAt, new Date(now - 30 * DAY)),
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(oauthGrants)
+            .where(sql`${oauthGrants.clientId} = ${oauthClients.id}`),
+        ),
+      ),
+    );
   // Revoked grants are kept for a while for the audit trail, then removed.
   await db.delete(oauthGrants).where(lt(oauthGrants.revokedAt, new Date(now - 30 * DAY)));
   // The activity log (tool_calls) is kept per plan: job `activity.prune` (ActivityService.prune).
