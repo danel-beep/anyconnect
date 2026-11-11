@@ -10,6 +10,7 @@ import { auditStage } from './audit.js';
 import { automationStage } from './automation.js';
 import { circuitStage } from './circuit.js';
 import { confirmFloorStage } from './confirm-floor.js';
+import { exposureStage } from './exposure.js';
 import { idempotencyStage } from './idempotency.js';
 import { identityStage } from './identity.js';
 import { limitsStage } from './limits.js';
@@ -35,6 +36,8 @@ export function defaultStages(deps: {
   maxResultTokens: number;
   meter?: UsageMeter;
   quota?: QuotaGate;
+  /** Whether an action returns third-party content; with it, the `exposure` stage is on. */
+  openWorld?: (workspaceId: string, connectorId: string, action: string) => Promise<boolean>;
   /** Stores an identity the `identity` stage found (see `AccountService.setIdentity`). */
   setIdentity?: (accountId: string, identity: string, defaultLabel: string) => Promise<void>;
 }): StageMap {
@@ -51,6 +54,9 @@ export function defaultStages(deps: {
       : {}),
     ...(deps.quota ? { quota: quotaStage(deps.quota) } : {}),
     risk: riskStage,
+    ...(deps.openWorld
+      ? { exposure: exposureStage({ db: deps.db, logger: deps.logger, openWorld: deps.openWorld }) }
+      : {}),
     automation: automationStage,
     confirm: confirmFloorStage,
     limits: limitsStage({ rateLimiter: deps.rateLimiter }),

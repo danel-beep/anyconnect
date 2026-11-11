@@ -167,6 +167,10 @@ export class Hub {
           maxResultTokens: deps.maxResultTokens,
           setIdentity: (accountId, identity, defaultLabel) =>
             deps.accounts.setIdentity(accountId, identity, defaultLabel),
+          openWorld: async (workspaceId, connectorId, action) => {
+            const connector = await deps.connectors.get(workspaceId, connectorId);
+            return connector?.actions.find((a) => a.name === action)?.hints?.openWorld !== false;
+          },
           ...(deps.meter ? { meter: deps.meter } : {}),
           ...(deps.quota ? { quota: deps.quota } : {}),
         }),

@@ -117,6 +117,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // The repository may be public (and anyone's): see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'POST', path: '/repos/{owner}/{repo}/issues' },
       response: { fields: ['number', 'html_url'] },
     },
@@ -141,6 +143,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false, idempotent: true },
       risk: 'write',
+      // The repository may be public (and anyone's): see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'PATCH', path: '/repos/{owner}/{repo}/issues/{number}' },
       response: { fields: ['number', 'state', 'html_url'] },
     },
@@ -159,6 +163,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // The repository may be public (and anyone's): see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'POST', path: '/repos/{owner}/{repo}/issues/{number}/comments' },
       response: { fields: ['id', 'html_url'] },
     },

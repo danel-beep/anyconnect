@@ -142,6 +142,8 @@ const manifest = defineManifestConnector({
       input: { type: 'object', properties: { post_id: postId, ...postFields }, required: ['post_id'] },
       hints: { readOnly: false, destructive: false, idempotent: true },
       risk: 'write',
+      // The post may already be published: see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'POST', path: '/posts/{post_id}', body: postBody },
       response: { fields: POST_FIELDS },
     },
