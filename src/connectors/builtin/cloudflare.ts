@@ -110,7 +110,9 @@ const manifest = defineManifestConnector({
         required: ['zone_id', 'type', 'name', 'content'],
       },
       hints: { readOnly: false, destructive: false },
-      risk: 'write',
+      // A new record can hand a subdomain or the domain's mail to someone else (a CNAME, an MX, a
+      // TXT that proves ownership to another service): asked like a change of a record.
+      risk: 'dangerous',
       undo: { kind: 'action', action: 'delete_dns_record' },
       request: { method: 'POST', path: '/zones/{zone_id}/dns_records', body: recordBody },
       response: { root: 'result', fields: RECORD_FIELDS },
