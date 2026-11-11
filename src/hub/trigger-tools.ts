@@ -312,6 +312,33 @@ export function narrows(before: ArgumentLimits | undefined, next: TriggerChange[
   );
 }
 
+/**
+ * Why a change lets the hub act on its own where it did not before, or undefined when it does
+ * not (then the AI app may make it without asking the user). `before` is undefined for a new trigger.
+ */
+export function widens(before: TriggerInfo | undefined, change: TriggerChange): string | undefined {
+  const kind = change.do ?? before?.do;
+  const acts = kind === 'tool' || kind === 'ai';
+  if (!acts) return undefined;
+  if (!before) return 'A new trigger lets the hub act on its own when an event matches';
+  if (change.do && change.do !== before.do) return 'The trigger will act on its own when an event matches';
+  if (change.enabled === true && (!before.enabled || before.paused))
+    return 'Turns on a trigger that acts on its own';
+  if (change.tool || change.tools || change.args || change.instructions)
+    return 'Changes what the trigger does on its own';
+  if (change.askBeforeRisky === false && before.askBeforeRisky !== false)
+    return 'The trigger’s AI will send and delete without asking';
+  if (change.allow !== undefined && !narrows(before.allow, change.allow))
+    return 'Lets the trigger’s AI use its tools with more argument values';
+  if (
+    change.account !== undefined ||
+    change.filter ||
+    (change.when !== undefined && change.when !== before.when)
+  )
+    return 'Changes which events make the trigger act';
+  return undefined;
+}
+
 /** A ready prompt for the user's scheduled task: check, and only read on when something matched. */
 const scheduleFor = (name?: string) => ({
   every: 'hour (or as often as the app allows)',
@@ -343,24 +370,6 @@ export function triggerActions(
     daily_limit: t.dailyLimit,
     runs_today: t.runsToday,
   });
-  /** Whether a change lets the hub act on its own where it did not before. */
-  const widens = (before: TriggerInfo | undefined, change: TriggerChange): string | undefined => {
-    const kind = change.do ?? before?.do;
-    const acts = kind === 'tool' || kind === 'ai';
-    if (!acts) return undefined;
-    if (!before) return 'A new trigger lets the hub act on its own when an event matches';
-    if (change.do && change.do !== before.do) return 'The trigger will act on its own when an event matches';
-    if (change.enabled === true && (!before.enabled || before.paused))
-      return 'Turns on a trigger that acts on its own';
-    if (change.tool || change.tools || change.args || change.instructions)
-      return 'Changes what the trigger does on its own';
-    if (change.askBeforeRisky === false && before.askBeforeRisky !== false)
-      return 'The trigger’s AI will send and delete without asking';
-    if (change.allow !== undefined && !narrows(before.allow, change.allow))
-      return 'Lets the trigger’s AI use its tools with more argument values';
-    if (change.account !== undefined || change.filter) return 'Changes which events make the trigger act';
-    return undefined;
-  };
   return [
     define({
       name: 'check_triggers',
