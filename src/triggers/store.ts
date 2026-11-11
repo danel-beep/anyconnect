@@ -59,6 +59,7 @@ export interface TriggerEvent {
   id: string;
   seq: number;
   triggerId: string;
+  workspaceId: string;
   accountId: string;
   status: TriggerEventStatus;
   /** Undefined when the account's key cannot be opened here (a sealed account outside its vault). */
@@ -475,16 +476,57 @@ export class TriggerStore {
     return Number(row?.n ?? 0);
   }
 
-  /** Events left `running` by a process that stopped (older than `staleMs`). */
-  async stale(staleMs: number): Promise<string[]> {
+  /**
+   * Takes a `running` event for its one run. False when a runner already took it (a job retried
+   * after its process stopped, the same job delivered twice): the action must not run again.
+   */
+  async claim(id: string): Promise<boolean> {
+    const rows = await this.db
+      .update(triggerEvents)
+      .set({ startedAt: new Date() })
+      .where(
+        and(eq(triggerEvents.id, id), eq(triggerEvents.status, 'running'), isNull(triggerEvents.startedAt)),
+      )
+      .returning({ id: triggerEvents.id });
+    return rows.length > 0;
+  }
+
+  /** Gives a taken event back untouched (its run stopped before it did anything), for another try. */
+  async release(id: string): Promise<void> {
+    await this.db
+      .update(triggerEvents)
+      .set({ startedAt: null })
+      .where(and(eq(triggerEvents.id, id), eq(triggerEvents.status, 'running')));
+  }
+
+  /** Runs taken before `startedBefore` and still not over: their process stopped. */
+  async interrupted(startedBefore: Date): Promise<string[]> {
     const rows = await this.db
       .select({ id: triggerEvents.id })
       .from(triggerEvents)
-      .where(
-        and(eq(triggerEvents.status, 'running'), lt(triggerEvents.createdAt, new Date(Date.now() - staleMs))),
-      )
-      .limit(100);
+      .where(and(eq(triggerEvents.status, 'running'), lt(triggerEvents.startedAt, startedBefore)))
+      .limit(200);
     return rows.map((r) => r.id);
+  }
+
+  /** Runs recorded before `createdBefore` that no runner has taken yet, oldest first. */
+  async waiting(createdBefore: Date): Promise<Array<{ id: string; workspaceId: string; createdAt: Date }>> {
+    return this.db
+      .select({
+        id: triggerEvents.id,
+        workspaceId: triggerEvents.workspaceId,
+        createdAt: triggerEvents.createdAt,
+      })
+      .from(triggerEvents)
+      .where(
+        and(
+          eq(triggerEvents.status, 'running'),
+          isNull(triggerEvents.startedAt),
+          lt(triggerEvents.createdAt, createdBefore),
+        ),
+      )
+      .orderBy(asc(triggerEvents.createdAt))
+      .limit(200);
   }
 
   /** Deletes events older than the retention, and delivered "anything new?" events after a day. */
@@ -530,6 +572,7 @@ export class TriggerStore {
       id: row.id,
       seq: row.seq,
       triggerId: row.triggerId,
+      workspaceId: row.workspaceId,
       accountId: row.accountId,
       status: row.status,
       tokens: row.tokens,

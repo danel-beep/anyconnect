@@ -66,6 +66,7 @@ export function builtinJobs(deps: {
       description: 'Record the status page sample of this minute',
       cron: '* * * * *',
       expectEveryMs: 10 * 60_000,
+      timeoutMs: 50_000,
       run: async () => {
         await deps.status.sample();
       },
@@ -75,8 +76,10 @@ export function builtinJobs(deps: {
       description: 'Refresh OAuth tokens that expire within 15 minutes',
       cron: '*/5 * * * *',
       expectEveryMs: 20 * 60_000,
-      run: async () => {
-        await deps.health.refreshExpiringTokens();
+      // Ends before the next run is due; what it did not get to is still due then.
+      timeoutMs: 4 * 60_000,
+      run: async (_data, ctx) => {
+        await deps.health.refreshExpiringTokens(undefined, ctx.signal);
       },
     },
     {
@@ -93,8 +96,9 @@ export function builtinJobs(deps: {
       description: 'Re-run the connection test of accounts not checked for a day',
       cron: '17 * * * *',
       expectEveryMs: 3 * 3_600_000,
-      run: async () => {
-        await deps.health.checkStaleAccounts();
+      timeoutMs: 50 * 60_000,
+      run: async (_data, ctx) => {
+        await deps.health.checkStaleAccounts(undefined, undefined, ctx.signal);
       },
     },
     {
@@ -102,8 +106,9 @@ export function builtinJobs(deps: {
       description: 'Re-read the tool lists of remote MCP servers',
       cron: '41 4 * * *',
       expectEveryMs: 50 * 3_600_000,
-      run: async () => {
-        await deps.customServices.refreshAll();
+      timeoutMs: 30 * 60_000,
+      run: async (_data, ctx) => {
+        await deps.customServices.refreshAll(ctx.signal);
       },
     },
     {

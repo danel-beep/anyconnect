@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, lt, ne, notLike } from 'drizzle-orm';
+import { and, eq, isNotNull, lt, ne, notLike, or, sql } from 'drizzle-orm';
 import { resolveProvider } from '../connectors/oauth/providers.js';
 import {
   type ConnectorDefinition,
@@ -33,6 +33,9 @@ type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
  * hub instances never race a rotating refresh token. A grant the provider no longer accepts marks
  * the account `needs_reauth`.
  */
+/** An account not called for this long is idle: its token is kept alive weekly, not hourly. */
+export const IDLE_AFTER_MS = 7 * 86_400_000;
+
 export class TokenManager {
   private readonly inflight = new Map<string, Promise<TokenSet>>();
 
@@ -302,8 +305,19 @@ export class TokenManager {
     return result;
   }
 
-  /** Accounts whose access token expires before `before` and that can be refreshed. */
-  async expiring(before: Date): Promise<{ accountId: string; workspaceId: string; connectorId: string }[]> {
+  /**
+   * Accounts whose access token should be refreshed ahead of time: it expires before `before` and
+   * the account is in use (called, or connected, within `IDLE_AFTER_MS`). Accounts nobody calls
+   * are most of them at any moment, and refreshing each one every hour is the largest recurring
+   * load of the hub for no benefit: their token is refreshed by the next call that needs it. An
+   * idle account is still refreshed once per `IDLE_AFTER_MS`, which keeps refresh tokens that
+   * expire without use alive (Microsoft: 90 days) and notices a revoked grant.
+   */
+  async expiring(
+    before: Date,
+    now = new Date(),
+  ): Promise<{ accountId: string; workspaceId: string; connectorId: string }[]> {
+    const idleSince = new Date(now.getTime() - IDLE_AFTER_MS);
     return this.deps.db
       .select({
         accountId: accountOauth.accountId,
@@ -320,6 +334,10 @@ export class TokenManager {
           // needs_reauth accounts wait for the user
           ne(accounts.status, 'needs_reauth'),
           notSealedAccount(),
+          or(
+            sql`coalesce(${accounts.lastUsedAt}, ${accounts.createdAt}) > ${idleSince.toISOString()}::timestamptz`,
+            lt(accountOauth.expiresAt, idleSince),
+          ),
         ),
       );
   }

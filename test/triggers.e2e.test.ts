@@ -673,6 +673,109 @@ describe('triggers', () => {
     await hub.services.db.delete(triggerEvents);
   });
 
+  it('runs an action exactly once, whatever happens to the process around it', async () => {
+    const trigger = await create({
+      name: 'Once',
+      when: 'message',
+      do: 'tool',
+      tool: 'demo_echo',
+      args: { account: 'main', message: 'once: {{text}}' },
+    });
+    const { engine } = hub.services.triggers;
+    const { pool } = hub.services.database;
+    const echoes = async () =>
+      (await hub.services.db.select().from(toolCalls).where(eq(toolCalls.toolName, 'demo_echo'))).length;
+    const statusOf = async (id: string) => (await hub.services.triggers.store.getEvent(id))?.status;
+    await inbound('First');
+    const [event] = await settled(trigger.id, 1);
+    const calls = await echoes();
+    const set = (sql: string) => pool.query(`update trigger_events set ${sql} where id = $1`, [event!.id]);
+
+    // The job comes back (retried after its process stopped mid-run): the action is not repeated…
+    await set("status = 'running'");
+    await engine.run(event!.id);
+    expect(await echoes()).toBe(calls);
+    expect(await statusOf(event!.id)).toBe('running');
+    // …and the run is closed as interrupted soon after, not left "running".
+    await engine.recover(Date.now() + 4 * 60_000);
+    expect(await statusOf(event!.id)).toBe('failed');
+
+    // A shutdown reaches a run that has not acted yet: the event is given back for the next process.
+    await set("status = 'running', started_at = null");
+    await expect(engine.run(event!.id, AbortSignal.abort())).rejects.toThrow(/interrupted/i);
+    expect(await echoes()).toBe(calls);
+    const [row] = (
+      await pool.query('select status, started_at from trigger_events where id = $1', [event!.id])
+    ).rows;
+    expect(row).toEqual({ status: 'running', started_at: null });
+
+    // A run that only waits in a long queue is not late; one whose hand-over was lost runs again.
+    await engine.recover(Date.now() + 5 * 60_000);
+    expect(await statusOf(event!.id)).toBe('running');
+    await engine.recover(Date.now() + 16 * 60_000);
+    await settled(trigger.id, 1);
+    expect(await statusOf(event!.id)).toBe('done');
+    expect(await echoes()).toBe(calls + 1);
+
+    // Never taken for a day: given up.
+    await set("status = 'running', started_at = null");
+    await engine.recover(Date.now() + 25 * 3_600_000);
+    expect(await statusOf(event!.id)).toBe('failed');
+  });
+
+  it('catches up on missed messages by reading only the accounts that got one', async () => {
+    const trigger = await create({ name: 'Catch up', when: 'message', do: 'check', filter: {} });
+    const { engine } = hub.services.triggers;
+    const store = hub.services.messaging.store;
+    const quiet = await hub.services.accounts.create(workspaceId, {
+      connectorId: 'fakechat',
+      name: 'quiet',
+      label: 'Quiet',
+      credentials: {},
+    });
+    const original = store.whatsNew.bind(store);
+    const read: string[] = [];
+    store.whatsNew = (accountIds, query) => {
+      read.push(...accountIds);
+      return original(accountIds, query);
+    };
+    const pass = async () => {
+      read.length = 0;
+      await engine.scanAll('message', { background: true, changedOnly: true });
+      return [...read].sort();
+    };
+    try {
+      // The first pass of a process looks everywhere (it may have missed anything).
+      expect(await pass()).toEqual([chatAccount, quiet.id].sort());
+      // Nothing arrived: nothing is read, however many accounts there are.
+      expect(await pass()).toEqual([]);
+      expect(await pass()).toEqual([]);
+      // A message whose notification was lost (no `onInbound`): only its account is read.
+      seq++;
+      await store.ingest(chatAccount, [
+        {
+          chat: { externalId: 'chat-lost', kind: 'direct', title: 'Lost' },
+          externalId: `m${seq}`,
+          direction: 'in',
+          sentAt: new Date(),
+          sender: { externalId: 'u-lost', name: 'Lost' },
+          text: 'Did this arrive?',
+        },
+      ]);
+      await new Promise((r) => setTimeout(r, 1_200));
+      expect(await pass()).toEqual([chatAccount]);
+      const events = await hub.services.triggers.service.events(workspaceId, { triggerId: trigger.id });
+      expect(events.map((e) => e.item?.text)).toEqual(['Did this arrive?']);
+      // Read once more a pass later (a row that committed late would show up here), then quiet again.
+      expect(await pass()).toEqual([chatAccount]);
+      expect(await pass()).toEqual([]);
+    } finally {
+      store.whatsNew = original;
+      await hub.services.accounts.delete(workspaceId, quiet.id);
+      await hub.services.db.delete(triggerEvents);
+    }
+  });
+
   it('follows many accounts that get a message at the same moment', async () => {
     const trigger = await create({ name: 'Everything', when: 'message', do: 'check', filter: {} });
     // More accounts than the database pool has connections (4 in tests).

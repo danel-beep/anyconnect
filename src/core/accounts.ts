@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import {
@@ -196,6 +196,32 @@ export class AccountService {
       .limit(1);
     if (!row) throw notFound('Account');
     return row;
+  }
+
+  /**
+   * The accounts of many workspaces in one read, for background passes over everyone (chunked, so
+   * the query stays small however many workspaces there are).
+   */
+  async listMany(workspaceIds: string[]): Promise<AccountRow[]> {
+    return this.inChunks(workspaceIds, (ids) => inArray(accounts.workspaceId, ids));
+  }
+
+  /** Accounts by id, across workspaces, for background passes. */
+  async byIds(accountIds: string[]): Promise<AccountRow[]> {
+    return this.inChunks(accountIds, (ids) => inArray(accounts.id, ids));
+  }
+
+  private async inChunks(ids: string[], where: (ids: string[]) => SQL): Promise<AccountRow[]> {
+    const out: AccountRow[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      out.push(
+        ...(await this.db
+          .select()
+          .from(accounts)
+          .where(where(ids.slice(i, i + 500)))),
+      );
+    }
+    return out;
   }
 
   /** Any workspace's account by id, for background work that starts from an account (triggers). */
@@ -484,6 +510,11 @@ export class AccountService {
       if (error instanceof VaultLockedError) throw lockedAccount(await this.keys.lockedError());
       throw error;
     }
+  }
+
+  /** {@link isSealed} for a row already in hand (no query). */
+  sealed(row: Pick<AccountRow, 'id' | 'dataKeyEncrypted'>): boolean {
+    return this.keys.isSealed(row);
   }
 
   /** True when the account's key is sealed to its owner's vault (only a request can open it). */

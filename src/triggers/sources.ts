@@ -19,6 +19,15 @@ export interface EventSource {
   source: TriggerItem['source'];
   /** Accounts of the workspace this source reads (enabled ones). */
   accounts(workspaceId: string): Promise<AccountRow[]>;
+  /** Whether this source reads the account (by its service). */
+  reads(account: AccountRow): Promise<boolean>;
+  /**
+   * Sources whose items land in the hub's own store can tell where something arrived: the
+   * accounts that got an item after `since` (a mark an earlier call returned; without it, or when
+   * the source cannot tell, `accountIds` is absent: read everything) and the mark of now. Lets the
+   * regular catch-up pass skip the accounts where nothing happened, which is nearly all of them.
+   */
+  changes?(since: string | undefined): Promise<{ mark: string; accountIds?: string[] }>;
   start(account: AccountRow): Promise<string>;
   read(
     account: AccountRow,
@@ -67,12 +76,19 @@ export class MessageSource implements EventSource {
   async accounts(workspaceId: string): Promise<AccountRow[]> {
     const rows = await this.deps.accounts.list(workspaceId);
     const out: AccountRow[] = [];
-    for (const row of rows) {
-      if (!row.enabled) continue;
-      const connector = await this.deps.connectors.get(workspaceId, row.connectorId);
-      if (connector?.messenger) out.push(row);
-    }
+    for (const row of rows) if (row.enabled && (await this.reads(row))) out.push(row);
     return out;
+  }
+
+  async reads(account: AccountRow): Promise<boolean> {
+    const connector = await this.deps.connectors.get(account.workspaceId, account.connectorId);
+    return connector?.messenger !== undefined;
+  }
+
+  async changes(since: string | undefined): Promise<{ mark: string; accountIds?: string[] }> {
+    const after = since === undefined ? undefined : Number(since);
+    const { latest, accountIds } = await this.deps.store.arrivedSince(after);
+    return { mark: String(latest), ...(accountIds ? { accountIds } : {}) };
   }
 
   start(account: AccountRow): Promise<string> {
@@ -146,9 +162,12 @@ export class MailSource implements EventSource {
   async accounts(workspaceId: string): Promise<AccountRow[]> {
     const rows = await this.deps.accounts.list(workspaceId);
     const out: AccountRow[] = [];
-    for (const row of rows)
-      if (row.enabled && (await this.searchAction(workspaceId, row.connectorId))) out.push(row);
+    for (const row of rows) if (row.enabled && (await this.reads(row))) out.push(row);
     return out;
+  }
+
+  async reads(account: AccountRow): Promise<boolean> {
+    return (await this.searchAction(account.workspaceId, account.connectorId)) !== undefined;
   }
 
   /** `!` marks a cursor no read has moved yet: nothing at or before it is new (no overlap). */
