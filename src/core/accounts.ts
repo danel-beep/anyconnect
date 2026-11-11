@@ -84,6 +84,23 @@ export function toAccountView(row: AccountRow): AccountView {
   };
 }
 
+/** How long a messenger account's copy of the chats may be kept, in days (the choices on the account page). */
+export const MESSAGE_RETENTION_DAYS = [30, 90, 365] as const;
+/** What a newly connected messenger account starts with. */
+export const DEFAULT_MESSAGE_RETENTION_DAYS = 90;
+
+const AccountSettingsInput = z.object({
+  disabledActions: z.array(z.string()).optional(),
+  /** Messengers only. Null: keep the messages while the account stays connected. */
+  keepMessagesDays: z
+    .number()
+    .refine((days) => (MESSAGE_RETENTION_DAYS as readonly number[]).includes(days), {
+      message: `one of ${MESSAGE_RETENTION_DAYS.join(', ')}`,
+    })
+    .nullable()
+    .optional(),
+});
+
 export const CreateAccountInput = z.object({
   connectorId: z.string().min(1),
   name: AccountName.optional(),
@@ -92,7 +109,7 @@ export const CreateAccountInput = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
   credentials: z.record(z.string(), z.unknown()).optional(),
   enabled: z.boolean().optional(),
-  settings: z.object({ disabledActions: z.array(z.string()).optional() }).optional(),
+  settings: AccountSettingsInput.optional(),
 });
 export type CreateAccountInput = z.infer<typeof CreateAccountInput>;
 
@@ -105,7 +122,8 @@ export const UpdateAccountInput = z.object({
   /** Merged into the stored credentials (send only the fields that change). */
   credentials: z.record(z.string(), z.unknown()).optional(),
   enabled: z.boolean().optional(),
-  settings: z.object({ disabledActions: z.array(z.string()).optional() }).optional(),
+  /** Only the settings named here change. */
+  settings: AccountSettingsInput.optional(),
 });
 export type UpdateAccountInput = z.infer<typeof UpdateAccountInput>;
 
@@ -336,6 +354,9 @@ export class AccountService {
     const config = parseWith(connector.config, input.config, 'config');
     const credentials = parseWith(connector.credentials, input.credentials, 'credentials');
     const disabledActions = this.validateDisabledActions(connector, input.settings?.disabledActions);
+    const keepMessagesDays = this.messageRetention(connector, input.settings?.keepMessagesDays, {
+      fallback: DEFAULT_MESSAGE_RETENTION_DAYS,
+    });
 
     const id = newId('acc');
     const hasCredentials = Object.keys(connector.credentials.shape).length > 0;
@@ -364,7 +385,10 @@ export class AccountService {
               ? this.keys.encryptCredentials({ id }, key, credentials)
               : null,
             enabled: input.enabled ?? true,
-            settings: disabledActions ? { disabledActions } : {},
+            settings: {
+              ...(disabledActions ? { disabledActions } : {}),
+              ...(keepMessagesDays ? { keepMessagesDays } : {}),
+            },
             // OAuth services get their tokens from the connect flow; until then the account is unusable.
             ...(connector.oauth && !(connector.oauth.optional && hasAnyValue(credentials))
               ? { status: 'needs_reauth' as const, statusMessage: 'Not connected yet: connect the account' }
@@ -393,8 +417,16 @@ export class AccountService {
     if (input.enabled !== undefined) patch.enabled = input.enabled;
     if (input.config !== undefined) patch.config = parseWith(connector.config, input.config, 'config');
     if (input.settings !== undefined) {
-      const disabledActions = this.validateDisabledActions(connector, input.settings.disabledActions);
-      patch.settings = { ...existing.settings, disabledActions: disabledActions ?? [] };
+      const settings: AccountSettings = { ...existing.settings };
+      if (input.settings.disabledActions !== undefined)
+        settings.disabledActions =
+          this.validateDisabledActions(connector, input.settings.disabledActions) ?? [];
+      if (input.settings.keepMessagesDays !== undefined) {
+        const days = this.messageRetention(connector, input.settings.keepMessagesDays, {});
+        if (days) settings.keepMessagesDays = days;
+        else delete settings.keepMessagesDays;
+      }
+      patch.settings = settings;
     }
     if (input.credentials !== undefined) {
       await this.prepareKeys(existing);
@@ -614,6 +646,22 @@ export class AccountService {
         ? isNull(accounts.credentialsEncrypted)
         : eq(accounts.credentialsEncrypted, row.credentialsEncrypted),
     );
+  }
+
+  /**
+   * The message retention to store: only messengers keep a copy of messages. `undefined` on a
+   * messenger takes `fallback` (a new account's default); null means "while connected".
+   */
+  private messageRetention(
+    connector: ConnectorDefinition,
+    days: number | null | undefined,
+    opts: { fallback?: number },
+  ): number | undefined {
+    if (!connector.messenger) {
+      if (days != null) throw badRequest(`${connector.name} keeps no copy of messages`);
+      return undefined;
+    }
+    return days === undefined ? opts.fallback : (days ?? undefined);
   }
 
   private validateDisabledActions(

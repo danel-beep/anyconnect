@@ -39,6 +39,8 @@ export interface AccountPageView {
   rule: { access: AccessLevel | null; confirm: ConfirmLevel | null };
   defaults: { access: AccessLevel; confirm: ConfirmLevel };
   prompts: string[];
+  /** Messengers: how long the hub keeps its copy of the messages (null: while connected). */
+  keepMessages?: { days: number | null; choices: readonly number[] } | undefined;
   calls: CallView[];
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
@@ -231,6 +233,28 @@ export const AccountPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AccountPage
                 </tr>
               </tbody>
             </table>
+            {view.keepMessages ? (
+              <form method="post" action={`${base}/retention`}>
+                <Hidden values={back} />
+                <label for="acc-keep">{t('app.account.keep.label')}</label>
+                <select id="acc-keep" name="days">
+                  {view.keepMessages.choices.map((days) => (
+                    <option value={String(days)} selected={view.keepMessages?.days === days}>
+                      {t('app.account.keep.days', { n: days })}
+                    </option>
+                  ))}
+                  <option value="" selected={view.keepMessages.days === null}>
+                    {t('app.account.keep.forever')}
+                  </option>
+                </select>
+                <p class="small muted">{t('app.account.keep.hint')}</p>
+                <div class="actions start">
+                  <button type="submit" class="sm">
+                    {t('app.account.keep.save')}
+                  </button>
+                </div>
+              </form>
+            ) : null}
             <div class="actions start">
               <form method="post" action={`${base}/toggle`} class="inline">
                 <Hidden values={back} />

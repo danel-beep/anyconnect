@@ -134,6 +134,15 @@ export function createMessaging(deps: {
           await outbox.prune();
         },
       },
+      {
+        name: 'messaging.prune_messages',
+        description: 'Delete messenger messages past the retention their account chose',
+        cron: '47 2 * * *',
+        expectEveryMs: 26 * 3_600_000,
+        run: async () => {
+          await store.prune();
+        },
+      },
     ],
     init: () => keys.init(),
     start: () => ready.start(),

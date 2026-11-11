@@ -12,12 +12,15 @@ import type {
   Page,
 } from '../connectors/messaging.js';
 import type { Db } from '../db/client.js';
-import { messengerChats, messengerMessages } from '../db/schema.js';
+import { accounts, messengerChats, messengerMessages } from '../db/schema.js';
 import { newId } from '../lib/ids.js';
 import type { CipherSource, JsonCipher } from './ciphers.js';
 import type { InboundSignal } from './inbound-signal.js';
 import type { MessengerKeys } from './keys.js';
 import { indexTerms, matchesQuery, queryTerms } from './search-index.js';
+
+const DAY_MS = 24 * 3_600_000;
+const RETENTION_CACHE_MS = 60_000;
 
 type ChatRow = typeof messengerChats.$inferSelect;
 type MessageRow = typeof messengerMessages.$inferSelect;
@@ -103,6 +106,9 @@ export class MessageStore {
     private readonly inbound?: InboundSignal,
   ) {}
 
+  /** Each account's retention in days, remembered for a minute (read on every ingest). */
+  private readonly retention = new Map<string, { days: number | undefined; until: number }>();
+
   // -------------------------------------------------------------------------
   // Writing
   // -------------------------------------------------------------------------
@@ -173,11 +179,58 @@ export class MessageStore {
    */
   async ingest(accountId: string, messages: InboundMessage[]): Promise<StoredMessage[]> {
     const stored: StoredMessage[] = [];
+    // History older than the account keeps (a backfill after a restart) is not stored again.
+    const cutoff = messages.length ? await this.retentionCutoff(accountId) : undefined;
     for (const message of messages) {
+      if (cutoff && message.sentAt < cutoff) continue;
       const result = await this.ingestOne(accountId, message);
       if (result) stored.push(result);
     }
     return stored;
+  }
+
+  /** Messages of the account sent before this moment are past their retention; undefined: all are kept. */
+  private async retentionCutoff(accountId: string, now = Date.now()): Promise<Date | undefined> {
+    const cached = this.retention.get(accountId);
+    let days = cached && cached.until > now ? cached.days : undefined;
+    if (!cached || cached.until <= now) {
+      const [row] = await this.db
+        .select({ settings: accounts.settings })
+        .from(accounts)
+        .where(eq(accounts.id, accountId))
+        .limit(1);
+      days = row?.settings.keepMessagesDays;
+      if (this.retention.size > 5000) this.retention.clear();
+      this.retention.set(accountId, { days, until: now + RETENTION_CACHE_MS });
+    }
+    return days ? new Date(now - days * DAY_MS) : undefined;
+  }
+
+  /**
+   * Deletes messages past their account's retention (`settings.keepMessagesDays`), in batches so a
+   * large backlog never holds a long lock. Returns how many were deleted.
+   */
+  async prune(opts: { now?: Date; batch?: number; maxBatches?: number } = {}): Promise<number> {
+    const now = (opts.now ?? new Date()).toISOString();
+    const batch = opts.batch ?? 5000;
+    let deleted = 0;
+    for (let round = 0; round < (opts.maxBatches ?? 200); round++) {
+      const result = await this.db.execute<{ seq: number }>(sql`
+        delete from ${messengerMessages}
+        where ${messengerMessages.seq} in (
+          select m.seq
+          from ${messengerMessages} m
+          join ${accounts} a on a.id = m.account_id
+          where (a.settings->>'keepMessagesDays') is not null
+            and m.sent_at < ${now}::timestamptz - make_interval(days => (a.settings->>'keepMessagesDays')::int)
+          limit ${batch}
+        )
+        returning seq`);
+      const count = result.rows.length;
+      deleted += count;
+      if (count < batch) break;
+    }
+    return deleted;
   }
 
   private async ingestOne(accountId: string, message: InboundMessage): Promise<StoredMessage | undefined> {

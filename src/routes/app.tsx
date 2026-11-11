@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isMetric, type Metric, PLANS } from '../billing/plans.js';
 import { REFERRAL_PROVIDER } from '../billing/referrals.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
-import type { AccountRow } from '../core/accounts.js';
+import { type AccountRow, MESSAGE_RETENTION_DAYS } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
 import { isSetupConnector } from '../hub/setup-tools.js';
 import { hashToken } from '../lib/crypto.js';
@@ -282,6 +282,9 @@ export function appRoutes() {
             usage,
             rule: { access: rule?.access ?? null, confirm: rule?.confirm ?? null },
             defaults: { access: security.defaultAccess, confirm: security.defaultConfirm },
+            keepMessages: connector?.messenger
+              ? { days: row.settings.keepMessagesDays ?? null, choices: MESSAGE_RETENTION_DAYS }
+              : undefined,
             prompts: connector
               ? connectorGuide(connector, locale, connector.oauth ? 'oauth' : 'form').prompts
               : [],
@@ -345,6 +348,16 @@ export function appRoutes() {
       .parse(form.label ?? '');
     await c.get('services').accounts.update(auth.workspace.id, account.id, { label });
     setFlash(c, 'ok', 'app.flash.renamed');
+  });
+  accountAction('retention', async (c, auth, account, form) => {
+    const days = z
+      .union([z.literal(''), z.coerce.number().int()])
+      .transform((value) => (value === '' ? null : value))
+      .parse(form.days ?? '');
+    await c
+      .get('services')
+      .accounts.update(auth.workspace.id, account.id, { settings: { keepMessagesDays: days } });
+    setFlash(c, 'ok', days ? 'app.flash.keepSaved' : 'app.flash.keepForever', { n: String(days ?? 0) });
   });
   accountAction('toggle', async (c, auth, account) => {
     await c.get('services').accounts.update(auth.workspace.id, account.id, { enabled: !account.enabled });
