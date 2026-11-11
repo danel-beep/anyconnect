@@ -110,7 +110,7 @@ html:not(.js) .billing-switch{display:none}
 @supports (grid-template-rows:subgrid){.plan{display:grid;grid-row:span 4;grid-template-rows:subgrid;row-gap:16px}}
 .plan.featured{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .plan .tag{position:absolute;top:-11px;left:20px;background:var(--accent);color:var(--accent-text);font:600 11px/1 ${MONO};letter-spacing:.04em;text-transform:uppercase;border-radius:6px;padding:6px 8px}
-.plan h3{font-size:18px;margin:0}
+.plan .plan-title{font-size:18px;margin:0}
 .plan .for{color:var(--muted);font-size:14px;margin:4px 0 0;min-height:42px}
 /* With subgrid the rows line up across cards, so a one-line description needs no reserved second line. */
 @supports (grid-template-rows:subgrid){.plan .for{min-height:0}}

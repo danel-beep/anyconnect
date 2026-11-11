@@ -39,10 +39,10 @@ export const Layout: FC<{
       bodyClass="auth"
       {...(refreshSeconds ? { refreshSeconds } : {})}
     >
-      <div class="auth-top">
+      <header class="auth-top">
         <Brand />
         <Prefs t={t} lang={lang} />
-      </div>
+      </header>
       <main id="main" class={narrow ? undefined : 'wide'}>
         {children}
       </main>

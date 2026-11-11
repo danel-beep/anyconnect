@@ -13,7 +13,7 @@ export const TEAMS_CSS = `
 .team-tile .small{display:block;margin-top:2px}
 .team-tile>svg{width:18px;height:18px;flex:none;color:var(--muted)}
 .team-tile:hover>svg{color:var(--accent-ink)}
-.team-mark{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--accent);color:#fff;font-weight:680;font-size:16px;letter-spacing:.02em;text-transform:uppercase}
+.team-mark{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--accent);color:var(--accent-text);font-weight:680;font-size:16px;letter-spacing:.02em;text-transform:uppercase}
 
 .team-intro h2{margin-bottom:16px}
 .team-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
