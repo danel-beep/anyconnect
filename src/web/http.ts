@@ -147,7 +147,8 @@ export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler 
       // (`payment` stays as it is: the payment provider's checkout frame needs it.)
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
       'Cache-Control': 'no-store',
-      ...(opts.hsts ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}),
+      // Subdomains too: none of ours is served over plain http, and a stray one must not downgrade the site's cookies.
+      ...(opts.hsts ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
     });
   };
 }

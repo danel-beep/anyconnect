@@ -880,6 +880,24 @@ export const pendingLogins = pgTable(
   (t) => [index().on(t.expiresAt)],
 );
 
+/**
+ * A sign-in link sent by email: the mail holds a random token, the database only its hash. The row
+ * lasts 15 minutes and is deleted when the link is used.
+ */
+export const emailLogins = pgTable(
+  'email_logins',
+  {
+    tokenHash: text().primaryKey(),
+    /** The normalized address the link was sent to; whoever opens it has proven they read its mail. */
+    email: text().notNull(),
+    /** Where to go after signing in (a path on this site). */
+    next: text().notNull().default('/app'),
+    createdAt: createdAt(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.expiresAt)],
+);
+
 // ---------------------------------------------------------------------------
 // The hub as an OAuth client of connected services
 // ---------------------------------------------------------------------------

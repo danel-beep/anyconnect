@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MemoryMailer } from '../../src/mail/mailer.js';
 import { FakeOidc } from '../fake-oidc.js';
 import { enableTotp, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { SoftwareAuthenticator } from '../webauthn-authenticator.js';
@@ -177,7 +178,15 @@ async function seed(): Promise<void> {
   personas.push({
     name: 'visitor',
     cookies: [],
-    start: ['/', '/login', '/signup', '/status', '/support'],
+    start: [
+      '/',
+      '/login',
+      '/signup',
+      '/status',
+      '/support',
+      // The page a sign-in link from the mail opens.
+      `/login/email/confirm?token=${await hub.services.emailLogins.create('visitor@example.com', '/app')}`,
+    ],
     within: /^\/(?!app|admin|security|confirm)/,
   });
 }
@@ -234,7 +243,8 @@ async function crawl(context: BrowserContext, persona: Persona): Promise<string[
 describe('every page keeps its layout', () => {
   beforeAll(async () => {
     await resetDatabase();
-    hub = await startTestHub({ loginProviders: [google.provider] });
+    // A mailer, so the sign-in pages offer the link by email as production does.
+    hub = await startTestHub({ loginProviders: [google.provider], mailer: new MemoryMailer() });
     browser = await chromium.launch(
       process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {},
     );

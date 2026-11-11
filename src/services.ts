@@ -99,6 +99,7 @@ import { StandingApprovals } from './security/standing-approvals.js';
 import { type BotUpdateHandler, chainUpdateHandlers, TelegramBot } from './security/telegram.js';
 import { createTriggers, type Triggers } from './triggers/index.js';
 import { VERSION } from './version.js';
+import { EmailLoginService } from './web/email-logins.js';
 import { translator } from './web/i18n.js';
 import { PendingLoginService } from './web/pending-logins.js';
 import { SessionService } from './web/sessions.js';
@@ -207,6 +208,7 @@ export interface Services {
   externalLogin: ExternalLoginService;
   /** Sign-ins waiting for a second factor. */
   pendingLogins: PendingLoginService;
+  emailLogins: EmailLoginService;
   /** TOTP, recovery codes and passkeys. */
   secondFactors: SecondFactorService;
   rateLimiter: RateLimiter;
@@ -746,6 +748,7 @@ export function createServices(
   );
   const adminPanel = new AdminService({ db, users, entitlements });
   const pendingLogins = new PendingLoginService(db);
+  const emailLogins = new EmailLoginService(db, mailer !== undefined && mailer.id !== 'log');
   const secondFactors = new SecondFactorService(
     new TotpService(db, secrets, config.auth.rpName),
     new RecoveryCodeService(db),
@@ -821,6 +824,7 @@ export function createServices(
     activity,
     analytics,
     pendingLogins,
+    emailLogins,
     secondFactors,
     rateLimiter,
     circuitBreaker,

@@ -17,7 +17,16 @@ import {
  * Bearer secrets carry a recognizable prefix (helps secret scanners and debugging)
  * followed by 256 bits of randomness. Only their SHA-256 hash is stored.
  */
-export type TokenPrefix = 'ac_at' | 'ac_rt' | 'ac_pat' | 'ac_code' | 'ac_ses' | 'ac_cs' | 'ac_pl' | 'ac_inv';
+export type TokenPrefix =
+  | 'ac_at'
+  | 'ac_rt'
+  | 'ac_pat'
+  | 'ac_code'
+  | 'ac_ses'
+  | 'ac_cs'
+  | 'ac_pl'
+  | 'ac_inv'
+  | 'ac_el';
 
 export function generateToken(prefix: TokenPrefix): string {
   return `${prefix}_${randomBytes(32).toString('base64url')}`;

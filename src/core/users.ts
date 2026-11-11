@@ -175,6 +175,28 @@ export class UserService {
     return { user, created: true };
   }
 
+  /**
+   * Finds or creates the user behind a sign-in link sent to `email` (opening it proved the person
+   * reads that mailbox). Never makes anyone an admin: that takes an authoritative external sign-in.
+   */
+  async signInEmail(address: string): Promise<{ user: User; created: boolean }> {
+    const email = normalizeEmail(address);
+    const existing = await findUserByEmail(this.deps.db, email);
+    if (existing) {
+      if (existing.status !== 'active') throw new SignInRefused('suspended');
+      return { user: existing, created: false };
+    }
+    if (this.deps.signups === 'closed') throw new SignInRefused('signups_closed');
+    const { user } = await createUser(this.deps.db, { email, role: 'user' });
+    return { user, created: true };
+  }
+
+  /** Whether a sign-in link to this address could sign anyone in (an account, or open sign-ups). */
+  async canSignInByEmail(address: string): Promise<boolean> {
+    if (this.deps.signups !== 'closed') return true;
+    return (await findUserByEmail(this.deps.db, normalizeEmail(address))) !== undefined;
+  }
+
   private async link(userId: string, profile: ExternalProfile, email: string): Promise<void> {
     await this.deps.db
       .insert(userIdentities)
