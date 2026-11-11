@@ -175,6 +175,8 @@ const manifest = defineManifestConnector({
       input: { type: 'object', properties: { project, ...issueFields }, required: ['project', 'title'] },
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // The project may be public (and anyone's): see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'POST', path: '/projects/{project}/issues' },
       response: { fields: ['iid', 'project_id', 'web_url'] },
     },
@@ -194,6 +196,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false, idempotent: true },
       risk: 'write',
+      // The project may be public (and anyone's): see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'PUT', path: '/projects/{project}/issues/{iid}' },
       response: { fields: ISSUE_FIELDS },
     },
@@ -208,6 +212,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // The project may be public (and anyone's): see the `publishes` tag.
+      tags: ['publishes'],
       request: { method: 'POST', path: '/projects/{project}/issues/{iid}/notes' },
       response: { fields: ['id', 'created_at'] },
     },

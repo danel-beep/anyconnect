@@ -7,7 +7,7 @@ import {
   type RemoteMcpTool,
 } from '../connectors/mcp-remote/connector.js';
 import { type ConnectorRegistry, type ConnectorResolver, validateConnector } from '../connectors/registry.js';
-import type { ConnectorDefinition, RiskLevel } from '../connectors/sdk.js';
+import { actionRisk, type ConnectorDefinition, type RiskLevel } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { customConnectors } from '../db/schema.js';
 import type { Logger } from '../logger.js';
@@ -36,7 +36,20 @@ export function compileCustomConnector(row: CustomConnectorRow): ConnectorDefini
       tools: (row.tools ?? []) as RemoteMcpTool[],
     });
   } else {
-    connector = defineManifestConnector({ ...(row.definition as HttpManifestInput), id: row.connectorId });
+    const compiled = defineManifestConnector({
+      ...(row.definition as HttpManifestInput),
+      id: row.connectorId,
+    });
+    // An API the user described: the hub does not know who reads what its write actions receive,
+    // so right after reading another account they ask (the `publishes` tag, see the SDK).
+    connector = {
+      ...compiled,
+      actions: compiled.actions.map((action) =>
+        actionRisk(action) === 'write' && !action.tags?.includes('publishes')
+          ? { ...action, tags: [...(action.tags ?? []), 'publishes' as const] }
+          : action,
+      ),
+    };
   }
   validateConnector(connector);
   return connector;

@@ -1,5 +1,5 @@
 {
-  "id": "f366e8e2-9c0e-403a-9707-8054520e13a4",
+  "id": "08686e1a-118f-43d8-815a-824db7a1811a",
   "prevId": "89abb3fc-5570-48e3-9624-e5795fd17d8b",
   "version": "7",
   "dialect": "postgresql",
@@ -1777,6 +1777,67 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.email_logins": {
+      "name": "email_logins",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next": {
+          "name": "next",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'/app'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "email_logins_expires_at_index": {
+          "name": "email_logins_expires_at_index",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -5754,12 +5815,6 @@
           "notNull": true,
           "default": "now()"
         },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "finished_at": {
           "name": "finished_at",
           "type": "timestamp with time zone",
@@ -5768,22 +5823,6 @@
         }
       },
       "indexes": {
-        "trigger_events_running_idx": {
-          "name": "trigger_events_running_idx",
-          "columns": [
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"trigger_events\".\"status\" = 'running'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "trigger_events_trigger_id_event_key_index": {
           "name": "trigger_events_trigger_id_event_key_index",
           "columns": [

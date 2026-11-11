@@ -223,7 +223,18 @@ const manifest = defineManifestConnector(
       },
     ],
   },
-  { actions: { search_contacts: { capability: searchContacts } } },
+  {
+    actions: {
+      search_contacts: { capability: searchContacts },
+      // A public note is shown (and emailed) to the customer: asked like a reply.
+      add_note: {
+        assessRisk: (input) =>
+          (input as { private?: unknown }).private === false
+            ? { risk: 'dangerous', reason: 'A public note is visible to the customer' }
+            : undefined,
+      },
+    },
+  },
 );
 
 const ui: ConnectorUi = {

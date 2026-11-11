@@ -201,8 +201,15 @@
     {
       "idx": 28,
       "version": "7",
-      "when": 1794427407246,
-      "tag": "0028_trigger_run_claim",
+      "when": 1794427032678,
+      "tag": "0028_misty_vision",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794428011963,
+      "tag": "0029_trigger_run_claim",
       "breakpoints": true
     }
   ]

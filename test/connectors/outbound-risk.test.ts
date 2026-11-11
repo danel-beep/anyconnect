@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import cloudflare from '../../src/connectors/builtin/cloudflare.js';
+import freshdesk from '../../src/connectors/builtin/freshdesk.js';
 import gcal from '../../src/connectors/builtin/google-calendar.js';
 import outlook from '../../src/connectors/builtin/outlook.js';
 import { createBuiltinRegistry } from '../../src/connectors/index.js';
 import { guestsRisk, invitationTextRisk } from '../../src/connectors/risk.js';
-import type { ActionDefinition, ConnectorDefinition } from '../../src/connectors/sdk.js';
+import { type ActionDefinition, actionRisk, type ConnectorDefinition } from '../../src/connectors/sdk.js';
 
 /**
  * Calls that hand content to other people must not run silently under the default rules
@@ -49,6 +50,44 @@ describe('risk of calls that reach other people', () => {
     for (const name of ['create_dns_record', 'update_dns_record', 'delete_dns_record']) {
       expect(action(cloudflare, name).risk).toBe('dangerous');
     }
+  });
+
+  it('asks before a public Freshdesk note, not before a private one', async () => {
+    const note = action(freshdesk, 'add_note');
+    expect(await note.assessRisk!({ ticket_id: 1, body: 'x', private: false }, ctx)).toMatchObject({
+      risk: 'dangerous',
+    });
+    expect(await note.assessRisk!({ ticket_id: 1, body: 'x' }, ctx)).toBeUndefined();
+  });
+
+  it('marks what can land in a public place, so the exposure stage can ask after an outside read', () => {
+    const tagged = createBuiltinRegistry()
+      .all()
+      .flatMap((c) => c.actions.filter((a) => a.tags?.includes('publishes')).map((a) => `${c.id}.${a.name}`))
+      .sort();
+    expect(tagged).toEqual([
+      'bitbucket.add_comment',
+      'bitbucket.add_inline_comment',
+      'github.add_comment',
+      'github.create_issue',
+      'github.update_issue',
+      'gitlab.add_note',
+      'gitlab.create_issue',
+      'gitlab.update_issue',
+      'http.request',
+      'wordpress.update_post',
+    ]);
+  });
+
+  it('never lets an action named like sending run silently', () => {
+    const silent: string[] = [];
+    for (const connector of createBuiltinRegistry().all()) {
+      for (const a of connector.actions) {
+        if (!/^(send|post|publish|share|invite|reply|forward)(_|$)/.test(a.name)) continue;
+        if (actionRisk(a) !== 'dangerous' && !a.assessRisk) silent.push(`${connector.id}.${a.name}`);
+      }
+    }
+    expect(silent).toEqual([]);
   });
 
   it('holds for every built-in action that takes attendees', () => {

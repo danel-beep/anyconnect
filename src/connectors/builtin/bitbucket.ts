@@ -162,6 +162,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // The repository may be public: see the `publishes` tag.
+      tags: ['publishes'],
       request: {
         method: 'POST',
         path: '/{repo}/pullrequests/{pr_id}/comments',
@@ -186,6 +188,8 @@ const manifest = defineManifestConnector({
       },
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // The repository may be public: see the `publishes` tag.
+      tags: ['publishes'],
       request: {
         method: 'POST',
         path: '/{repo}/pullrequests/{pr_id}/comments',

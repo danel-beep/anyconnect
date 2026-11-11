@@ -98,6 +98,8 @@ export const LoginPage: FC<{
   mode?: LoginMode;
   /** "Continue with Google" is configured. */
   google?: boolean;
+  /** The hub can send mail, so a sign-in link by email is offered. */
+  emailLink?: boolean;
   signupsOpen?: boolean;
   email?: string;
   error?: string;
@@ -114,6 +116,7 @@ export const LoginPage: FC<{
   next,
   mode: modeProp,
   google,
+  emailLink: emailLinkProp,
   signupsOpen,
   email,
   error,
@@ -131,9 +134,13 @@ export const LoginPage: FC<{
         ? t('signup.subtitle')
         : t('login.subtitle');
   const googleHref = `/auth/google?next=${encodeURIComponent(next)}${mode === 'reauth' ? '&reauth=1' : ''}`;
-  const showPassword = passwordOpen || !google || Boolean(error && !google);
   // With sign-ups closed the sign-up page only says so; existing users sign in on /login.
   const signupClosed = mode === 'signup' && !signupsOpen;
+  // Confirming a session again is done with what the account already has, not with a new link.
+  const emailLink = Boolean(emailLinkProp) && mode !== 'reauth' && !signupClosed;
+  /** A way in without a password is offered, so the password form is folded below it. */
+  const passwordless = Boolean(google) || emailLink;
+  const showPassword = passwordOpen || !passwordless;
   const passwordForm = (
     <form method="post" action="/login">
       <input type="hidden" name="csrf" value={csrf} />
@@ -144,7 +151,7 @@ export const LoginPage: FC<{
       <label for="password">{t('login.password')}</label>
       <input id="password" type="password" name="password" autocomplete="current-password" required />
       <div class="actions">
-        <button class={google ? 'block' : 'primary block'} type="submit">
+        <button class={passwordless ? 'block' : 'primary block'} type="submit">
           {t('login.submit')}
         </button>
       </div>
@@ -167,25 +174,45 @@ export const LoginPage: FC<{
           </p>
         ) : null}
         {google && !signupClosed ? (
-          <>
-            <a class="btn block primary btn-google" href={googleHref}>
-              <GoogleG /> {t('login.google')}
-            </a>
-            {mode === 'signup' ? (
-              <p class="small muted">
-                {t('signup.termsA')} <a href="/terms">{t('signup.termsLink')}</a> {t('signup.and')}{' '}
-                <a href="/privacy">{t('signup.privacyLink')}</a>.
-              </p>
-            ) : null}
-          </>
+          <a class="btn block primary btn-google" href={googleHref}>
+            <GoogleG /> {t('login.google')}
+          </a>
+        ) : null}
+        {emailLink ? (
+          <form method="post" action="/login/email">
+            <input type="hidden" name="csrf" value={csrf} />
+            <input type="hidden" name="next" value={next} />
+            {google ? <p class="divider small muted">{t('login.or')}</p> : null}
+            <label for="link-email">{t('login.link.label')}</label>
+            <input
+              id="link-email"
+              type="email"
+              name="email"
+              autocomplete="email"
+              required
+              value={passwordOpen ? '' : (email ?? '')}
+            />
+            <div class="actions">
+              <button class={google ? 'block' : 'primary block'} type="submit">
+                <Icon name="mail" /> {t('login.link.submit')}
+              </button>
+            </div>
+            <p class="small muted">{t('login.link.hint')}</p>
+          </form>
+        ) : null}
+        {mode === 'signup' && passwordless && !signupClosed ? (
+          <p class="small muted">
+            {t('signup.termsA')} <a href="/terms">{t('signup.termsLink')}</a> {t('signup.and')}{' '}
+            <a href="/privacy">{t('signup.privacyLink')}</a>.
+          </p>
         ) : null}
         {signupClosed ? <div class="notice small">{t('signup.closed')}</div> : null}
-        {mode === 'signup' && !signupClosed && !google ? (
+        {mode === 'signup' && !signupClosed && !passwordless ? (
           <div class="notice small">{t('signup.noGoogle')}</div>
         ) : null}
         {mode !== 'signup' ? (
           <>
-            {google ? (
+            {passwordless ? (
               <details class="more-ways" open={showPassword}>
                 <summary>{t('login.withEmail')}</summary>
                 {passwordForm}
@@ -209,7 +236,7 @@ export const LoginPage: FC<{
           </>
         ) : null}
       </div>
-      {mode === 'login' && google && signupsOpen ? (
+      {mode === 'login' && passwordless && signupsOpen ? (
         <p class="small muted">
           {t('login.noAccount')}{' '}
           <a href={`/signup?next=${encodeURIComponent(next)}`}>{t('login.signupLink')}</a>
@@ -224,6 +251,53 @@ export const LoginPage: FC<{
     </Layout>
   );
 };
+
+/** After asking for a sign-in link: the same words whether or not the address has an account. */
+export const EmailLinkSentPage: FC<{ t: Translate; lang: string; email: string; next: string }> = ({
+  t,
+  lang,
+  email,
+  next,
+}) => (
+  <Layout title={t('login.link.sentTitle')} narrow lang={lang}>
+    <div class="card">
+      <h1>{t('login.link.sentTitle')}</h1>
+      <p>{t('login.link.sent', { email })}</p>
+      <p class="small muted">{t('login.link.sentSpam')}</p>
+      <div class="actions start">
+        <a class="btn" href={`/login?next=${encodeURIComponent(next)}`}>
+          {t('login.link.again')}
+        </a>
+      </div>
+    </div>
+  </Layout>
+);
+
+/** Opened from the email: the sign-in happens only when the person presses the button. */
+export const EmailLinkConfirmPage: FC<{
+  t: Translate;
+  lang: string;
+  csrf: string;
+  token: string;
+  email: string;
+}> = ({ t, lang, csrf, token, email }) => (
+  <Layout title={t('login.link.confirmTitle')} narrow lang={lang}>
+    <div class="card">
+      <h1>{t('login.link.confirmTitle')}</h1>
+      <p>{t('login.link.confirm', { email })}</p>
+      <form method="post" action="/login/email/confirm">
+        <input type="hidden" name="csrf" value={csrf} />
+        <input type="hidden" name="token" value={token} />
+        <div class="actions">
+          <button class="primary block" type="submit">
+            {t('login.link.confirmSubmit')}
+          </button>
+        </div>
+      </form>
+      <p class="small muted">{t('login.link.notYou')}</p>
+    </div>
+  </Layout>
+);
 
 export const ErrorPage: FC<{
   t: Translate;

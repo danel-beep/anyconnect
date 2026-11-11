@@ -5,6 +5,13 @@
 export const emailEn = {
   'email.footer': 'You get this email because you have a {brand} account. Manage your plan: {url}',
   'email.hello': 'Hi{name},',
+  'email.signIn.subject': 'Your {brand} sign-in link',
+  'email.signIn.body':
+    'Press the button to sign in to {brand}. The link works for {minutes} minutes and only once.',
+  'email.signIn.ignore': 'If you did not ask for it, ignore this email: nobody can sign in without the link.',
+  'email.signIn.cta': 'Sign in to {brand}',
+  'email.signIn.footer':
+    'You get this email because someone asked for a {brand} sign-in link for this address.',
   'email.signoff': '— The {brand} team',
 
   'email.trialEnding.subject': 'Your {brand} Pro trial ends in {n} {n|day|days}',
@@ -58,6 +65,14 @@ export type EmailKey = keyof typeof emailEn;
 export const emailRu: Record<EmailKey, string> = {
   'email.footer': 'Это письмо пришло, потому что у вас есть аккаунт {brand}. Управлять тарифом: {url}',
   'email.hello': 'Здравствуйте{name}!',
+  'email.signIn.subject': 'Ссылка для входа в {brand}',
+  'email.signIn.body':
+    'Нажмите кнопку, чтобы войти в {brand}. Ссылка действует {minutes} минут и только один раз.',
+  'email.signIn.ignore':
+    'Если вы её не запрашивали, просто не открывайте письмо: без ссылки никто не войдёт.',
+  'email.signIn.cta': 'Войти в {brand}',
+  'email.signIn.footer':
+    'Это письмо пришло, потому что кто-то запросил ссылку для входа в {brand} на этот адрес.',
   'email.signoff': '— Команда {brand}',
 
   'email.trialEnding.subject': 'Пробный период Pro в {brand} закончится через {n} {n|день|дня|дней}',
