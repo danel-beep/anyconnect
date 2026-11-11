@@ -63,4 +63,4 @@ export function redirectUriMatches(registered: readonly string[], requested: str
   });
 }
 
-export { knownClientName } from '../core/ai-apps.js';
+export { knownAppInName, knownClientName } from '../core/ai-apps.js';

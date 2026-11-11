@@ -1,6 +1,6 @@
 /**
  * Messages the hub sends to a workspace's owners on its own (not as an answer to them): today,
- * accounts that stopped working and what triggers report. Each notice is plain data; a channel (`OwnerNotifier`) renders
+ * accounts that stopped working, what triggers report and changes to who can get into the account. Each notice is plain data; a channel (`OwnerNotifier`) renders
  * it in the owner's language. New notices are new `kind`s; new channels (email, web push) are new
  * notifiers.
  */
@@ -53,7 +53,30 @@ export type OwnerNotice =
       reason: 'limit' | 'ai_limit';
       limit: number;
       url: string;
+    }
+  | {
+      /** Something changed about who can get into the account; the user should recognise it. */
+      kind: 'security';
+      event: SecurityEvent;
+      /** What it concerns (the browser, the app, the passkey's name); empty when the event says it all. */
+      subject: string;
+      /** Where the user reviews or undoes it. */
+      url: string;
     };
+
+/**
+ * `sign_in`: a sign-in from a browser the user has not used before. `app_connected` /
+ * `token_created`: something new can use the workspace. `totp_removed` / `passkey_removed`: a
+ * sign-in protection was turned off.
+ */
+export const SECURITY_EVENTS = [
+  'sign_in',
+  'app_connected',
+  'token_created',
+  'totp_removed',
+  'passkey_removed',
+] as const;
+export type SecurityEvent = (typeof SECURITY_EVENTS)[number];
 
 /**
  * `sent`: delivered. `no_channel`: the owner has nowhere to receive it (not an error: the dashboard

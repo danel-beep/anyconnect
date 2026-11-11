@@ -87,6 +87,7 @@ import {
 import { PersonaService } from './security/personas.js';
 import { PolicyService } from './security/policy-service.js';
 import { PendingCallRunner } from './security/runner.js';
+import { SecurityNotices } from './security/security-notices.js';
 import {
   approvalsStage,
   confirmStage,
@@ -101,6 +102,7 @@ import { createTriggers, type Triggers } from './triggers/index.js';
 import { VERSION } from './version.js';
 import { EmailLoginService } from './web/email-logins.js';
 import { translator } from './web/i18n.js';
+import { KnownDevices } from './web/known-devices.js';
 import { PendingLoginService } from './web/pending-logins.js';
 import { SessionService } from './web/sessions.js';
 
@@ -194,6 +196,9 @@ export interface Services {
   /** Secret Telegram must send with webhook updates (derived from the master key). */
   telegramWebhookSecret: string;
   sessions: SessionService;
+  /** Which browsers a user has signed in from (a cookie), for the new sign-in notice. */
+  knownDevices: KnownDevices;
+  securityNotices: SecurityNotices;
   /** Sign-up through external providers, roles, suspension, deletion. */
   users: UserService;
   /** Teams: members, invitations, sharing accounts, leaving. */
@@ -817,6 +822,8 @@ export function createServices(
     quickConnects,
     telegramWebhookSecret: secrets.deriveKey('telegram-webhook').toString('base64url'),
     sessions,
+    knownDevices: new KnownDevices(secrets.deriveKey('known-device')),
+    securityNotices: new SecurityNotices({ notifier: ownerNotifier, publicUrl: config.publicUrl, logger }),
     users,
     teams,
     externalLogin,

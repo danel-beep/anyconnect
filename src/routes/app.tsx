@@ -504,6 +504,7 @@ export function appRoutes() {
         aiClientId: client.id,
         ...(persona ? { personaId: persona.id } : {}),
       });
+      void s.securityNotices.report(auth.user.id, 'token_created', input.name);
       // Shown once, right in the response: never stored in a cookie or the URL.
       return renderApps(c, auth, { newToken: token });
     }),
