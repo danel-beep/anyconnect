@@ -18,6 +18,7 @@ describe('AI app directories', () => {
         REVIEW_ACCOUNT_EMAIL: REVIEW.email,
         REVIEW_ACCOUNT_PASSWORD: REVIEW.password,
         WELL_KNOWN_MCP_REGISTRY_AUTH: PROOF,
+        SUPPORT_EMAIL: 'support@hub.example',
         CLIENT_POLICIES: 'claude,chatgpt',
       },
     });
@@ -32,6 +33,20 @@ describe('AI app directories', () => {
     expect((await fetch(`${hub.baseUrl}/.well-known/openai-apps-challenge`)).status).toBe(404);
     const oauth = await fetch(`${hub.baseUrl}/.well-known/oauth-authorization-server`);
     expect(((await oauth.json()) as { issuer: string }).issuer).toBe(hub.baseUrl);
+  });
+
+  it('says where to report a vulnerability (security.txt)', async () => {
+    const file = await fetch(`${hub.baseUrl}/.well-known/security.txt`);
+    expect(file.status).toBe(200);
+    expect(file.headers.get('content-type')).toMatch(/^text\/plain/);
+    const text = await file.text();
+    expect(text).toContain('Contact: mailto:support@hub.example');
+    expect(text).toContain(`Canonical: ${hub.baseUrl}/.well-known/security.txt`);
+    expect(text).toContain(`Policy: ${hub.baseUrl}/trust`);
+    // Valid for months ahead, and less than the year the standard allows.
+    const expires = Date.parse(/^Expires: (.+)$/m.exec(text)![1]!);
+    expect(expires - Date.now()).toBeGreaterThan(150 * 86_400_000);
+    expect(expires - Date.now()).toBeLessThan(365 * 86_400_000);
   });
 
   it('serves the server card and the icons', async () => {

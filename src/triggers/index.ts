@@ -5,6 +5,7 @@ import type { OwnerNotifier } from '../core/owner-notices.js';
 import type { Db } from '../db/client.js';
 import type { DbListener } from '../db/listener.js';
 import type { JobDefinition, JobQueue } from '../jobs/queue.js';
+import type { Semaphore } from '../lib/concurrency.js';
 import type { SecretBox } from '../lib/crypto.js';
 import { DueLoop } from '../lib/due-loop.js';
 import type { Logger } from '../logger.js';
@@ -17,6 +18,9 @@ import { TriggerEngine } from './engine.js';
 import { TriggerService } from './service.js';
 import { MailSource, MessageSource } from './sources.js';
 import { TriggerStore } from './store.js';
+
+/** Trigger actions one process runs at a time (the `triggers.run` job). */
+const RUN_CONCURRENCY = 4;
 
 /** The trigger subsystem, wired once (see docs/TRIGGERS.md). */
 export interface Triggers {
@@ -51,8 +55,10 @@ export function createTriggers(deps: {
   onError?: (error: unknown, context: Record<string, string | number | boolean | undefined>) => void;
   /** How often `start()` reads watched mailboxes (0 or absent: only the `triggers.scan` job). */
   mailPollMs?: number;
+  /** The share of the database pool scans may hold for their locks (`TriggerStore.exclusive`). */
+  scanSlots?: Semaphore;
 }): Triggers {
-  const store = new TriggerStore(deps.db, deps.secrets, deps.messaging.ciphers);
+  const store = new TriggerStore(deps.db, deps.secrets, deps.messaging.ciphers, deps.scanSlots);
   const keys = new AiKeyStore(deps.db, deps.secrets);
   const hub: AgentHub = {
     getCatalog: (principal) => deps.hub().getCatalog(principal),
@@ -112,6 +118,9 @@ export function createTriggers(deps: {
       {
         name: 'triggers.run',
         description: 'Run the action of an event a trigger matched',
+        // A run mostly waits (for the user's AI, for a service), up to two minutes: several at a
+        // time, so one slow answer does not delay every other user's trigger.
+        concurrency: RUN_CONCURRENCY,
         run: async (data) => {
           if (typeof (data as { eventId?: unknown }).eventId === 'string')
             await engine.run((data as { eventId: string }).eventId);

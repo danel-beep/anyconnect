@@ -8,6 +8,7 @@ import {
   triggerEvents,
   triggers,
 } from '../db/schema.js';
+import { Semaphore } from '../lib/concurrency.js';
 import { hmac, type SecretBox } from '../lib/crypto.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
@@ -95,6 +96,11 @@ export class TriggerStore {
     private readonly db: Db,
     private readonly secrets: SecretBox,
     private readonly ciphers: CipherSource,
+    /**
+     * How many scans may hold their lock at once (see {@link exclusive}): each keeps a database
+     * connection for the lock while its queries use others, so it must stay well below the pool.
+     */
+    private readonly scanSlots = new Semaphore(2),
   ) {
     this.hashKey = secrets.deriveKey('trigger-keys');
   }
@@ -252,14 +258,19 @@ export class TriggerStore {
    * False when another process holds it.
    */
   async exclusive(triggerId: string, accountId: string, fn: () => Promise<void>): Promise<boolean> {
-    return this.db.transaction(async (tx) => {
-      const lock = await tx.execute<{ ok: boolean }>(
-        sql`select pg_try_advisory_xact_lock(hashtext(${`trigger:${triggerId}:${accountId}`})) as ok`,
-      );
-      if (!lock.rows[0]?.ok) return false;
-      await fn();
-      return true;
-    });
+    // The lock lives in a transaction, which keeps one connection while `fn` runs its queries on
+    // others. Many accounts getting a message in the same moment would otherwise take every
+    // connection for their locks and wait for one more that never frees up.
+    return this.scanSlots.run(() =>
+      this.db.transaction(async (tx) => {
+        const lock = await tx.execute<{ ok: boolean }>(
+          sql`select pg_try_advisory_xact_lock(hashtext(${`trigger:${triggerId}:${accountId}`})) as ok`,
+        );
+        if (!lock.rows[0]?.ok) return false;
+        await fn();
+        return true;
+      }),
+    );
   }
 
   // --- Events ------------------------------------------------------------------

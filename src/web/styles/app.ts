@@ -51,9 +51,12 @@ export const APP_SHELL_CSS = `
 a.stat{color:inherit;text-decoration:none}
 a.stat:hover{border-color:var(--border-strong)}
 @media (max-width:1000px){.stats{grid-template-columns:1fr 1fr}}
+/* Two columns with an odd number of tiles: the last one takes the row instead of leaving a hole. */
+@media (max-width:1000px){.stats>.stat:last-child:nth-child(odd){grid-column:1/-1}}
 @media (max-width:520px){.stats{grid-template-columns:1fr 1fr}}
 /* Inside a card the boxes fit as many to a row as its width allows: one under another on a phone. */
 .card .stats{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+@media (max-width:1000px){.card .stats>.stat:last-child:nth-child(odd){grid-column:auto}}
 .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 @media (max-width:1000px){.grid-2,.grid-3{grid-template-columns:minmax(0,1fr)}}

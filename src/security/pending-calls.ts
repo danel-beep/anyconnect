@@ -89,6 +89,7 @@ export function principalOf(row: PendingCallRow): Principal {
  */
 export class PendingCallService {
   private readonly scheduledListeners = new Set<(executeAt: Date) => void>();
+  private readonly settledListeners = new Set<(row: PendingCallRow) => void>();
   constructor(
     private readonly db: Db,
     private readonly secrets: SecretBox,
@@ -158,6 +159,27 @@ export class PendingCallService {
   onScheduled(listener: (executeAt: Date) => void): () => void {
     this.scheduledListeners.add(listener);
     return () => this.scheduledListeners.delete(listener);
+  }
+
+  /**
+   * Tells `listener` when a call reaches its end in this process: it ran (or failed), the user
+   * refused or undid it, or nobody answered in time. Whoever started the call (a trigger) can then
+   * show how it ended. A listener that throws never affects the call.
+   */
+  onSettled(listener: (row: PendingCallRow) => void): () => void {
+    this.settledListeners.add(listener);
+    return () => this.settledListeners.delete(listener);
+  }
+
+  private settled(row: PendingCallRow | undefined): void {
+    if (!row) return;
+    for (const listener of this.settledListeners) {
+      try {
+        listener(row);
+      } catch {
+        // The outcome is stored; showing it elsewhere is best effort.
+      }
+    }
   }
 
   /** Wakes the runner of this process directly and the runners of other instances by NOTIFY. */
@@ -300,7 +322,8 @@ export class PendingCallService {
         ),
       )
       .returning();
-    await this.scheduled(row);
+    if (approve) await this.scheduled(row);
+    else this.settled(row);
     return row;
   }
 
@@ -330,6 +353,7 @@ export class PendingCallService {
         and(eq(pendingCalls.id, id), inArray(pendingCalls.status, ['awaiting_confirmation', 'scheduled'])),
       )
       .returning();
+    this.settled(row);
     return row;
   }
 
@@ -359,6 +383,7 @@ export class PendingCallService {
       })
       .where(and(eq(pendingCalls.id, id), eq(pendingCalls.status, 'running')))
       .returning();
+    this.settled(row);
     return row;
   }
 
@@ -384,23 +409,22 @@ export class PendingCallService {
   /** Expires unanswered confirmations, recovers calls stuck in `running`, deletes old rows. */
   async maintain(): Promise<void> {
     const now = Date.now();
-    await this.db
+    const expired = await this.db
       .update(pendingCalls)
       .set({ status: 'expired' })
-      .where(
-        and(eq(pendingCalls.status, 'awaiting_confirmation'), lt(pendingCalls.expiresAt, new Date(now))),
-      );
+      .where(and(eq(pendingCalls.status, 'awaiting_confirmation'), lt(pendingCalls.expiresAt, new Date(now))))
+      .returning();
     // A crash while running leaves the outcome unknown: never retry automatically (it may have
     // been sent already), report it as failed instead.
-    await this.db
+    const stuck = await this.db
       .update(pendingCalls)
       .set({
         status: 'failed',
         resultEncrypted: null,
       })
-      .where(
-        and(eq(pendingCalls.status, 'running'), lt(pendingCalls.updatedAt, new Date(now - 15 * 60_000))),
-      );
+      .where(and(eq(pendingCalls.status, 'running'), lt(pendingCalls.updatedAt, new Date(now - 15 * 60_000))))
+      .returning();
+    for (const row of [...expired, ...stuck]) this.settled(row);
     await this.db
       .delete(pendingCalls)
       .where(and(inArray(pendingCalls.status, FINAL), lt(pendingCalls.updatedAt, new Date(now - DAY))));

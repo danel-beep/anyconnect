@@ -231,6 +231,8 @@ export const siteEn = {
   'service.promptsNone': 'Ask in plain words, for example “What is new in {service} today?”',
   'service.toolsNote': 'Each action can be turned off per account, and changes can wait for your OK.',
   'service.title': '{service} for Claude and ChatGPT · Manyplug',
+  'service.description':
+    'Use {service} in Claude, ChatGPT and other AI apps: {blurb} Connect once through Manyplug and keep several accounts side by side. Free plan.',
   'service.how': 'How to connect',
   'service.connect.oauth': 'You sign in on the service’s own page. Manyplug never sees your password.',
   'service.connect.form':
@@ -528,6 +530,8 @@ export const siteRu: Record<SiteKey, string> = {
   'service.toolsNote':
     'Любое действие можно отключить для отдельного аккаунта, а изменения могут ждать вашего «да».',
   'service.title': '{service} для Claude и ChatGPT · Manyplug',
+  'service.description':
+    '{service} в Claude, ChatGPT и других ИИ-приложениях: {blurb} Подключите один раз через Manyplug и держите несколько аккаунтов рядом. Бесплатный тариф.',
   'service.how': 'Как подключить',
   'service.connect.oauth': 'Вы входите на странице самого сервиса. Manyplug не видит ваш пароль.',
   'service.connect.form':

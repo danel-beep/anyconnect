@@ -106,6 +106,12 @@ describe('docs and search pages', () => {
     expect(html).toContain('href="/services/gmail/claude"');
     expect(html).toContain('href="/services/gmail/cursor"');
     expect(types(html)).toContain('BreadcrumbList');
+    // The line search results show says what the page offers and fits their length.
+    const description = /<meta name="description" content="([^"]+)"/.exec(html)![1]!;
+    expect(description).toContain('Manyplug');
+    expect(description).toContain('Gmail');
+    expect(description.length).toBeGreaterThan(110);
+    expect(description.length).toBeLessThan(190);
   });
 
   it('renders the FAQ, comparisons and explainers', async () => {

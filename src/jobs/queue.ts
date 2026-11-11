@@ -31,6 +31,11 @@ export interface JobDefinition<TData extends object = Record<string, unknown>> {
    * health checks and on the status page (default: none, the job is not watched).
    */
   expectEveryMs?: number;
+  /**
+   * How many runs of this job one process works on at a time (default 1). For jobs that mostly wait
+   * for another service (an AI answering a trigger), so one slow run does not hold up the queue.
+   */
+  concurrency?: number;
   run(data: TData, ctx: JobContext): Promise<void>;
 }
 
@@ -124,6 +129,9 @@ export class JobQueue {
         {
           pollingIntervalSeconds,
           notifyPollingIntervalSeconds: Math.max(this.options.backstopSeconds ?? 300, pollingIntervalSeconds),
+          ...(definition.concurrency && definition.concurrency > 1
+            ? { localConcurrency: definition.concurrency }
+            : {}),
         },
         async (jobs) => {
           try {

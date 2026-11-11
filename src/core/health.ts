@@ -1,8 +1,9 @@
-import { and, asc, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { resolveProvider } from '../connectors/oauth/providers.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import type { Db } from '../db/client.js';
 import { accounts } from '../db/schema.js';
+import { mapLimit } from '../lib/concurrency.js';
 import type { Logger } from '../logger.js';
 import { notSealedAccount } from './account-keys.js';
 import type { AccountService } from './accounts.js';
@@ -34,9 +35,11 @@ export class AccountHealthService {
     const due = await this.deps.tokens.expiring(new Date(Date.now() + windowMs));
     let refreshed = 0;
     let failed = 0;
-    for (const item of due) {
+    // Two at a time: a slow provider does not hold up the others, and the refreshes that tool
+    // calls need right now still find a free slot (`TokenManager.refresh`).
+    await mapLimit(due, 2, async (item) => {
       const connector = await this.deps.connectors.get(item.workspaceId, item.connectorId);
-      if (!connector?.oauth) continue;
+      if (!connector?.oauth) return;
       try {
         await this.deps.tokens.refresh(
           { id: item.accountId, workspaceId: item.workspaceId },
@@ -49,37 +52,45 @@ export class AccountHealthService {
       } catch {
         failed += 1; // already recorded on the account by the token manager
       }
-    }
+    });
     if (due.length) this.deps.logger.info({ refreshed, failed }, 'OAuth tokens refreshed');
     return { refreshed, failed };
   }
 
-  /** Re-tests enabled accounts not checked for `maxAgeMs`, oldest first, `limit` per run. */
+  /**
+   * Re-tests enabled accounts not checked for `maxAgeMs`: never checked first, then oldest first, a
+   * few at a time. Without `limit` a run takes a share of all accounts that lets hourly runs get
+   * through every account twice a day, so the check keeps its daily promise as the hub grows.
+   */
   async checkStaleAccounts(
     maxAgeMs = 24 * 3_600_000,
-    limit = 50,
+    limit?: number,
   ): Promise<{ checked: number; failing: number }> {
     const cutoff = new Date(Date.now() - maxAgeMs);
+    const checkable = and(eq(accounts.enabled, true), notSealedAccount());
+    const batch = limit ?? healthBatch(await this.deps.db.$count(accounts, checkable));
     const rows = await this.deps.db
       .select({ id: accounts.id, workspaceId: accounts.workspaceId })
       .from(accounts)
-      .where(
-        and(
-          eq(accounts.enabled, true),
-          or(isNull(accounts.checkedAt), lt(accounts.checkedAt, cutoff)),
-          notSealedAccount(),
-        ),
-      )
-      .orderBy(asc(accounts.checkedAt))
-      .limit(limit);
-    let failing = 0;
-    for (const row of rows) {
-      const result = await this.deps.accounts
+      .where(and(checkable, or(isNull(accounts.checkedAt), lt(accounts.checkedAt, cutoff))))
+      .orderBy(sql`${accounts.checkedAt} asc nulls first`)
+      .limit(batch);
+    const results = await mapLimit(rows, HEALTH_CONCURRENCY, (row) =>
+      this.deps.accounts
         .test(row.workspaceId, row.id, this.deps.logger)
-        .catch((error: Error) => ({ ok: false, message: error.message }));
-      if (!result.ok) failing += 1;
-    }
+        .catch((error: Error) => ({ ok: false, message: error.message })),
+    );
+    const failing = results.filter((result) => !result.ok).length;
     if (rows.length) this.deps.logger.info({ checked: rows.length, failing }, 'account health checked');
     return { checked: rows.length, failing };
   }
 }
+
+/** Connection tests in flight at once (each is a request or two to the account's service). */
+const HEALTH_CONCURRENCY = 4;
+const HEALTH_BATCH_MIN = 50;
+const HEALTH_BATCH_MAX = 2000;
+
+/** Accounts one hourly run re-tests: a twelfth of them all, within sane bounds. */
+export const healthBatch = (accounts: number): number =>
+  Math.min(HEALTH_BATCH_MAX, Math.max(HEALTH_BATCH_MIN, Math.ceil(accounts / 12)));

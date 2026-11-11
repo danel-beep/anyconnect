@@ -26,8 +26,24 @@ export interface EventSource {
     signal: AbortSignal,
     options?: ReadOptions,
   ): Promise<{ items: TriggerItem[]; cursor: string }>;
+  /**
+   * Sources whose read costs a request to the service (a mailbox) answer several cursors of one
+   * account from a single fetch: every trigger watching the mailbox shares it. Results come in the
+   * order of `requests`. Sources that read the hub's own store do not need it.
+   */
+  readMany?(account: AccountRow, requests: ReadRequest[], signal: AbortSignal): Promise<ReadResult[]>;
   /** The newest items of about the last day, newest first (to try a trigger on a real one). */
   recent(account: AccountRow, signal: AbortSignal, options?: ReadOptions): Promise<TriggerItem[]>;
+}
+
+export interface ReadRequest {
+  cursor: string;
+  options?: ReadOptions;
+}
+
+export interface ReadResult {
+  items: TriggerItem[];
+  cursor: string;
 }
 
 /** How far back `recent` looks, and how many items it returns at most. */
@@ -151,62 +167,84 @@ export class MailSource implements EventSource {
     cursor: string,
     signal: AbortSignal,
     options: ReadOptions = {},
-  ): Promise<{ items: TriggerItem[]; cursor: string }> {
+  ): Promise<ReadResult> {
+    const [result] = await this.readMany(account, [{ cursor, options }], signal);
+    return result ?? { items: [], cursor };
+  }
+
+  /**
+   * One fetch of the mailbox for every cursor on it: the search starts at the earliest cursor (and
+   * covers spam when any request asks), then each request takes what is new past its own cursor.
+   */
+  async readMany(account: AccountRow, requests: ReadRequest[], signal: AbortSignal): Promise<ReadResult[]> {
     const found = await this.searchAction(account.workspaceId, account.connectorId);
-    if (!found) return { items: [], cursor };
-    const strict = cursor.startsWith('!');
-    const after = Date.parse(strict ? cursor.slice(1) : cursor) || Date.now();
-    const since = new Date(after - MAIL_OVERLAP_MS);
+    if (!found || requests.length === 0) return requests.map(({ cursor }) => ({ items: [], cursor }));
+    const now = Date.now();
+    const cursors = requests.map(({ cursor }) => {
+      const strict = cursor.startsWith('!');
+      return { strict, after: Date.parse(strict ? cursor.slice(1) : cursor) || now };
+    });
+    const since = new Date(Math.min(...cursors.map((c) => c.after)) - MAIL_OVERLAP_MS);
     const ctx = await this.deps.accounts.buildContext(found.connector as ConnectorDefinition, account, {
       signal,
       logger: this.deps.logger.child({ connector: account.connectorId, account: account.id }),
     });
     // New mail is what lands in the inbox (not the user's own sent mail), and in spam when asked.
-    const list: Array<Record<string, unknown>> = [];
-    for (const folder of options.spam ? ['inbox', 'junk'] : ['inbox']) {
+    const folders = requests.some((r) => r.options?.spam)
+      ? (['inbox', 'junk'] as const)
+      : (['inbox'] as const);
+    const capability = getCapability('mail.search');
+    const mail: Record<string, FetchedMail[]> = {};
+    for (const folder of folders) {
       const canonical = { since: since.toISOString(), limit: MAIL_PAGE, folder };
       const input = found.binding.mapInput ? found.binding.mapInput(canonical) : canonical;
       try {
         const raw = await found.action.run(found.action.input.parse(input), ctx);
         const output = found.binding.mapOutput ? found.binding.mapOutput(raw, canonical) : raw;
-        list.push(...((listOf(output)?.items ?? []) as Array<Record<string, unknown>>));
+        mail[folder] = ((listOf(output)?.items ?? []) as Array<Record<string, unknown>>).flatMap((entry) => {
+          const parsed = capability?.output.safeParse(entry);
+          const item = (parsed?.success ? parsed.data : entry) as Omit<FetchedMail, 'at'> & { date?: string };
+          return item.id ? [{ ...item, at: Date.parse(item.date ?? '') || now }] : [];
+        });
       } catch (error) {
         // A mailbox without a spam folder still delivers its inbox.
         if (folder === 'inbox' || !(error instanceof ConnectorError && error.kind === 'not_found'))
           throw error;
       }
     }
-    const capability = getCapability('mail.search');
-    let newest = after;
-    const items: TriggerItem[] = [];
-    for (const entry of list) {
-      const parsed = capability?.output.safeParse(entry);
-      const mail = (parsed?.success ? parsed.data : entry) as {
-        id?: string;
-        from?: string;
-        subject?: string;
-        snippet?: string;
-        date?: string;
-        bulk?: boolean;
-      };
-      if (!mail.id) continue;
-      const at = Date.parse(mail.date ?? '') || Date.now();
-      newest = Math.max(newest, at);
-      // Items at or before the cursor were seen by an earlier read; the overlap only catches late
-      // arrivals, and the event key keeps a repeat from firing twice.
-      if (strict ? at <= after : at < after - MAIL_OVERLAP_MS) continue;
-      items.push({
-        source: 'mail',
-        service: account.connectorId,
-        account: account.name,
-        id: mail.id,
-        ...(mail.from ? { from: mail.from } : {}),
-        ...(mail.subject ? { subject: mail.subject } : {}),
-        text: mail.snippet ?? '',
-        ...(mail.bulk ? { bulk: true } : {}),
-        at: new Date(at).toISOString(),
-      });
-    }
-    return { items, cursor: new Date(Math.max(newest, after)).toISOString() };
+    return requests.map((request, index) => {
+      const { strict, after } = cursors[index]!;
+      const list = [...(mail.inbox ?? []), ...(request.options?.spam ? (mail.junk ?? []) : [])];
+      let newest = after;
+      const items: TriggerItem[] = [];
+      for (const entry of list) {
+        newest = Math.max(newest, entry.at);
+        // Items at or before the cursor were seen by an earlier read; the overlap only catches late
+        // arrivals, and the event key keeps a repeat from firing twice.
+        if (strict ? entry.at <= after : entry.at < after - MAIL_OVERLAP_MS) continue;
+        items.push({
+          source: 'mail',
+          service: account.connectorId,
+          account: account.name,
+          id: entry.id,
+          ...(entry.from ? { from: entry.from } : {}),
+          ...(entry.subject ? { subject: entry.subject } : {}),
+          text: entry.snippet ?? '',
+          ...(entry.bulk ? { bulk: true } : {}),
+          at: new Date(entry.at).toISOString(),
+        });
+      }
+      return { items, cursor: new Date(newest).toISOString() };
+    });
   }
+}
+
+/** A message as `mail.search` returned it, with its date parsed. */
+interface FetchedMail {
+  id: string;
+  from?: string;
+  subject?: string;
+  snippet?: string;
+  bulk?: boolean;
+  at: number;
 }
