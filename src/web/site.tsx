@@ -790,7 +790,12 @@ export const ServiceDetailPage: FC<{
     <SiteLayout
       ctx={ctx}
       title={t('service.title', { service: service.name })}
-      description={blurb(ctx.lang, service)}
+      // Search results show this line: say what the page offers, not only what the service does.
+      description={
+        service.ready
+          ? t('service.description', { service: service.name, blurb: blurb(ctx.lang, service) })
+          : blurb(ctx.lang, service)
+      }
       current="services"
       canonicalPath={`/services/${service.id}`}
       jsonLd={[
