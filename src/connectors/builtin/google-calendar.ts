@@ -1,4 +1,5 @@
 import { defineManifestConnector } from '../manifest/compile.js';
+import { guestsRisk, invitationTextRisk } from '../risk.js';
 import type { CapabilityBinding, CapabilityOutput } from '../sdk.js';
 import { type ConnectorUi, withUi } from '../sdk.js';
 
@@ -197,7 +198,8 @@ const manifest = defineManifestConnector(
         name: 'create_event',
         keywords: 'schedule book add meeting appointment invite',
         title: 'Create event',
-        description: 'Creates an event; invitations are emailed only if sendUpdates is "all".',
+        description:
+          'Creates an event; invitations are emailed only if sendUpdates is "all". With attendees the user is asked first.',
         input: {
           type: 'object',
           properties: { calendar_id: calendarId, ...eventFields },
@@ -301,7 +303,11 @@ const manifest = defineManifestConnector(
   {
     actions: {
       list_events: { capability: listEvents },
-      create_event: { capability: createEvent },
+      // With guests the event is no longer the user's own note: Google shows it (and, with
+      // sendUpdates, emails it) to every guest, so the user is asked like for a message.
+      create_event: { capability: createEvent, assessRisk: guestsRisk },
+      update_event: { assessRisk: guestsRisk },
+      quick_add: { assessRisk: (input) => invitationTextRisk((input as { text?: unknown }).text) },
     },
   },
 );

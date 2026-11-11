@@ -1,6 +1,7 @@
 import addressparser from 'nodemailer/lib/addressparser/index.js';
 import { z } from 'zod';
 import { HttpClient } from '../http/client.js';
+import { guestsRisk } from '../risk.js';
 import {
   type AccountContext,
   type CapabilityOutput,
@@ -942,6 +943,8 @@ export default defineConnector({
       input: z.object({ ...EventFields, calendarId: CalendarId }),
       hints: { readOnly: false, destructive: false },
       risk: 'write',
+      // Attendees get the invitation with the event body: the user is asked like for a message.
+      assessRisk: guestsRisk,
       undo: { kind: 'action', action: 'delete_event' },
       capability: {
         id: 'calendar.create_event',
@@ -972,6 +975,7 @@ export default defineConnector({
       }),
       hints: { readOnly: false, destructive: false, idempotent: true },
       risk: 'write',
+      assessRisk: guestsRisk,
       run: async ({ id, ...input }, ctx) => {
         const body = eventBody(input, ctx.config.timeZone);
         if (!Object.keys(body).length) throw new ConnectorError('invalid_input', 'Nothing to change.');
