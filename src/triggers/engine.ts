@@ -28,6 +28,13 @@ const STALE_MS = 15 * 60_000;
 const TEST_POLL_MS = 500;
 /** How long one run may take (an AI wake with a few tool calls). */
 const RUN_TIMEOUT_MS = 120_000;
+/** What the event says when a call that waited for the user's OK did not go through. */
+const CONFIRMATION_OUTCOMES: Record<string, string> = {
+  denied: 'You declined the action',
+  cancelled: 'You cancelled the action',
+  expired: 'The confirmation was not answered in time',
+  failed: 'The action failed after you confirmed it',
+};
 /** Identity of the AI app every trigger of a workspace acts as (one entry in the AI apps list). */
 export const AUTOMATION_CLIENT = {
   matchKey: 'automation:triggers',
@@ -488,6 +495,35 @@ export class TriggerEngine {
     } catch (error) {
       this.deps.onError?.(error, { source: 'trigger', step: 'run', action: trigger.spec.action.kind });
       await finish('failed', { error: 'Internal error' }).catch(() => {});
+    }
+  }
+
+  /**
+   * A call the trigger made waited for the user's OK and has now ended (see
+   * `PendingCallService.onSettled`): the event leaves "waiting for confirmation" and shows how it
+   * went. Never throws.
+   */
+  async confirmationSettled(eventId: string, tool: string, outcome: string): Promise<void> {
+    const text = CONFIRMATION_OUTCOMES[outcome];
+    if (!(outcome === 'succeeded' || text)) return;
+    try {
+      const { store } = this.deps;
+      const event = await store.getEvent(eventId);
+      if (event?.status !== 'awaiting_confirmation') return;
+      const ok = outcome === 'succeeded';
+      const status = ok ? 'done' : 'failed';
+      // Without the account's key (a sealed account outside its vault) only the status changes.
+      if (!event.item) {
+        await store.setStatus(eventId, status, { from: 'awaiting_confirmation' });
+        return;
+      }
+      const calls = event.result.calls?.map((call) => (call.tool === tool ? { ...call, ok } : call));
+      await store.setStatus(eventId, status, {
+        from: 'awaiting_confirmation',
+        result: { ...event.result, ...(calls ? { calls } : {}), ...(ok ? {} : { error: text }) },
+      });
+    } catch (error) {
+      this.deps.onError?.(error, { source: 'trigger', step: 'confirmation' });
     }
   }
 

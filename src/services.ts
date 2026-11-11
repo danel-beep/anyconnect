@@ -609,6 +609,11 @@ export function createServices(
     mailPollMs: config.triggers.mailPollMs,
     scanSlots: poolShare(0.25),
   });
+  // A trigger's call that waited for the user's OK: its event shows how that ended.
+  pendingCalls.onSettled((row) => {
+    const scope = row.principal.automation;
+    if (scope) void triggers.engine.confirmationSettled(scope.eventId, row.toolName, row.status);
+  });
   for (const job of [
     ...builtinJobs({
       health,

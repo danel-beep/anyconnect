@@ -121,6 +121,17 @@ describe('triggers', () => {
     throw new Error('trigger events did not settle');
   };
 
+  /** Waits until `count` events of the trigger have `status` and returns the newest of them. */
+  const settledAs = async (triggerId: string, status: TriggerEvent['status'], count = 1) => {
+    for (let i = 0; i < 100; i++) {
+      const events = await hub.services.triggers.service.events(workspaceId, { triggerId });
+      const found = events.filter((e) => e.status === status);
+      if (found.length >= count) return found[0]!;
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    throw new Error(`no trigger event became ${status}`);
+  };
+
   const create = (input: Parameters<TestHub['services']['triggers']['service']['create']>[1]) =>
     hub.services.triggers.service.create(session, input);
 
@@ -357,11 +368,12 @@ describe('triggers', () => {
 
   it('lets an AI approved to act without asking send on its own, only within its limits', async () => {
     let step = 0;
+    let reply = 'Got it';
     const bodies: any[] = [];
     const post = (id: string, args: Record<string, unknown>) => ({
       id,
       type: 'function',
-      function: { name: 'notes_post', arguments: JSON.stringify({ text: 'Got it', ...args }) },
+      function: { name: 'notes_post', arguments: JSON.stringify({ text: reply, ...args }) },
     });
     internet.serve('api.openai.com', async (request) => {
       bodies.push(await request.json());
@@ -429,6 +441,26 @@ describe('triggers', () => {
       const email = mailer.sent.find((m) => m.tag === 'notice.confirmation_waiting');
       expect(email?.subject).toBe('Your trigger waits for your OK');
       expect(email?.text).toContain('/confirm/');
+
+      // Once the user answers, the event shows how it ended instead of waiting forever.
+      const waitingCall = async () =>
+        (await hub.services.pendingCalls.listOpen(workspaceId)).find(
+          (row) =>
+            row.principal.automation?.triggerId === trigger.id && row.status === 'awaiting_confirmation',
+        )!;
+      await hub.services.confirmations.decide((await waitingCall()).id, 'deny', 'web');
+      const declined = await settledAs(trigger.id, 'failed');
+      expect(declined.result.error).toBe('You declined the action');
+
+      step = 0;
+      bodies.length = 0;
+      reply = 'Got the contract';
+      await inbound('And the contract?');
+      await settledAs(trigger.id, 'awaiting_confirmation');
+      await hub.services.confirmations.decide((await waitingCall()).id, 'approve', 'web');
+      await hub.services.pendingRunner.tick();
+      const approved = await settledAs(trigger.id, 'done', 2);
+      expect(approved.result.calls).toContainEqual({ tool: 'notes_post', ok: true });
     } finally {
       await hub.services.triggers.keys.delete(workspaceId, key.id);
     }
