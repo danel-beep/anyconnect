@@ -130,7 +130,11 @@ export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler 
   return async (c, next) => {
     await next();
     const type = c.res.headers.get('content-type') ?? '';
-    if (!type.includes('text/html')) return;
+    if (!type.includes('text/html')) {
+      // JSON, scripts, styles and text are never to be guessed into something else by a browser.
+      setResponseHeaders(c, { 'X-Content-Type-Options': 'nosniff' });
+      return;
+    }
     setResponseHeaders(c, {
       // No form-action: Chrome applies it to the redirect after the consent form, which must reach the AI app.
       // Scripts only from our own files (/assets/webauthn.js), which call back to our own endpoints.
@@ -139,6 +143,9 @@ export function pageSecurityHeaders(opts: { hsts: boolean }): MiddlewareHandler 
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',
+      // The pages use none of these device features; a script that got in could not either.
+      // (`payment` stays as it is: the payment provider's checkout frame needs it.)
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
       'Cache-Control': 'no-store',
       ...(opts.hsts ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}),
     });

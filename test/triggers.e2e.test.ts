@@ -599,6 +599,89 @@ describe('triggers', () => {
     expect(events.filter((e) => e.status === 'skipped').map((e) => e.result.skipped)).toEqual(['loop']);
   });
 
+  it('reads a mailbox once however many triggers watch it', async () => {
+    const plain = await create({
+      name: 'Decisions',
+      when: 'mail',
+      do: 'check',
+      filter: { subject: 'decision' },
+    });
+    const spam = await create({ name: 'Contracts', when: 'mail', do: 'check', filter: { spam: true } });
+    const at = (s: number) => new Date(Date.now() + s * 1000).toISOString();
+    mailbox.push(
+      {
+        id: 'p1',
+        folder: 'inbox',
+        from: 'Ann <ann@acme.example>',
+        subject: 'Decision?',
+        snippet: '',
+        date: at(1),
+      },
+      {
+        id: 'p2',
+        folder: 'junk',
+        from: 'Bob <bob@acme.example>',
+        subject: 'Decision',
+        snippet: '',
+        date: at(2),
+      },
+    );
+    folderReads.length = 0;
+    await hub.services.triggers.engine.scanAll('mail', { background: false });
+    // One fetch per folder for both triggers; spam only reaches the trigger that asked for it.
+    expect([...folderReads].sort()).toEqual(['inbox', 'junk']);
+    const subjects = async (triggerId: string) =>
+      (await hub.services.triggers.service.events(workspaceId, { triggerId })).map((e) => e.item?.id).sort();
+    expect(await subjects(plain.id)).toEqual(['p1']);
+    expect(await subjects(spam.id)).toEqual(['p1', 'p2']);
+    // The next pass finds nothing new and fires nothing twice.
+    await hub.services.triggers.engine.scanAll('mail', { background: false });
+    expect(await subjects(spam.id)).toEqual(['p1', 'p2']);
+    mailbox.length = 0;
+    await hub.services.db.delete(triggerEvents);
+  });
+
+  it('follows many accounts that get a message at the same moment', async () => {
+    const trigger = await create({ name: 'Everything', when: 'message', do: 'check', filter: {} });
+    // More accounts than the database pool has connections (4 in tests).
+    const accounts: string[] = [chatAccount];
+    for (let i = 0; i < 7; i++) {
+      const row = await hub.services.accounts.create(workspaceId, {
+        connectorId: 'fakechat',
+        name: `burst${i}`,
+        label: `Burst ${i}`,
+        credentials: {},
+      });
+      accounts.push(row.id);
+    }
+    try {
+      await hub.services.triggers.engine.prime(
+        await hub.services.triggers.store.get(workspaceId, trigger.id),
+      );
+      for (const [i, account] of accounts.entries()) {
+        await hub.services.messaging.store.ingest(account, [
+          {
+            chat: { externalId: `burst-chat-${i}`, kind: 'direct', title: `Sender ${i}` },
+            externalId: `burst-m${i}`,
+            direction: 'in',
+            sentAt: new Date(),
+            sender: { externalId: `burst-u${i}`, name: `Sender ${i}` },
+            text: 'Hello',
+          },
+        ]);
+      }
+      const started = Date.now();
+      await Promise.all(accounts.map((account) => hub.services.triggers.engine.onInbound(account)));
+      const events = await hub.services.triggers.service.events(workspaceId, { triggerId: trigger.id });
+      expect(events).toHaveLength(accounts.length);
+      // Waiting for a free connection would take the pool's 10 s timeout.
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      for (const id of accounts.slice(1)) await hub.services.accounts.delete(workspaceId, id);
+      await hub.services.db.delete(triggerEvents);
+    }
+  });
+
   it('shows the triggers and AI API pages and creates a trigger from the form', async () => {
     const browser = new TestBrowser(hub.baseUrl);
     await browser.login();

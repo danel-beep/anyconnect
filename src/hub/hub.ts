@@ -19,6 +19,7 @@ import type { WorkspaceAdmin } from '../core/workspace-admin.js';
 import type { Db } from '../db/client.js';
 import { oauthClients, toolCalls } from '../db/schema.js';
 import type { CircuitBreaker } from '../lib/circuit-breaker.js';
+import { mapLimit } from '../lib/concurrency.js';
 import { AppError, notFound } from '../lib/errors.js';
 import type { RateLimiter } from '../lib/rate-limit.js';
 import type { Logger } from '../logger.js';
@@ -140,19 +141,6 @@ export interface CallOptions {
 
 /** Known limits of AI clients, matched by their OAuth client name. */
 const CLIENT_LIMITS: Array<{ match: RegExp; maxTools: number }> = [{ match: /cursor/i, maxTools: 40 }];
-
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
 
 const isEmpty = (value: unknown) => value === undefined || value === null || value === '';
 

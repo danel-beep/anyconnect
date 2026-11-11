@@ -26,6 +26,11 @@ describe('background job queue (pg-boss)', () => {
   const retriedOnce = new Promise<void>((resolve) => {
     retried = resolve;
   });
+  let slowRunning = 0;
+  let allSlowRunning: () => void;
+  const slowTogether = new Promise<void>((resolve) => {
+    allSlowRunning = resolve;
+  });
   let done: () => void;
   const finished = new Promise<void>((resolve) => {
     done = resolve;
@@ -51,6 +56,16 @@ describe('background job queue (pg-boss)', () => {
           retried();
         },
       })
+      .register<{ n: number }>({
+        name: 'test.slow',
+        description: 'Waits until three runs are in flight',
+        concurrency: 3,
+        run: async () => {
+          slowRunning++;
+          if (slowRunning === 3) allSlowRunning();
+          await slowTogether;
+        },
+      })
       .register({ name: 'test.cron', description: 'Recurring', cron: '0 3 * * *', run: async () => {} });
     await queue.start();
   });
@@ -73,6 +88,13 @@ describe('background job queue (pg-boss)', () => {
     await queue.send('test.flaky');
     await within(10_000, retriedOnce);
     expect(flakyRuns).toBe(2);
+  });
+
+  it('works on several runs of a job at a time when the job asks for it', async () => {
+    // Each run waits for the other two: with one worker the first would never finish.
+    for (const n of [1, 2, 3]) await queue.send('test.slow', { n });
+    await within(10_000, slowTogether);
+    expect(slowRunning).toBe(3);
   });
 
   it('turns NOTIFY on for queues an older release created without it', async () => {

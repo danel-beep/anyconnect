@@ -9,6 +9,7 @@ import {
 } from '../connectors/sdk.js';
 import type { Db } from '../db/client.js';
 import { accountOauth, accounts } from '../db/schema.js';
+import type { Semaphore } from '../lib/concurrency.js';
 import type { DataKey } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
 import {
@@ -43,6 +44,8 @@ export class TokenManager {
       apps: OAuthAppService;
       fetch: FetchLike;
       logger: Logger;
+      /** How many refreshes may run at once: each holds a database connection (see `refresh`). */
+      refreshSlots?: Semaphore;
     },
   ) {}
 
@@ -171,9 +174,12 @@ export class TokenManager {
   ): Promise<TokenSet> {
     const running = this.inflight.get(account.id);
     if (running) return running;
-    const promise = this.refreshLocked(account, provider, staleAccessToken, signal, connector).finally(() =>
-      this.inflight.delete(account.id),
-    );
+    // A refresh keeps a database connection (the row lock) while it waits for the provider. When
+    // many accounts need one in the same moment, or a provider answers slowly, they take turns
+    // here instead of taking every connection of the pool.
+    const slots = this.deps.refreshSlots;
+    const locked = () => this.refreshLocked(account, provider, staleAccessToken, signal, connector);
+    const promise = (slots ? slots.run(locked) : locked()).finally(() => this.inflight.delete(account.id));
     this.inflight.set(account.id, promise);
     return promise;
   }

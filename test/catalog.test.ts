@@ -54,6 +54,8 @@ describe('tool catalog', () => {
     expect(echo.inputSchema.required).toEqual(['message']);
     expect(echo.target).toMatchObject({ kind: 'action', fanOut: true });
     expect(catalog.instructions).toContain('Demo (demo)');
+    // One service: no unified tools, so the instructions do not send the AI looking for them.
+    expect(catalog.instructions).not.toContain('Unified tools');
   });
 
   it('makes the account argument optional when only one account exists', () => {

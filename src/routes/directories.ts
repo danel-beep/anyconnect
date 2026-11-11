@@ -31,6 +31,16 @@ export function directoryRoutes() {
     return c.body(card, 200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': HOURLY });
   });
 
+  // Where to report a vulnerability (RFC 9116). Served when the hub has a contact address; the
+  // expiry moves with the clock, so the file never goes stale between deploys.
+  app.get('/.well-known/security.txt', (c) => {
+    const { publicUrl, site } = c.get('services').config;
+    if (!site.supportEmail) return c.notFound();
+    return c.text(securityTxt({ publicUrl, contact: site.supportEmail, now: new Date() }), 200, {
+      'Cache-Control': HOURLY,
+    });
+  });
+
   app.get('/.well-known/:name', async (c, next) => {
     const proof = c.get('services').config.directories.wellKnown[c.req.param('name')];
     if (proof === undefined) return next();
@@ -49,4 +59,19 @@ export function directoryRoutes() {
     });
   });
   return app;
+}
+
+const SECURITY_TXT_DAYS = 180;
+
+export function securityTxt(opts: { publicUrl: string; contact: string; now: Date }): string {
+  const expires = new Date(opts.now.getTime() + SECURITY_TXT_DAYS * 86_400_000);
+  return [
+    `Contact: mailto:${opts.contact}`,
+    `Expires: ${expires.toISOString().slice(0, 10)}T00:00:00.000Z`,
+    'Preferred-Languages: en, ru',
+    `Canonical: ${opts.publicUrl}/.well-known/security.txt`,
+    // How the hub protects data, for a researcher deciding what is in scope.
+    `Policy: ${opts.publicUrl}/trust`,
+    '',
+  ].join('\n');
 }

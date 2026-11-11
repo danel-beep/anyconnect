@@ -53,6 +53,7 @@ import { PgUsageMeter, type UsageMeter } from './hub/usage.js';
 import { builtinJobs } from './jobs/builtin.js';
 import { JobQueue } from './jobs/queue.js';
 import { CircuitBreaker } from './lib/circuit-breaker.js';
+import { Semaphore } from './lib/concurrency.js';
 import { parseKey, SecretBox } from './lib/crypto.js';
 import { createNetworkPolicy, type NetworkPolicy } from './lib/network.js';
 import { RateLimiter } from './lib/rate-limit.js';
@@ -299,7 +300,19 @@ export function createServices(
   const vaults = new VaultService(db);
   const vaultScopes = new VaultScopes(vaults);
   const keyring = new AccountKeyring(secrets, secrets, vaultScopes);
-  const tokens = new TokenManager({ db, keys: keyring, apps: oauthApps, fetch: network.fetch, logger });
+  // Work that keeps a database connection while it waits (a token refresh under its row lock, a
+  // trigger scan under its advisory lock) gets a bounded share of the pool, so a burst of it queues
+  // instead of leaving no connection for requests.
+  const poolShare = (fraction: number) =>
+    new Semaphore(Math.max(1, Math.floor(config.database.poolMax * fraction)));
+  const tokens = new TokenManager({
+    db,
+    keys: keyring,
+    apps: oauthApps,
+    fetch: network.fetch,
+    logger,
+    refreshSlots: poolShare(0.3),
+  });
   const usage = new PgUsageMeter(db);
   const payers = new Payers(db);
   const entitlements = new EntitlementService({
@@ -594,6 +607,7 @@ export function createServices(
     logger,
     onError: (error, context) => ops.errors.capture(error, { source: 'trigger', context }),
     mailPollMs: config.triggers.mailPollMs,
+    scanSlots: poolShare(0.25),
   });
   for (const job of [
     ...builtinJobs({

@@ -5,6 +5,7 @@ import type { OwnerNotifier } from '../core/owner-notices.js';
 import type { Principal } from '../core/principal.js';
 import type { ArgumentLimits, TriggerSource } from '../db/schema.js';
 import type { ToolCallResult } from '../hub/result.js';
+import { mapLimit } from '../lib/concurrency.js';
 import type { Logger } from '../logger.js';
 import { VISIBILITY_LAG_MS } from '../messaging/store.js';
 import type { AiClientService } from '../security/clients.js';
@@ -19,6 +20,8 @@ import type { EventResult, Trigger, TriggerEvent, TriggerStore } from './store.j
 /** Runs of one trigger for one other side in a short window before loop protection steps in. */
 export const LOOP_RUNS = 5;
 export const LOOP_WINDOW_MS = 10 * 60_000;
+/** Accounts one pass reads at a time (a mailbox read is a request to the service). */
+const SCAN_CONCURRENCY = 4;
 /** An event still `running` after this was left by a process that stopped. */
 const STALE_MS = 15 * 60_000;
 /** How often a test run is checked for its outcome. */
@@ -77,6 +80,10 @@ export class TriggerEngine {
   private readonly clients = new Map<string, string>();
   /** Accounts with a read scheduled after a notification (see {@link onInbound}). */
   private readonly inbound = new Map<string, { again: boolean; done: Promise<void> }>();
+  /** Per source: when this process last read each account (see {@link scanAll}). */
+  private readonly scanned = new Map<TriggerSource, Map<string, number>>();
+  /** Shared reads in flight, by source and account (see {@link scanAccount}). */
+  private readonly reading = new Set<string>();
 
   constructor(private readonly deps: TriggerEngineDeps) {}
 
@@ -128,6 +135,10 @@ export class TriggerEngine {
    * Reads every active trigger of a source (the job backstop and mail polling). In the background
    * (`background: true`) accounts sealed in their owner's vault are skipped: only a request of the
    * owner can open them, which `manyplug_check_triggers` does for its own workspace.
+   *
+   * Built for many mailboxes: a few accounts are read at a time, the ones read longest ago first,
+   * so when a pass runs out of time (`signal`) the next one starts with what this one left, and a
+   * mailbox is fetched once however many triggers watch it.
    */
   async scanAll(
     source: TriggerSource,
@@ -136,17 +147,74 @@ export class TriggerEngine {
     const active = await this.deps.store.active(source, options.workspaceId);
     const byWorkspace = new Map<string, Trigger[]>();
     for (const t of active) byWorkspace.set(t.workspaceId, [...(byWorkspace.get(t.workspaceId) ?? []), t]);
+    const work: Array<{ account: AccountRow; triggers: Trigger[] }> = [];
     for (const [workspaceId, list] of byWorkspace) {
-      const accounts = await this.source(source).accounts(workspaceId);
-      for (const account of accounts) {
-        if (options.signal?.aborted) return;
-        if (options.background && (await this.deps.accounts.isSealed(account.id))) continue;
-        for (const trigger of list.filter((t) => this.watches(t, account))) {
-          await this.scan(trigger, account, options.signal).catch((error) =>
-            this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId }),
-          );
-        }
+      for (const account of await this.source(source).accounts(workspaceId)) {
+        const triggers = list.filter((t) => this.watches(t, account));
+        if (triggers.length) work.push({ account, triggers });
       }
+    }
+    const scanned = this.scannedAt(source, work);
+    work.sort((a, b) => (scanned.get(a.account.id) ?? 0) - (scanned.get(b.account.id) ?? 0));
+    await mapLimit(work, SCAN_CONCURRENCY, async ({ account, triggers }) => {
+      if (options.signal?.aborted) return;
+      if (options.background && (await this.deps.accounts.isSealed(account.id))) return;
+      scanned.set(account.id, Date.now());
+      await this.scanAccount(triggers, account, options.signal).catch((error) =>
+        this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId }),
+      );
+    });
+  }
+
+  /** When each account of a source was last read by this process; accounts no longer watched go. */
+  private scannedAt(source: TriggerSource, work: Array<{ account: AccountRow }>): Map<string, number> {
+    const previous = this.scanned.get(source);
+    const current = new Map<string, number>();
+    for (const { account } of work) {
+      const at = previous?.get(account.id);
+      if (at !== undefined) current.set(account.id, at);
+    }
+    this.scanned.set(source, current);
+    return current;
+  }
+
+  /** Reads one account for the triggers watching it: one shared fetch where the source offers it. */
+  private async scanAccount(triggers: Trigger[], account: AccountRow, signal?: AbortSignal): Promise<void> {
+    const source = this.source(triggers[0]!.source);
+    if (!source.readMany) {
+      for (const trigger of triggers) {
+        await this.scan(trigger, account, signal).catch((error) =>
+          this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId }),
+        );
+      }
+      return;
+    }
+    // The fetch is a request to the service (seconds): no database lock or connection is held
+    // across it. One read of an account at a time in this process; a read by another process only
+    // repeats the fetch, and the unique event key keeps a repeat from firing twice.
+    const key = `${source.source}:${account.id}`;
+    if (this.reading.has(key)) return;
+    this.reading.add(key);
+    try {
+      const { store } = this.deps;
+      const requests = [];
+      for (const trigger of triggers) {
+        // An account connected after the trigger was made starts where its feed is now.
+        const cursor = (await store.cursor(trigger.id, account.id)) ?? (await source.start(account));
+        requests.push({ cursor, options: trigger.spec.filter.spam ? { spam: true } : {} });
+      }
+      const pages = await source.readMany(account, requests, signal ?? AbortSignal.timeout(30_000));
+      for (const [index, trigger] of triggers.entries()) {
+        const page = pages[index];
+        if (!page) continue;
+        for (const item of page.items) {
+          if (matchesFilter(trigger.spec.filter, item)) await this.handle(trigger, account, item);
+        }
+        if (page.cursor !== requests[index]!.cursor)
+          await store.setCursor(trigger.id, account.id, page.cursor);
+      }
+    } finally {
+      this.reading.delete(key);
     }
   }
 

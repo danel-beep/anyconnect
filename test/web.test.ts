@@ -116,6 +116,11 @@ describe('web pages: login, consent and home', () => {
     expect(html).toContain('<p class="small muted">Название указано самим приложением.</p>');
     expect(html).not.toContain('class="warning');
     expect(page.headers.get('x-frame-options')).toBe('DENY');
+    expect(page.headers.get('permissions-policy')).toContain('camera=()');
+    // Responses that are not pages (JSON, scripts) are not to be sniffed into another type either.
+    const metadata = await fetch(`${hub.baseUrl}/.well-known/oauth-authorization-server`);
+    expect(metadata.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(metadata.headers.get('permissions-policy')).toBeNull();
   });
 
   it('puts the self-declared name and the trust warning in one note for an unknown site', async () => {

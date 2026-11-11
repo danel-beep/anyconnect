@@ -101,6 +101,9 @@ describe('hub dispatch: unified tools, fan-out, call_tool(s)', () => {
   it('lists unified tools next to the service tools', () => {
     const names = catalog.tools.map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(['messages_search', 'messages_send', 'alpha_search']));
+    // The server instructions name the unified families this catalog has, and no others.
+    expect(catalog.instructions).toContain('Unified tools (messages_*) work across');
+    expect(catalog.instructions).not.toContain('mail_*');
   });
 
   it('runs a unified list tool on every account, merged and newest first, with partial errors', async () => {
