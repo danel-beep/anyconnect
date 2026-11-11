@@ -178,7 +178,9 @@ describe('status page', () => {
     const html = await (await fetch(`${hub.baseUrl}/status`)).text();
     expect(html).toContain('All systems operational');
     expect(html).toContain('AI app connections');
-    expect(html).toContain('http-equiv="refresh"');
+    // Refreshes in place (data-poll), not with a page reload that resets a screen reader.
+    expect(html).toContain('data-poll="60"');
+    expect(html).not.toContain('http-equiv="refresh"');
     const json = (await (await fetch(`${hub.baseUrl}/status.json`)).json()) as {
       components: { id: string }[];
     };

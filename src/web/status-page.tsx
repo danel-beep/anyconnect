@@ -93,9 +93,10 @@ export const StatusPage: FC<{ ctx: PageCtx; data: StatusPageData }> = ({ ctx, da
       description={t('status.description')}
       current="status"
       canonicalPath="/status"
-      refreshSeconds={60}
     >
-      <div class="wrap status-wrap">
+      {/* Refreshes in place every minute (data-poll), not with a page reload that moves focus and
+          the screen-reader cursor back to the top. */}
+      <div class="wrap status-wrap" id="status-live" data-poll="60">
         <h1>{t('status.title')}</h1>
         {data.updatedAt === null ? (
           <div class="status-banner s-none">

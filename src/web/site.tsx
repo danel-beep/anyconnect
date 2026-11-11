@@ -296,7 +296,7 @@ const Roadmap: FC<{ ctx: PageCtx; services: PublicService[]; limit?: number }> =
   if (!items.length) return null;
   return (
     <div data-filter-group>
-      <h3 class="cat-title">{ctx.t('services.roadmap')}</h3>
+      <h2 class="cat-title">{ctx.t('services.roadmap')}</h2>
       <ul class="roadmap-list">
         {items.map((x) => (
           <li data-search={x.name}>
@@ -369,7 +369,9 @@ export const PlanCard: FC<{
   plan: Plan;
   current?: boolean;
   action?: Child;
-}> = ({ ctx, plan, current, action }) => {
+  /** The plan name's heading level: one below the heading the cards sit under (h2 under a page's h1). */
+  heading?: 'h2' | 'h3';
+}> = ({ ctx, plan, current, action, heading: Heading = 'h3' }) => {
   const { t, lang } = ctx;
   const start = plan.start ? startText(t, lang, plan) : undefined;
   // What every plan gives today; features still being built are listed apart in the compare table.
@@ -387,7 +389,7 @@ export const PlanCard: FC<{
     <div class={`plan${plan.featured ? ' featured' : ''}${current ? ' current' : ''}`}>
       {plan.featured ? <span class="tag">{t('pricing.popular')}</span> : null}
       <div>
-        <h3>{t(`plan.${plan.id}.name` as 'plan.free.name')}</h3>
+        <Heading class="plan-title">{t(`plan.${plan.id}.name` as 'plan.free.name')}</Heading>
         <p class="for">{t(`plan.${plan.id}.for` as 'plan.free.for')}</p>
       </div>
       <div>
@@ -431,11 +433,12 @@ export const PlanCard: FC<{
   );
 };
 
-export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan: Plan) => Child }> = ({
-  ctx,
-  currentPlan,
-  actions,
-}) => (
+export const PlansGrid: FC<{
+  ctx: PageCtx;
+  currentPlan?: string;
+  actions?: (plan: Plan) => Child;
+  heading?: 'h2' | 'h3';
+}> = ({ ctx, currentPlan, actions, heading }) => (
   <div data-interval="month" data-interval-root>
     <fieldset class="billing-switch">
       <legend class="sr-only">{ctx.t('pricing.interval')}</legend>
@@ -456,6 +459,7 @@ export const PlansGrid: FC<{ ctx: PageCtx; currentPlan?: string; actions?: (plan
           plan={plan}
           current={plan.id === currentPlan}
           action={actions ? actions(plan) : <PlanCta ctx={ctx} plan={plan} />}
+          {...(heading ? { heading } : {})}
         />
       ))}
     </div>
@@ -591,7 +595,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
               ) : null}
             </div>
           )}
-          <PlansGrid ctx={ctx} />
+          <PlansGrid ctx={ctx} heading="h2" />
           <p class="hint plans-hint">{t('pricing.actionHint')}</p>
         </div>
       </section>
@@ -604,7 +608,9 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
             <table class="compare">
               <thead>
                 <tr>
-                  <th />
+                  <th scope="col">
+                    <span class="sr-only">{t('pricing.feature')}</span>
+                  </th>
                   {plans.map((p) => (
                     <th>{t(`plan.${p.id}.name` as 'plan.free.name')}</th>
                   ))}
@@ -722,7 +728,7 @@ export const ServicesPage: FC<{ ctx: PageCtx; services: PublicService[] }> = ({ 
                 if (!inCat.length && cat !== 'custom') return null;
                 return (
                   <div data-filter-group>
-                    <h3 class="cat-title">{t(`category.${cat}`)}</h3>
+                    <h2 class="cat-title">{t(`category.${cat}`)}</h2>
                     <div class="svc-grid">
                       {inCat.map((s) => (
                         <ServiceCard ctx={ctx} service={s} />
