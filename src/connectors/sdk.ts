@@ -50,8 +50,14 @@ export type RiskLevel = 'read' | 'write' | 'dangerous';
  * - `commerce`: shows plans or prices, or starts a purchase or subscription;
  * - `test_only`: exists to test the hub itself (e.g. always fails); directories expect every tool
  *   to succeed with valid input.
+ *
+ * One tag is for the hub itself rather than for directories:
+ * - `publishes`: puts the content of the call where people outside the account can read it (a
+ *   public repository or page, an API the hub knows nothing about). Right after the AI app read
+ *   third-party content from another account such a call asks the user (the executor's `exposure`
+ *   stage), so an instruction hidden in an email cannot carry data out.
  */
-export const ACTION_TAGS = ['moves_money', 'generates_media', 'commerce', 'test_only'] as const;
+export const ACTION_TAGS = ['moves_money', 'generates_media', 'commerce', 'test_only', 'publishes'] as const;
 export type ActionTag = (typeof ACTION_TAGS)[number];
 
 /** How the effect of an action can be undone (shown in the audit log; the panel offers "undo"). */

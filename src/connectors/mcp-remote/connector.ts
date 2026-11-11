@@ -247,6 +247,11 @@ export function defineRemoteMcpConnector(spec: RemoteMcpSpec): ConnectorDefiniti
       inputSchema: schema,
       hints: hintsFor(tool),
       risk: spec.toolRisk?.[name] ?? riskFromAnnotations(tool),
+      // A write the server itself calls harmless still hands its arguments to a third party: after
+      // reading another account it asks (`publishes`). A risk the user set is the user's decision.
+      ...(!spec.toolRisk?.[name] && riskFromAnnotations(tool) === 'write'
+        ? { tags: ['publishes'] as const }
+        : {}),
       async run(input, rawCtx) {
         const ctx = rawCtx as unknown as Ctx;
         const args: Record<string, unknown> = {};

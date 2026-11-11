@@ -390,6 +390,8 @@ export default defineConnector({
       hints: { readOnly: false, destructive: true, idempotent: false },
       // An unknown API: a write is a write, and a DELETE always asks for confirmation.
       risk: 'write',
+      // The hub does not know who reads what this API receives: see the `publishes` tag.
+      tags: ['publishes'],
       assessRisk: ({ method }) =>
         method === 'DELETE' ? { risk: 'dangerous', reason: 'DELETE request to the API' } : undefined,
       run: async ({ method, path, query, body, ...shape }, ctx) => {
