@@ -372,6 +372,11 @@ export const apiTokens = pgTable(
 export interface AccountSettings {
   /** Actions of the connector that are hidden from AI clients for this account. */
   disabledActions?: string[];
+  /**
+   * Messengers: the hub's copy of a message is deleted this many days after it was sent. Absent:
+   * kept while the account stays connected.
+   */
+  keepMessagesDays?: number;
 }
 
 export interface AccountMetadata {

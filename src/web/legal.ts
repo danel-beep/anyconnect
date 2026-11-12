@@ -18,6 +18,7 @@ interface Facts {
 
 const REFUNDS_UPDATED = { ru: 'Редакция от 5 ноября 2026 года', en: 'Last updated November 5, 2026' };
 const CURRENT = { ru: 'Редакция от 6 ноября 2026 года', en: 'Last updated November 6, 2026' };
+const PRIVACY_UPDATED = { ru: 'Редакция от 11 ноября 2026 года', en: 'Last updated November 11, 2026' };
 
 export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc {
   const contact =
@@ -36,7 +37,7 @@ const history = (id: 'free' | 'personal' | 'pro') => getPlan(id).limits.historyD
 const privacy: Record<Locale, Builder> = {
   ru: ({ contact, site }) => ({
     title: 'Политика конфиденциальности',
-    updated: CURRENT.ru,
+    updated: PRIVACY_UPDATED.ru,
     intro: `Здесь описано, какие данные собирает сервис Manyplug (${site}), зачем и как мы их защищаем. Коротко: мы храним только то, что нужно для работы подключений, шифруем данные для входа в сервисы и не продаём данные.`,
     sections: [
       {
@@ -103,7 +104,7 @@ const privacy: Record<Locale, Builder> = {
         title: 'Сроки хранения и удаление',
         paragraphs: [
           `Журнал действий хранится столько, сколько предусматривает тариф: ${history('free')} дней на бесплатном, ${history('personal')} на «Личном», ${history('pro')} на «Про». Во время бесплатного пробного периода действует срок «Про». Более старые записи удаляются раз в сутки. Журнал команды хранится по тарифу того, кто за неё платит.`,
-          'Переписка мессенджера хранится, пока аккаунт мессенджера подключён, чтобы ИИ мог искать и по старым сообщениям. Если мессенджер сообщает, что сообщение удалено, его текст и вложения стираются и из копии. Исходящие сообщения удаляются из очереди отправки через 30 дней после отправки (в самой переписке они остаются).',
+          'Переписка мессенджера хранится столько, сколько выбрано на странице этого аккаунта: 30, 90 или 365 дней либо пока аккаунт подключён. Новый аккаунт начинает с 90 дней. Сообщения старше этого срока раз в сутки удаляются из нашей копии (в самом мессенджере они остаются). Если мессенджер сообщает, что сообщение удалено, его текст и вложения стираются и из копии. Исходящие сообщения удаляются из очереди отправки через 30 дней после отправки (в самой переписке они остаются).',
           'Вы можете отключить любой аккаунт сервиса: сразу удаляются его ключи, а у мессенджера ещё и вся сохранённая переписка, очередь отправки и сессия. Или удалите свой аккаунт Manyplug в настройках: все подключения, ключи, токены, переписка и история будут удалены.',
           'Разрешение вести разговор заканчивается само по сроку (не больше 72 часов) или когда вы его отзываете. Подтверждения, на которые вы ответили, удаляются через сутки.',
           'Удалённые данные ещё до 30 дней могут оставаться в зашифрованных резервных копиях базы, пока эти копии не удалятся.',
@@ -144,7 +145,7 @@ const privacy: Record<Locale, Builder> = {
   }),
   en: ({ contact, site }) => ({
     title: 'Privacy policy',
-    updated: CURRENT.en,
+    updated: PRIVACY_UPDATED.en,
     intro: `This page explains what data Manyplug (${site}) collects, why, and how we protect it. In short: we keep only what connections need, encrypt access keys and never sell data.`,
     sections: [
       {
@@ -211,7 +212,7 @@ const privacy: Record<Locale, Builder> = {
         title: 'Retention and deletion',
         paragraphs: [
           `The activity log is kept as long as your plan includes: ${history('free')} days on Free, ${history('personal')} on Personal, ${history('pro')} on Pro. During the free trial the Pro period applies. Older entries are deleted once a day. A team’s log follows the plan of whoever pays for it.`,
-          'A messenger’s chats are kept while the messenger account stays connected, so your AI app can search older messages too. When the messenger reports that a message was deleted, its text and attachments are erased from the copy as well. Outgoing messages are deleted from the sending queue 30 days after they were sent (they stay in the chat itself).',
+          'A messenger’s chats are kept for the period chosen on that account’s page: 30, 90 or 365 days, or as long as the account stays connected. A newly connected account starts with 90 days. Messages past the period are deleted from our copy once a day (they stay in the messenger itself). When the messenger reports that a message was deleted, its text and attachments are erased from the copy as well. Outgoing messages are deleted from the sending queue 30 days after they were sent (they stay in the chat itself).',
           'You can disconnect any service account: its credentials are deleted at once, and for a messenger so are all its stored chats, sending queue and session. Or delete your Manyplug account in Settings: all connections, keys, tokens, chats and history are removed.',
           'A permission to carry on a conversation ends on its own when its time runs out (72 hours at most) or when you revoke it. Answered confirmations are deleted a day later.',
           'Deleted data can stay in encrypted database backups for up to 30 more days, until those backups are deleted.',
