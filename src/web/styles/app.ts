@@ -78,7 +78,7 @@ a.onboard-step.current:hover{border-color:var(--accent)}
 .onboard-step.current .tick{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
 .onboard-step.done .tick{background:var(--ok);border-color:var(--ok);color:var(--card)}
 .onboard-step.done .tick svg{width:14px;height:14px}
-.onboard-step.done .onboard-body{opacity:.7}
+.onboard-step.done .onboard-body strong{color:var(--muted)}
 .onboard-body{display:flex;flex-direction:column;gap:3px;min-width:0}
 .onboard-body strong{font-size:14.5px}
 .onboard-body>span{font-size:13px;color:var(--muted)}

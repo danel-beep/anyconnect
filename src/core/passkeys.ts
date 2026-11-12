@@ -275,12 +275,14 @@ export class PasskeyService {
     if (updated.length === 0) throw notFound('Passkey');
   }
 
-  async remove(userId: string, id: string): Promise<void> {
-    const deleted = await this.db
+  /** Removes a passkey; returns the name the user gave it. */
+  async remove(userId: string, id: string): Promise<string> {
+    const [deleted] = await this.db
       .delete(webauthnCredentials)
       .where(and(eq(webauthnCredentials.id, id), eq(webauthnCredentials.userId, userId)))
-      .returning({ id: webauthnCredentials.id });
-    if (deleted.length === 0) throw notFound('Passkey');
+      .returning({ name: webauthnCredentials.name });
+    if (!deleted) throw notFound('Passkey');
+    return deleted.name;
   }
 
   async removeAll(userId: string): Promise<number> {

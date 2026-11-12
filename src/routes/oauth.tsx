@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { getDefaultWorkspace, type Workspace } from '../core/identity.js';
 import type { MemberRole } from '../db/schema.js';
 import { isMetadataDocumentClientId, OAuthProtocolError } from '../oauth/clients.js';
-import { isLoopbackRedirect, knownClientName } from '../oauth/redirect.js';
+import { isLoopbackRedirect, knownAppInName, knownClientName } from '../oauth/redirect.js';
 import type { AuthorizationRequest } from '../oauth/server.js';
 import { suggestClientIdentity } from '../security/clients.js';
 import { clientRateKey, csrfToken, publicCors, verifyCsrf } from '../web/http.js';
@@ -72,6 +72,12 @@ function displayName(request: AuthorizationRequest): { clientName: string; verif
   return verifiedDomain ? { clientName, verifiedDomain } : { clientName };
 }
 
+/** Where the app takes the user (and the access) back to; a custom scheme for a desktop app. */
+function redirectHostOf(request: AuthorizationRequest): string {
+  const redirect = new URL(request.redirectUri);
+  return redirect.host || `${redirect.protocol}//`;
+}
+
 type PersonaRow = NonNullable<Awaited<ReturnType<AppContext['var']['services']['personas']['bySlug']>>>;
 
 /** Where an app that asks for an MCP URL connects, and how many accounts it will see there. */
@@ -138,10 +144,15 @@ async function renderConsent(c: AppContext, request: AuthorizationRequest, param
   const persona = target.kind === 'personal' ? target.persona : null;
   const choice = await clientChoice(c, workspace.id, request);
   const redirect = new URL(request.redirectUri);
-  const redirectHost = redirect.host || `${redirect.protocol}//`;
+  const redirectHost = redirectHostOf(request);
   const { clientName, verifiedDomain } = displayName(request);
   const knownApp =
     knownClientName(redirect.host) ?? (verifiedDomain ? knownClientName(verifiedDomain) : undefined);
+  const trusted = knownApp && redirect.protocol === 'https:' ? knownApp : undefined;
+  const loopback = isLoopbackRedirect(request.redirectUri);
+  // A local app is covered by the localhost warning; anything else that borrows a famous name
+  // without coming from that app's hosts is called out.
+  const borrowed = knownAppInName(clientName);
   return c.html(
     <ConsentPage
       t={c.get('t')}
@@ -150,8 +161,9 @@ async function renderConsent(c: AppContext, request: AuthorizationRequest, param
         clientName,
         ...(verifiedDomain ? { verifiedDomain } : {}),
         redirectHost,
-        ...(knownApp && redirect.protocol === 'https:' ? { knownApp } : {}),
-        loopback: isLoopbackRedirect(request.redirectUri),
+        ...(trusted ? { knownApp: trusted } : {}),
+        ...(!trusted && !loopback && borrowed ? { lookalike: borrowed } : {}),
+        loopback,
         workspaceName: workspace.name,
         activeAccounts: target.visible,
         ...(persona ? { persona: { name: persona.name, slug: persona.slug } } : {}),
@@ -317,6 +329,13 @@ export function oauthRoutes() {
         ...(target.kind === 'team' ? { teamId: workspace.id } : {}),
       },
       'oauth access approved',
+    );
+    // The name is the app's own claim, so the notice also says where the access goes.
+    const { clientName } = displayName(validation.request);
+    void s.securityNotices.report(
+      user.id,
+      'app_connected',
+      `${clientName} · ${redirectHostOf(validation.request)}`,
     );
     return c.redirect(location, 303);
   });

@@ -58,6 +58,27 @@ export const emailEn = {
   'email.paused.body':
     'It starts again tomorrow (UTC), or now if you raise the limit. Nothing is lost: new events wait in the log.',
   'email.paused.cta': 'Change the limit',
+  'notice.security.subject': '{subject}',
+  'notice.security.sign_in.title': 'New sign-in to your {brand} account',
+  'notice.security.sign_in.fix':
+    'Was it you? Then there is nothing to do. If not, change your password and end the other sessions in Settings.',
+  'notice.security.sign_in.cta': 'Open Settings',
+  'notice.security.app_connected.title': 'An AI app was connected to your {brand}',
+  'notice.security.app_connected.fix':
+    'Was it you? Then there is nothing to do. If not, disconnect it on the AI apps page: it loses access at once.',
+  'notice.security.app_connected.cta': 'Open AI apps',
+  'notice.security.token_created.title': 'An access token was created in your {brand}',
+  'notice.security.token_created.fix':
+    'Was it you? Then there is nothing to do. If not, revoke it on the AI apps page: it stops working at once.',
+  'notice.security.token_created.cta': 'Open AI apps',
+  'notice.security.totp_removed.title': 'The authenticator app was turned off in your {brand}',
+  'notice.security.totp_removed.fix':
+    'Was it you? Then there is nothing to do. If not, change your password and turn it back on.',
+  'notice.security.totp_removed.cta': 'Open sign-in protection',
+  'notice.security.passkey_removed.title': 'A passkey was removed from your {brand}',
+  'notice.security.passkey_removed.fix':
+    'Was it you? Then there is nothing to do. If not, change your password and check your sign-in protection.',
+  'notice.security.passkey_removed.cta': 'Open sign-in protection',
 } as const;
 
 export type EmailKey = keyof typeof emailEn;
@@ -119,4 +140,26 @@ export const emailRu: Record<EmailKey, string> = {
   'email.paused.body':
     'Он снова заработает завтра (по UTC) или сразу, если поднять лимит. Ничего не теряется: новые события ждут в журнале.',
   'email.paused.cta': 'Изменить лимит',
+
+  'notice.security.subject': '{subject}',
+  'notice.security.sign_in.title': 'Новый вход в ваш аккаунт {brand}',
+  'notice.security.sign_in.fix':
+    'Это были вы? Тогда ничего делать не нужно. Если нет, смените пароль и завершите остальные сессии в настройках.',
+  'notice.security.sign_in.cta': 'Открыть настройки',
+  'notice.security.app_connected.title': 'К вашему {brand} подключено ИИ-приложение',
+  'notice.security.app_connected.fix':
+    'Это были вы? Тогда ничего делать не нужно. Если нет, отключите его на странице «ИИ-приложения»: доступ пропадёт сразу.',
+  'notice.security.app_connected.cta': 'Открыть ИИ-приложения',
+  'notice.security.token_created.title': 'В вашем {brand} создан токен доступа',
+  'notice.security.token_created.fix':
+    'Это были вы? Тогда ничего делать не нужно. Если нет, отзовите его на странице «ИИ-приложения»: он сразу перестанет работать.',
+  'notice.security.token_created.cta': 'Открыть ИИ-приложения',
+  'notice.security.totp_removed.title': 'В вашем {brand} отключено приложение-аутентификатор',
+  'notice.security.totp_removed.fix':
+    'Это были вы? Тогда ничего делать не нужно. Если нет, смените пароль и включите его снова.',
+  'notice.security.totp_removed.cta': 'Открыть защиту входа',
+  'notice.security.passkey_removed.title': 'Из вашего {brand} удалён ключ доступа',
+  'notice.security.passkey_removed.fix':
+    'Это были вы? Тогда ничего делать не нужно. Если нет, смените пароль и проверьте защиту входа.',
+  'notice.security.passkey_removed.cta': 'Открыть защиту входа',
 };

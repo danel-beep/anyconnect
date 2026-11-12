@@ -6,6 +6,7 @@ import { MemoryMailer } from '../../src/mail/mailer.js';
 import { FakeOidc } from '../fake-oidc.js';
 import { enableTotp, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { SoftwareAuthenticator } from '../webauthn-authenticator.js';
+import { type A11yProblem, AXE_SOURCE, checkFocus, RUN_AXE } from './a11y-checks.js';
 import { BOXES, checkLayout, type LayoutProblem } from './layout-checks.js';
 
 /**
@@ -279,7 +280,15 @@ describe('every page keeps its layout', () => {
               await page.evaluate('document.fonts.ready');
               const problems = (await page.evaluate(
                 `(${checkLayout.toString()})(${JSON.stringify(BOXES)})`,
-              )) as LayoutProblem[];
+              )) as (LayoutProblem | A11yProblem)[];
+              // Accessibility: contrast depends on the theme, the rest on the markup, so one viewport
+              // and language per theme is enough (English and Russian share the templates).
+              if (viewport === 'desktop' && lang === 'en') {
+                // Evaluated, not a <script> tag, which the pages' CSP would block.
+                await page.evaluate(AXE_SOURCE);
+                problems.push(...((await page.evaluate(RUN_AXE)) as A11yProblem[]));
+                problems.push(...((await page.evaluate(`(${checkFocus.toString()})()`)) as A11yProblem[]));
+              }
               for (const p of problems) {
                 const key = `${persona.name} ${path} ${p.rule}: ${p.where}`;
                 const entry = failures.get(key) ?? { detail: p.detail, variants: [] };

@@ -236,8 +236,10 @@ export function securityRoutes() {
     const s = c.get('services');
     const guard = await guardForm(c);
     if (guard instanceof Response) return guard;
+    const had = (await s.secondFactors.summary(guard.session.user.id)).totp;
     await s.secondFactors.disableTotp(guard.session.user.id);
     s.logger.info({ userId: guard.session.user.id }, 'authenticator app disabled');
+    if (had) void s.securityNotices.report(guard.session.user.id, 'totp_removed');
     return c.redirect(`${securityUrl(guard.next)}#totp`, 303);
   });
 
@@ -419,8 +421,9 @@ export function securityRoutes() {
     const s = c.get('services');
     const guard = await guardForm(c);
     if (guard instanceof Response) return guard;
-    await s.secondFactors.removePasskey(guard.session.user.id, c.req.param('id'));
+    const name = await s.secondFactors.removePasskey(guard.session.user.id, c.req.param('id'));
     s.logger.info({ userId: guard.session.user.id }, 'passkey removed');
+    void s.securityNotices.report(guard.session.user.id, 'passkey_removed', name);
     return c.redirect(`${securityUrl(guard.next)}#passkeys`, 303);
   });
 

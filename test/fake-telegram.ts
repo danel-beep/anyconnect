@@ -31,6 +31,9 @@ const group: tl.RawChat = {
 const peers = PeersIndex.from({ users: [me, anna], chats: [group] });
 
 /** A message from Anna (or to her, `out`), or in the group; dates count from a fixed second. */
+/** An hour ago: recent enough for any retention period an account may choose. */
+const RECENT = Math.floor(Date.now() / 1000) - 3600;
+
 export function fakeMessage(
   id: number,
   text: string,
@@ -46,7 +49,7 @@ export function fakeMessage(
         id,
         peerId,
         fromId,
-        date: 1_700_000_000 + id,
+        date: RECENT + id,
         action: { _: 'messageActionChatJoinedByLink', inviterId: ANNA_ID },
       } as tl.RawMessageService)
     : ({
@@ -55,7 +58,7 @@ export function fakeMessage(
         peerId,
         fromId,
         out: options.out ?? false,
-        date: 1_700_000_000 + id,
+        date: RECENT + id,
         message: text,
         ...(options.media ? { media: options.media } : {}),
       } as tl.RawMessage);

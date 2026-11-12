@@ -39,10 +39,10 @@ export const Layout: FC<{
       bodyClass="auth"
       {...(refreshSeconds ? { refreshSeconds } : {})}
     >
-      <div class="auth-top">
+      <header class="auth-top">
         <Brand />
         <Prefs t={t} lang={lang} />
-      </div>
+      </header>
       <main id="main" class={narrow ? undefined : 'wide'}>
         {children}
       </main>
@@ -328,6 +328,8 @@ export interface ConsentView {
   verifiedDomain?: string;
   redirectHost: string;
   knownApp?: string;
+  /** The well-known app whose name this unknown app uses. */
+  lookalike?: string;
   loopback: boolean;
   workspaceName: string;
   activeAccounts: number;
@@ -349,7 +351,13 @@ export interface ConsentView {
  */
 export const ConsentPage: FC<{ t: Translate; lang: string; view: ConsentView }> = ({ t, lang, view }) => {
   const picked = view.clientChoice.options.find((o) => o.value === view.clientChoice.selected);
-  const warning = view.loopback ? t('consent.loopback') : view.knownApp ? undefined : t('consent.unknown');
+  const warning = view.loopback
+    ? t('consent.loopback')
+    : view.knownApp
+      ? undefined
+      : view.lookalike
+        ? t('consent.lookalike', { app: view.lookalike })
+        : t('consent.unknown');
   const selfDeclared = view.verifiedDomain ? undefined : t('consent.selfDeclared');
   return (
     <Layout title={t('consent.title', { client: view.clientName })} narrow lang={lang}>

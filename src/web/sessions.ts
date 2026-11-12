@@ -91,6 +91,23 @@ export class SessionService {
       .where(eq(webSessions.tokenHash, hashToken(token)));
   }
 
+  /** Whether the user already has (or had, until it expired) a session from this address and browser. */
+  async seenFrom(userId: string, ip: string | undefined, userAgent: string | undefined): Promise<boolean> {
+    if (!ip || !userAgent) return false;
+    const [row] = await this.db
+      .select({ id: webSessions.tokenHash })
+      .from(webSessions)
+      .where(
+        and(
+          eq(webSessions.userId, userId),
+          eq(webSessions.ip, ip),
+          eq(webSessions.userAgent, userAgent.slice(0, 500)),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  }
+
   /** Other sessions of the user (e.g. after a security change: sign out everywhere else). */
   async destroyOthers(userId: string, keepToken: string | undefined): Promise<number> {
     const keep = keepToken ? hashToken(keepToken) : '';

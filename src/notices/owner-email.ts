@@ -89,6 +89,17 @@ export function emailOf(notice: OwnerNotice): EmailContent | undefined {
         cta: { label: 'email.paused.cta', url: notice.url },
         vars: { trigger: notice.trigger, n: notice.limit },
       };
+    case 'security':
+      return {
+        tag: `notice.security.${notice.event}`,
+        subject: `notice.security.${notice.event}.title`,
+        paragraphs: [
+          ...(notice.subject ? (['notice.security.subject'] as const) : []),
+          `notice.security.${notice.event}.fix`,
+        ],
+        cta: { label: `notice.security.${notice.event}.cta`, url: notice.url },
+        vars: { subject: notice.subject },
+      };
     case 'accounts_need_reauth':
       return undefined;
   }

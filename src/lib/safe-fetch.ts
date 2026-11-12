@@ -170,7 +170,10 @@ export function safeFetch(rawUrl: string, options: SafeFetchOptions = {}): Promi
         res.on('data', (chunk: Buffer) => {
           size += chunk.length;
           if (size > maxBytes) {
-            req.destroy(new UnsafeUrlError(`Response is larger than ${maxBytes} bytes`));
+            // Reject before destroying: a destroyed response can still emit `end`, which would
+            // otherwise resolve with a silently truncated body.
+            reject(new UnsafeUrlError(`Response is larger than ${maxBytes} bytes`));
+            req.destroy();
             return;
           }
           chunks.push(chunk);

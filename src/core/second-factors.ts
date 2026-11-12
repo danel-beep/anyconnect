@@ -51,9 +51,11 @@ export class SecondFactorService {
     await this.dropOrphanedRecoveryCodes(userId);
   }
 
-  async removePasskey(userId: string, passkeyId: string): Promise<void> {
-    await this.passkeys.remove(userId, passkeyId);
+  /** Returns the removed passkey's name. */
+  async removePasskey(userId: string, passkeyId: string): Promise<string> {
+    const name = await this.passkeys.remove(userId, passkeyId);
     await this.dropOrphanedRecoveryCodes(userId);
+    return name;
   }
 
   /** Break-glass reset (admin CLI): removes every second factor of the user. */
