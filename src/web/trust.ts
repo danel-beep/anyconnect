@@ -1,4 +1,5 @@
 import { getPlan } from '../billing/plans.js';
+import type { MerchantOfRecord } from '../billing/provider.js';
 import type { Locale } from './i18n.js';
 
 /**
@@ -45,9 +46,11 @@ export interface TrustDoc {
 
 interface Facts {
   supportEmail?: string | undefined;
+  /** The active payment provider when it resells the plans (Paddle, Creem); unset = a plain processor or none. */
+  merchant?: MerchantOfRecord | undefined;
 }
 
-const UPDATED = { en: 'Last updated November 6, 2026', ru: 'Редакция от 6 ноября 2026 года' };
+const UPDATED = { en: 'Last updated November 12, 2026', ru: 'Редакция от 12 ноября 2026 года' };
 
 const history = (id: 'free' | 'personal' | 'pro') => getPlan(id).limits.historyDays;
 
@@ -55,7 +58,7 @@ export function trustDoc(lang: Locale, facts: Facts): TrustDoc {
   return (lang === 'ru' ? ru : en)(facts);
 }
 
-function en({ supportEmail }: Facts): TrustDoc {
+function en({ supportEmail, merchant }: Facts): TrustDoc {
   const ask = supportEmail ? `Write to ${supportEmail}` : 'Write to the support address on the Support page';
   return {
     title: 'Trust: how your data is handled',
@@ -203,7 +206,7 @@ function en({ supportEmail }: Facts): TrustDoc {
         {
           name: 'Providers we rely on',
           sees: [
-            'Paddle, our reseller and Merchant of Record: your payment details and billing address. We get only the plan, status and subscription id.',
+            `${merchant ? `${merchant.name}, our reseller and Merchant of Record` : 'Our payment provider'}: your payment details and billing address. We get only the plan, status and subscription id.`,
             'Render (Frankfurt, EU): hosts the servers and the encrypted database',
             'Our email provider: the address and text of emails we send you',
             'An error tracker, when enabled: error reports scrubbed of arguments, tokens and contents',
@@ -232,7 +235,7 @@ function en({ supportEmail }: Facts): TrustDoc {
       after: [
         `The activity log already deletes itself: entries older than your plan’s period (${history('free')}, ${history('personal')} or ${history('pro')} days) are removed every day.`,
         'Deleted data can stay in encrypted database backups for up to 30 days, until those backups expire.',
-        'Paddle keeps records of payments as tax law requires, under its own policy.',
+        `${merchant?.name ?? 'Our payment provider'} keeps records of payments as tax law requires, under its own policy.`,
         `Want a copy of your data, or something deleted that you cannot reach? ${ask}. We answer within 30 days.`,
       ],
     },
@@ -259,7 +262,7 @@ function en({ supportEmail }: Facts): TrustDoc {
   };
 }
 
-function ru({ supportEmail }: Facts): TrustDoc {
+function ru({ supportEmail, merchant }: Facts): TrustDoc {
   const ask = supportEmail ? `Напишите на ${supportEmail}` : 'Напишите на адрес со страницы поддержки';
   return {
     title: 'Доверие: как мы обращаемся с данными',
@@ -407,7 +410,7 @@ function ru({ supportEmail }: Facts): TrustDoc {
         {
           name: 'Наши подрядчики',
           sees: [
-            'Paddle, наш реселлер и Merchant of Record: платёжные данные и адрес для счёта. Нам приходят только тариф, статус и id подписки.',
+            `${merchant ? `${merchant.name}, наш реселлер и Merchant of Record` : 'Платёжный провайдер'}: платёжные данные и адрес для счёта. Нам приходят только тариф, статус и id подписки.`,
             'Render (Франкфурт, ЕС): серверы и зашифрованная база',
             'Почтовый провайдер: адрес и текст писем, которые мы вам отправляем',
             'Сервис ошибок, если включён: отчёты об ошибках без аргументов, токенов и содержимого',
@@ -436,7 +439,7 @@ function ru({ supportEmail }: Facts): TrustDoc {
       after: [
         `Журнал действий чистится сам: записи старше срока вашего тарифа (${history('free')}, ${history('personal')} или ${history('pro')} дней) удаляются каждый день.`,
         'Удалённые данные могут оставаться в зашифрованных бэкапах базы до 30 дней, пока эти бэкапы не удалятся.',
-        'Paddle хранит записи о платежах столько, сколько требует налоговое право, по своей политике.',
+        `${merchant?.name ?? 'Платёжный провайдер'} хранит записи о платежах столько, сколько требует налоговое право, по своей политике.`,
         `Нужна копия данных или удалить то, до чего не дотянуться? ${ask}. Отвечаем в течение 30 дней.`,
       ],
     },

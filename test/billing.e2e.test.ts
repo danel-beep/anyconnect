@@ -340,3 +340,67 @@ describe('Paddle webhooks', () => {
     );
   });
 });
+
+/** Creem's signed webhooks reach the plan through the same HTTP route. */
+describe('Creem webhooks', () => {
+  const secret = 'whsec_creem_e2e';
+  let hub: TestHub;
+  let workspaceId: string;
+
+  beforeAll(async () => {
+    await resetDatabase();
+    hub = await startTestHub({
+      seed: false,
+      env: {
+        BILLING_PROVIDER: 'creem',
+        CREEM_API_KEY: 'creem_test_x',
+        CREEM_WEBHOOK_SECRET: secret,
+        CREEM_PRICE_PRO_MONTH: 'prod_pro_m',
+      },
+    });
+    workspaceId = (await hub.services.db.query.workspaces.findFirst())!.id;
+    await hub.services.entitlements.setPlan(workspaceId, 'free');
+  });
+
+  afterAll(async () => {
+    await hub?.close();
+  });
+
+  it('applies a signed checkout, rejects forged ones and names Creem in the terms', async () => {
+    const body = JSON.stringify({
+      id: 'evt_creem_1',
+      eventType: 'checkout.completed',
+      created_at: Date.now(),
+      object: {
+        id: 'ch_1',
+        customer: { id: 'cust_1' },
+        metadata: { workspace_id: workspaceId },
+        subscription: {
+          id: 'sub_creem_1',
+          status: 'active',
+          product: { id: 'prod_pro_m', billing_period: 'every-month' },
+          customer: 'cust_1',
+          current_period_end_date: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+        },
+      },
+    });
+    const post = (signature: string) =>
+      fetch(`${hub.baseUrl}/billing/webhook/creem`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'creem-signature': signature },
+        body,
+      });
+    expect((await post('0'.repeat(64))).status).toBe(400);
+    expect((await hub.services.entitlements.entitlements(workspaceId)).plan.id).toBe('free');
+    expect((await post(hmacHex(secret, body))).status).toBe(200);
+    expect((await hub.services.entitlements.entitlements(workspaceId)).plan.id).toBe('pro');
+    expect(await hub.services.entitlements.subscription(workspaceId)).toMatchObject({
+      provider: 'creem',
+      externalId: 'sub_creem_1',
+      customerId: 'cust_1',
+    });
+    const terms = await (await fetch(`${hub.baseUrl}/terms`)).text();
+    expect(terms).toContain('Armitage Labs OÜ');
+    expect(terms).not.toContain('Paddle');
+  });
+});

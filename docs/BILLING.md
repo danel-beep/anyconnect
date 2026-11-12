@@ -6,6 +6,7 @@
 
 ```
 кабинет /app/billing ─┐                     ┌─ PaddleProvider  (src/billing/providers/paddle.ts)
+                      │                     ├─ CreemProvider   (…/creem.ts)
 setup-инструменты ИИ ─┼─> BillingService ──>├─ StripeProvider  (…/stripe.ts)
 вебхуки /billing/... ─┘   (service.ts)      └─ TestBillingProvider (…/test.ts, только разработка)
                               │
@@ -53,10 +54,11 @@ Setup-инструменты (`src/hub/billing-tools.ts`, реализация `
 
 | Переменная | Значение |
 |---|---|
-| `BILLING_PROVIDER` | `none` (по умолчанию: тарифы назначает администратор по запросу), `paddle`, `stripe`, `test` |
+| `BILLING_PROVIDER` | `none` (по умолчанию: тарифы назначает администратор по запросу), `paddle`, `creem`, `stripe`, `test` |
 | `<PROVIDER>_PRICE_<PLAN>_<MONTH\|YEAR>` | Цена провайдера для тарифа и периода, например `PADDLE_PRICE_PRO_YEAR=pri_01…`. Тариф без цены нельзя купить; админка → Система показывает, каких цен не хватает |
 | `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET` | Ключи Paddle |
 | `PADDLE_ENVIRONMENT` | `sandbox` (по умолчанию) или `production` |
+| `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET` | Ключи Creem; ключ `creem_test_…` включает тестовый режим (API test-api.creem.io) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Ключи Stripe (`sk_test_…` — тестовый режим) |
 
 `BILLING_PROVIDER=test` — встроенный тестовый провайдер: свои страницы «оплаты» и «портала»
@@ -88,6 +90,32 @@ production запрещён (сервер не стартует).
 
 Оплата открывается на странице хаба `/billing/paddle/checkout`, которая запускает Paddle.js
 (у неё своя CSP с доменами Paddle, остальные страницы остаются со строгой политикой).
+
+## Creem: подключение
+
+Creem — тоже Merchant of Record (продаёт сам, платит налоги и VAT, делает возвраты), принимает
+физлиц из ОАЭ; проверка магазина — 1–3 дня. Оплата и портал — страницы Creem, своих страниц у хаба
+нет. В Creem у продукта одна цена и один период, поэтому «цена» тарифа — это id продукта.
+
+1. **Products → Create product**: четыре подписки — Personal месяц/год ($5/$50) и Pro месяц/год
+   ($12/$120), «Recurring», период «Monthly»/«Yearly», налоговая категория SaaS. Id продуктов
+   (`prod_…`) → `CREEM_PRICE_PERSONAL_MONTH`, `CREEM_PRICE_PERSONAL_YEAR`, `CREEM_PRICE_PRO_MONTH`,
+   `CREEM_PRICE_PRO_YEAR`.
+2. **Developers → API keys** → `CREEM_API_KEY`.
+3. **Developers → Webhooks**: адрес `https://<хаб>/billing/webhook/creem` → секрет →
+   `CREEM_WEBHOOK_SECRET`. Хаб читает `checkout.completed` и `subscription.*`; подпись —
+   HMAC-SHA256 тела в заголовке `creem-signature`. Метки времени в подписи нет: повтор
+   отсекается по id события (`billing_events`) и по `provider_updated_at`.
+4. `BILLING_PROVIDER=creem`. Сначала тестовый режим (переключатель **Test mode** в Creem: свои
+   продукты, ключ и вебхук), после проверки — боевые.
+
+Смена тарифа — `POST /subscriptions/{id}/upgrade` с пересчётом сразу, отмена в конце периода —
+`cancel` с `mode: scheduled`, её отмена — `resume`. Статус `scheduled_cancel` = тариф в силе до
+конца периода, `unpaid` = пауза (как у Stripe), `expired` = отменена.
+
+Юридические страницы (`/terms`, `/privacy`, `/refunds`, `/trust`) называют активного провайдера,
+если он Merchant of Record (`BillingProvider.merchant`: Paddle или Creem, с его условиями для
+покупателя); без такого провайдера тексты говорят просто «платёжный провайдер».
 
 ## Stripe: подключение
 

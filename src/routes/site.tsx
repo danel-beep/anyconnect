@@ -153,7 +153,15 @@ export function siteRoutes() {
 
   app.get('/trust', async (c) => {
     const ctx = pageCtx(c, await currentUser(c));
-    return c.html(<TrustPage ctx={ctx} doc={trustDoc(ctx.lang, { supportEmail: ctx.supportEmail })} />);
+    return c.html(
+      <TrustPage
+        ctx={ctx}
+        doc={trustDoc(ctx.lang, {
+          supportEmail: ctx.supportEmail,
+          merchant: c.get('services').billing.provider?.merchant,
+        })}
+      />,
+    );
   });
 
   app.get('/support', async (c) => {
@@ -169,6 +177,7 @@ export function siteRoutes() {
         publicUrl: ctx.publicUrl,
         supportEmail: ctx.supportEmail,
         operator: c.get('services').config.site.legalOperator,
+        merchant: c.get('services').billing.provider?.merchant,
       });
       return c.html(<LegalPage ctx={ctx} doc={doc} path={`/${kind}`} />);
     });

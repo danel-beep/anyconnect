@@ -1,5 +1,6 @@
 import type { BillingConfig } from '../config.js';
 import type { BillingProvider } from '../provider.js';
+import { CreemProvider } from './creem.js';
 import { PaddleProvider } from './paddle.js';
 import { StripeProvider } from './stripe.js';
 import { TestBillingProvider } from './test.js';
@@ -16,6 +17,8 @@ export function createBillingProvider(
         publicUrl: opts.publicUrl,
         ...(opts.fetch ? { fetch: opts.fetch } : {}),
       });
+    case 'creem':
+      return new CreemProvider({ ...config.creem!, ...(opts.fetch ? { fetch: opts.fetch } : {}) });
     case 'stripe':
       return new StripeProvider({ ...config.stripe!, ...(opts.fetch ? { fetch: opts.fetch } : {}) });
     case 'test':
@@ -25,4 +28,4 @@ export function createBillingProvider(
   }
 }
 
-export { PaddleProvider, StripeProvider, TestBillingProvider };
+export { CreemProvider, PaddleProvider, StripeProvider, TestBillingProvider };

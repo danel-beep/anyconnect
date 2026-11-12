@@ -7,7 +7,7 @@ import type { BillingInterval } from './provider.js';
  * (`BILLING_PROVIDER`); each has its keys and a price for every paid plan and interval:
  * `<PROVIDER>_PRICE_<PLAN>_<MONTH|YEAR>`, e.g. `PADDLE_PRICE_PRO_YEAR=pri_01h...`.
  */
-export type BillingProviderId = 'paddle' | 'stripe' | 'test';
+export type BillingProviderId = 'paddle' | 'creem' | 'stripe' | 'test';
 
 export interface BillingConfig {
   /** Undefined = payments off (plans are changed by admins; users send plan requests). */
@@ -21,6 +21,8 @@ export interface BillingConfig {
     webhookSecret: string;
     sandbox: boolean;
   };
+  /** Test mode follows the key (`creem_test_…`). */
+  creem?: { apiKey: string; webhookSecret: string };
   stripe?: { secretKey: string; webhookSecret: string };
 }
 
@@ -29,7 +31,7 @@ export const priceKey = (planId: string, interval: BillingInterval) => `${planId
 /** Paid plans anyone can buy: each needs a price per interval at the active provider. */
 export const PAID_PLANS = PLANS.filter((p) => p.public && p.priceMonthly > 0);
 
-const Provider = z.enum(['none', 'paddle', 'stripe', 'test']).default('none');
+const Provider = z.enum(['none', 'paddle', 'creem', 'stripe', 'test']).default('none');
 
 export class BillingConfigError extends Error {}
 
@@ -37,7 +39,7 @@ export function readBillingConfig(source: NodeJS.ProcessEnv, opts: { isProductio
   const get = (name: string) => source[name]?.trim() || undefined;
   const parsed = Provider.safeParse(get('BILLING_PROVIDER')?.toLowerCase());
   if (!parsed.success) {
-    throw new BillingConfigError('BILLING_PROVIDER must be one of none, paddle, stripe, test');
+    throw new BillingConfigError('BILLING_PROVIDER must be one of none, paddle, creem, stripe, test');
   }
   const provider = parsed.data === 'none' ? undefined : parsed.data;
   const prices = new Map<string, string>();
@@ -47,7 +49,7 @@ export function readBillingConfig(source: NodeJS.ProcessEnv, opts: { isProductio
     // The test provider upgrades anyone for free: never on the live site.
     if (opts.isProduction) {
       throw new BillingConfigError(
-        'BILLING_PROVIDER=test is for development only; use the Paddle sandbox or Stripe test keys on a server',
+        'BILLING_PROVIDER=test is for development only; use the Paddle sandbox, Creem or Stripe test keys on a server',
       );
     }
     for (const plan of PAID_PLANS) {
@@ -84,6 +86,13 @@ export function readBillingConfig(source: NodeJS.ProcessEnv, opts: { isProductio
         webhookSecret: require('PADDLE_WEBHOOK_SECRET'),
         sandbox: env === 'sandbox',
       },
+    };
+  }
+  if (provider === 'creem') {
+    return {
+      provider,
+      prices,
+      creem: { apiKey: require('CREEM_API_KEY'), webhookSecret: require('CREEM_WEBHOOK_SECRET') },
     };
   }
   return {

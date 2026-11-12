@@ -5,6 +5,7 @@ import {
   type BillingProvider,
   BillingProviderError,
   type CheckoutInput,
+  type MerchantOfRecord,
   type ProviderSubscriptionRef,
   type SubscriptionChange,
   type WebhookResult,
@@ -69,6 +70,11 @@ export class PaddleProvider implements BillingProvider {
   readonly id = 'paddle';
   readonly name: string;
   readonly testMode: boolean;
+  readonly merchant: MerchantOfRecord = {
+    name: 'Paddle',
+    legalName: 'Paddle.com',
+    buyerTerms: 'paddle.com/legal/invoiced-consumer-terms',
+  };
   private readonly base: string;
   private readonly fetch: typeof fetch;
 

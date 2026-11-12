@@ -34,6 +34,28 @@ describe('trust page and legal texts', () => {
     }
   });
 
+  it('names the payment provider that resells the plans, and stays generic without one', () => {
+    const merchant = {
+      name: 'Creem',
+      legalName: 'Creem (Armitage Labs OÜ)',
+      buyerTerms: 'creem.io/buyer-terms',
+    };
+    for (const lang of ['en', 'ru'] as const) {
+      for (const kind of ['privacy', 'terms', 'refunds'] as const) {
+        const named = text(legalDoc(kind, lang, { publicUrl: 'https://hub.example', merchant }));
+        expect(named).toContain('Creem');
+        expect(named).not.toContain('Paddle');
+        const plain = text(legalDoc(kind, lang, { publicUrl: 'https://hub.example' }));
+        expect(plain).not.toMatch(/Paddle|Creem|undefined/);
+      }
+      expect(text(legalDoc('terms', lang, { publicUrl: 'https://hub.example', merchant }))).toContain(
+        'creem.io/buyer-terms',
+      );
+      expect(text(trustDoc(lang, { merchant }))).toContain('Creem');
+      expect(text(trustDoc(lang, {}))).not.toMatch(/Paddle|Creem|undefined/);
+    }
+  });
+
   it('uses the support address for data requests when it is set', () => {
     expect(text(trustDoc('en', { supportEmail: 'help@hub.example' }))).toContain('help@hub.example');
   });

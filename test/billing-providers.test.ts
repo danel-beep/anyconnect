@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { missingPrices, readBillingConfig } from '../src/billing/config.js';
+import { CreemProvider } from '../src/billing/providers/creem.js';
 import { PaddleProvider } from '../src/billing/providers/paddle.js';
 import { hmacHex } from '../src/billing/providers/signature.js';
 import { StripeProvider } from '../src/billing/providers/stripe.js';
@@ -16,7 +17,8 @@ function fakeApi(answer: (url: string, init: RequestInit) => unknown) {
       url,
       method: init.method ?? 'GET',
       body: String(init.body ?? ''),
-      auth: new Headers(init.headers).get('authorization') ?? '',
+      auth:
+        new Headers(init.headers).get('authorization') ?? new Headers(init.headers).get('x-api-key') ?? '',
     });
     return new Response(JSON.stringify(answer(url, init)), { status: 200 });
   }) as typeof globalThis.fetch;
@@ -44,6 +46,25 @@ describe('billing config', () => {
     expect(missingPrices(config)).not.toContain('team:year');
     expect(missingPrices(config)).not.toContain('business:year');
     expect(missingPrices(config)).not.toContain('pro:month');
+  });
+
+  it('reads Creem keys and products, with test mode from the key', () => {
+    const config = readBillingConfig(
+      {
+        BILLING_PROVIDER: 'creem',
+        CREEM_API_KEY: 'creem_test_abc',
+        CREEM_WEBHOOK_SECRET: 'whsec_x',
+        CREEM_PRICE_PERSONAL_MONTH: 'prod_pm',
+      },
+      { isProduction: true },
+    );
+    expect(config.creem).toEqual({ apiKey: 'creem_test_abc', webhookSecret: 'whsec_x' });
+    expect(config.prices.get('personal:month')).toBe('prod_pm');
+    expect(() => readBillingConfig({ BILLING_PROVIDER: 'creem' }, { isProduction: true })).toThrow(
+      /CREEM_API_KEY/,
+    );
+    expect(new CreemProvider({ apiKey: 'creem_test_abc', webhookSecret: 'x' }).testMode).toBe(true);
+    expect(new CreemProvider({ apiKey: 'creem_abc', webhookSecret: 'x' }).testMode).toBe(false);
   });
 
   it('refuses missing keys and the test provider in production', () => {
@@ -257,6 +278,129 @@ describe('Stripe provider', () => {
       await stripe.parseWebhook({ body, headers: new Headers({ 'stripe-signature': `t=${ts},v1=00` }) }),
     ).toMatchObject({
       ok: false,
+    });
+  });
+});
+
+describe('Creem provider', () => {
+  const secret = 'whsec_creem_secret';
+  const make = (fetch?: typeof globalThis.fetch) =>
+    new CreemProvider({ apiKey: 'creem_test_key', webhookSecret: secret, ...(fetch ? { fetch } : {}) });
+  const signed = (body: string) => new Headers({ 'creem-signature': hmacHex(secret, body) });
+  const subscription = {
+    id: 'sub_c1',
+    object: 'subscription',
+    status: 'scheduled_cancel',
+    product: { id: 'prod_pro_m', billing_period: 'every-month', price: 1200 },
+    customer: { id: 'cust_1', email: 'ann@example.com' },
+    items: [{ id: 'sitem_1', product_id: 'prod_pro_m', units: 1 }],
+    current_period_end_date: '2026-12-04T00:00:00.000Z',
+    canceled_at: null,
+    metadata: { workspace_id: 'wsp_1', plan: 'pro' },
+  };
+  const event = (object: unknown, eventType = 'subscription.paid') =>
+    JSON.stringify({ id: 'evt_c1', eventType, created_at: NOW.getTime(), object });
+
+  it('opens a hosted checkout with the workspace in the metadata', async () => {
+    const api = fakeApi(() => ({ id: 'ch_1', checkout_url: 'https://checkout.creem.io/ch_1' }));
+    const input = {
+      workspaceId: 'wsp_1',
+      userId: 'usr_1',
+      email: 'ann@example.com',
+      planId: 'pro',
+      interval: 'month' as const,
+      priceId: 'prod_pro_m',
+      quantity: 1,
+      customerId: null,
+      successUrl: 'https://hub.example/app/billing?paid=1',
+      cancelUrl: 'https://hub.example/app/billing',
+    };
+    expect(await make(api.fetch).checkout(input)).toEqual({ url: 'https://checkout.creem.io/ch_1' });
+    await make(api.fetch).checkout({ ...input, customerId: 'cust_1' });
+    expect(api.calls[0]!.url).toBe('https://test-api.creem.io/v1/checkouts');
+    expect(api.calls[0]!.auth).toBe('creem_test_key');
+    expect(JSON.parse(api.calls[0]!.body)).toEqual({
+      product_id: 'prod_pro_m',
+      units: 1,
+      success_url: 'https://hub.example/app/billing?paid=1',
+      customer: { email: 'ann@example.com' },
+      metadata: { workspace_id: 'wsp_1', plan: 'pro', user_id: 'usr_1' },
+    });
+    expect(JSON.parse(api.calls[1]!.body).customer).toEqual({ id: 'cust_1' });
+  });
+
+  it('upgrades, cancels, resumes and opens the portal through the API', async () => {
+    const api = fakeApi((url) =>
+      url.endsWith('/customers/billing') ? { customer_portal_link: 'https://creem.io/portal/x' } : {},
+    );
+    const creem = make(api.fetch);
+    const ref = { externalId: 'sub_c1', customerId: 'cust_1' };
+    await creem.changeSubscription(ref, { priceId: 'prod_pro_y', quantity: 1 });
+    await creem.setCancelAtPeriodEnd(ref, true);
+    await creem.setCancelAtPeriodEnd(ref, false);
+    expect(await creem.portal({ subscription: ref })).toEqual({ url: 'https://creem.io/portal/x' });
+    expect(
+      api.calls.map((c) => `${c.method} ${c.url.replace('https://test-api.creem.io/v1', '')} ${c.body}`),
+    ).toEqual([
+      'POST /subscriptions/sub_c1/upgrade {"product_id":"prod_pro_y","update_behavior":"proration-charge-immediately"}',
+      'POST /subscriptions/sub_c1/cancel {"mode":"scheduled","onExecute":"cancel"}',
+      'POST /subscriptions/sub_c1/resume ',
+      'POST /customers/billing {"customer_id":"cust_1"}',
+    ]);
+  });
+
+  it('verifies webhook signatures and normalizes subscription events', async () => {
+    const creem = make();
+    const body = event(subscription);
+    expect(await creem.parseWebhook({ body, headers: signed(body) })).toEqual({
+      ok: true,
+      changes: [
+        {
+          eventId: 'evt_c1',
+          type: 'subscription.paid',
+          occurredAt: NOW,
+          workspaceId: 'wsp_1',
+          externalId: 'sub_c1',
+          customerId: 'cust_1',
+          priceId: 'prod_pro_m',
+          quantity: 1,
+          interval: 'month',
+          status: 'active',
+          periodEnd: new Date('2026-12-04T00:00:00.000Z'),
+          cancelAtPeriodEnd: true,
+        },
+      ],
+    });
+    expect(await creem.parseWebhook({ body: `${body} `, headers: signed(body) })).toMatchObject({
+      ok: false,
+    });
+    expect(await creem.parseWebhook({ body, headers: new Headers() })).toMatchObject({ ok: false });
+    const refund = event({ id: 'ref_1' }, 'refund.created');
+    expect(await creem.parseWebhook({ body: refund, headers: signed(refund) })).toEqual({
+      ok: true,
+      changes: [],
+    });
+  });
+
+  it('takes the workspace from the checkout when the subscription carries no metadata', async () => {
+    const { metadata: _, ...bare } = subscription;
+    const body = event(
+      {
+        id: 'ch_1',
+        subscription: { ...bare, status: 'active' },
+        customer: 'cust_1',
+        metadata: { workspace_id: 'wsp_2' },
+      },
+      'checkout.completed',
+    );
+    const result = await make().parseWebhook({ body, headers: signed(body) });
+    expect(result).toMatchObject({
+      ok: true,
+      changes: [{ workspaceId: 'wsp_2', status: 'active', cancelAtPeriodEnd: false, externalId: 'sub_c1' }],
+    });
+    const expired = event({ ...subscription, status: 'expired' }, 'subscription.expired');
+    expect(await make().parseWebhook({ body: expired, headers: signed(expired) })).toMatchObject({
+      changes: [{ status: 'canceled' }],
     });
   });
 });
