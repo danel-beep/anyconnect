@@ -1,4 +1,5 @@
 import { getPlan } from '../billing/plans.js';
+import type { MerchantOfRecord } from '../billing/provider.js';
 import type { Locale } from './i18n.js';
 import type { LegalDoc } from './site.js';
 
@@ -14,11 +15,13 @@ interface Facts {
   supportEmail?: string | undefined;
   /** Legal name of whoever operates the service (`LEGAL_OPERATOR_NAME`); the terms name it when set. */
   operator?: string | undefined;
+  /** The active payment provider when it resells the plans (Paddle, Creem); unset = a plain processor or none. */
+  merchant?: MerchantOfRecord | undefined;
 }
 
-const REFUNDS_UPDATED = { ru: 'Редакция от 5 ноября 2026 года', en: 'Last updated November 5, 2026' };
-const CURRENT = { ru: 'Редакция от 6 ноября 2026 года', en: 'Last updated November 6, 2026' };
-const PRIVACY_UPDATED = { ru: 'Редакция от 11 ноября 2026 года', en: 'Last updated November 11, 2026' };
+const REFUNDS_UPDATED = { ru: 'Редакция от 12 ноября 2026 года', en: 'Last updated November 12, 2026' };
+const CURRENT = { ru: 'Редакция от 12 ноября 2026 года', en: 'Last updated November 12, 2026' };
+const PRIVACY_UPDATED = { ru: 'Редакция от 12 ноября 2026 года', en: 'Last updated November 12, 2026' };
 
 export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc {
   const contact =
@@ -26,16 +29,26 @@ export function legalDoc(kind: LegalKind, lang: Locale, facts: Facts): LegalDoc 
     (lang === 'ru' ? 'адрес поддержки, указанный на сайте' : 'the support address listed on the website');
   const site = facts.publicUrl.replace(/^https?:\/\//, '');
   const docs = { privacy, terms, refunds }[kind];
-  return docs[lang]({ contact, site, operator: facts.operator?.trim() || undefined });
+  return docs[lang]({
+    contact,
+    site,
+    operator: facts.operator?.trim() || undefined,
+    merchant: facts.merchant,
+  });
 }
 
-type Builder = (f: { contact: string; site: string; operator: string | undefined }) => LegalDoc;
+type Builder = (f: {
+  contact: string;
+  site: string;
+  operator: string | undefined;
+  merchant: MerchantOfRecord | undefined;
+}) => LegalDoc;
 
 /** Days of activity history per public plan, straight from the plan catalog (enforced by `activity.prune`). */
 const history = (id: 'free' | 'personal' | 'pro') => getPlan(id).limits.historyDays;
 
 const privacy: Record<Locale, Builder> = {
-  ru: ({ contact, site }) => ({
+  ru: ({ contact, site, merchant }) => ({
     title: 'Политика конфиденциальности',
     updated: PRIVACY_UPDATED.ru,
     intro: `Здесь описано, какие данные собирает сервис Manyplug (${site}), зачем и как мы их защищаем. Коротко: мы храним только то, что нужно для работы подключений, шифруем данные для входа в сервисы и не продаём данные.`,
@@ -49,7 +62,7 @@ const privacy: Record<Locale, Builder> = {
           'Мессенджеры (личный Telegram, Telegram Bot, WhatsApp): если вы подключили мессенджер, Manyplug хранит свою копию переписки, которая к нему приходит, чтобы ИИ-приложение быстро читало и искало сообщения, не обращаясь каждый раз к мессенджеру. В копии есть названия чатов, текст сообщений, отправители, даты и сведения о вложениях (имя, тип и размер файла, но не сам файл), а также исходящие сообщения в очереди на отправку. Сообщения сохраняются по мере того, как приходят и уходят, а не только когда спрашивает ИИ. Личный аккаунт Telegram при подключении копирует последние сообщения недавних чатов, а для работы сессии хранит её ключи и список собеседников, который нужен Telegram. Бот Telegram хранит переписку, которая приходит этому боту.',
           'Переписка, которую ведёт ИИ: если вы разрешили ИИ-приложению вести разговор в чате, мы храним это разрешение (какой чат, какое приложение, цель разговора, до какого времени и сколько сообщений), пока оно не закончится или вы его не отзовёте.',
           'Команды: в каких командах вы состоите и с какой ролью, приглашения (почта приглашённого), кому вы дали доступ к своим аккаунтам и на каком уровне, кто платит за команду.',
-          'Оплата: тариф, статус подписки и её id у Paddle. Данные карты и адрес для счёта хранит Paddle, к нам они не попадают.',
+          `Оплата: тариф, статус подписки и её id у ${merchant?.name ?? 'платёжного провайдера'}. Данные карты и адрес для счёта хранит ${merchant?.name ?? 'провайдер'}, к нам они не попадают.`,
           'Бот уведомлений: если вы связали Telegram для подтверждений, мы храним id вашего чата с ботом Manyplug и язык.',
           'Журнал действий: какой инструмент вызывался, когда, через какое ИИ-приложение и с каким результатом (успех или ошибка). Аргументы вызовов и содержимое ваших писем, файлов и сообщений в журнал не записываются.',
           'Технические данные: IP-адрес и браузер для сессий входа и защиты от злоупотреблений.',
@@ -70,7 +83,7 @@ const privacy: Record<Locale, Builder> = {
           'ИИ-приложениям, которые вы подключили (Claude, ChatGPT, Cursor и другие), — результаты инструментов по их запросам. Как эти приложения обращаются с данными, определяют их собственные политики.',
           'Подключённым сервисам — ваши запросы к ним от вашего имени.',
           'Участникам ваших команд — аккаунты команды и те ваши аккаунты, которыми вы сами поделились, на выбранном вами уровне. Владелец и администраторы команды не видят ваши личные аккаунты, которыми вы не делились. Тот, кто платит за команду, видит действия команды в счётчике своего тарифа, но не их содержание.',
-          'Paddle (наш реселлер и Merchant of Record) — данные, нужные для оплаты: почту, страну, тариф. Хостингу Render (Франкфурт, ЕС) — зашифрованную базу данных. Почтовому провайдеру — адрес и текст писем, которые мы вам отправляем. Сервису учёта ошибок, если он включён, — отчёты об ошибках, из которых удалены аргументы, токены и содержимое.',
+          `${merchant ? `${merchant.name} (наш реселлер и Merchant of Record)` : 'Платёжному провайдеру'} — данные, нужные для оплаты: почту, страну, тариф. Хостингу Render (Франкфурт, ЕС) — зашифрованную базу данных. Почтовому провайдеру — адрес и текст писем, которые мы вам отправляем. Сервису учёта ошибок, если он включён, — отчёты об ошибках, из которых удалены аргументы, токены и содержимое.`,
           'Мы не продаём и не передаём данные рекламным сетям.',
         ],
       },
@@ -143,7 +156,7 @@ const privacy: Record<Locale, Builder> = {
       },
     ],
   }),
-  en: ({ contact, site }) => ({
+  en: ({ contact, site, merchant }) => ({
     title: 'Privacy policy',
     updated: PRIVACY_UPDATED.en,
     intro: `This page explains what data Manyplug (${site}) collects, why, and how we protect it. In short: we keep only what connections need, encrypt access keys and never sell data.`,
@@ -157,7 +170,7 @@ const privacy: Record<Locale, Builder> = {
           'Messengers (personal Telegram, Telegram Bot, WhatsApp): if you connect a messenger, Manyplug keeps its own copy of the chats that reach it, so your AI app can read and search messages quickly without asking the messenger every time. The copy holds chat names, message text, senders, dates and attachment details (file name, type and size, not the file itself), plus outgoing messages waiting to be sent. Messages are saved as they are sent and received, not only when your AI app asks. A personal Telegram account also copies the latest messages of your recent chats when you connect it, and keeps the session keys and the list of people you chat with that Telegram needs to stay signed in. A Telegram bot keeps the chats that reach that bot.',
           'Conversations your AI carries on: if you let an AI app carry on a conversation in a chat, we keep that permission (which chat, which AI app, the goal you gave, until when and how many messages) until it ends or you revoke it.',
           'Teams: which teams you belong to and your role, invitations (the invited email), whom you shared your accounts with and at what level, and who pays for the team.',
-          'Billing: your plan, the subscription status and its Paddle id. Card details and billing address stay with Paddle and never reach us.',
+          `Billing: your plan, the subscription status and its ${merchant?.name ?? 'payment provider'} id. Card details and billing address stay with ${merchant?.name ?? 'the provider'} and never reach us.`,
           'Notification bot: if you link Telegram for confirmations, we keep the id of your chat with the Manyplug bot and its language.',
           'Activity log: which tool was called, when, by which AI app and whether it succeeded. Call arguments and the contents of your mail, files and messages are not logged.',
           'Technical data: IP address and browser, for sign-in sessions and abuse protection.',
@@ -178,7 +191,7 @@ const privacy: Record<Locale, Builder> = {
           'AI apps you connected (Claude, ChatGPT, Cursor and others) receive tool results they asked for. Their own policies govern how they treat that data.',
           'Connected services receive your requests made on your behalf.',
           'Members of your teams get the team accounts and those of your accounts you shared with them, at the level you chose. A team’s owner and admins do not see your personal accounts you did not share. Whoever pays for a team sees the team’s actions in their plan’s usage count, not what the actions were.',
-          'Paddle (our reseller and Merchant of Record) receives what a payment needs: email, country and plan. Render (Frankfurt, EU) hosts the encrypted database. Our email provider receives the address and text of the emails we send you. An error tracker, when enabled, receives error reports with arguments, tokens and contents removed.',
+          `${merchant ? `${merchant.name} (our reseller and Merchant of Record)` : 'Our payment provider'} receives what a payment needs: email, country and plan. Render (Frankfurt, EU) hosts the encrypted database. Our email provider receives the address and text of the emails we send you. An error tracker, when enabled, receives error reports with arguments, tokens and contents removed.`,
           'We do not sell data or share it with ad networks.',
         ],
       },
@@ -254,7 +267,7 @@ const privacy: Record<Locale, Builder> = {
 };
 
 const terms: Record<Locale, Builder> = {
-  ru: ({ contact, site, operator }) => ({
+  ru: ({ contact, site, operator, merchant }) => ({
     title: 'Условия использования',
     updated: CURRENT.ru,
     intro: `Эти условия действуют, когда вы пользуетесь сервисом Manyplug (${site}). Регистрируясь, вы с ними соглашаетесь. ${operator ? `Сервисом управляет ${operator}, частное лицо в Объединённых Арабских Эмиратах.` : 'Сервисом управляет частное лицо в Объединённых Арабских Эмиратах.'}`,
@@ -310,7 +323,9 @@ const terms: Record<Locale, Builder> = {
       {
         title: 'Оплата',
         paragraphs: [
-          'Платежи принимает наш реселлер Paddle.com (Merchant of Record): он выставляет счёт, списывает оплату, начисляет налоги и обрабатывает возвраты. При оплате действуют также условия покупателя Paddle (paddle.com/legal/invoiced-consumer-terms).',
+          merchant
+            ? `Платежи принимает наш реселлер ${merchant.legalName} (Merchant of Record): он выставляет счёт, списывает оплату, начисляет налоги и обрабатывает возвраты. При оплате действуют также условия покупателя ${merchant.name} (${merchant.buyerTerms}).`
+            : 'Платежи принимает наш платёжный провайдер: он списывает оплату и обрабатывает возвраты.',
           'Подписка продлевается автоматически в конце каждого периода, пока вы её не отмените. Отменить можно в любой момент в разделе «Тариф и лимиты» или из чата; тариф остаётся до конца оплаченного периода. Возвраты описаны в политике возврата (/refunds).',
         ],
       },
@@ -339,7 +354,7 @@ const terms: Record<Locale, Builder> = {
       },
     ],
   }),
-  en: ({ contact, site, operator }) => ({
+  en: ({ contact, site, operator, merchant }) => ({
     title: 'Terms of service',
     updated: CURRENT.en,
     intro: `These terms apply when you use Manyplug (${site}). By signing up you accept them. ${operator ? `Manyplug is operated by ${operator}, an individual based in the United Arab Emirates.` : 'Manyplug is operated by an individual based in the United Arab Emirates.'}`,
@@ -395,7 +410,9 @@ const terms: Record<Locale, Builder> = {
       {
         title: 'Payments',
         paragraphs: [
-          'Our order process is conducted by our online reseller Paddle.com. Paddle.com is the Merchant of Record for all our orders: it invoices you, takes the payment, handles taxes and processes refunds. Paddle’s buyer terms (paddle.com/legal/invoiced-consumer-terms) also apply to your purchase.',
+          merchant
+            ? `Our order process is conducted by our online reseller ${merchant.legalName}. ${merchant.legalName} is the Merchant of Record for all our orders: it invoices you, takes the payment, handles taxes and processes refunds. ${merchant.name}’s buyer terms (${merchant.buyerTerms}) also apply to your purchase.`
+            : 'Payments are taken by our payment provider, which charges you and processes refunds.',
           'Subscriptions renew automatically at the end of each period until you cancel. You can cancel at any time on the Plan and limits page or from the chat; the plan stays until the end of the paid period. Refunds are covered by our refund policy (/refunds).',
         ],
       },
@@ -427,7 +444,7 @@ const terms: Record<Locale, Builder> = {
 };
 
 const refunds: Record<Locale, Builder> = {
-  ru: ({ contact, site }) => ({
+  ru: ({ contact, site, merchant }) => ({
     title: 'Политика возврата',
     updated: REFUNDS_UPDATED.ru,
     intro: `Здесь описано, когда и как можно вернуть деньги за платный тариф Manyplug (${site}). Коротко: в течение 14 дней после любой оплаты вернём деньги полностью, без объяснения причин.`,
@@ -449,7 +466,7 @@ const refunds: Record<Locale, Builder> = {
       {
         title: 'Как запросить возврат',
         paragraphs: [
-          `Напишите на ${contact} с адреса, с которого оформлена подписка, или ответьте на чек от Paddle. Возврат проводит наш реселлер Paddle.com на ту же карту или счёт; обычно деньги приходят за 5–10 рабочих дней в зависимости от банка.`,
+          `Напишите на ${contact} с адреса, с которого оформлена подписка, или ответьте на чек от ${merchant?.name ?? 'платёжного провайдера'}. Возврат проводит ${merchant ? `наш реселлер ${merchant.legalName}` : 'платёжный провайдер'} на ту же карту или счёт; обычно деньги приходят за 5–10 рабочих дней в зависимости от банка.`,
         ],
       },
       {
@@ -458,7 +475,7 @@ const refunds: Record<Locale, Builder> = {
       },
     ],
   }),
-  en: ({ contact, site }) => ({
+  en: ({ contact, site, merchant }) => ({
     title: 'Refund policy',
     updated: REFUNDS_UPDATED.en,
     intro: `This page explains when and how you can get your money back for a paid Manyplug plan (${site}). In short: within 14 days of any payment we refund it in full, no questions asked.`,
@@ -480,7 +497,7 @@ const refunds: Record<Locale, Builder> = {
       {
         title: 'How to request a refund',
         paragraphs: [
-          `Write to ${contact} from the address you subscribed with, or reply to your Paddle receipt. Refunds are processed by our reseller Paddle.com to the original card or account and usually arrive within 5–10 business days, depending on your bank.`,
+          `Write to ${contact} from the address you subscribed with, or reply to your ${merchant?.name ?? 'payment'} receipt. Refunds are processed by ${merchant ? `our reseller ${merchant.legalName}` : 'our payment provider'} to the original card or account and usually arrive within 5–10 business days, depending on your bank.`,
         ],
       },
       {

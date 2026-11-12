@@ -61,6 +61,19 @@ export interface SubscriptionChange {
   cancelAtPeriodEnd: boolean;
 }
 
+/**
+ * A provider that sells to the customer itself (reseller): the legal pages name it, its buyer
+ * terms apply to the purchase, and it invoices, charges tax and refunds.
+ */
+export interface MerchantOfRecord {
+  /** Short name in running text, e.g. "Paddle". */
+  name: string;
+  /** As the terms name the reseller, e.g. "Paddle.com". */
+  legalName: string;
+  /** The provider's terms for buyers, without the scheme (shown as text on the legal pages). */
+  buyerTerms: string;
+}
+
 export type WebhookResult =
   /** The signature did not verify: answer 400, change nothing. */
   | { ok: false; reason: string }
@@ -74,6 +87,8 @@ export interface BillingProvider {
   readonly name: string;
   /** Sandbox / test mode: shown to users so nobody mistakes it for a real charge. */
   readonly testMode: boolean;
+  /** Set when the provider is the merchant of record (Paddle, Creem); unset for processors (Stripe). */
+  readonly merchant?: MerchantOfRecord;
   /** A hosted checkout page for a new subscription. */
   checkout(input: CheckoutInput): Promise<{ url: string }>;
   /** A hosted page where the customer updates the card, sees invoices or cancels. */
