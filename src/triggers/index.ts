@@ -16,7 +16,7 @@ import type { AgentHub } from './ai/agent.js';
 import { AiKeyStore } from './ai-keys.js';
 import { RUN_TIMEOUT_MS, TriggerEngine } from './engine.js';
 import { TriggerService } from './service.js';
-import { MailSource, MessageSource } from './sources.js';
+import { CalendarSource, MailSource, MessageSource } from './sources.js';
 import { TriggerStore } from './store.js';
 
 /**
@@ -28,6 +28,9 @@ const RUN_CONCURRENCY = 8;
 const RUN_CONCURRENCY_PER_WORKSPACE = 2;
 /** The catch-up pass ends before the next one is due. */
 const SCAN_TIMEOUT_MS = 110_000;
+/** Sources read on a schedule (their services have no push without paid infrastructure). */
+const POLLED = ['mail', 'calendar'] as const;
+const CALENDAR_POLL_MS = 60_000;
 
 /** The trigger subsystem, wired once (see docs/TRIGGERS.md). */
 export interface Triggers {
@@ -38,7 +41,7 @@ export interface Triggers {
   jobs: JobDefinition[];
   /**
    * Follows new messages (Postgres NOTIFY from every process that stores them) and reads watched
-   * mailboxes every `mailPollMs` (mail has no push without paid infrastructure).
+   * mailboxes every `mailPollMs` and calendars once a minute (no push without paid infrastructure).
    */
   start(): void;
   stop(): void;
@@ -85,6 +88,7 @@ export function createTriggers(deps: {
         store: deps.messaging.store,
       }),
       new MailSource({ accounts: deps.accounts, connectors: deps.connectors, logger }),
+      new CalendarSource({ accounts: deps.accounts, connectors: deps.connectors, logger }),
     ],
     hub,
     accounts: deps.accounts,
@@ -114,9 +118,9 @@ export function createTriggers(deps: {
     aiPageUrl,
   });
   let unlisten: (() => void) | undefined;
-  let mailLoop: DueLoop | undefined;
-  const scanMail = (timeoutMs = 90_000, stop?: AbortSignal) =>
-    engine.scanAll('mail', {
+  const loops: DueLoop[] = [];
+  const poll = (source: (typeof POLLED)[number], timeoutMs = 90_000, stop?: AbortSignal) =>
+    engine.scanAll(source, {
       background: true,
       signal: stop ? AbortSignal.any([stop, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
@@ -151,7 +155,8 @@ export function createTriggers(deps: {
       },
       {
         name: 'triggers.scan',
-        description: 'Check mailboxes for triggers and catch up on messages a lost notification missed',
+        description:
+          'Check mailboxes and calendars for triggers and catch up on messages a lost notification missed',
         cron: '*/2 * * * *',
         expectEveryMs: 10 * 60_000,
         timeoutMs: SCAN_TIMEOUT_MS,
@@ -159,8 +164,9 @@ export function createTriggers(deps: {
           // Runs first: it is cheap, and must not wait behind a long pass over mailboxes.
           await engine.recover();
           await engine.scanAll('message', { background: true, signal: ctx.signal, changedOnly: true });
-          // The poll loop of `start()` reads mail more often; this is the backstop without it.
-          if (!mailLoop) await scanMail(90_000, ctx.signal);
+          // The poll loops of `start()` read mail and calendars more often; this is the backstop
+          // without them.
+          if (!loops.length) for (const source of POLLED) await poll(source, 90_000, ctx.signal);
         },
       },
       {
@@ -172,18 +178,23 @@ export function createTriggers(deps: {
       },
     ],
     start: () => {
-      const every = deps.mailPollMs ?? 0;
-      if (every > 0 && !mailLoop) {
-        mailLoop = new DueLoop({
-          work: async () => {
-            await scanMail(Math.max(every * 3, 60_000));
-            return new Date(Date.now() + every);
-          },
-          idleMs: () => every,
-          onError: (error) => deps.onError?.(error, { step: 'mail_poll' }),
-          minGapMs: Math.min(every, 5_000),
-        });
-        mailLoop.start();
+      const mailEvery = deps.mailPollMs ?? 0;
+      if (mailEvery > 0 && !loops.length) {
+        for (const source of POLLED) {
+          // A calendar trigger fires minutes ahead of an event: a look a minute is often enough.
+          const every = source === 'calendar' ? Math.max(mailEvery, CALENDAR_POLL_MS) : mailEvery;
+          const loop = new DueLoop({
+            work: async () => {
+              await poll(source, Math.max(every * 3, 60_000));
+              return new Date(Date.now() + every);
+            },
+            idleMs: () => every,
+            onError: (error) => deps.onError?.(error, { step: `${source}_poll` }),
+            minGapMs: Math.min(every, 5_000),
+          });
+          loop.start();
+          loops.push(loop);
+        }
       }
       unlisten ??= deps.listener?.listen(
         INBOUND_CHANNEL,
@@ -195,8 +206,7 @@ export function createTriggers(deps: {
     stop: () => {
       unlisten?.();
       unlisten = undefined;
-      void mailLoop?.stop();
-      mailLoop = undefined;
+      for (const loop of loops.splice(0)) void loop.stop();
     },
   };
 }

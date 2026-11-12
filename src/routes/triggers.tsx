@@ -4,7 +4,7 @@ import { connectorText } from '../connectors/sdk.js';
 import type { Principal } from '../core/principal.js';
 import type { TriggerChange, TriggerDo, TriggerWhen } from '../hub/trigger-tools.js';
 import { AI_PROVIDER_IDS, AI_PROVIDERS } from '../triggers/ai/providers.js';
-import { DEFAULT_DAILY_RUNS, MAX_DAILY_RUNS } from '../triggers/spec.js';
+import { DEFAULT_DAILY_RUNS, MAX_DAILY_RUNS, MAX_MINUTES_BEFORE, TRIGGER_SOURCES } from '../triggers/spec.js';
 import type { TriggerEvent } from '../triggers/store.js';
 import type { Key } from '../web/i18n.js';
 import { type AccountOption, AiKeysPage, type TriggerEventView, TriggersPage } from '../web/triggers.js';
@@ -31,12 +31,13 @@ const dailyLimit = (form: Record<string, string>, field: string): number | null 
 
 const TriggerForm = z.object({
   name: z.string().trim().min(1).max(80),
-  account: z.string().regex(/^(message|mail):[\w.:@-]{0,200}$/),
+  account: z.string().regex(/^(message|mail|calendar):[\w.:@-]{0,200}$/),
   do: z.enum(['check', 'notify', 'tool', 'ai']),
   from: z.string().max(300).default(''),
   text: z.string().max(300).default(''),
   chat: z.string().max(300).default(''),
   subject: z.string().max(300).default(''),
+  minutesBefore: z.string().trim().max(5).default(''),
   task: z.string().trim().max(1000).default(''),
   tool: z.string().trim().max(100).default(''),
   args: z.string().trim().max(4000).default(''),
@@ -72,7 +73,17 @@ function triggerInput(
     name: input.name,
     when,
     ...(account ? { account } : {}),
-    filter: { from: input.from, text: input.text, chat: input.chat, subject: input.subject },
+    filter: {
+      from: input.from,
+      text: input.text,
+      chat: input.chat,
+      subject: input.subject,
+      ...(when === 'calendar' && input.minutesBefore
+        ? {
+            minutes_before: z.coerce.number().int().min(0).max(MAX_MINUTES_BEFORE).parse(input.minutesBefore),
+          }
+        : {}),
+    },
     do: input.do,
     ...(input.do === 'check' && input.task ? { task: input.task } : {}),
     ...(input.do === 'tool' ? { tool: input.tool, args: args ?? {} } : {}),
@@ -100,7 +111,7 @@ async function accountOptions(c: AppContext, workspaceId: string): Promise<Accou
   ]);
   const names = new Map(connectors.map((x) => [x.id, connectorText(x, c.get('locale')).name]));
   const out: AccountOption[] = [];
-  for (const when of ['message', 'mail'] as const) {
+  for (const when of TRIGGER_SOURCES) {
     const rows = [...watchable[when]].sort(
       (a, b) => a.connectorId.localeCompare(b.connectorId) || a.label.localeCompare(b.label),
     );

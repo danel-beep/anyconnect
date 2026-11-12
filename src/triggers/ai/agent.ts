@@ -76,6 +76,13 @@ function systemPrompt(instructions: string, toolNames: string[]): string {
   ].join('\n');
 }
 
+/** How the event is introduced to the AI, by where it came from. */
+const EVENT_NAMES: Record<TriggerItem['source'], string> = {
+  message: 'New message',
+  mail: 'New email',
+  calendar: 'Calendar event about to start',
+};
+
 function eventMessage(item: TriggerItem, trigger: string): string {
   const id = randomBytes(4).toString('hex');
   const fields = {
@@ -89,12 +96,12 @@ function eventMessage(item: TriggerItem, trigger: string): string {
   const content = [
     item.chatTitle ? `Chat: ${item.chatTitle}` : '',
     item.from ? `From: ${item.from}` : '',
-    item.subject ? `Subject: ${item.subject}` : '',
+    item.subject ? `${item.source === 'calendar' ? 'Event' : 'Subject'}: ${item.subject}` : '',
     clip(item.text, MAX_EVENT_CHARS),
   ]
     .filter(Boolean)
     .join('\n');
-  return `New ${item.source === 'mail' ? 'email' : 'message'}: ${JSON.stringify(fields)}\n⟦untrusted ${id} source="event"⟧\n${content.replace(/[⟦⟧]/g, ' ')}\n⟦/untrusted ${id}⟧`;
+  return `${EVENT_NAMES[item.source]}: ${JSON.stringify(fields)}\n⟦untrusted ${id} source="event"⟧\n${content.replace(/[⟦⟧]/g, ' ')}\n⟦/untrusted ${id}⟧`;
 }
 
 const resultText = (result: ToolCallResult): string =>

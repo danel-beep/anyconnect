@@ -5,15 +5,14 @@
 export const triggersEn = {
   'triggers.title': 'Triggers',
   'triggers.sub':
-    'Automations: when a message or email matches, something happens on its own. Your AI app sets them up for you.',
+    'Automations: when a message or email matches, or a calendar event is about to start, something happens on its own. Your AI app sets them up for you.',
   'triggers.askTitle': 'Set one up by asking your AI',
   'triggers.askText':
     'Tell Claude or ChatGPT (connected to Manyplug) what should happen, in one sentence: “When …, …”. It picks what to watch, the filter and the action, and asks you to confirm anything that acts on its own.',
   'triggers.ask': 'Try one of these',
   'triggers.askHint': 'Tap to copy, then paste into your AI app.',
   'triggers.askPrompt1': 'When an email from my bank arrives, notify me in Telegram.',
-  'triggers.askPrompt2':
-    'When a client writes to me in Telegram, save it so you can draft a reply when I check in.',
+  'triggers.askPrompt2': 'Ten minutes before each meeting in my calendar, send me its details in Telegram.',
   'triggers.askPrompt3':
     'When someone asks about prices in Telegram, have my AI reply with our price list, but ask me before sending.',
   'triggers.askPrompt4': 'Every hour, check my triggers and tell me only if something is new.',
@@ -26,6 +25,7 @@ export const triggersEn = {
   'triggers.pausedWhy': 'it hit its daily limit; turn it on again or raise the limit',
   'triggers.when.message': 'Messages',
   'triggers.when.mail': 'Mail',
+  'triggers.when.calendar': 'Calendar',
   'triggers.everyAccount': 'every account',
   'triggers.do.check': 'Let my AI app check',
   'triggers.do.checkHint':
@@ -66,6 +66,7 @@ export const triggersEn = {
   'triggers.source': 'Watch',
   'triggers.allMessages': 'All messages (every messenger account)',
   'triggers.allMail': 'All mail (every mailbox)',
+  'triggers.allCalendars': 'All calendars (every calendar account)',
   'triggers.filter': 'Only when',
   'triggers.filterHint':
     'Leave a field empty to skip it. Separate alternatives with commas: “invoice, receipt” matches either. Case does not matter.',
@@ -75,8 +76,10 @@ export const triggersEn = {
   'triggers.filter.textPlaceholder': 'For example, urgent, asap',
   'triggers.filter.chat': 'Chat or group',
   'triggers.filter.chatPlaceholder': 'Messages only',
-  'triggers.filter.subject': 'Email subject',
-  'triggers.filter.subjectPlaceholder': 'Mail only',
+  'triggers.filter.subject': 'Email subject or event title',
+  'triggers.filter.subjectPlaceholder': 'Mail and calendar',
+  'triggers.filter.minutes_before': 'Minutes before the event',
+  'triggers.filter.minutes_beforePlaceholder': 'Calendar only, {n} by default',
   'triggers.filter.not_from': 'Not from',
   'triggers.filter.not_chat': 'Not in chat',
   'triggers.filter.not_subject': 'Subject without',
@@ -129,7 +132,7 @@ export const triggersEn = {
   'aikeys.step2Cta': 'See examples',
   'aikeys.step3': 'It runs on its own',
   'aikeys.step3Text':
-    'The hub watches your messages and mail around the clock and wakes your AI on your key, within a daily limit. Results show up under Triggers.',
+    'The hub watches your messages, mail and calendar around the clock and wakes your AI on your key, within a daily limit. Results show up under Triggers.',
   'aikeys.step3Cta': 'Open Triggers',
   'aikeys.list': 'Your keys',
   'aikeys.lastUsed': 'used {when}',
@@ -195,15 +198,14 @@ type TriggersKey = keyof typeof triggersEn;
 export const triggersRu: Record<TriggersKey, string> = {
   'triggers.title': 'Триггеры',
   'triggers.sub':
-    'Автоматизации: когда сообщение или письмо подходит под условие, что-то происходит само. Настраивает их ваше ИИ-приложение.',
+    'Автоматизации: когда сообщение или письмо подходит под условие или скоро начнётся событие в календаре, что-то происходит само. Настраивает их ваше ИИ-приложение.',
   'triggers.askTitle': 'Настройте, просто попросив свой ИИ',
   'triggers.askText':
     'Скажите Claude или ChatGPT (подключённому к Manyplug) одной фразой, что должно происходить: «Когда …, …». Он сам выберет, за чем следить, условие и действие, а всё, что действует само, отправит вам на подтверждение.',
   'triggers.ask': 'Попробуйте одну из фраз',
   'triggers.askHint': 'Нажмите, чтобы скопировать, и вставьте в ИИ-приложение.',
   'triggers.askPrompt1': 'Когда придёт письмо от моего банка, напиши мне в Telegram.',
-  'triggers.askPrompt2':
-    'Когда клиент пишет мне в Telegram, сохраняй это, чтобы ты подготовил ответ, когда я загляну.',
+  'triggers.askPrompt2': 'За десять минут до каждой встречи в календаре присылай мне её детали в Telegram.',
   'triggers.askPrompt3':
     'Когда в Telegram спрашивают про цены, пусть мой ИИ отвечает нашим прайсом, но спрашивает меня перед отправкой.',
   'triggers.askPrompt4': 'Каждый час проверяй мои триггеры и пиши, только если появилось что-то новое.',
@@ -216,6 +218,7 @@ export const triggersRu: Record<TriggersKey, string> = {
   'triggers.pausedWhy': 'достиг дневного лимита; включите снова или поднимите лимит',
   'triggers.when.message': 'Сообщения',
   'triggers.when.mail': 'Почта',
+  'triggers.when.calendar': 'Календарь',
   'triggers.everyAccount': 'все аккаунты',
   'triggers.do.check': 'Пусть проверяет моё ИИ-приложение',
   'triggers.do.checkHint':
@@ -256,6 +259,7 @@ export const triggersRu: Record<TriggersKey, string> = {
   'triggers.source': 'Следить за',
   'triggers.allMessages': 'Все сообщения (все аккаунты мессенджеров)',
   'triggers.allMail': 'Вся почта (все ящики)',
+  'triggers.allCalendars': 'Все календари (все аккаунты календарей)',
   'triggers.filter': 'Только если',
   'triggers.filterHint':
     'Пустое поле не учитывается. Варианты пишите через запятую: «счёт, чек» подходит под любой. Регистр не важен.',
@@ -265,8 +269,10 @@ export const triggersRu: Record<TriggersKey, string> = {
   'triggers.filter.textPlaceholder': 'Например, срочно, asap',
   'triggers.filter.chat': 'Чат или группа',
   'triggers.filter.chatPlaceholder': 'Только для сообщений',
-  'triggers.filter.subject': 'Тема письма',
-  'triggers.filter.subjectPlaceholder': 'Только для почты',
+  'triggers.filter.subject': 'Тема письма или название события',
+  'triggers.filter.subjectPlaceholder': 'Почта и календарь',
+  'triggers.filter.minutes_before': 'Минут до события',
+  'triggers.filter.minutes_beforePlaceholder': 'Только для календаря, по умолчанию {n}',
   'triggers.filter.not_from': 'Не от',
   'triggers.filter.not_chat': 'Не в чате',
   'triggers.filter.not_subject': 'Тема без',
@@ -319,7 +325,7 @@ export const triggersRu: Record<TriggersKey, string> = {
   'aikeys.step2Cta': 'Примеры',
   'aikeys.step3': 'Дальше всё работает само',
   'aikeys.step3Text':
-    'Хаб круглосуточно следит за сообщениями и почтой и будит ваш ИИ на вашем ключе в пределах дневного лимита. Результаты видны в разделе «Триггеры».',
+    'Хаб круглосуточно следит за сообщениями, почтой и календарём и будит ваш ИИ на вашем ключе в пределах дневного лимита. Результаты видны в разделе «Триггеры».',
   'aikeys.step3Cta': 'Открыть триггеры',
   'aikeys.list': 'Ваши ключи',
   'aikeys.lastUsed': 'использован {when}',

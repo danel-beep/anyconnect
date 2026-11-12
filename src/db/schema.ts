@@ -1377,7 +1377,7 @@ export const telegramConnections = pgTable('telegram_connections', {
 // ---------------------------------------------------------------------------
 
 /** What a trigger listens to. */
-export type TriggerSource = 'message' | 'mail';
+export type TriggerSource = 'message' | 'mail' | 'calendar';
 /** What a trigger does when an event matches. */
 export type TriggerActionKind = 'check' | 'notify' | 'tool' | 'ai';
 /** Why a trigger stopped on its own. */

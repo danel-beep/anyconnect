@@ -1,12 +1,14 @@
 import type { FC } from 'hono/jsx';
-import type { AiProviderId, TriggerEventStatus } from '../db/schema.js';
+import type { AiProviderId, TriggerEventStatus, TriggerSource } from '../db/schema.js';
+import { DEFAULT_MINUTES_BEFORE, MAX_MINUTES_BEFORE } from '../triggers/spec.js';
 import { AppShell, Flash, PageHead, type SetupStep, SetupSteps, type ShellInfo } from './app.js';
 import type { Key } from './i18n.js';
 import type { PageCtx } from './page-context.js';
 import { AskAi, Fold, fmtAgo, fmtNumber, Hidden, Icon, Meter, SectionHead } from './ui.js';
 
 /**
- * Triggers in the dashboard (`/app/triggers`): the rules "when a message or email matches, do…",
+ * Triggers in the dashboard (`/app/triggers`): the rules "when a message, an email or a calendar
+ * event matches, do…",
  * and the live feed of what they matched. The separate AI API page (`/app/ai`) holds the user's
  * own keys that `ai` triggers wake. The user's AI app sets both up through the chat tools
  * (`manyplug_*_trigger`, `manyplug_*ai_key*`), so the pages lead with what to ask it; pasting a key
@@ -21,10 +23,10 @@ export interface TriggerRowView {
   name: string;
   enabled: boolean;
   paused: string | null;
-  when: 'message' | 'mail';
+  when: TriggerSource;
   accounts: string;
   everyAccount: boolean;
-  filter: Record<string, string | boolean>;
+  filter: Record<string, string | boolean | number>;
   do: TriggerKind;
   action: string;
   dailyLimit: number | null;
@@ -50,7 +52,7 @@ export interface AccountOption {
   /** "", "service" or "service:name". */
   value: string;
   label: string;
-  when: 'message' | 'mail';
+  when: TriggerSource;
 }
 
 export interface TriggersView {
@@ -72,7 +74,7 @@ const STATUS_CLASS: Record<TriggerEventStatus, string> = {
   skipped: 'badge',
 };
 
-const filterText = (ctx: PageCtx, filter: Record<string, string | boolean>): string => {
+const filterText = (ctx: PageCtx, filter: Record<string, string | boolean | number>): string => {
   const parts = Object.entries(filter).map(([k, v]) =>
     typeof v === 'boolean'
       ? ctx.t(`triggers.filter.${k}` as Key)
@@ -207,6 +209,7 @@ const NewTrigger: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) => 
             <select id="tr-account" name="account">
               <option value="message:">{t('triggers.allMessages')}</option>
               <option value="mail:">{t('triggers.allMail')}</option>
+              <option value="calendar:">{t('triggers.allCalendars')}</option>
               {view.accounts.map((a) => (
                 <option value={`${a.when}:${a.value}`}>{a.label}</option>
               ))}
@@ -229,6 +232,17 @@ const NewTrigger: FC<{ ctx: PageCtx; view: TriggersView }> = ({ ctx, view }) => 
                 />
               </div>
             ))}
+            <div>
+              <label for="tr-before">{t('triggers.filter.minutes_before')}</label>
+              <input
+                id="tr-before"
+                type="number"
+                name="minutesBefore"
+                min={0}
+                max={MAX_MINUTES_BEFORE}
+                placeholder={t('triggers.filter.minutes_beforePlaceholder', { n: DEFAULT_MINUTES_BEFORE })}
+              />
+            </div>
           </div>
         </fieldset>
         <fieldset class="choice-list">

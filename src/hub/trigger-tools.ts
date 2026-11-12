@@ -17,7 +17,8 @@ import type { SetupActionSpec, SetupContext } from './setup-tools.js';
  * the tools point to the AI API page.
  */
 
-export type TriggerWhen = 'message' | 'mail';
+export const TRIGGER_WHEN = ['message', 'mail', 'calendar'] as const;
+export type TriggerWhen = (typeof TRIGGER_WHEN)[number];
 export type TriggerDo = 'check' | 'notify' | 'tool' | 'ai';
 
 /** A trigger as the tools show it. */
@@ -32,7 +33,7 @@ export interface TriggerInfo {
   accounts: string;
   /** Watches every account of its source (the label then reads "all mail" / "all messages"). */
   everyAccount: boolean;
-  filter: Record<string, string | boolean>;
+  filter: Record<string, string | boolean | number>;
   do: TriggerDo;
   /** Short description of the action, e.g. "telegram_send" or "AI (OpenAI, 3 tools)". */
   action: string;
@@ -59,6 +60,7 @@ export interface TriggerChange {
     not_text?: string;
     skip_bulk?: boolean;
     spam?: boolean;
+    minutes_before?: number;
   };
   do?: TriggerDo;
   task?: string;
@@ -193,9 +195,10 @@ const FilterInput = z
     not_text: z.string().trim().max(300).optional(),
     skip_bulk: z.boolean().optional(),
     spam: z.boolean().optional(),
+    minutes_before: z.number().int().min(0).max(1440).optional(),
   })
   .describe(
-    'Every field set must match (case-insensitive "contains"; commas separate alternatives): from = sender name, @username, phone or email; chat = chat title (messages); subject = email subject (mail); text = words in the message or the email subject and preview. not_from / not_chat / not_subject / not_text skip an item that contains any of their words. Mail: skip_bulk skips newsletters, notifications and no-reply senders for free, before any action or AI runs (recommend it for "important mail"); spam also watches the spam folder. Mail triggers watch the inbox. Empty: every new item.',
+    'Every field set must match (case-insensitive "contains"; commas separate alternatives): from = sender name, @username, phone or email; chat = chat title (messages); subject = email subject (mail) or event title (calendar); text = words in the message, the email subject and preview, or the event title, time and place. not_from / not_chat / not_subject / not_text skip an item that contains any of their words. Mail: skip_bulk skips newsletters, notifications and no-reply senders for free, before any action or AI runs (recommend it for "important mail"); spam also watches the spam folder. Mail triggers watch the inbox. Calendar: the trigger fires once for each event with a start time, minutes_before minutes before it starts (default 10, at most 1440; all-day events are skipped). Empty: every new item.',
   );
 
 const ChangeFields = {
@@ -397,7 +400,7 @@ export function triggerActions(
       name: 'triggers',
       title: 'Show triggers',
       description:
-        'Lists the user’s triggers ("when a message or email matches, do something"): what each watches, what it does, whether it is on, runs today and the daily limit.',
+        'Lists the user’s triggers ("when a message, an email or a calendar event matches, do something"): what each watches, what it does, whether it is on, runs today and the daily limit.',
       input: z.object({}),
       risk: 'read',
       hints: { readOnly: true, idempotent: true, openWorld: false },
@@ -419,13 +422,18 @@ export function triggerActions(
     }),
     define({
       name: 'create_trigger',
-      keywords: 'automation when arrives whenever comes in notify ping alert watch',
+      keywords:
+        'automation when arrives whenever comes in notify ping alert watch remind before meeting event starts',
       title: 'Create a trigger',
       description:
-        'Creates a trigger (an automation): when a new message or email matches the filter, the hub does something. Use it when the user asks "when X happens, do Y"; fill the filter and action from their words and ask only what is unclear. Prefer do=check for things the AI should handle (no cost until something matches) or do=notify; do=tool and do=ai make the hub act on its own and wait for the user’s confirmation. Returns a ready scheduled-task prompt for do=check.',
+        'Creates a trigger (an automation): when a new message or email matches the filter, or a calendar event is about to start, the hub does something. Use it when the user asks "when X happens, do Y"; fill the filter and action from their words and ask only what is unclear. Prefer do=check for things the AI should handle (no cost until something matches) or do=notify; do=tool and do=ai make the hub act on its own and wait for the user’s confirmation. Returns a ready scheduled-task prompt for do=check.',
       input: z.object({
         name: z.string().trim().min(1).max(80).describe('Short name, e.g. "Invoices from Acme"'),
-        when: z.enum(['message', 'mail']).describe('message: messengers (Telegram, WhatsApp…) · mail: email'),
+        when: z
+          .enum(TRIGGER_WHEN)
+          .describe(
+            'message: messengers (Telegram, WhatsApp…) · mail: email · calendar: an event is about to start',
+          ),
         do: DO,
         ...ChangeFields,
       }),
@@ -459,7 +467,7 @@ export function triggerActions(
       input: z.object({
         trigger: triggerRef,
         name: z.string().trim().min(1).max(80).optional(),
-        when: z.enum(['message', 'mail']).optional(),
+        when: z.enum(TRIGGER_WHEN).optional(),
         do: DO.optional(),
         enabled: z.boolean().optional(),
         ...ChangeFields,
@@ -484,7 +492,7 @@ export function triggerActions(
       keywords: 'try run dry test existing email message already arrived',
       title: 'Try a trigger on a real message',
       description:
-        'Tries a trigger on a message or email that already arrived (the last day): by default the newest one its filter matches, or the one with "item" (an id from the service’s tools). Says whether the filter matches and runs the action for real, as a new match would (same limits and checks; do=check keeps it for manyplug_check_triggers), then returns the outcome. run false only checks the filter; force true runs it on an item the filter does not match.',
+        'Tries a trigger on a message or email that already arrived (the last day), or on a calendar event of the next 24 hours: by default the newest one its filter matches, or the one with "item" (an id from the service’s tools). Says whether the filter matches and runs the action for real, as a new match would (same limits and checks; do=check keeps it for manyplug_check_triggers), then returns the outcome. run false only checks the filter; force true runs it on an item the filter does not match.',
       input: z.object({
         trigger: triggerRef,
         item: z
