@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { isMetric, type Metric, PLANS } from '../billing/plans.js';
 import { REFERRAL_PROVIDER } from '../billing/referrals.js';
+import { BRAND } from '../brand.js';
 import { actionRisk, actionText, connectorGuide, connectorText } from '../connectors/sdk.js';
 import { type AccountRow, MESSAGE_RETENTION_DAYS } from '../core/accounts.js';
 import { isRecentAuth } from '../core/auth-methods.js';
@@ -989,6 +990,26 @@ export function appRoutes() {
     action('/app/settings', async (c, auth) => {
       const n = await c.get('services').sessions.destroyOthers(auth.user.id, auth.session.token);
       setFlash(c, 'ok', 'app.flash.sessionsEnded', { n: String(n) });
+    }),
+  );
+
+  // The person's own data as a file. Asked with a form (CSRF), answered with a download.
+  app.post(
+    '/app/settings/export',
+    action('/app/settings', async (c, auth) => {
+      const s = c.get('services');
+      if (!s.rateLimiter.consume(`export:user:${auth.user.id}`, 6, 60 * 60_000).allowed) {
+        setFlash(c, 'bad', 'app.flash.exportLimited');
+        return;
+      }
+      const data = await s.dataExport.forUser(auth.user.id);
+      s.logger.info({ userId: auth.user.id }, 'user exported their data');
+      const day = new Date().toISOString().slice(0, 10);
+      return c.body(JSON.stringify(data, null, 2), 200, {
+        'content-type': 'application/json; charset=utf-8',
+        'content-disposition': `attachment; filename="${BRAND.slug}-export-${day}.json"`,
+        'cache-control': 'no-store',
+      });
     }),
   );
 

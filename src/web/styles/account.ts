@@ -4,6 +4,7 @@
  */
 export const ACCOUNT_CSS = `
 .sec-head{display:flex;align-items:flex-start;gap:14px;margin:0 0 18px}
+.sec-head:last-child{margin-bottom:0}
 .sec-head h2{margin:2px 0 4px;font-size:18px}
 .sec-head p{margin:0}
 .sec-head>.badge,.sec-head>form{flex:none;margin-top:6px}
