@@ -1,16 +1,18 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ------------------------------------------------------------------
-FROM node:26-slim AS build
+# The base image is pinned by digest (Dependabot refreshes it weekly): a tag can be moved, a digest cannot.
+FROM node:26-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# No install scripts: a dependency must not run code at build time (the hub needs none of them).
+RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev --no-audit --no-fund
+RUN npm run build && npm prune --omit=dev --ignore-scripts --no-audit --no-fund
 
 # ---- runtime ----------------------------------------------------------------
-FROM node:26-slim AS runtime
+FROM node:26-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS runtime
 ENV NODE_ENV=production
 # pg_dump / pg_restore for database backups, from the PostgreSQL apt repository: they must be at
 # least the server's major version (PostgreSQL 17 on Render), newer than Debian's own.

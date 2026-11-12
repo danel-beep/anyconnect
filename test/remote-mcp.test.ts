@@ -1,5 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { actionNamesFor, defineRemoteMcpConnector } from '../src/connectors/mcp-remote/connector.js';
+import {
+  actionNamesFor,
+  defineRemoteMcpConnector,
+  type RemoteMcpTool,
+  riskFromAnnotations,
+  visibleText,
+  withoutRiskDowngrades,
+} from '../src/connectors/mcp-remote/connector.js';
 import { validateConnector } from '../src/connectors/registry.js';
 import { actionRisk } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
@@ -291,5 +298,86 @@ describe('remote MCP servers as services', () => {
     expect(unknown.status).toBe(400);
     const extra = await api('/services/upstream', { method: 'PATCH', body: { url: 'https://evil.example' } });
     expect(extra.status).toBe(400);
+  });
+});
+
+describe('what a remote server says about its tools', () => {
+  const HIDDEN = '\u200B\u202E\u{E0049}\u{E0067}\u0007';
+
+  it('passes on only the text a person can see, capped', () => {
+    expect(visibleText(`Reads${HIDDEN} notes\n\tline two `, 100)).toBe('Reads notes\n\tline two');
+    expect(visibleText('x'.repeat(5000), 2000)).toHaveLength(2000);
+
+    const connector = defineRemoteMcpConnector({
+      id: 'notes',
+      name: 'Notes',
+      description: 'Remote notes',
+      url: 'https://notes.example/mcp',
+      auth: { type: 'none' },
+      tools: [
+        {
+          name: 'find',
+          title: `Find${HIDDEN} notes`,
+          description: `Finds notes.${HIDDEN}${'!'.repeat(5000)}`,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: `Words${HIDDEN} to look for` },
+              filter: {
+                type: 'object',
+                properties: { tag: { type: 'string', title: `Tag${HIDDEN}`, description: 'y'.repeat(5000) } },
+              },
+            },
+          },
+          annotations: { readOnlyHint: true },
+        },
+        { name: 'blank', description: HIDDEN, inputSchema: { type: 'object' } },
+      ],
+    });
+    const [find, blank] = connector.actions;
+    expect(find!.title).toBe('Find notes');
+    expect(find!.description).toHaveLength(2000);
+    expect(find!.description.startsWith('Finds notes.!')).toBe(true);
+    const schema = find!.inputSchema as { properties: Record<string, any> };
+    expect(schema.properties.query.description).toBe('Words to look for');
+    expect(schema.properties.filter.properties.tag.title).toBe('Tag');
+    expect(schema.properties.filter.properties.tag.description).toHaveLength(2000);
+    // A description made only of invisible characters is no description.
+    expect(blank!.description).toBe('Runs "blank" on Notes.');
+  });
+
+  it('does not let a refresh nobody reviews lower the risk of a tool', () => {
+    const tool = (name: string, annotations?: RemoteMcpTool['annotations']): RemoteMcpTool => ({
+      name,
+      description: `${name} v1`,
+      inputSchema: { type: 'object' },
+      ...(annotations ? { annotations } : {}),
+    });
+    const before = [
+      tool('wipe'),
+      tool('post', { destructiveHint: false }),
+      tool('list', { readOnlyHint: true }),
+      tool('rename', { destructiveHint: false }),
+    ];
+    const after = withoutRiskDowngrades(before, [
+      // "Now harmless": stays as guarded as it was.
+      { ...tool('wipe', { readOnlyHint: true }), description: 'wipe v2' },
+      { ...tool('post', { readOnlyHint: true }), description: 'post v2' },
+      // Stricter or unchanged annotations and new tools are taken as they are.
+      tool('list'),
+      tool('rename', { destructiveHint: false, idempotentHint: true }),
+      tool('extra', { readOnlyHint: true }),
+    ]);
+    expect(after.map((t) => [t.name, riskFromAnnotations(t)])).toEqual([
+      ['wipe', 'dangerous'],
+      ['post', 'write'],
+      ['list', 'dangerous'],
+      ['rename', 'write'],
+      ['extra', 'read'],
+    ]);
+    // Everything but the annotations follows the server.
+    expect(after[0]!.description).toBe('wipe v2');
+    expect(after[0]!.annotations).toBeUndefined();
+    expect(after[3]!.annotations).toEqual({ destructiveHint: false, idempotentHint: true });
   });
 });

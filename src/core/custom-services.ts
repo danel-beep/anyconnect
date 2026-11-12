@@ -10,6 +10,7 @@ import {
   listRemoteTools,
   type RemoteMcpAuth,
   type RemoteMcpTool,
+  withoutRiskDowngrades,
 } from '../connectors/mcp-remote/connector.js';
 import type { ConnectorRegistry } from '../connectors/registry.js';
 import {
@@ -406,9 +407,16 @@ export class CustomServiceManager {
 
   /**
    * Re-reads the tool list of a remote MCP server through one of its connected accounts (or
-   * anonymously). Called after an account connects, on demand, and by a daily job.
+   * anonymously). Called after an account connects, on demand, and by a daily job. Only a refresh
+   * the user asked for (`reviewed`) may lower a tool's risk; the others keep the stricter
+   * annotations they already had (`withoutRiskDowngrades`).
    */
-  async refreshTools(workspaceId: string, connectorId: string, via?: AccountRow): Promise<ServiceView> {
+  async refreshTools(
+    workspaceId: string,
+    connectorId: string,
+    opts: { via?: AccountRow; reviewed?: boolean } = {},
+  ): Promise<ServiceView> {
+    const { via } = opts;
     const row = await this.deps.store.row(workspaceId, connectorId);
     if (!row) throw notFound('Service');
     if (row.kind !== 'mcp') return this.view(row);
@@ -445,7 +453,10 @@ export class CustomServiceManager {
       })) as never;
     }
     try {
-      const tools = await listRemoteTools(definition.url, definition.auth, ctx);
+      const listed = await listRemoteTools(definition.url, definition.auth, ctx);
+      const tools = opts.reviewed
+        ? listed
+        : withoutRiskDowngrades((row.tools ?? []) as RemoteMcpTool[], listed);
       await this.deps.db
         .update(customConnectors)
         .set({ tools, toolsRefreshedAt: new Date(), lastError: null })
@@ -461,7 +472,7 @@ export class CustomServiceManager {
   async afterAccountConnected(account: AccountRow): Promise<void> {
     const row = await this.deps.store.row(account.workspaceId, account.connectorId);
     if (row?.kind !== 'mcp') return;
-    await this.refreshTools(account.workspaceId, account.connectorId, account).catch((error) =>
+    await this.refreshTools(account.workspaceId, account.connectorId, { via: account }).catch((error) =>
       this.deps.logger.warn(
         { err: error, service: account.connectorId },
         'tool refresh after connect failed',

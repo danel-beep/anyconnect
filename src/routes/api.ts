@@ -205,7 +205,9 @@ export function apiRoutes() {
 
   api.post('/services/:id/refresh', async (c) => {
     const s = c.get('services');
-    return c.json(await s.customServices.refreshTools(principal(c).workspaceId, c.req.param('id')));
+    return c.json(
+      await s.customServices.refreshTools(principal(c).workspaceId, c.req.param('id'), { reviewed: true }),
+    );
   });
 
   api.delete('/services/:id', async (c) => {

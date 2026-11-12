@@ -117,6 +117,54 @@ export function riskFromAnnotations(tool: RemoteMcpTool): RiskLevel {
   return a.destructiveHint === false ? 'write' : 'dangerous';
 }
 
+const RISK_ORDER: Record<RiskLevel, number> = { read: 0, write: 1, dangerous: 2 };
+
+/**
+ * A refresh nobody is looking at must not make a tool less guarded than it was: a server that
+ * first calls a tool destructive and later "read-only" would get it to run without a question.
+ * A tool whose new annotations lower its risk keeps the earlier ones (everything else about it is
+ * taken from the new list) until the user refreshes the tools themselves.
+ */
+export function withoutRiskDowngrades(previous: RemoteMcpTool[], next: RemoteMcpTool[]): RemoteMcpTool[] {
+  const before = new Map(previous.map((tool) => [tool.name, tool]));
+  return next.map((tool) => {
+    const old = before.get(tool.name);
+    if (!old || RISK_ORDER[riskFromAnnotations(tool)] >= RISK_ORDER[riskFromAnnotations(old)]) return tool;
+    const { annotations: _lowered, ...rest } = tool;
+    return { ...rest, ...(old.annotations ? { annotations: old.annotations } : {}) };
+  });
+}
+
+const TITLE_MAX = 120;
+const DESCRIPTION_MAX = 2000;
+const SCHEMA_DEPTH = 12;
+
+/**
+ * Text a remote server wrote for the AI, as a person reviewing the tool sees it: characters that
+ * do not show (zero-width and bidi controls, Unicode tags, other control characters) are removed
+ * and the length is capped, so a description cannot carry instructions the user cannot read.
+ */
+export function visibleText(text: string, max: number): string {
+  return text
+    .replace(/[\p{Cc}\p{Cf}\p{Co}]/gu, (ch) => (ch === '\n' || ch === '\t' ? ch : ''))
+    .trim()
+    .slice(0, max);
+}
+
+/** The same for the titles and descriptions inside an input schema. */
+function visibleSchema(value: unknown, depth = 0): unknown {
+  if (depth > SCHEMA_DEPTH || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => visibleSchema(item, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const [key, inner] of Object.entries(value)) {
+    out[key] =
+      typeof inner === 'string' && (key === 'description' || key === 'title')
+        ? visibleText(inner, key === 'title' ? TITLE_MAX : DESCRIPTION_MAX)
+        : visibleSchema(inner, depth + 1);
+  }
+  return out;
+}
+
 /** Renames properties the hub reserves (`account`, `fields`) so remote schemas never clash. */
 function adaptSchema(schema: JsonSchema): { schema: JsonSchema; renames: Map<string, string> } {
   const renames = new Map<string, string>();
@@ -236,12 +284,16 @@ function toContent(blocks: unknown[]): ContentBlock[] {
 export function defineRemoteMcpConnector(spec: RemoteMcpSpec): ConnectorDefinition {
   const names = actionNamesFor(spec.tools);
   const actions: ActionDefinition[] = spec.tools.map((tool) => {
-    const { schema, renames } = adaptSchema(tool.inputSchema ?? { type: 'object' });
+    const { schema, renames } = adaptSchema(
+      visibleSchema(tool.inputSchema ?? { type: 'object' }) as JsonSchema,
+    );
     const name = names.get(tool.name)!;
+    const title = visibleText(tool.title ?? tool.annotations?.title ?? '', TITLE_MAX);
     return {
       name,
-      ...(tool.title || tool.annotations?.title ? { title: tool.title ?? tool.annotations?.title } : {}),
-      description: tool.description?.trim() || `Runs "${tool.name}" on ${spec.name}.`,
+      ...(title ? { title } : {}),
+      description:
+        visibleText(tool.description ?? '', DESCRIPTION_MAX) || `Runs "${tool.name}" on ${spec.name}.`,
       // The remote server validates arguments; the hub only shows its schema to the AI.
       input: z.object({}).loose(),
       inputSchema: schema,

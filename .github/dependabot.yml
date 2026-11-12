@@ -1,5 +1,7 @@
 # Weekly dependency updates. Minor/patch updates of the same ecosystem are grouped into one PR
-# so CI runs once; major versions arrive as separate PRs to review on their own.
+# so CI runs once; major versions arrive as separate PRs to review on their own. A new version is
+# offered only after it has been public for a week (`cooldown`): most poisoned releases are found
+# and pulled within days. Security updates are not delayed.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -8,6 +10,8 @@ updates:
       interval: weekly
       day: monday
       timezone: Europe/Moscow
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       production:
@@ -22,6 +26,8 @@ updates:
       interval: weekly
       day: monday
       timezone: Europe/Moscow
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -31,3 +37,5 @@ updates:
       interval: weekly
       day: monday
       timezone: Europe/Moscow
+    cooldown:
+      default-days: 7
