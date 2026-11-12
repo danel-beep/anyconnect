@@ -153,7 +153,9 @@ describe('background job queue (pg-boss)', () => {
     // Three free slots, yet the second run of the busy group waits for its first.
     for (let i = 0; i < 100 && fairStarted.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
     await new Promise((r) => setTimeout(r, 500));
-    expect([...fairStarted].sort()).toEqual(['busy-1', 'other']);
+    // Which of the busy group's two runs goes first is not promised (workers fetch on their own).
+    expect(fairStarted.filter((who) => who.startsWith('busy'))).toHaveLength(1);
+    expect(fairStarted).toContain('other');
     releaseFair();
     await within(15_000, fairFinished);
     expect(fairDone).toHaveLength(3);
