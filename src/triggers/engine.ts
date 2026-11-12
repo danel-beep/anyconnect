@@ -13,7 +13,7 @@ import { type AgentHub, runAgent } from './ai/agent.js';
 import { AI_PROVIDERS, AiProviderError } from './ai/providers.js';
 import type { AiKeyStore } from './ai-keys.js';
 import { clip, matchesFilter, renderArgs } from './match.js';
-import type { EventSource } from './sources.js';
+import type { EventSource, ReadOptions } from './sources.js';
 import { counterpartOf, type TriggerItem } from './spec.js';
 import type { EventResult, Trigger, TriggerEvent, TriggerStore } from './store.js';
 
@@ -103,6 +103,12 @@ export interface TriggerEngineDeps {
  */
 /** How long after a new-message notification the read starts: just past the store's visibility lag. */
 const INBOUND_DELAY_MS = VISIBILITY_LAG_MS + 200;
+
+/** What a trigger's filter asks of the read itself (the rest of the filter is matched afterwards). */
+function readOptionsOf(trigger: Trigger): ReadOptions {
+  const { spam, minutes_before: minutesBefore } = trigger.spec.filter;
+  return { ...(spam ? { spam: true } : {}), ...(minutesBefore !== undefined ? { minutesBefore } : {}) };
+}
 
 export class TriggerEngine {
   private readonly clients = new Map<string, string>();
@@ -276,7 +282,7 @@ export class TriggerEngine {
       for (const trigger of triggers) {
         // An account connected after the trigger was made starts where its feed is now.
         const cursor = (await store.cursor(trigger.id, account.id)) ?? (await source.start(account));
-        requests.push({ cursor, options: trigger.spec.filter.spam ? { spam: true } : {} });
+        requests.push({ cursor, options: readOptionsOf(trigger) });
       }
       const pages = await source.readMany(account, requests, signal ?? AbortSignal.timeout(30_000));
       for (const [index, trigger] of triggers.entries()) {
@@ -320,9 +326,12 @@ export class TriggerEngine {
     await this.deps.store.exclusive(trigger.id, account.id, async () => {
       // An account connected after the trigger was made starts where its feed is now.
       const cursor = (await this.deps.store.cursor(trigger.id, account.id)) ?? (await source.start(account));
-      const page = await source.read(account, cursor, signal ?? AbortSignal.timeout(30_000), {
-        ...(trigger.spec.filter.spam ? { spam: true } : {}),
-      });
+      const page = await source.read(
+        account,
+        cursor,
+        signal ?? AbortSignal.timeout(30_000),
+        readOptionsOf(trigger),
+      );
       for (const item of page.items) {
         if (matchesFilter(trigger.spec.filter, item)) await this.handle(trigger, account, item);
       }
@@ -431,7 +440,7 @@ export class TriggerEngine {
     options: { itemId?: string; run: boolean; force: boolean; signal: AbortSignal },
   ): Promise<TriggerTest> {
     const source = this.source(trigger.source);
-    const readOptions = trigger.spec.filter.spam ? { spam: true } : {};
+    const readOptions = readOptionsOf(trigger);
     const found: Array<{ account: AccountRow; item: TriggerItem }> = [];
     for (const account of await source.accounts(trigger.workspaceId)) {
       if (!this.watches(trigger, account) || options.signal.aborted) continue;
@@ -441,7 +450,10 @@ export class TriggerEngine {
       });
       for (const item of items) found.push({ account, item });
     }
-    found.sort((a, b) => b.item.at.localeCompare(a.item.at));
+    // Nearest to now first: the newest message or email, the next calendar event.
+    const now = Date.now();
+    const distance = (item: TriggerItem) => Math.abs(Date.parse(item.at) - now);
+    found.sort((a, b) => distance(a.item) - distance(b.item));
     const pick = options.itemId
       ? found.find((f) => f.item.id === options.itemId)
       : (found.find((f) => matchesFilter(trigger.spec.filter, f.item)) ?? found[0]);

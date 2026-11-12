@@ -22,6 +22,7 @@ import { clip } from './match.js';
 import {
   ArgumentLimitsInput,
   DEFAULT_DAILY_RUNS,
+  TRIGGER_SOURCES,
   type TriggerAction,
   type TriggerFilter,
   type TriggerItem,
@@ -143,7 +144,7 @@ export class TriggerService implements WorkspaceTriggers {
     // This request can open the owner's vault: read mailboxes the background cannot, and catch up on
     // messages a lost notification may have left behind. Bounded, so the check stays quick.
     const signal = AbortSignal.any([options.signal, AbortSignal.timeout(CHECK_SCAN_MS)]);
-    for (const source of ['message', 'mail'] as const) {
+    for (const source of TRIGGER_SOURCES) {
       if (!all.some((t) => t.source === source && t.enabled)) continue;
       await this.deps.engine.scanAll(source, { workspaceId, background: false, signal }).catch(() => {});
     }
@@ -175,16 +176,24 @@ export class TriggerService implements WorkspaceTriggers {
       force: options.force,
       signal: AbortSignal.any([options.signal, AbortSignal.timeout(TEST_WAIT_MS)]),
     });
+    // A calendar is tried on what lies ahead, the other sources on what already arrived.
+    const ahead = trigger.source === 'calendar';
     const note = !tried.item
       ? options.item
-        ? `No message or email "${options.item}" among the last day's ${tried.looked} on the accounts this trigger watches.`
-        : 'Nothing arrived on the accounts this trigger watches in the last day.'
+        ? ahead
+          ? `No event "${options.item}" among the ${tried.looked} that start in the next day in the calendars this trigger watches.`
+          : `No message or email "${options.item}" among the last day's ${tried.looked} on the accounts this trigger watches.`
+        : ahead
+          ? 'No event with a start time in the next day in the calendars this trigger watches.'
+          : 'Nothing arrived on the accounts this trigger watches in the last day.'
       : options.run && !trigger.enabled
         ? 'The trigger is off, so it did not run. Turn it on to try its action.'
         : !tried.matched && !tried.ran
           ? options.item
             ? 'The filter does not match this item, so the trigger would skip it. force: true runs it anyway.'
-            : 'None of the last day’s items match the filter; this is the newest. force: true runs it anyway.'
+            : ahead
+              ? 'None of the next day’s events match the filter; this is the next one. force: true runs it anyway.'
+              : 'None of the last day’s items match the filter; this is the newest. force: true runs it anyway.'
           : tried.event?.status === 'running'
             ? 'Still running: manyplug_trigger_runs shows the outcome.'
             : undefined;
@@ -253,11 +262,10 @@ export class TriggerService implements WorkspaceTriggers {
 
   /** The accounts each source can watch, for the dashboard's picker. */
   async watchable(workspaceId: string): Promise<Record<TriggerSource, AccountRow[]>> {
-    const [message, mail] = await Promise.all([
-      this.deps.engine.sourceAccounts('message', workspaceId),
-      this.deps.engine.sourceAccounts('mail', workspaceId),
-    ]);
-    return { message, mail };
+    const [message, mail, calendar] = await Promise.all(
+      TRIGGER_SOURCES.map((source) => this.deps.engine.sourceAccounts(source, workspaceId)),
+    );
+    return { message: message ?? [], mail: mail ?? [], calendar: calendar ?? [] };
   }
 
   /** The latest events for the dashboard. */
@@ -283,7 +291,7 @@ export class TriggerService implements WorkspaceTriggers {
     if (!matches.length) {
       const known = [...new Set(readable.map((a) => `${a.connectorId}:${a.name}`))];
       throw badRequest(
-        `No ${source === 'mail' ? 'mailbox' : 'messenger account'} "${value}". ${known.length ? `Use one of: ${known.join(', ')}` : `Connect one first.`}`,
+        `No ${SOURCE_ACCOUNTS[source]} "${value}". ${known.length ? `Use one of: ${known.join(', ')}` : `Connect one first.`}`,
       );
     }
     return name
@@ -394,10 +402,10 @@ export class TriggerService implements WorkspaceTriggers {
       when: trigger.source,
       accounts: accountsLabel(trigger, accounts),
       everyAccount: !trigger.connectorId && trigger.accountIds.length === 0,
-      filter: Object.fromEntries(Object.entries(trigger.spec.filter).filter(([, v]) => v)) as Record<
-        string,
-        string | boolean
-      >,
+      // Zero minutes before an event is a setting too; empty words and switched-off flags are not.
+      filter: Object.fromEntries(
+        Object.entries(trigger.spec.filter).filter(([, v]) => v || v === 0),
+      ) as Record<string, string | boolean | number>,
       do: action.kind,
       action:
         action.kind === 'tool'
@@ -437,6 +445,18 @@ export function limitsOf(
   return Object.keys(limits).length ? limits : undefined;
 }
 
+/** What an account of each source is called, and the label of a trigger that watches all of them. */
+const SOURCE_ACCOUNTS: Record<TriggerSource, string> = {
+  message: 'messenger account',
+  mail: 'mailbox',
+  calendar: 'calendar',
+};
+const ALL_ACCOUNTS: Record<TriggerSource, string> = {
+  message: 'all messages',
+  mail: 'all mail',
+  calendar: 'all calendars',
+};
+
 const FILTER_WORDS = [
   'from',
   'chat',
@@ -456,6 +476,7 @@ export function filterOf(input: TriggerChange['filter']): TriggerFilter {
   }
   if (input?.skip_bulk) out.skip_bulk = true;
   if (input?.spam) out.spam = true;
+  if (typeof input?.minutes_before === 'number') out.minutes_before = input.minutes_before;
   return out;
 }
 
@@ -470,7 +491,7 @@ export function accountsLabel(
       .join(', ');
   }
   if (trigger.connectorId) return trigger.connectorId;
-  return trigger.source === 'mail' ? 'all mail' : 'all messages';
+  return ALL_ACCOUNTS[trigger.source];
 }
 
 function checked(event: TriggerEvent, trigger: Trigger): CheckedEvent {

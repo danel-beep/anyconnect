@@ -7,7 +7,11 @@ import type { TriggerActionKind, TriggerSource } from '../db/schema.js';
  * accounts and the kind of action are plain columns for lookups (see `docs/TRIGGERS.md`).
  */
 
-export const TRIGGER_SOURCES = ['message', 'mail'] as const satisfies readonly TriggerSource[];
+export const TRIGGER_SOURCES = ['message', 'mail', 'calendar'] as const satisfies readonly TriggerSource[];
+/** Calendar: an event counts once its start is this close, unless the trigger says otherwise. */
+export const DEFAULT_MINUTES_BEFORE = 10;
+/** Calendar: the earliest a trigger can fire before an event (a day). */
+export const MAX_MINUTES_BEFORE = 24 * 60;
 export const TRIGGER_ACTIONS = [
   'check',
   'notify',
@@ -35,17 +39,19 @@ const words = (what: string) =>
 export const TriggerFilter = z.object({
   from: words('Sender name, @username, phone or email contains'),
   chat: words('Chat or group title contains (messages only)'),
-  subject: words('Email subject contains (mail only)'),
-  text: words('Message text or email subject and preview contains'),
+  subject: words('Email subject or calendar event title contains'),
+  text: words('Message text, email subject and preview, or event title, time and place contains'),
   /** Exclusions: an event matching any of their alternatives is skipped, before any action runs. */
   not_from: words('Skip when the sender contains'),
   not_chat: words('Skip when the chat title contains (messages only)'),
-  not_subject: words('Skip when the email subject contains (mail only)'),
-  not_text: words('Skip when the text or email subject and preview contains'),
+  not_subject: words('Skip when the email subject or event title contains'),
+  not_text: words('Skip when the text, email subject and preview, or event title, time and place contains'),
   /** Mail: skip newsletters, notifications and automatic mail (list headers, noreply senders…). */
   skip_bulk: z.boolean().optional(),
   /** Mail: also watch the spam folder (an important email can land there). */
   spam: z.boolean().optional(),
+  /** Calendar: how long before an event starts the trigger fires (default {@link DEFAULT_MINUTES_BEFORE}). */
+  minutes_before: z.number().int().min(0).max(MAX_MINUTES_BEFORE).optional(),
 });
 export type TriggerFilter = z.output<typeof TriggerFilter>;
 
@@ -96,36 +102,36 @@ export type TriggerAction = z.output<typeof TriggerAction>;
 export const TriggerSpec = z.object({ filter: TriggerFilter, action: TriggerAction });
 export type TriggerSpec = z.output<typeof TriggerSpec>;
 
-/** One event as triggers see it: a new incoming message or email. */
+/** One event as triggers see it: a new incoming message or email, or a calendar event about to start. */
 export interface TriggerItem {
   source: TriggerSource;
   /** Connector id, e.g. `telegram`. */
   service: string;
   /** The account's name, as the service's tools take it in `account`. */
   account: string;
-  /** The item's id for the service's tools (message or email id). */
+  /** The item's id for the service's tools (message, email or calendar event id). */
   id: string;
   /** Chat id (messages), for replying with `<service>_send`. */
   chat?: string;
   chatTitle?: string;
   from?: string;
   subject?: string;
-  /** Message text, or the email's preview. */
+  /** Message text, the email's preview, or when and where the calendar event is. */
   text: string;
   /** Mail sent to many by a machine (newsletter, notification), when the service tells. */
   bulk?: boolean;
-  /** ISO time it was sent. */
+  /** ISO time it was sent (a calendar event: when it starts). */
   at: string;
 }
 
 /** Placeholders an action can use, with what they become. */
 export const TEMPLATE_FIELDS = {
   from: 'who sent it',
-  text: 'message text or email preview',
+  text: 'message text, email preview, or when and where the event is',
   chat: 'chat id (reply here)',
   chat_title: 'chat title',
-  subject: 'email subject',
-  id: 'message or email id',
+  subject: 'email subject or event title',
+  id: 'message, email or event id',
   account: 'the account name, for the service’s tools',
   service: 'the service id',
 } as const;
