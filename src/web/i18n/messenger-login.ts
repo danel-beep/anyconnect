@@ -35,6 +35,8 @@ export const messengerLoginEn = {
     'Done: the account is connected. Chats are loading now; the AI sees them in a minute.',
   'mlogin.devices':
     'The session shows up in Telegram under Settings → Devices as "{brand}". You can end it there at any time.',
+  'mlogin.twoStep':
+    'Tip: turn on Two-Step Verification in Telegram (Settings → Privacy and Security). Then a login code alone is not enough to get into your account.',
   'mlogin.toServices': 'To services',
   'mlogin.failedTitle': 'The login did not finish',
   'mlogin.retry': 'Try again',
@@ -76,6 +78,8 @@ export const messengerLoginRu: Record<keyof typeof messengerLoginEn, string> = {
   'mlogin.doneNoIdentity': 'Готово: аккаунт подключён. Чаты загружаются, через минуту ИИ их увидит.',
   'mlogin.devices':
     'Сессия видна в Telegram в Настройки → Устройства как «{brand}». Там её можно завершить в любой момент.',
+  'mlogin.twoStep':
+    'Совет: включите в Telegram двухэтапную проверку (Настройки → Конфиденциальность). Тогда одного кода для входа в аккаунт будет мало.',
   'mlogin.toServices': 'К сервисам',
   'mlogin.failedTitle': 'Вход не завершён',
   'mlogin.retry': 'Попробовать снова',

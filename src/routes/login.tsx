@@ -17,6 +17,7 @@ import {
   setSecureCookie,
   verifyCsrf,
 } from '../web/http.js';
+import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE } from '../web/known-devices.js';
 import {
   EmailLinkConfirmPage,
   EmailLinkSentPage,
@@ -26,6 +27,7 @@ import {
 } from '../web/pages.js';
 import { PENDING_LOGIN_TTL_SECONDS } from '../web/pending-logins.js';
 import { VerifyPage } from '../web/security-pages.js';
+import { agentName } from '../web/user-agent.js';
 import { analyticsRequest } from './analytics.js';
 import {
   type AppContext,
@@ -69,10 +71,22 @@ async function finishSignIn(c: AppContext, userId: string, amr: AuthMethod[]): P
     if (owned) await s.entitlements.ensurePlan(owned.id, 'unlimited');
   }
   const opts = cookieOpts(c);
-  await s.sessions.destroy(readCookie(c, SESSION_COOKIE, opts));
   const ip = clientIp(c, s.config.trustProxy);
-  const token = await s.sessions.create(userId, { amr, ip, userAgent: c.req.header('user-agent') });
+  const userAgent = c.req.header('user-agent');
+  // A browser is known by its cookie, or (cookies get cleared) by a session from the same address
+  // and browser. Checked before the old session goes.
+  const devices = readCookie(c, DEVICE_COOKIE, opts);
+  const known = s.knownDevices.knows(devices, userId) || (await s.sessions.seenFrom(userId, ip, userAgent));
+  await s.sessions.destroy(readCookie(c, SESSION_COOKIE, opts));
+  const token = await s.sessions.create(userId, { amr, ip, userAgent });
   setSecureCookie(c, SESSION_COOKIE, token, { ...opts, maxAge: s.config.sessionTtlSeconds });
+  setSecureCookie(c, DEVICE_COOKIE, s.knownDevices.remember(devices, userId), {
+    ...opts,
+    maxAge: DEVICE_COOKIE_MAX_AGE,
+  });
+  // The very first sign-in is the sign-up itself: there is nothing to compare it with.
+  if (!known && user.lastLoginAt)
+    void s.securityNotices.report(userId, 'sign_in', agentName(userAgent) ?? '');
   clearCookie(c, PENDING_LOGIN_COOKIE, opts);
   if (user.locale === 'ru' || user.locale === 'en') saveLocale(c, user.locale);
   resetSessionCache(c);

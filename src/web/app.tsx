@@ -31,6 +31,7 @@ import {
   Tabs,
   UsageStat,
 } from './ui.js';
+import { agentName } from './user-agent.js';
 
 // ---------------------------------------------------------------------------
 // Shell
@@ -2419,31 +2420,6 @@ export interface SettingsView {
   recentAuth: boolean;
   flash?: { kind: 'ok' | 'bad'; text: string } | undefined;
 }
-
-const agentName = (ua: string | null): string | null => {
-  if (!ua) return null;
-  const browser = /Edg\//.test(ua)
-    ? 'Edge'
-    : /Chrome\//.test(ua)
-      ? 'Chrome'
-      : /Firefox\//.test(ua)
-        ? 'Firefox'
-        : /Safari\//.test(ua)
-          ? 'Safari'
-          : 'Browser';
-  const os = /Windows/.test(ua)
-    ? 'Windows'
-    : /Mac OS X/.test(ua)
-      ? /iPhone|iPad/.test(ua)
-        ? 'iOS'
-        : 'macOS'
-      : /Android/.test(ua)
-        ? 'Android'
-        : /Linux/.test(ua)
-          ? 'Linux'
-          : '';
-  return os ? `${browser} · ${os}` : browser;
-};
 
 export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsView }> = ({
   ctx,

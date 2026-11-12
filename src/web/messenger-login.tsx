@@ -233,6 +233,7 @@ const Step: FC<{ t: Translate; view: MessengerLoginView }> = ({ t, view }) => {
             {login.identity ? t('mlogin.done', { identity: login.identity }) : t('mlogin.doneNoIdentity')}
           </p>
           <p class="small muted">{t('mlogin.devices', { brand: BRAND.name })}</p>
+          <p class="small muted">{t('mlogin.twoStep')}</p>
           <div class="actions start">
             <a class="btn primary" href="/app/services">
               {t('mlogin.toServices')}

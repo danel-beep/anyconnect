@@ -115,6 +115,8 @@ const coreEn = {
   'consent.loopback':
     'It runs on this computer (localhost). Approve only if you started it yourself, e.g. Claude Code or an IDE.',
   'consent.unknown': 'Make sure you trust this site before approving.',
+  'consent.lookalike':
+    'It calls itself {app}, but it does not return to {app}’s own site. Approve only if you know exactly who is asking.',
   'consent.signedInAs': 'Signed in as {email}',
   'consent.approve': 'Allow',
   'consent.deny': 'Deny',
@@ -344,6 +346,8 @@ const coreRu: Record<keyof typeof coreEn, string> = {
   'consent.loopback':
     'Оно работает на этом компьютере (localhost). Разрешайте, только если запустили его сами, например Claude Code или IDE.',
   'consent.unknown': 'Разрешайте, только если доверяете этому сайту.',
+  'consent.lookalike':
+    'Оно называет себя {app}, но возвращает не на сайт {app}. Разрешайте, только если точно знаете, кто запрашивает доступ.',
   'consent.signedInAs': 'Вы вошли как {email}',
   'consent.approve': 'Разрешить',
   'consent.deny': 'Отклонить',

@@ -1,3 +1,4 @@
+import { BRAND } from '../brand.js';
 import type { NoticeDelivery, OwnerNotice, OwnerNotifier } from '../core/owner-notices.js';
 import type { Logger } from '../logger.js';
 import type { Locale, Translate } from '../web/i18n.js';
@@ -65,6 +66,14 @@ export function renderNotice(t: Translate, notice: OwnerNotice): string {
         '',
         escapeHtml(t('email.confirm.body', { ...notice, minutes: notice.expiresMinutes })),
         `<a href="${escapeHtml(notice.url)}">${escapeHtml(t('email.confirm.cta'))}</a>`,
+      ].join('\n');
+    case 'security':
+      return [
+        `<b>${escapeHtml(t(`notice.security.${notice.event}.title`, { brand: BRAND.name }))}</b>`,
+        ...(notice.subject ? [escapeHtml(notice.subject)] : []),
+        '',
+        escapeHtml(t(`notice.security.${notice.event}.fix`)),
+        `<a href="${escapeHtml(notice.url)}">${escapeHtml(t(`notice.security.${notice.event}.cta`))}</a>`,
       ].join('\n');
     case 'trigger_paused':
       return [

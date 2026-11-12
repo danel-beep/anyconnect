@@ -15,6 +15,25 @@ export function knownClientName(host: string): string | undefined {
   return KNOWN_HOSTS[host.toLowerCase()];
 }
 
+/** Names people know these apps (and their makers) by, lower case. */
+const KNOWN_NAMES: Record<string, string> = {
+  claude: 'Claude',
+  anthropic: 'Claude',
+  chatgpt: 'ChatGPT',
+  openai: 'ChatGPT',
+};
+
+/**
+ * The well-known app a self-declared name borrows ("Claude Desktop" → Claude), if any. A name is
+ * only a claim: an app that uses one without coming from that app's hosts gets a warning on the
+ * consent screen.
+ */
+export function knownAppInName(name: string): string | undefined {
+  const lower = name.toLowerCase();
+  const hit = Object.keys(KNOWN_NAMES).find((known) => lower.includes(known));
+  return hit ? KNOWN_NAMES[hit] : undefined;
+}
+
 /**
  * The known app an OAuth client belongs to, or `undefined`. A metadata-document client is the app
  * of its document's host; a registered client is a known app only when every https redirect URI it
