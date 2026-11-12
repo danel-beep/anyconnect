@@ -132,7 +132,7 @@ const privacy: Record<Locale, Builder> = {
       {
         title: 'Ваши права',
         paragraphs: [
-          'Подключения и журнал действий видны в личном кабинете. Вы можете запросить копию своих данных, их исправление или удаление, написав по адресу ниже. Мы отвечаем в течение 30 дней.',
+          'Подключения и журнал действий видны в личном кабинете. Копию своих данных можно скачать одним файлом в настройках кабинета («Ваши данные»), а профиль там же удалить. Попросить об исправлении данных или о помощи с копией и удалением можно по адресу ниже. Мы отвечаем в течение 30 дней.',
           'Manyplug не предназначен для детей младше 16 лет, и мы сознательно не собираем их данные.',
           'При изменении политики новая редакция публикуется на этой странице с датой. О существенных изменениях мы сообщаем на сайте до того, как они вступят в силу.',
         ],
@@ -240,7 +240,7 @@ const privacy: Record<Locale, Builder> = {
       {
         title: 'Your rights',
         paragraphs: [
-          'You can see your connections and activity in the dashboard, and ask us for a copy of your data, to correct it or to delete it: write to the contact below. We answer within 30 days.',
+          'You can see your connections and activity in the dashboard, download a copy of your data as one file in Settings (“Your data”), and delete your account there. To have data corrected, or for help with a copy or deletion, write to the contact below. We answer within 30 days.',
           'Manyplug is not meant for children under 16, and we do not knowingly collect their data.',
           'When this policy changes, the new version is published on this page with its date. Material changes are announced on the website before they take effect.',
         ],

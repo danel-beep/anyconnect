@@ -2636,6 +2636,21 @@ export const SettingsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: SettingsVi
           ))}
         </ul>
       </div>
+      <div class="card" id="export">
+        <SectionHead
+          icon="layers"
+          title={t('app.settings.export')}
+          hint={t('app.settings.exportText')}
+          aside={
+            <form method="post" action="/app/settings/export">
+              <input type="hidden" name="csrf" value={ctx.csrf} />
+              <button type="submit" class="sm">
+                {t('app.settings.exportCta')}
+              </button>
+            </form>
+          }
+        />
+      </div>
       <details class="card danger-zone">
         <summary>
           <span class="row-icon">

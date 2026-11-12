@@ -23,6 +23,7 @@ import { HubTokenVerifier } from './core/auth.js';
 import { ConnectService } from './core/connect.js';
 import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-connectors.js';
 import { CustomServiceManager } from './core/custom-services.js';
+import { DataExportService } from './core/data-export.js';
 import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
 import { AccountHealthService } from './core/health.js';
 import { getWorkspace } from './core/identity.js';
@@ -214,6 +215,8 @@ export interface Services {
   /** Sign-ins waiting for a second factor. */
   pendingLogins: PendingLoginService;
   emailLogins: EmailLoginService;
+  /** A person's own data as a downloadable document. */
+  dataExport: DataExportService;
   /** TOTP, recovery codes and passkeys. */
   secondFactors: SecondFactorService;
   rateLimiter: RateLimiter;
@@ -616,6 +619,22 @@ export function createServices(
     mailPollMs: config.triggers.mailPollMs,
     scanSlots: poolShare(0.25),
   });
+  const dataExport = new DataExportService({
+    db,
+    publicUrl: config.publicUrl,
+    triggers: async (workspaceId) =>
+      (await triggers.store.list(workspaceId)).map((t) => ({
+        id: t.id,
+        name: t.name,
+        enabled: t.enabled,
+        source: t.source,
+        service: t.connectorId,
+        accountIds: t.accountIds,
+        dailyRuns: t.dailyRuns,
+        createdAt: t.createdAt,
+        definition: t.spec,
+      })),
+  });
   // A trigger's call that waited for the user's OK: its event shows how that ended.
   pendingCalls.onSettled((row) => {
     const scope = row.principal.automation;
@@ -832,6 +851,7 @@ export function createServices(
     analytics,
     pendingLogins,
     emailLogins,
+    dataExport,
     secondFactors,
     rateLimiter,
     circuitBreaker,

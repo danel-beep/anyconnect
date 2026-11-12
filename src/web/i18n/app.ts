@@ -348,6 +348,11 @@ export const appEn = {
   'app.settings.sessions': 'Where you are signed in',
   'app.settings.signOutOthers': 'Sign out everywhere else',
   'app.settings.thisDevice': 'This device',
+  'app.settings.export': 'Your data',
+  'app.settings.exportText':
+    'Download everything Manyplug keeps about you as one file: profile, connected accounts, rules, triggers, AI apps and activity. Passwords, keys and tokens are never in it.',
+  'app.settings.exportCta': 'Download',
+  'app.flash.exportLimited': 'Too many downloads in a row. Try again in an hour.',
   'app.settings.delete': 'Delete account',
   'app.settings.deleteText':
     'All accounts, keys, tokens and history will be deleted right away. This cannot be undone.',
@@ -1052,6 +1057,11 @@ export const appRu: Record<AppKey, string> = {
   'app.settings.sessions': 'Где выполнен вход',
   'app.settings.signOutOthers': 'Выйти на остальных устройствах',
   'app.settings.thisDevice': 'Это устройство',
+  'app.settings.export': 'Ваши данные',
+  'app.settings.exportText':
+    'Скачайте одним файлом всё, что Manyplug хранит о вас: профиль, подключённые аккаунты, правила, триггеры, ИИ-приложения и историю действий. Паролей, ключей и токенов в файле нет.',
+  'app.settings.exportCta': 'Скачать',
+  'app.flash.exportLimited': 'Слишком много скачиваний подряд. Попробуйте через час.',
   'app.settings.delete': 'Удаление профиля Manyplug',
   'app.settings.deleteText':
     'Все подключения сервисов, ключи, токены и история будут удалены сразу. Отменить это нельзя.',
