@@ -53,8 +53,21 @@ function oauthErrorResponse(c: AppContext, error: unknown) {
   throw error;
 }
 
-function rateLimited(c: AppContext, key: string, limit: number, windowMs: number) {
-  const result = c.get('services').rateLimiter.consume(key, limit, windowMs);
+/**
+ * `shared` counts in the database (every instance, across restarts): for what is counted over an
+ * hour; the per-minute throttle of the token endpoint stays in memory.
+ */
+async function rateLimited(
+  c: AppContext,
+  key: string,
+  limit: number,
+  windowMs: number,
+  options: { shared?: boolean } = {},
+) {
+  const s = c.get('services');
+  const result = options.shared
+    ? await s.sharedLimiter.consume(key, limit, windowMs)
+    : s.rateLimiter.consume(key, limit, windowMs);
   if (result.allowed) return undefined;
   return c.json({ error: 'slow_down', error_description: 'Too many requests' }, 429, {
     'Retry-After': String(result.retryAfterSeconds),
@@ -210,7 +223,15 @@ export function oauthRoutes() {
 
   app.post('/oauth/register', async (c) => {
     const s = c.get('services');
-    const limited = rateLimited(c, `register:${clientRateKey(c, s.config.trustProxy)}`, 30, 60 * 60_000);
+    const limited = await rateLimited(
+      c,
+      `register:${clientRateKey(c, s.config.trustProxy)}`,
+      30,
+      60 * 60_000,
+      {
+        shared: true,
+      },
+    );
     if (limited) return limited;
     const body = await c.req.json().catch(() => undefined);
     try {
@@ -222,7 +243,7 @@ export function oauthRoutes() {
 
   app.post('/oauth/token', async (c) => {
     const s = c.get('services');
-    const limited = rateLimited(c, `token:${clientRateKey(c, s.config.trustProxy)}`, 120, 60_000);
+    const limited = await rateLimited(c, `token:${clientRateKey(c, s.config.trustProxy)}`, 120, 60_000);
     if (limited) return limited;
     try {
       const tokens = await s.oauth.token(await bodyParams(c), c.req.header('authorization'));

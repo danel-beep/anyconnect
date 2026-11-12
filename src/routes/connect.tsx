@@ -105,7 +105,7 @@ export function connectRoutes() {
       const reconnect = await reconnectTarget(c, user, workspace, connector, q('account'));
       const quick = await s.quickConnects.for(connector.id, reconnect);
       if (quick && (reconnect || !q('account'))) {
-        const limit = s.rateLimiter.consume(`quick-connect:${user.id}`, 30, 60 * 60_000);
+        const limit = await s.sharedLimiter.consume(`quick-connect:${user.id}`, 30, 60 * 60_000);
         if (!limit.allowed) {
           const t = c.get('t');
           return c.html(

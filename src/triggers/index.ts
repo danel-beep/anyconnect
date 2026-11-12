@@ -67,6 +67,11 @@ export function createTriggers(deps: {
   mailPollMs?: number;
   /** The share of the database pool scans may hold for their locks (`TriggerStore.exclusive`). */
   scanSlots?: Semaphore;
+  /**
+   * With several instances, only the one this says yes to polls mailboxes and calendars (see
+   * `WorkLeases`); absent: this process always polls.
+   */
+  lease?: (name: string, ttlMs: number) => Promise<boolean>;
 }): Triggers {
   const store = new TriggerStore(deps.db, deps.secrets, deps.messaging.ciphers, deps.scanSlots);
   const keys = new AiKeyStore(deps.db, deps.secrets);
@@ -185,7 +190,11 @@ export function createTriggers(deps: {
           const every = source === 'calendar' ? Math.max(mailEvery, CALENDAR_POLL_MS) : mailEvery;
           const loop = new DueLoop({
             work: async () => {
-              await poll(source, Math.max(every * 3, 60_000));
+              const passMs = Math.max(every * 3, 60_000);
+              // The lease outlives a full pass and the wait after it, so it changes hands only
+              // when its holder is gone.
+              if (!deps.lease || (await deps.lease(`triggers.poll.${source}`, passMs + every + 30_000)))
+                await poll(source, passMs);
               return new Date(Date.now() + every);
             },
             idleMs: () => every,

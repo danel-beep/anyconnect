@@ -35,6 +35,7 @@ import type { Principal } from './core/principal.js';
 import { QuickConnects } from './core/quick-connect.js';
 import { RecoveryCodeService } from './core/recovery-codes.js';
 import { SecondFactorService } from './core/second-factors.js';
+import { SharedRateLimiter, WorkLeases } from './core/shared-limits.js';
 import { TeamService } from './core/teams.js';
 import { TotpService } from './core/totp.js';
 import { activeUserCheck, memberCheck, UserService } from './core/users.js';
@@ -219,7 +220,10 @@ export interface Services {
   dataExport: DataExportService;
   /** TOTP, recovery codes and passkeys. */
   secondFactors: SecondFactorService;
+  /** Per-process, in memory: throttles on hot paths. */
   rateLimiter: RateLimiter;
+  /** In Postgres: attempts on secrets, sign-ups and limits counted over hours (shared, restart-proof). */
+  sharedLimiter: SharedRateLimiter;
   circuitBreaker: CircuitBreaker;
   idempotency: IdempotencyStore;
   mcp: McpHttpHandler;
@@ -445,6 +449,8 @@ export function createServices(
     onError: (error) => ops.errors.capture(error, { source: 'analytics' }),
   });
   const rateLimiter = new RateLimiter();
+  const sharedLimiter = new SharedRateLimiter(db);
+  const leases = new WorkLeases(db);
   const circuitBreaker = new CircuitBreaker();
   const idempotency = new MemoryIdempotencyStore();
 
@@ -618,6 +624,7 @@ export function createServices(
     onError: (error, context) => ops.errors.capture(error, { source: 'trigger', context }),
     mailPollMs: config.triggers.mailPollMs,
     scanSlots: poolShare(0.25),
+    lease: (name, ttlMs) => leases.hold(name, ttlMs),
   });
   const dataExport = new DataExportService({
     db,
@@ -854,6 +861,7 @@ export function createServices(
     dataExport,
     secondFactors,
     rateLimiter,
+    sharedLimiter,
     circuitBreaker,
     idempotency,
     mcp,
@@ -863,6 +871,8 @@ export function createServices(
     async close() {
       await analytics.close();
       triggers.stop();
+      // Another instance can take over the polling at once instead of waiting for the lease to end.
+      await leases.release().catch(() => {});
       await messaging?.stop();
       await listener.stop();
       await pendingRunner.stop();

@@ -62,7 +62,8 @@ export async function truncateAll(services: Services): Promise<void> {
              pending_logins, webauthn_challenges, webauthn_credentials, user_recovery_codes, user_totp,
              login_states, admin_audit_log, limit_grants, subscriptions, user_identities,
              error_groups, job_runs, workspace_members, workspaces, users, analytics_visits,
-             analytics_pages, analytics_events, analytics_salts, user_attribution RESTART IDENTITY CASCADE`);
+             analytics_pages, analytics_events, analytics_salts, user_attribution, rate_counters,
+             work_leases RESTART IDENTITY CASCADE`);
 }
 
 export interface TestHub {

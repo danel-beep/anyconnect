@@ -10,6 +10,7 @@ import {
   oauthGrants,
   oauthTokens,
   pendingLogins,
+  rateCounters,
   telegramLinks,
   vaultRequests,
   vaultWraps,
@@ -64,6 +65,8 @@ export async function runMaintenance(db: Db): Promise<void> {
   await db.delete(webSessions).where(lt(webSessions.expiresAt, new Date(now)));
   await db.delete(pendingLogins).where(lt(pendingLogins.expiresAt, new Date(now)));
   await db.delete(emailLogins).where(lt(emailLogins.expiresAt, new Date(now)));
+  // Attempt counters whose window is over (`SharedRateLimiter`).
+  await db.delete(rateCounters).where(lt(rateCounters.resetAt, new Date(now)));
   await db.delete(webauthnChallenges).where(lt(webauthnChallenges.expiresAt, new Date(now)));
   // Abandoned "connect an account" OAuth flows.
   await db.delete(oauthConnectStates).where(lt(oauthConnectStates.expiresAt, new Date(now)));

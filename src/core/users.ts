@@ -42,9 +42,15 @@ export interface ExternalProfile {
   name?: string | undefined;
 }
 
-export type SignInRefusal = 'suspended' | 'signups_closed' | 'email_unverified';
+export type SignInRefusal = 'suspended' | 'signups_closed' | 'signups_limited' | 'email_unverified';
 
 /** A sign-in that must not go ahead; the website shows a translated message by `reason`. */
+/** What a sign-in may check just before it creates a new user. */
+export interface SignUpOptions {
+  /** Asked only when a user is about to be created (the caller's sign-up limit); false refuses. */
+  admit?: () => Promise<boolean>;
+}
+
 export class SignInRefused extends AppError {
   constructor(readonly reason: SignInRefusal) {
     super(403, reason, `Sign-in refused: ${reason}`);
@@ -126,7 +132,10 @@ export class UserService {
    * that address (the provider proved the person owns it); otherwise a new user with a personal
    * workspace is created, if sign-ups are open.
    */
-  async signInExternal(profile: ExternalProfile): Promise<{ user: User; created: boolean }> {
+  async signInExternal(
+    profile: ExternalProfile,
+    options: SignUpOptions = {},
+  ): Promise<{ user: User; created: boolean }> {
     const db = this.deps.db;
     const email = normalizeEmail(profile.email);
     const [identity] = await db
@@ -166,6 +175,8 @@ export class UserService {
     }
 
     if (this.deps.signups === 'closed' && !isAdminEmail) throw new SignInRefused('signups_closed');
+    if (!isAdminEmail && options.admit && !(await options.admit()))
+      throw new SignInRefused('signups_limited');
     const { user } = await createUser(db, {
       email,
       ...(profile.name ? { name: profile.name.slice(0, 100) } : {}),
@@ -179,7 +190,7 @@ export class UserService {
    * Finds or creates the user behind a sign-in link sent to `email` (opening it proved the person
    * reads that mailbox). Never makes anyone an admin: that takes an authoritative external sign-in.
    */
-  async signInEmail(address: string): Promise<{ user: User; created: boolean }> {
+  async signInEmail(address: string, options: SignUpOptions = {}): Promise<{ user: User; created: boolean }> {
     const email = normalizeEmail(address);
     const existing = await findUserByEmail(this.deps.db, email);
     if (existing) {
@@ -187,6 +198,7 @@ export class UserService {
       return { user: existing, created: false };
     }
     if (this.deps.signups === 'closed') throw new SignInRefused('signups_closed');
+    if (options.admit && !(await options.admit())) throw new SignInRefused('signups_limited');
     const { user } = await createUser(this.deps.db, { email, role: 'user' });
     return { user, created: true };
   }

@@ -32,6 +32,8 @@ export const authEn = {
   'login.linkExpired': 'This sign-in link has expired or was already used. Ask for a new one.',
   'login.refused.signups_closed_email':
     'There is no account for this address, and sign-up is closed on this hub.',
+  'login.refused.signups_limited':
+    'Too many new accounts were opened from your network today. Try again tomorrow, or sign in to an account you already have.',
   'signup.title': 'Create your Manyplug account',
   'signup.subtitle': 'Free plan, no card. It takes a minute.',
   'signup.termsA': 'By continuing you accept the',
@@ -109,6 +111,8 @@ export const authRu: Record<AuthKey, string> = {
   'login.link.notYou': 'Это не вы? Закройте страницу: пока вы не нажали кнопку, ничего не произойдёт.',
   'login.linkExpired': 'Ссылка для входа устарела или уже использована. Запросите новую.',
   'login.refused.signups_closed_email': 'Аккаунта с этим адресом нет, а регистрация на этом хабе закрыта.',
+  'login.refused.signups_limited':
+    'Сегодня из вашей сети открыто слишком много новых аккаунтов. Попробуйте завтра или войдите в уже существующий.',
   'signup.title': 'Регистрация в Manyplug',
   'signup.subtitle': 'Бесплатный тариф, без карты. Это займёт минуту.',
   'signup.termsA': 'Продолжая, вы принимаете',
