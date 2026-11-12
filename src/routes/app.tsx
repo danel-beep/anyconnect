@@ -998,7 +998,7 @@ export function appRoutes() {
     '/app/settings/export',
     action('/app/settings', async (c, auth) => {
       const s = c.get('services');
-      if (!s.rateLimiter.consume(`export:user:${auth.user.id}`, 6, 60 * 60_000).allowed) {
+      if (!(await s.sharedLimiter.consume(`export:user:${auth.user.id}`, 6, 60 * 60_000)).allowed) {
         setFlash(c, 'bad', 'app.flash.exportLimited');
         return;
       }

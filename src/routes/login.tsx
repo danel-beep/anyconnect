@@ -42,17 +42,32 @@ import { cookieOpts, saveLocale } from './page-helpers.js';
 import { attachReferral } from './referral.js';
 
 /** Second-factor code attempts: per user (the pending login's owner) and per client IP. */
-function consumeCodeAttempt(c: AppContext, userId: string): boolean {
+async function consumeCodeAttempt(c: AppContext, userId: string): Promise<boolean> {
   const s = c.get('services');
-  const byUser = s.rateLimiter.consume(`mfa:user:${userId}`, 5, 5 * 60_000);
-  const byIp = s.rateLimiter.consume(`mfa:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 15 * 60_000);
+  const [byUser, byIp] = await Promise.all([
+    s.sharedLimiter.consume(`mfa:user:${userId}`, 5, 5 * 60_000),
+    s.sharedLimiter.consume(`mfa:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 15 * 60_000),
+  ]);
   return byUser.allowed && byIp.allowed;
 }
 
-/** Passkey ceremonies (options + verification) per client IP. */
-function consumePasskeyAttempt(c: AppContext): boolean {
+/**
+ * New accounts one address (an IPv4 address, an IPv6 /64) may open in a day. Counted only when a
+ * sign-in is about to create a user, so signing in to existing accounts is never held back.
+ */
+const SIGNUPS_PER_ADDRESS_PER_DAY = 10;
+
+async function admitSignUp(c: AppContext): Promise<boolean> {
   const s = c.get('services');
-  return s.rateLimiter.consume(`passkey:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 5 * 60_000).allowed;
+  const key = `signup:ip:${clientRateKey(c, s.config.trustProxy)}`;
+  return (await s.sharedLimiter.consume(key, SIGNUPS_PER_ADDRESS_PER_DAY, 24 * 3_600_000)).allowed;
+}
+
+/** Passkey ceremonies (options + verification) per client IP. */
+async function consumePasskeyAttempt(c: AppContext): Promise<boolean> {
+  const s = c.get('services');
+  const key = `passkey:ip:${clientRateKey(c, s.config.trustProxy)}`;
+  return (await s.sharedLimiter.consume(key, 30, 5 * 60_000)).allowed;
 }
 
 /**
@@ -142,6 +157,7 @@ const LOGIN_ERRORS = {
   suspended: 'login.refused.suspended',
   signups_closed: 'login.refused.signups_closed',
   signups_closed_email: 'login.refused.signups_closed_email',
+  signups_limited: 'login.refused.signups_limited',
   linkExpired: 'login.linkExpired',
   email_unverified: 'login.refused.email_unverified',
 } as const;
@@ -224,10 +240,8 @@ export function loginRoutes() {
     const providerId = c.req.param('provider');
     const next = nextOf(c.req.query('next'));
     if (!s.externalLogin.get(providerId)) return c.notFound();
-    if (
-      !s.rateLimiter.consume(`external-login:ip:${clientRateKey(c, s.config.trustProxy)}`, 30, 15 * 60_000)
-        .allowed
-    )
+    const startKey = `external-login:ip:${clientRateKey(c, s.config.trustProxy)}`;
+    if (!(await s.sharedLimiter.consume(startKey, 30, 15 * 60_000)).allowed)
       return renderLogin(c, { mode: 'login', next, error: c.get('t')('login.rateLimited'), status: 429 });
     const { url, state } = await s.externalLogin.start(providerId, next);
     setSecureCookie(c, EXTERNAL_STATE_COOKIE, state, { ...cookieOpts(c), maxAge: 10 * 60 });
@@ -262,7 +276,7 @@ export function loginRoutes() {
     }
     const next = nextOf(result.next);
     try {
-      const signedIn = await s.users.signInExternal(result.profile);
+      const signedIn = await s.users.signInExternal(result.profile, { admit: () => admitSignUp(c) });
       return await completeFirstFactor(c, signedIn, {
         source: providerId,
         method: 'fed',
@@ -294,12 +308,13 @@ export function loginRoutes() {
     const email = normalizeEmail(address.data);
     const limits = EMAIL_LINK_LIMITS;
     const ipKey = `email-link:ip:${clientRateKey(c, s.config.trustProxy)}`;
-    if (!s.rateLimiter.consume(ipKey, limits.ip.max, limits.ip.windowMs).allowed)
+    if (!(await s.sharedLimiter.consume(ipKey, limits.ip.max, limits.ip.windowMs)).allowed)
       return render(t('login.rateLimited'), 429);
     // Past the per-address or hub-wide limit nothing is sent, quietly: the page stays the same.
     const send =
-      s.rateLimiter.consume(`email-link:to:${email}`, limits.address.max, limits.address.windowMs).allowed &&
-      s.rateLimiter.consume('email-link:hub', limits.hub.max, limits.hub.windowMs).allowed &&
+      (await s.sharedLimiter.consume(`email-link:to:${email}`, limits.address.max, limits.address.windowMs))
+        .allowed &&
+      (await s.sharedLimiter.consume('email-link:hub', limits.hub.max, limits.hub.windowMs)).allowed &&
       (await s.users.canSignInByEmail(email));
     if (send) {
       const token = await s.emailLogins.create(email, next);
@@ -353,12 +368,13 @@ export function loginRoutes() {
     if (!verifyCsrf(c, form.csrf, { ...cookieOpts(c), publicUrl: s.config.publicUrl }))
       return refuse(t('error.csrf'), 403);
     const ipKey = `email-link:confirm:${clientRateKey(c, s.config.trustProxy)}`;
-    if (!s.rateLimiter.consume(ipKey, 30, 15 * 60_000).allowed) return refuse(t('login.rateLimited'), 429);
+    if (!(await s.sharedLimiter.consume(ipKey, 30, 15 * 60_000)).allowed)
+      return refuse(t('login.rateLimited'), 429);
     const link = await s.emailLogins.consume(form.token);
     if (!link) return c.redirect('/login?error=linkExpired', 303);
     const next = nextOf(link.next);
     try {
-      const signedIn = await s.users.signInEmail(link.email);
+      const signedIn = await s.users.signInEmail(link.email, { admit: () => admitSignUp(c) });
       return await completeFirstFactor(c, signedIn, { source: 'email', method: 'eml', next, status: 303 });
     } catch (error) {
       if (!(error instanceof SignInRefused)) throw error;
@@ -389,9 +405,10 @@ export function loginRoutes() {
     const ip = clientIp(c, s.config.trustProxy);
     const email = (form.email ?? '').trim().toLowerCase();
     // The address first: a client over its limit does not use up the account's attempts too.
-    if (!s.rateLimiter.consume(`login:ip:${clientRateKey(c, s.config.trustProxy)}`, 20, 15 * 60_000).allowed)
+    const loginIpKey = `login:ip:${clientRateKey(c, s.config.trustProxy)}`;
+    if (!(await s.sharedLimiter.consume(loginIpKey, 20, 15 * 60_000)).allowed)
       return render(t('login.rateLimited'), 429);
-    if (!s.rateLimiter.consume(`login:email:${email}`, 10, 15 * 60_000).allowed)
+    if (!(await s.sharedLimiter.consume(`login:email:${email}`, 10, 15 * 60_000)).allowed)
       return render(t('login.rateLimited'), 429);
 
     const user = await authenticate(s.db, email, form.password ?? '');
@@ -399,7 +416,7 @@ export function loginRoutes() {
       s.logger.warn({ ip }, 'failed login');
       return render(t('login.invalid'), 400);
     }
-    s.rateLimiter.reset(`login:email:${email}`);
+    await s.sharedLimiter.reset(`login:email:${email}`);
     if (user.status !== 'active') return render(t('login.suspended'), 403);
     if (!(await s.secondFactors.hasAny(user.id))) {
       await finishSignIn(c, user.id, ['pwd']);
@@ -454,7 +471,7 @@ export function loginRoutes() {
     if (!pending) return c.redirect(`/login?next=${encodeURIComponent(next)}`, 303);
     if (!verifyCsrf(c, form.csrf, { ...opts, publicUrl: s.config.publicUrl }))
       return renderVerify(c, pending.userId, next, { message: t('error.csrf'), status: 403 });
-    if (!consumeCodeAttempt(c, pending.userId))
+    if (!(await consumeCodeAttempt(c, pending.userId)))
       return renderVerify(c, pending.userId, next, { message: t('login.rateLimited'), status: 429 });
 
     const method = await s.secondFactors.verifyCode(pending.userId, form.code ?? '');
@@ -464,7 +481,7 @@ export function loginRoutes() {
     }
     const completed = await s.pendingLogins.consume(pendingToken);
     if (!completed) return c.redirect(`/login?next=${encodeURIComponent(next)}`, 303);
-    s.rateLimiter.reset(`mfa:user:${completed.userId}`);
+    await s.sharedLimiter.reset(`mfa:user:${completed.userId}`);
     try {
       await finishSignIn(c, completed.userId, [...completed.amr, method]);
     } catch (error) {
@@ -482,7 +499,8 @@ export function loginRoutes() {
     const body = parsed.data;
     if (!verifyCsrf(c, body.csrf, { ...cookieOpts(c), publicUrl: s.config.publicUrl }))
       return { error: c.json({ error: c.get('t')('error.csrf') }, 403) };
-    if (!consumePasskeyAttempt(c)) return { error: c.json({ error: c.get('t')('login.rateLimited') }, 429) };
+    if (!(await consumePasskeyAttempt(c)))
+      return { error: c.json({ error: c.get('t')('login.rateLimited') }, 429) };
     const pendingToken = readCookie(c, PENDING_LOGIN_COOKIE, cookieOpts(c));
     if (body.flow === 'passwordless') return { body, pendingToken, pending: undefined };
     const pending = await s.pendingLogins.get(pendingToken);

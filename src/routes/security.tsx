@@ -208,14 +208,14 @@ export function securityRoutes() {
     if (guard instanceof Response) return guard;
     const { session, form, next } = guard;
     const userId = session.user.id;
-    if (!s.rateLimiter.consume(`mfa:user:${userId}`, 5, 5 * 60_000).allowed) {
+    if (!(await s.sharedLimiter.consume(`mfa:user:${userId}`, 5, 5 * 60_000)).allowed) {
       return renderSecurity(c, session, next, { totpError: t('login.rateLimited'), status: 429 });
     }
     const first = !(await s.secondFactors.hasAny(userId));
     if (!(await s.secondFactors.totp.confirm(userId, form.code ?? ''))) {
       return renderSecurity(c, session, next, { totpError: t('security.totpInvalid'), status: 400 });
     }
-    s.rateLimiter.reset(`mfa:user:${userId}`);
+    await s.sharedLimiter.reset(`mfa:user:${userId}`);
     // The code just proved the factor: this session now counts as signed in with it.
     await s.sessions.addAuthMethod(session.token, 'otp');
     if (first) await endSessionsOpenedWithoutFactor(c, session);

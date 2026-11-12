@@ -903,6 +903,33 @@ export const emailLogins = pgTable(
   (t) => [index().on(t.expiresAt)],
 );
 
+/**
+ * Attempt counters that every instance shares and a restart does not reset: sign-in and code
+ * attempts, sign-ups per address, anything counted over hours (`SharedRateLimiter`). The key (it
+ * names an address or an email) is stored only as a hash.
+ */
+export const rateCounters = pgTable(
+  'rate_counters',
+  {
+    keyHash: text().primaryKey(),
+    count: integer().notNull(),
+    /** When the window ends: the next attempt after it starts a new count. */
+    resetAt: timestamp({ withTimezone: true }).notNull(),
+  },
+  (t) => [index().on(t.resetAt)],
+);
+
+/**
+ * Background work only one instance should do at a time (polling mailboxes and calendars for
+ * triggers): the instance that holds the row does it and keeps renewing; when it stops renewing,
+ * another takes over (`WorkLeases`).
+ */
+export const workLeases = pgTable('work_leases', {
+  name: text().primaryKey(),
+  holder: text().notNull(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+});
+
 // ---------------------------------------------------------------------------
 // The hub as an OAuth client of connected services
 // ---------------------------------------------------------------------------
