@@ -38,7 +38,7 @@ async function until<T>(
 }
 
 /** A gateway instance (runtime + internal API) on a random port, sharing the hub's database. */
-async function startGateway(instanceId: string, log: FakeLog) {
+async function startGateway(instanceId: string, log: FakeLog, options: { leaseTtlMs?: number } = {}) {
   let handler: ((req: Request) => Response | Promise<Response>) | undefined;
   const server = serve({
     fetch: (req) => (handler ? handler(req) : new Response('starting', { status: 503 })),
@@ -64,7 +64,7 @@ async function startGateway(instanceId: string, log: FakeLog) {
       drivers: [driver],
       connectors: registryWithFakeChat,
       instanceId,
-      leaseTtlMs: 1_500,
+      leaseTtlMs: options.leaseTtlMs ?? 1_500,
       dispatchIntervalMs: 100,
       host: { startJitterMs: 0, scanIntervalMs: 100, backoffBaseMs: 50, backoffMaxMs: 200, maxFailures: 3 },
     },
@@ -221,6 +221,41 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
     expect(session.signal.aborted).toBe(true);
     // The status is left to the new owner.
     expect((await row(account.id)).leaseOwner).toBe('intruder');
+  });
+
+  it('rides out a short database hiccup, and stops before the lease can expire when it lasts', async () => {
+    const account = await addLoggedInAccount();
+    // A 6 s lease, renewed every 2 s: an outage of 2.5 s always spans a renewal.
+    gatewayB = await startGateway('gw-b', log, { leaseTtlMs: 6_000 });
+    await gatewayA.close();
+    await until(() => gatewayB!.runtime.host.isOnline(account.id), 'takeover by the long-lease instance');
+    const gateway = gatewayB;
+    const live = gateway.driver.lives.get(account.id)!;
+    let stopped = false;
+    void live.closed.then(() => {
+      stopped = true;
+    });
+    const { leases } = gateway.runtime;
+    const renew = leases.renew.bind(leases);
+    const down = () => Promise.reject(new Error('Connection terminated unexpectedly'));
+
+    // Renewals fail for 2.5 s: the session stays up, unchanged (it used to stop at the first one).
+    leases.renew = down;
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    leases.renew = renew;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(stopped).toBe(false);
+    expect(gateway.driver.lives.get(account.id)).toBe(live);
+    expect(gateway.runtime.host.isOnline(account.id)).toBe(true);
+
+    // Renewals keep failing: the session stops while the lease is still ours, so no second
+    // instance can be running it at the same time.
+    leases.renew = down;
+    await new Promise((resolve) => setTimeout(resolve, 50)); // a renewal already under way lands
+    const expiresAt = (await row(account.id)).leaseExpiresAt!.getTime();
+    await until(() => stopped, 'session stop after renewals kept failing', 8_000);
+    expect(Date.now()).toBeLessThan(expiresAt);
+    leases.renew = renew;
   });
 
   it('reconnects with backoff and opens the circuit after repeated failures', async () => {

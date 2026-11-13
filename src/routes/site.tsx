@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { isDatabaseUnavailable } from '../db/errors.js';
 import { ASSET_URLS, assetCacheControl } from '../web/asset-urls.js';
 import { fontFile } from '../web/assets.js';
 import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
@@ -57,7 +58,12 @@ export function siteRoutes() {
   // --- Status page ---------------------------------------------------------------
   app.get('/status', async (c) => {
     const data = await c.get('services').ops.status.page();
-    return c.html(<StatusPage ctx={pageCtx(c, await currentUser(c))} data={data} />);
+    // The page has to open during a database outage too, when the session cannot be read.
+    const user = await currentUser(c).catch((error) => {
+      if (isDatabaseUnavailable(error)) return undefined;
+      throw error;
+    });
+    return c.html(<StatusPage ctx={pageCtx(c, user)} data={data} />);
   });
 
   // For external monitors and embeds: the same data, without internal details.

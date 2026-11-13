@@ -49,6 +49,9 @@ export const authEn = {
   'error.notFound': 'Page not found',
   'error.notFoundText': 'The link may be outdated or mistyped.',
   'error.internal': 'Something went wrong on our side. Try again in a minute.',
+  'error.unavailableTitle': 'Back in a moment',
+  'error.unavailable':
+    '{brand} cannot reach its database right now. Your accounts and data are safe; this usually passes within a minute. Reload the page shortly.',
   'error.reference': 'If it keeps happening, write to us and mention the reference {ref}.',
   'error.code.not_found': 'Not found: it may have been removed already. Reload the page.',
   'error.code.self_change': 'You cannot do this to your own profile.',
@@ -128,6 +131,9 @@ export const authRu: Record<AuthKey, string> = {
   'error.notFound': 'Страница не найдена',
   'error.notFoundText': 'Возможно, ссылка устарела или в ней опечатка.',
   'error.internal': 'У нас что-то сломалось. Попробуйте через минуту.',
+  'error.unavailableTitle': 'Скоро вернёмся',
+  'error.unavailable':
+    '{brand} сейчас не может связаться со своей базой данных. Аккаунты и данные в сохранности; обычно это проходит за минуту. Обновите страницу чуть позже.',
   'error.reference': 'Если повторяется, напишите нам и укажите код {ref}.',
   'error.code.not_found': 'Не найдено: возможно, это уже удалили. Обновите страницу.',
   'error.code.self_change': 'Это нельзя сделать со своим профилем.',

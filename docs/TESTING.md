@@ -79,6 +79,12 @@ VISUAL_PAGES='^/app/services$' VISUAL_BASELINE=/tmp/vis-before VISUAL_SCREENSHOT
 и вызывает его от чужого имени из браузера и с API-токеном. В ответах не должно быть ничего
 чужого, а чужие строки в базе не должны измениться. Новый маршрут попадает под проверку сам.
 
+**Сбои инфраструктуры.** `test/fault-proxy.ts` — TCP-прокси перед Postgres: `cut()` рвёт все
+соединения и не пускает новые (перезапуск базы), `freeze()` оставляет их открытыми, но без ответа
+(разрыв сети), `restore()` пускает снова. Хаб поднимается через него
+(`startTestHub({ databaseUrl: proxy.url(TEST_DATABASE_URL) })`), см. `test/outage.e2e.test.ts` и
+docs/OPERATIONS.md («Сбой базы данных»).
+
 `test/helpers.ts`: `startTestHub()` поднимает настоящий хаб на случайном порту, `TestBrowser` —
 браузер с cookie, формами и `walk()` (идёт по редиректам, в том числе на сайты провайдеров).
 

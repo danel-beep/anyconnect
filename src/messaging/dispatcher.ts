@@ -4,6 +4,7 @@ import {
   type PacingLimits,
   type SentReceipt,
 } from '../connectors/messaging.js';
+import { isDatabaseUnavailable } from '../db/errors.js';
 import type { DbListener } from '../db/listener.js';
 import { DueLoop } from '../lib/due-loop.js';
 import type { Logger } from '../logger.js';
@@ -27,6 +28,8 @@ export interface DeliveryExecutor {
 }
 
 const MAX_ATTEMPTS = 5;
+/** Waits between attempts to record a delivery while the database is unavailable (~15 s in all). */
+const RECORD_RETRY_MS = [500, 1_000, 2_000, 4_000, 8_000];
 /** A flood wait longer than this pauses all sending of the account and is reported to the user. */
 const LONG_FLOOD_SECONDS = 300;
 const SPAM_PAUSE_MS = 24 * 3_600_000;
@@ -62,6 +65,8 @@ export class Dispatcher {
       /** Database notifications: a job queued by another process wakes this dispatcher. */
       listener?: DbListener;
       random?: () => number;
+      /** Waits between attempts to record a delivery while the database is down (tests shorten them). */
+      recordRetryMs?: readonly number[];
     },
   ) {
     this.loop = new DueLoop({
@@ -165,8 +170,10 @@ export class Dispatcher {
 
   /** Returns false when the account must wait (pacing, flood, error). */
   private async process(accountId: string, row: OutboxRow, job: OutboundJob): Promise<boolean> {
-    const { executor, outbox, store } = this.deps;
+    const { executor, outbox } = this.deps;
     const random = this.deps.random ?? Math.random;
+    let receipt: SentReceipt | undefined;
+    let handedOver = false;
     try {
       if (job.kind === 'message') {
         const limits = await executor.pacing(accountId);
@@ -189,50 +196,93 @@ export class Dispatcher {
         }
       }
 
-      const receipt = await executor.deliver(accountId, job);
-      if (job.kind === 'message') {
-        let messageId: string | undefined;
-        if (receipt) {
-          const [stored] = await store.ingest(accountId, [
-            {
-              chat: { externalId: job.chat.externalId, kind: job.chat.kind },
-              externalId: receipt.externalId,
-              direction: 'out',
-              sentAt: receipt.sentAt,
-              text: job.text ?? '',
-              ...(job.replyToExternalId ? { replyToExternalId: job.replyToExternalId } : {}),
-              ...(receipt.attachments?.length
-                ? { attachments: receipt.attachments }
-                : job.file
-                  ? {
-                      attachments: [
-                        {
-                          externalId: `${receipt.externalId}:file`,
-                          kind: job.file.kind,
-                          ...(job.file.name ? { name: job.file.name } : {}),
-                          // Not kept by the messenger in a form the hub can fetch: get_attachment says so.
-                          locator: { sentLink: job.file.url },
-                        },
-                      ],
-                    }
-                  : {}),
-            },
-          ]);
-          messageId =
-            stored?.id ??
-            (await store.findMessageByExternalId(accountId, row.chatId, receipt.externalId))?.id;
-        }
-        await outbox.markSent(row.id, {
-          sentAt: receipt?.sentAt ?? new Date(),
-          ...(messageId ? { messageId } : {}),
-        });
-      } else {
-        await store.markChatRead(row.chatId);
-        await outbox.markSent(row.id, { sentAt: new Date() });
-      }
-      return true;
+      handedOver = true;
+      receipt = await executor.deliver(accountId, job);
     } catch (error) {
+      if (!handedOver && !(error instanceof DeliveryError)) {
+        // Nothing reached the messenger yet (e.g. the database did not answer the pacing read): it
+        // is certainly unsent, so it waits and goes again instead of being reported as uncertain.
+        this.deps.logger.warn({ err: error, job: row.id }, 'delivery postponed by an error before sending');
+        return this.retry(row, 'Temporary error before sending, will retry', random);
+      }
       return this.handleFailure(accountId, row, error);
+    }
+    // From here the message is out: only writing that down can fail, and that must never make it
+    // look unsent (a retry would send it twice).
+    return this.recordDelivery(accountId, row, job, receipt);
+  }
+
+  /**
+   * Records a delivery. While the database is briefly unavailable this is retried for about 15 s;
+   * if it still fails the job is at least marked sent. Returns false when the drain should pause.
+   */
+  private async recordDelivery(
+    accountId: string,
+    row: OutboxRow,
+    job: OutboundJob,
+    receipt: SentReceipt | undefined,
+  ): Promise<boolean> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await this.record(accountId, row, job, receipt);
+        return true;
+      } catch (error) {
+        const wait = (this.deps.recordRetryMs ?? RECORD_RETRY_MS)[attempt];
+        if (wait === undefined || !isDatabaseUnavailable(error)) {
+          this.deps.logger.warn({ err: error, job: row.id }, 'delivered, but could not record the delivery');
+          await this.deps.outbox.markSent(row.id, { sentAt: receipt?.sentAt ?? new Date() }).catch(() => {});
+          return false;
+        }
+        await sleep(wait);
+      }
+    }
+  }
+
+  private async record(
+    accountId: string,
+    row: OutboxRow,
+    job: OutboundJob,
+    receipt: SentReceipt | undefined,
+  ): Promise<void> {
+    const { outbox, store } = this.deps;
+    if (job.kind === 'message') {
+      let messageId: string | undefined;
+      if (receipt) {
+        const [stored] = await store.ingest(accountId, [
+          {
+            chat: { externalId: job.chat.externalId, kind: job.chat.kind },
+            externalId: receipt.externalId,
+            direction: 'out',
+            sentAt: receipt.sentAt,
+            text: job.text ?? '',
+            ...(job.replyToExternalId ? { replyToExternalId: job.replyToExternalId } : {}),
+            ...(receipt.attachments?.length
+              ? { attachments: receipt.attachments }
+              : job.file
+                ? {
+                    attachments: [
+                      {
+                        externalId: `${receipt.externalId}:file`,
+                        kind: job.file.kind,
+                        ...(job.file.name ? { name: job.file.name } : {}),
+                        // Not kept by the messenger in a form the hub can fetch: get_attachment says so.
+                        locator: { sentLink: job.file.url },
+                      },
+                    ],
+                  }
+                : {}),
+          },
+        ]);
+        messageId =
+          stored?.id ?? (await store.findMessageByExternalId(accountId, row.chatId, receipt.externalId))?.id;
+      }
+      await outbox.markSent(row.id, {
+        sentAt: receipt?.sentAt ?? new Date(),
+        ...(messageId ? { messageId } : {}),
+      });
+    } else {
+      await store.markChatRead(row.chatId);
+      await outbox.markSent(row.id, { sentAt: new Date() });
     }
   }
 

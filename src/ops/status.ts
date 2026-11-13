@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
+import { isDatabaseUnavailable } from '../db/errors.js';
 import { statusComponents, statusDays, statusIncidents } from '../db/schema.js';
 import { newId } from '../lib/ids.js';
 import { type HealthRegistry, type HealthStatus, type StatusComponent, worst } from './checks.js';
@@ -12,7 +13,9 @@ import { type HealthRegistry, type HealthStatus, type StatusComponent, worst } f
  * `missing`: a status page that only records what it saw while alive would always look perfect.
  *
  * The page itself is served by the hub, so it cannot show an outage while the hub is down; an
- * external monitor on /readyz covers that (see docs/OPERATIONS.md).
+ * external monitor on /readyz covers that (see docs/OPERATIONS.md). While the hub runs but its
+ * database does not answer, the page still opens and says so (`outage`), with the history it last
+ * read.
  */
 
 export const PUBLIC_COMPONENTS: readonly { id: StatusComponent; publicDetail?: boolean }[] = [
@@ -74,6 +77,11 @@ export class StatusService {
       now?: () => number;
     },
   ) {}
+
+  /** The last page read per `days`, shown during a database outage. */
+  private readonly lastPage = new Map<number, StatusPageData>();
+  /** When the database stopped answering the page (cleared by the next successful read). */
+  private outageSince: Date | undefined;
 
   private now(): number {
     return this.deps.now?.() ?? Date.now();
@@ -206,6 +214,63 @@ export class StatusService {
   /** Everything the status page shows: current state, `days` daily bars, recent incidents. */
   async page(options: { days?: number; incidentDays?: number } = {}): Promise<StatusPageData> {
     const days = options.days ?? 90;
+    try {
+      const data = await this.read(days, options.incidentDays ?? 14);
+      this.lastPage.set(days, data);
+      this.outageSince = undefined;
+      return data;
+    } catch (error) {
+      if (!isDatabaseUnavailable(error)) throw error;
+      return this.outage(days);
+    }
+  }
+
+  /**
+   * The database does not answer: everything that needs it (the dashboard, MCP sign-in, jobs) is
+   * down right now. Service connections keep their last known state; history is the last read.
+   */
+  private outage(days: number): StatusPageData {
+    const now = new Date(this.now());
+    this.outageSince ??= now;
+    const since = this.outageSince;
+    const last = this.lastPage.get(days);
+    const components: ComponentStatus[] = [];
+    for (const { id } of PUBLIC_COMPONENTS) {
+      const before = last?.components.find((c) => c.id === id);
+      // Service connections do not depend on the database: their last known state stands.
+      if (id === 'connections') {
+        if (before) components.push(before);
+        continue;
+      }
+      const bars =
+        before?.days ??
+        Array.from({ length: days }, (_, i) => ({
+          day: dayOf(now.getTime() - (days - 1 - i) * DAY),
+          status: 'none' as const,
+          uptime: null,
+        }));
+      components.push({
+        id,
+        status: 'down',
+        since,
+        note: undefined,
+        days: bars,
+        uptime: before?.uptime ?? null,
+      });
+    }
+    return {
+      overall: 'down',
+      updatedAt: now,
+      stale: false,
+      components,
+      incidents: [
+        { component: 'database', status: 'down', startedAt: since, endedAt: null },
+        ...(last?.incidents ?? []),
+      ],
+    };
+  }
+
+  private async read(days: number, incidentDays: number): Promise<StatusPageData> {
     const now = this.now();
     const firstDay = dayOf(now - (days - 1) * DAY);
     const [current, history, incidents] = await Promise.all([
@@ -214,7 +279,7 @@ export class StatusService {
       this.deps.db
         .select()
         .from(statusIncidents)
-        .where(gte(statusIncidents.startedAt, new Date(now - (options.incidentDays ?? 14) * DAY)))
+        .where(gte(statusIncidents.startedAt, new Date(now - incidentDays * DAY)))
         .orderBy(desc(statusIncidents.startedAt))
         .limit(50),
     ]);

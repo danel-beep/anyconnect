@@ -5,9 +5,9 @@ import type { Services } from './services.js';
 
 /** Startup tasks: migrations, the bootstrap owner, and demo accounts for a brand-new workspace. */
 export async function bootstrap(services: Services): Promise<void> {
-  const { config, logger, database, db, accounts } = services;
+  const { config, logger, db, accounts } = services;
   if (config.migrateOnStart) {
-    await runMigrations(database.pool);
+    await runMigrations(config.database.url);
     logger.info('database migrations applied');
   }
   await services.messaging.init();

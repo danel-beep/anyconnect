@@ -53,11 +53,34 @@ interface Running {
   abort: AbortController;
   live?: LiveSession;
   renewTimer?: NodeJS.Timeout;
+  /**
+   * When the last successful renewal (or the claim) was sent. The database set the expiry later
+   * than that, so the lease is certainly ours until `renewedAt + ttl`.
+   */
+  renewedAt: number;
+  renewing?: boolean;
   login?: { id: string; flow: LoginFlow; expiresAt: Date; timer: NodeJS.Timeout };
   done: Promise<void>;
 }
 
 class HostError extends ConnectorError {}
+
+/** How often a failed lease renewal is retried (at most; a fifteenth of the TTL in tests). */
+const RENEW_RETRY_MS = 2_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms).unref());
+
+/** Rejects when `promise` takes longer than `ms`. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`no answer in ${Math.round(ms)} ms`)), ms);
+      timer.unref();
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 /**
  * Runs the messenger sessions of this gateway instance: claims accounts through leases, connects
@@ -185,6 +208,7 @@ export class SessionHost implements DeliveryExecutor {
   async launch(accountId: string): Promise<boolean> {
     if (this.stopping || this.running.has(accountId)) return false;
     let token: number | undefined;
+    const claimedAt = Date.now();
     try {
       token = await this.deps.leases.acquire(accountId);
     } catch (error) {
@@ -193,13 +217,19 @@ export class SessionHost implements DeliveryExecutor {
       return false;
     }
     if (token === undefined) return false;
-    const running = this.track(accountId, token);
+    const running = this.track(accountId, token, claimedAt);
     running.done = this.connectAndWatch(running);
     return true;
   }
 
-  private track(accountId: string, token: number): Running {
-    const running: Running = { accountId, token, abort: new AbortController(), done: Promise.resolve() };
+  private track(accountId: string, token: number, claimedAt: number): Running {
+    const running: Running = {
+      accountId,
+      token,
+      renewedAt: claimedAt,
+      abort: new AbortController(),
+      done: Promise.resolve(),
+    };
     this.running.set(accountId, running);
     // Renew at a third of the TTL: two renewals can fail before the lease runs out.
     running.renewTimer = setInterval(
@@ -210,14 +240,53 @@ export class SessionHost implements DeliveryExecutor {
     return running;
   }
 
+  /**
+   * Extends the lease. "Lost" (another owner has it) stops the session at once. A failed renewal
+   * (the database restarts, a network blip) proves nothing either way, so it is retried every
+   * couple of seconds while the lease is certainly still ours; only when that time is nearly up
+   * does the session stop, before anyone else could take the account over. So a database hiccup
+   * no longer drops every messenger session, and two copies of one session still never run.
+   */
   private async renew(running: Running): Promise<void> {
+    if (running.renewing || running.abort.signal.aborted) return;
+    running.renewing = true;
+    const ttl = this.deps.leases.ttlMs;
+    // Stop with a sixth of the lease to spare: time to close the session before it can expire.
+    const deadline = running.renewedAt + ttl - ttl / 6;
     try {
-      if (await this.deps.leases.renew(running.accountId, running.token)) return;
-      this.deps.logger.warn({ account: running.accountId }, 'session lease lost: stopping the session');
-    } catch (error) {
-      // Cannot tell whether we still hold it; the lease may expire, so behave as if lost.
-      this.deps.logger.warn({ err: error, account: running.accountId }, 'session lease renewal failed');
-      if (await this.deps.leases.renew(running.accountId, running.token).catch(() => false)) return;
+      for (let failures = 0; ; failures++) {
+        const sentAt = Date.now();
+        const left = deadline - sentAt;
+        if (left <= 0) {
+          this.deps.logger.warn(
+            { account: running.accountId, failures },
+            'session lease could not be renewed in time: stopping the session',
+          );
+          break;
+        }
+        try {
+          // A renewal that hangs (network split) must not outlast the lease either.
+          const renewed = await withTimeout(this.deps.leases.renew(running.accountId, running.token), left);
+          if (renewed) {
+            running.renewedAt = sentAt;
+            if (failures > 0)
+              this.deps.logger.info({ account: running.accountId, failures }, 'session lease renewed');
+            return;
+          }
+          this.deps.logger.warn({ account: running.accountId }, 'session lease lost: stopping the session');
+          break;
+        } catch (error) {
+          if (running.abort.signal.aborted) return;
+          if (failures === 0)
+            this.deps.logger.warn(
+              { err: error, account: running.accountId },
+              'session lease renewal failed, retrying',
+            );
+          await sleep(Math.min(RENEW_RETRY_MS, ttl / 15, Math.max(0, deadline - Date.now())));
+        }
+      }
+    } finally {
+      running.renewing = false;
     }
     running.abort.abort(new Error('lease lost'));
     await running.live?.stop().catch(() => {});
@@ -362,11 +431,12 @@ export class SessionHost implements DeliveryExecutor {
   async startLogin(accountId: string, input: StartLoginInput): Promise<LoginView> {
     const existing = this.running.get(accountId);
     if (existing) await this.shutdown(existing);
+    const claimedAt = Date.now();
     const token = await this.deps.leases.acquire(accountId);
     if (token === undefined) {
       throw new HostError('upstream', 'Another gateway instance holds this account; try again in a minute.');
     }
-    const running = this.track(accountId, token);
+    const running = this.track(accountId, token, claimedAt);
     try {
       const { driver, session } = await this.session(running);
       if (!driver.login)
@@ -472,9 +542,10 @@ export class SessionHost implements DeliveryExecutor {
   }
 
   private async claimForMaintenance(accountId: string): Promise<Running | undefined> {
+    const claimedAt = Date.now();
     const token = await this.deps.leases.acquire(accountId);
     if (token === undefined) return undefined;
-    return this.track(accountId, token);
+    return this.track(accountId, token, claimedAt);
   }
 
   // -------------------------------------------------------------------------

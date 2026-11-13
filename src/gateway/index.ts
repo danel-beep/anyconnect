@@ -39,7 +39,7 @@ async function main() {
   });
   // The hub applies migrations too; both take the same advisory lock, so whoever starts first wins.
   step = 'applying database migrations';
-  await runMigrations(runtime.database.pool);
+  await runMigrations(config.database.url);
   step = 'starting sessions and the outbox';
   await runtime.start();
   step = 'starting the internal API';

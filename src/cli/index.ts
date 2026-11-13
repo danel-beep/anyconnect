@@ -127,7 +127,7 @@ async function main() {
   try {
     switch (command) {
       case 'db:migrate':
-        await runMigrations(services.database.pool);
+        await runMigrations(services.config.database.url);
         console.log('Migrations applied.');
         break;
       case 'db:status': {

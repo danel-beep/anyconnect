@@ -1,4 +1,4 @@
-import { verifyBearerToken } from '@modelcontextprotocol/server';
+import { OAuthError, verifyBearerToken } from '@modelcontextprotocol/server';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -43,7 +43,9 @@ export function apiRoutes() {
         if (principal.personaId) throw unauthorized();
         c.set('principal', principal);
         if (info.token) vaultSecret = bearerVaultSecret(principal, info.token);
-      } catch {
+      } catch (error) {
+        // A failed check (the database does not answer) is not a rejected token: it answers 503.
+        if (!(error instanceof OAuthError || error instanceof AppError)) throw error;
         throw unauthorized('Invalid or insufficient token: use a personal access token with the "api" scope');
       }
       // This API sees a whole workspace; in a team each member sees only part of it, which the MCP

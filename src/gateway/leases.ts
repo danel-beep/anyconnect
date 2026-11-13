@@ -10,7 +10,8 @@ import { messengerAccounts } from '../db/schema.js';
  * network split), the lease runs out and another instance takes over with a higher token, and
  * every state write of the old holder is rejected because it carries the old token.
  * Two live copies of one session are the main cause of key conflicts and forced logouts, so
- * the host stops a session the moment a renewal fails.
+ * the host stops a session the moment the lease is lost, and when renewals keep failing it stops
+ * the session before the lease could run out (`SessionHost.renew`).
  */
 export class LeaseManager {
   constructor(

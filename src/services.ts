@@ -270,7 +270,10 @@ export function createServices(
   const logger =
     overrides.logger ??
     createLogger({ level: config.logLevel, pretty: !config.isProduction && process.stdout.isTTY === true });
-  const database = createDatabase(config.database.url, { poolMax: config.database.poolMax });
+  const database = createDatabase(config.database.url, {
+    poolMax: config.database.poolMax,
+    queryTimeoutMs: config.database.queryTimeoutMs,
+  });
   const db = database.db;
   const ops = createOps({
     config,

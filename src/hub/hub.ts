@@ -17,6 +17,7 @@ import { getWorkspace } from '../core/identity.js';
 import type { Principal } from '../core/principal.js';
 import type { WorkspaceAdmin } from '../core/workspace-admin.js';
 import type { Db } from '../db/client.js';
+import { DATABASE_RETRY_AFTER_SECONDS, isDatabaseUnavailable } from '../db/errors.js';
 import { oauthClients, toolCalls } from '../db/schema.js';
 import type { CircuitBreaker } from '../lib/circuit-breaker.js';
 import { mapLimit } from '../lib/concurrency.js';
@@ -162,6 +163,8 @@ export class Hub {
           db: deps.db,
           logger: deps.logger,
           rateLimiter: deps.rateLimiter,
+          // Without it the `circuit` stage is left out and a dead service is called on every turn.
+          ...(deps.circuitBreaker ? { circuitBreaker: deps.circuitBreaker } : {}),
           idempotency: deps.idempotency,
           idempotencyWindowMs: deps.idempotencyWindowMs,
           maxResultTokens: deps.maxResultTokens,
@@ -859,7 +862,12 @@ export class Hub {
     },
   ): Promise<{ call: CallContext } | { rejected: ExecResult }> {
     // The account may have been disabled since the catalog was built.
-    const row = await this.deps.accounts.get(principal.workspaceId, account.id).catch(() => undefined);
+    // Only "not found" means removed: a database that does not answer must not read as a deleted
+    // account (the AI would tell the user it is gone); that error goes to `toErrorResult`.
+    const row = await this.deps.accounts.get(principal.workspaceId, account.id).catch((error: unknown) => {
+      if (error instanceof AppError && error.status === 404) return undefined;
+      throw error;
+    });
     if (!row?.enabled)
       return { rejected: errorResult(`Account "${account.name}" is disabled or was removed.`) };
 
@@ -997,6 +1005,15 @@ export class Hub {
     } else {
       ref = Math.random().toString(36).slice(2, 10);
       this.deps.logger.error({ err: error, tool: toolName, ref }, 'tool call failed');
+    }
+    if (isDatabaseUnavailable(error)) {
+      // The hub's own database, not the service: say so, so the AI neither blames the service nor
+      // gives up on it. What failed may have been bookkeeping after the action, hence the check.
+      return errorResult(
+        `${BRAND.name} could not reach its database for a moment (a temporary problem on ${BRAND.name}'s side, not with the service). Try again in a minute; before repeating an action that sends or changes something, check whether it already happened.`,
+        'hub',
+        DATABASE_RETRY_AFTER_SECONDS,
+      );
     }
     return errorResult(`Internal error while running ${toolName} (ref ${ref}).`, 'internal');
   }
