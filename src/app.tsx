@@ -1,6 +1,8 @@
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { compress } from 'hono/compress';
+import { BRAND } from './brand.js';
 import { VaultLockedError } from './core/vaults.js';
+import { DATABASE_RETRY_AFTER_SECONDS, isDatabaseUnavailable } from './db/errors.js';
 import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
 import { adminRoutes } from './routes/admin.js';
@@ -158,6 +160,7 @@ export function createApp(services: Services) {
       source: 'http',
       context: { method: c.req.method, path: routePath(c.req.path) },
     });
+    if (isDatabaseUnavailable(error)) return unavailable(c);
     if (c.req.path.startsWith('/api/'))
       return c.json({ error: { code: 'internal', message: `Internal error (ref ${ref})`, ref } }, 500);
     if (!wantsHtml(c.req.header('accept'))) return c.text(`Internal error (ref ${ref})`, 500);
@@ -174,6 +177,31 @@ export function createApp(services: Services) {
   });
 
   return app;
+}
+
+/**
+ * The database cannot be reached (restart, network): a temporary outage, not a bug. 503 with
+ * Retry-After tells browsers, AI apps and OAuth clients to come back rather than give up (a
+ * token endpoint answering 500 or 400 can make an AI app drop its sign-in).
+ */
+function unavailable(c: Context<AppEnv>) {
+  const headers = { 'Retry-After': String(DATABASE_RETRY_AFTER_SECONDS), 'Cache-Control': 'no-store' };
+  const message = `${BRAND.name} is temporarily unavailable. Try again in a minute.`;
+  if (c.req.path.startsWith('/api/'))
+    return c.json({ error: { code: 'unavailable', message } }, 503, headers);
+  if (!wantsHtml(c.req.header('accept')))
+    return c.json({ error: 'temporarily_unavailable', error_description: message }, 503, headers);
+  const t = c.get('t');
+  return c.html(
+    <ErrorPage
+      t={t}
+      lang={c.get('locale')}
+      title={t('error.unavailableTitle')}
+      message={t('error.unavailable', { brand: BRAND.name })}
+    />,
+    503,
+    headers,
+  );
 }
 
 const PROBES = new Set(['/healthz', '/readyz']);

@@ -1,8 +1,10 @@
-import { bearerAuthChallengeResponse, verifyBearerToken } from '@modelcontextprotocol/server';
+import { bearerAuthChallengeResponse, OAuthError, verifyBearerToken } from '@modelcontextprotocol/server';
 import { Hono } from 'hono';
+import { BRAND } from '../brand.js';
 import { principalFromAuthInfo } from '../core/auth.js';
 import { isMcpSubPath } from '../core/mcp-paths.js';
 import { bearerVaultSecret } from '../core/vault-scope.js';
+import { DATABASE_RETRY_AFTER_SECONDS, isDatabaseUnavailable } from '../db/errors.js';
 import { VISITOR_CALLABLE } from '../hub/visitor.js';
 import { clientRateKey, publicCors } from '../web/http.js';
 import type { AppContext, AppEnv } from './context.js';
@@ -58,7 +60,26 @@ export function mcpRoutes() {
         expectedResource: new URL(resource),
       });
     } catch (error) {
-      return bearerAuthChallengeResponse(error, { requiredScopes, resourceMetadataUrl });
+      if (error instanceof OAuthError) {
+        return bearerAuthChallengeResponse(error, { requiredScopes, resourceMetadataUrl });
+      }
+      // Not a verdict on the token: the check itself failed. Never a 401, which would make the AI
+      // app throw its sign-in away and ask the user to connect again.
+      s.ops.errors.capture(error, { source: 'http', context: { method: c.req.method, path: '/mcp' } });
+      return isDatabaseUnavailable(error)
+        ? c.json(
+            {
+              jsonrpc: '2.0',
+              id: null,
+              error: {
+                code: -32000,
+                message: `${BRAND.name} is temporarily unavailable. Try again in a minute.`,
+              },
+            },
+            503,
+            { 'Retry-After': String(DATABASE_RETRY_AFTER_SECONDS) },
+          )
+        : bearerAuthChallengeResponse(error, { requiredScopes, resourceMetadataUrl });
     }
     // The caller's vault opens (lazily) with the token it presented: sealed accounts work only here.
     const secret = authInfo.token

@@ -20,6 +20,8 @@ export interface GatewayRuntime {
   database: Database;
   messaging: Messaging;
   host: SessionHost;
+  /** The session leases of this instance (one session per account across instances). */
+  leases: LeaseManager;
   /** Delivers outbox jobs of the sessions running on this instance. */
   dispatcher: Dispatcher;
   network: NetworkPolicy;
@@ -49,7 +51,10 @@ export function createGatewayRuntime(
   },
 ): GatewayRuntime {
   const { logger } = options;
-  const database = createDatabase(config.database.url, { poolMax: config.database.poolMax });
+  const database = createDatabase(config.database.url, {
+    poolMax: config.database.poolMax,
+    queryTimeoutMs: config.database.queryTimeoutMs,
+  });
   const db = database.db;
   const secrets = new SecretBox(config.encryption.key, config.encryption.previousKeys);
   const network = createNetworkPolicy({ allowPrivateNetwork: config.allowPrivateNetwork });
@@ -114,6 +119,7 @@ export function createGatewayRuntime(
     database,
     messaging: ready,
     host,
+    leases,
     dispatcher: outbox,
     network,
     connectors,

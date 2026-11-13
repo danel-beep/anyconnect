@@ -13,6 +13,8 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(10000),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+  /** A database query without an answer for this long fails and its connection is dropped (0: off). */
+  DATABASE_QUERY_TIMEOUT_SECONDS: z.coerce.number().int().min(0).default(60),
   ENCRYPTION_KEY: optionalString,
   ENCRYPTION_KEYS_PREVIOUS: optionalString,
   GATEWAY_TOKEN: optionalString,
@@ -35,7 +37,7 @@ export interface GatewayConfig {
   isProduction: boolean;
   host: string;
   port: number;
-  database: { url: string; poolMax: number };
+  database: { url: string; poolMax: number; queryTimeoutMs: number };
   encryption: { key: string | undefined; previousKeys: string[] };
   token: string;
   advertiseUrl: string;
@@ -68,7 +70,11 @@ export function loadGatewayConfig(source: NodeJS.ProcessEnv = process.env): Gate
     isProduction,
     host: env.HOST,
     port: env.PORT,
-    database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
+    database: {
+      url: env.DATABASE_URL,
+      poolMax: env.DATABASE_POOL_MAX,
+      queryTimeoutMs: env.DATABASE_QUERY_TIMEOUT_SECONDS * 1000,
+    },
     encryption: {
       key: env.ENCRYPTION_KEY,
       previousKeys: (env.ENCRYPTION_KEYS_PREVIOUS ?? '')

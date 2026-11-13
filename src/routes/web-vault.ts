@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { MiddlewareHandler } from 'hono';
 import { VaultSecret } from '../core/vault-scope.js';
+import { isDatabaseUnavailable } from '../db/errors.js';
 import { newId } from '../lib/ids.js';
 import { readCookie, setSecureCookie } from '../web/http.js';
 import { type AppEnv, currentSession } from './context.js';
@@ -31,7 +32,15 @@ function parse(value: string | undefined): { userId: string; deviceId: string; s
 export function webVault(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     if (SKIP.test(c.req.path)) return next();
-    const session = await currentSession(c);
+    let session: Awaited<ReturnType<typeof currentSession>>;
+    try {
+      session = await currentSession(c);
+    } catch (error) {
+      // The database does not answer: pages that work without it (status, docs) still open, and
+      // those that need it answer 503 themselves.
+      if (isDatabaseUnavailable(error)) return next();
+      throw error;
+    }
     if (!session) return next();
     const s = c.get('services');
     const userId = session.user.id;

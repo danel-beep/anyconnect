@@ -37,6 +37,7 @@ export class PgListener implements DbListener {
   private retryTimer: NodeJS.Timeout | undefined;
   private pingTimer: NodeJS.Timeout | undefined;
   private isConnected = false;
+  private pinging = false;
 
   constructor(
     private readonly options: {
@@ -46,6 +47,12 @@ export class PgListener implements DbListener {
       retry?: { minMs: number; maxMs: number };
       /** A dead TCP connection can look idle: a cheap query this often proves it is alive (default 60 s). */
       pingMs?: number;
+      /**
+       * A ping without an answer for this long means the connection is dead (default 10 s). After
+       * a network split the socket stays open and a query on it never returns, so without a limit
+       * the listener would stay "connected" and deaf until TCP gives up, hours later.
+       */
+      pingTimeoutMs?: number;
     },
   ) {
     this.retryMs = options.retry?.minMs ?? 1000;
@@ -89,6 +96,10 @@ export class PgListener implements DbListener {
     const client = new pg.Client({
       connectionString: this.options.connectionString,
       keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      // Bounds the LISTENs and pings, and connecting while the database host is unreachable.
+      query_timeout: this.options.pingTimeoutMs ?? 10_000,
+      connectionTimeoutMillis: 10_000,
       application_name: `${BRAND.slug}-listener`,
     });
     client.on('notification', (message) => {
@@ -138,13 +149,18 @@ export class PgListener implements DbListener {
    * mode LISTEN seems to work but nothing arrives; the session then shows no listening channels.
    */
   private async ping(client: pg.Client): Promise<void> {
+    if (this.pinging) return;
+    this.pinging = true;
     try {
+      // Fails with "Query read timeout" after `pingTimeoutMs` (the client's `query_timeout`).
       const { rows } = await client.query<{ channel: string }>('SELECT pg_listening_channels() AS channel');
       const heard = new Set(rows.map((r) => r.channel));
       const deaf = [...new Set([...this.subscriptions].map((s) => s.channel))].filter((c) => !heard.has(c));
       if (deaf.length > 0) this.lost(new Error(`not listening on ${deaf.join(', ')}`), client);
     } catch (err) {
       this.lost(err, client);
+    } finally {
+      this.pinging = false;
     }
   }
 

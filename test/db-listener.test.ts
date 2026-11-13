@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { BRAND } from '../src/brand.js';
 import { PgListener } from '../src/db/listener.js';
 import { createLogger } from '../src/logger.js';
+import { FaultProxy } from './fault-proxy.js';
 import { TEST_DATABASE_URL } from './helpers.js';
 
 const logger = createLogger({ level: 'silent' });
@@ -113,6 +114,43 @@ describe('PgListener (Postgres LISTEN/NOTIFY)', () => {
       },
       { timeout: 5_000 },
     );
+  });
+
+  it('notices a connection that went silent (network split) and comes back with its channels', async () => {
+    const proxy = await FaultProxy.start(TEST_DATABASE_URL);
+    try {
+      listener = new PgListener({
+        connectionString: proxy.url(TEST_DATABASE_URL),
+        logger,
+        retry: { minMs: 20, maxMs: 200 },
+        pingMs: 100,
+        pingTimeoutMs: 300,
+      });
+      const l = listener;
+      const got: string[] = [];
+      const resync = vi.fn();
+      l.listen('test_f', (p) => got.push(p), resync);
+      l.start();
+      await vi.waitFor(() => expect(l.connected).toBe(true), { timeout: 5_000 });
+      // The socket stays open but nothing arrives: before, the ping waited forever and the
+      // listener stayed "connected" and deaf until TCP gave up, hours later.
+      proxy.freeze();
+      await vi.waitFor(() => expect(l.connected).toBe(false), { timeout: 5_000 });
+      expect(resync).toHaveBeenCalledTimes(2);
+      proxy.restore();
+      await vi.waitFor(() => expect(l.connected).toBe(true), { timeout: 5_000 });
+      expect(resync).toHaveBeenCalledTimes(3);
+      await vi.waitFor(
+        async () => {
+          await notify('test_f', 'after the split');
+          expect(got).toContain('after the split');
+        },
+        { timeout: 5_000 },
+      );
+    } finally {
+      await listener?.stop();
+      await proxy.close();
+    }
   });
 
   it('never throws without a server and keeps retrying until stopped', async () => {

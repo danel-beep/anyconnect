@@ -47,6 +47,8 @@ const EnvSchema = z.object({
   LEGACY_PUBLIC_URLS: optionalString,
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).default(10),
+  /** A database query without an answer for this long fails and its connection is dropped (0: off). */
+  DATABASE_QUERY_TIMEOUT_SECONDS: z.coerce.number().int().min(0).default(60),
   /** 32-byte key (base64 or hex) used to encrypt service credentials at rest. */
   ENCRYPTION_KEY: optionalString,
   /** Previous keys, comma separated. Still used for decryption so keys can be rotated. */
@@ -200,7 +202,7 @@ export interface AppConfig {
   secureCookies: boolean;
   /** How to find the client IP behind proxies (`hops: 0` = use the socket address). */
   trustProxy: TrustProxy;
-  database: { url: string; poolMax: number };
+  database: { url: string; poolMax: number; queryTimeoutMs: number };
   encryption: { key: string | undefined; previousKeys: string[] };
   admin: { email: string; password: string } | undefined;
   logLevel: Env['LOG_LEVEL'];
@@ -526,7 +528,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     legacyHosts: legacyHosts(publicUrl, env),
     secureCookies: publicUrl.startsWith('https://'),
     trustProxy,
-    database: { url: env.DATABASE_URL, poolMax: env.DATABASE_POOL_MAX },
+    database: {
+      url: env.DATABASE_URL,
+      poolMax: env.DATABASE_POOL_MAX,
+      queryTimeoutMs: env.DATABASE_QUERY_TIMEOUT_SECONDS * 1000,
+    },
     encryption: {
       key: env.ENCRYPTION_KEY,
       previousKeys: (env.ENCRYPTION_KEYS_PREVIOUS ?? '')
