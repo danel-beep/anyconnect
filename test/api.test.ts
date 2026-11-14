@@ -96,6 +96,26 @@ describe('REST API, personal tokens and account management', () => {
     expect(me.body.mcpUrl).toBe(hub.mcpUrl);
   });
 
+  it('pages the call log newest first', async () => {
+    for (const text of ['one', 'two', 'three']) {
+      const call = await api('/tools/demo_echo/call', {
+        method: 'POST',
+        body: { arguments: { account: 'main', text } },
+      });
+      expect(call.status).toBe(200);
+    }
+    const first = await api('/tool-calls?limit=2');
+    expect(first.status).toBe(200);
+    expect(first.body).toHaveLength(2);
+    const rest = await api(`/tool-calls?limit=2&before=${first.body[1].id}`);
+    expect(rest.body).toHaveLength(1);
+    const ids = [...first.body, ...rest.body].map((r: { id: number }) => r.id);
+    expect(ids).toEqual([...ids].sort((a, b) => b - a));
+    expect(new Set(ids).size).toBe(3);
+    // An id from another workspace (or one already deleted) is no place to continue from.
+    expect((await api('/tool-calls?before=999999')).body).toEqual([]);
+  });
+
   it('describes connectors with JSON schemas for building forms', async () => {
     const { body } = await api('/connectors');
     const flakyInfo = body.find((c: { id: string }) => c.id === 'flaky');

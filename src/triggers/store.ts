@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import {
   type TriggerEventStatus,
@@ -532,16 +532,15 @@ export class TriggerStore {
   /** Deletes events older than the retention, and delivered "anything new?" events after a day. */
   async prune(): Promise<void> {
     const now = Date.now();
+    // Two statements, each over its own index: as one OR, every event older than a week was read
+    // to find the skipped ones.
+    await this.db
+      .delete(triggerEvents)
+      .where(lt(triggerEvents.createdAt, new Date(now - RETENTION_DAYS * 86_400_000)));
     await this.db
       .delete(triggerEvents)
       .where(
-        or(
-          lt(triggerEvents.createdAt, new Date(now - RETENTION_DAYS * 86_400_000)),
-          and(
-            eq(triggerEvents.status, 'skipped'),
-            lt(triggerEvents.createdAt, new Date(now - 7 * 86_400_000)),
-          ),
-        ),
+        and(eq(triggerEvents.status, 'skipped'), lt(triggerEvents.createdAt, new Date(now - 7 * 86_400_000))),
       );
   }
 

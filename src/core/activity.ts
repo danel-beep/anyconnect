@@ -1,6 +1,6 @@
-import { and, count, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, exists, gte, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { toolCalls } from '../db/schema.js';
+import { toolCalls, workspaces } from '../db/schema.js';
 
 const DAY = 86_400_000;
 
@@ -43,13 +43,23 @@ export class ActivityService {
    * Deletes log entries older than each workspace's retention. Only workspaces with entries past
    * the shortest retention are looked up. One failing workspace does not stop the others; the
    * failures are thrown together at the end.
+   *
+   * The candidates are found per workspace (one index probe each), not by reading the old part of
+   * the log: on a quiet day that part is most of the table.
    */
   async prune(retention: ActivityRetention, now = new Date()): Promise<{ workspaces: number }> {
     const floor = new Date(now.getTime() - retention.minimumHistoryDays * DAY);
     const candidates = await this.db
-      .selectDistinct({ workspaceId: toolCalls.workspaceId })
-      .from(toolCalls)
-      .where(lt(toolCalls.createdAt, floor));
+      .select({ workspaceId: workspaces.id })
+      .from(workspaces)
+      .where(
+        exists(
+          this.db
+            .select({ one: sql`1` })
+            .from(toolCalls)
+            .where(and(eq(toolCalls.workspaceId, workspaces.id), lt(toolCalls.createdAt, floor))),
+        ),
+      );
     const failures: unknown[] = [];
     let pruned = 0;
     for (const { workspaceId } of candidates) {

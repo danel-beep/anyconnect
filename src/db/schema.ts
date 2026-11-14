@@ -498,10 +498,20 @@ export const toolCalls = pgTable(
     durationMs: integer().notNull(),
     createdAt: createdAt(),
   },
+  // The first index serves a workspace's log by time. It also carries the columns the counts read
+  // (activity tile, most-used tools in discovery), so those are answered from the index alone: a
+  // busy workspace's rows are spread over the whole table, and reading them from it costs a page per
+  // row once the table no longer fits in memory.
   // The second index serves an account's own log (the account page, the activity filter).
   // The third serves hub-wide windows (status page, retention clean-up).
   (t) => [
-    index().on(t.workspaceId, t.createdAt),
+    index('tool_calls_workspace_time_idx').on(
+      t.workspaceId,
+      t.createdAt,
+      t.toolName,
+      t.connectorId,
+      t.status,
+    ),
     index().on(t.accountId, t.createdAt),
     index().on(t.createdAt),
   ],
@@ -767,6 +777,8 @@ export const pendingCalls = pgTable(
     index().on(t.status, t.executeAt),
     index().on(t.workspaceId, t.createdAt),
     index().on(t.workspaceId, t.argsHash),
+    // Removing an account deletes its calls (foreign key).
+    index().on(t.accountId),
   ],
 );
 
@@ -1225,7 +1237,8 @@ export const messengerChats = pgTable(
   },
   (t) => [
     uniqueIndex().on(t.accountId, t.externalKey),
-    index().on(t.accountId, t.lastMessageAt),
+    // The chat list: newest first, in the order `MessageStore.listChats` pages through.
+    index('messenger_chats_account_recent_idx').on(t.accountId, t.lastMessageAt.desc().nullsLast(), t.id),
     index().using('gin', t.titleIndex),
   ],
 );
@@ -1299,6 +1312,8 @@ export const messengerOutbox = pgTable(
     index().on(t.status, t.notBefore),
     index().on(t.accountId, t.sentAt),
     index().on(t.accountId, t.contentKey, t.createdAt),
+    // Removing a chat (or its account) deletes its queued messages (foreign key).
+    index().on(t.chatId),
   ],
 );
 
@@ -1493,7 +1508,11 @@ export const triggerCursors = pgTable(
     cursor: text().notNull(),
     updatedAt: updatedAt(),
   },
-  (t) => [primaryKey({ columns: [t.triggerId, t.accountId] })],
+  (t) => [
+    primaryKey({ columns: [t.triggerId, t.accountId] }),
+    // Removing an account deletes its cursors (foreign key).
+    index().on(t.accountId),
+  ],
 );
 
 /**
@@ -1537,12 +1556,16 @@ export const triggerEvents = pgTable(
   (t) => [
     // The few runs in flight, for the recovery pass (every other event is finished).
     index('trigger_events_running_idx').on(t.createdAt).where(sql`${t.status} = 'running'`),
+    // Skipped events go after a week, the rest after a month (`TriggerStore.prune`).
+    index('trigger_events_skipped_idx').on(t.createdAt).where(sql`${t.status} = 'skipped'`),
     uniqueIndex().on(t.triggerId, t.eventKey),
     index().on(t.workspaceId, t.seq),
     index().on(t.triggerId, t.createdAt),
     index().on(t.triggerId, t.counterpartKey, t.createdAt),
     index().on(t.aiKeyId, t.createdAt),
     index().on(t.createdAt),
+    // Removing an account deletes its events (foreign key).
+    index().on(t.accountId),
   ],
 );
 
