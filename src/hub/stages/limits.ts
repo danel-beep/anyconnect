@@ -15,6 +15,9 @@ export interface LimitsOptions {
   backoffMs?: number;
 }
 
+/** Added to a wait for a free slot (see `acquire`). */
+const TIMER_SLACK_MS = 20;
+
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) return resolve();
@@ -42,7 +45,9 @@ export function limitsStage(options: LimitsOptions): Middleware {
     const windowMs = spec.perSeconds * 1000;
     let slot = options.rateLimiter.consume(key, spec.requests, windowMs);
     if (slot.allowed) return null;
-    const waitMs = slot.retryAfterSeconds * 1000;
+    // A timer can fire a millisecond before the clock it is compared with says the window is over:
+    // waiting exactly until the reset sometimes found the window still full.
+    const waitMs = slot.retryAfterMs + TIMER_SLACK_MS;
     if (waitMs <= maxWaitMs && Date.now() + waitMs < call.deadline) {
       await sleep(waitMs, call.signal);
       slot = options.rateLimiter.consume(key, spec.requests, windowMs);

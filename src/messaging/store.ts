@@ -209,26 +209,38 @@ export class MessageStore {
   /**
    * Deletes messages past their account's retention (`settings.keepMessagesDays`), in batches so a
    * large backlog never holds a long lock. Returns how many were deleted.
+   *
+   * Account by account, each through its (account_id, sent_at) index: one statement over all
+   * accounts would read every message of the hub to find the few past their date.
    */
   async prune(opts: { now?: Date; batch?: number; maxBatches?: number } = {}): Promise<number> {
-    const now = (opts.now ?? new Date()).toISOString();
+    const now = opts.now ?? new Date();
     const batch = opts.batch ?? 5000;
+    let rounds = opts.maxBatches ?? 200;
+    const kept = await this.db
+      .select({ id: accounts.id, days: sql<string>`${accounts.settings}->>'keepMessagesDays'` })
+      .from(accounts)
+      .where(sql`${accounts.settings} ? 'keepMessagesDays'`)
+      .orderBy(accounts.id);
     let deleted = 0;
-    for (let round = 0; round < (opts.maxBatches ?? 200); round++) {
-      const result = await this.db.execute<{ seq: number }>(sql`
-        delete from ${messengerMessages}
-        where ${messengerMessages.seq} in (
-          select m.seq
-          from ${messengerMessages} m
-          join ${accounts} a on a.id = m.account_id
-          where (a.settings->>'keepMessagesDays') is not null
-            and m.sent_at < ${now}::timestamptz - make_interval(days => (a.settings->>'keepMessagesDays')::int)
-          limit ${batch}
-        )
-        returning seq`);
-      const count = result.rows.length;
-      deleted += count;
-      if (count < batch) break;
+    for (const { id, days } of kept) {
+      const keepDays = Number(days);
+      if (!Number.isInteger(keepDays) || keepDays <= 0) continue;
+      const before = new Date(now.getTime() - keepDays * DAY_MS);
+      while (rounds-- > 0) {
+        const old = this.db
+          .select({ seq: messengerMessages.seq })
+          .from(messengerMessages)
+          .where(and(eq(messengerMessages.accountId, id), lt(messengerMessages.sentAt, before)))
+          .limit(batch);
+        const removed = await this.db
+          .delete(messengerMessages)
+          .where(inArray(messengerMessages.seq, old))
+          .returning({ seq: messengerMessages.seq });
+        deleted += removed.length;
+        if (removed.length < batch) break;
+      }
+      if (rounds <= 0) break;
     }
     return deleted;
   }

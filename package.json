@@ -24,6 +24,7 @@
     "eval": "vitest run eval",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/cli/index.ts db:migrate",
+    "db:scale": "tsx test/perf/seed-scale.ts",
     "distribution": "tsx scripts/distribution.ts",
     "check": "npm run lint && npm run typecheck && npm run test",
     "check:fast": "npm run lint && npm run typecheck && vitest run --changed origin/main"

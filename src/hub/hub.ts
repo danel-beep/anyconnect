@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, lt } from 'drizzle-orm';
+import { and, count, desc, eq, gt, sql } from 'drizzle-orm';
 import { BRAND } from '../brand.js';
 import { type CapabilityDefinition, getCapability } from '../connectors/capabilities.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
@@ -1043,17 +1043,26 @@ export class Hub {
     });
   }
 
+  /**
+   * The newest calls first; `before` is the id of the last call of the previous page. Ordered by
+   * time like the activity page, so the workspace's (workspace_id, created_at) index serves it: by
+   * id, a workspace with few calls made Postgres walk the whole log backwards to find them.
+   */
   async recentToolCalls(workspaceId: string, options: { limit?: number; before?: number } = {}) {
     const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const conditions = [eq(toolCalls.workspaceId, workspaceId)];
+    if (options.before) {
+      const last = this.deps.db
+        .select({ createdAt: toolCalls.createdAt, id: toolCalls.id })
+        .from(toolCalls)
+        .where(and(eq(toolCalls.id, options.before), eq(toolCalls.workspaceId, workspaceId)));
+      conditions.push(sql`(${toolCalls.createdAt}, ${toolCalls.id}) < (${last})`);
+    }
     return this.deps.db
       .select()
       .from(toolCalls)
-      .where(
-        options.before
-          ? and(eq(toolCalls.workspaceId, workspaceId), lt(toolCalls.id, options.before))
-          : eq(toolCalls.workspaceId, workspaceId),
-      )
-      .orderBy(desc(toolCalls.id))
+      .where(and(...conditions))
+      .orderBy(desc(toolCalls.createdAt), desc(toolCalls.id))
       .limit(limit);
   }
 }

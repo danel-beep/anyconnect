@@ -6,9 +6,18 @@ export type Db = NodePgDatabase<typeof schema>;
 /** A database handle or an open transaction. */
 export type DbExecutor = Db | Parameters<Parameters<Db['transaction']>[0]>[0];
 
+/** Sees every statement the app sends through drizzle, before it runs (tests, diagnostics). */
+export type QueryListener = (query: string, params: readonly unknown[]) => void;
+
 export interface Database {
   db: Db;
   pool: pg.Pool;
+  /**
+   * Starts telling `listener` about each statement; the returned function stops it. Used by the
+   * query-budget and query-plan tests (`test/perf/`); with no listener it costs one length check.
+   * Statements sent on the raw `pool` (migrations, the change listener, the job queue) are not seen.
+   */
+  onQuery(listener: QueryListener): () => void;
   close(): Promise<void>;
 }
 
@@ -39,8 +48,22 @@ export function createDatabase(url: string, options: DatabaseOptions = {}): Data
   });
   // Errors on idle clients (e.g. the server restarted) must not crash the process.
   pool.on('error', () => {});
-  const db = drizzle({ client: pool, schema, casing: 'snake_case' });
-  return { db, pool, close: () => pool.end() };
+  const listeners = new Set<QueryListener>();
+  const logger = {
+    logQuery(query: string, params: unknown[]) {
+      if (listeners.size) for (const listener of listeners) listener(query, params);
+    },
+  };
+  const db = drizzle({ client: pool, schema, casing: 'snake_case', logger });
+  return {
+    db,
+    pool,
+    onQuery(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    close: () => pool.end(),
+  };
 }
 
 export { schema };

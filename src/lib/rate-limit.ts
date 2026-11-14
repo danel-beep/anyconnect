@@ -19,8 +19,15 @@ export class RateLimiter {
     this.sweeper.unref();
   }
 
-  /** Returns true when the action is allowed. */
-  consume(key: string, limit: number, windowMs: number): { allowed: boolean; retryAfterSeconds: number } {
+  /**
+   * Counts one action; `allowed` says whether it fits the limit. `retryAfterMs` is when the window
+   * resets, `retryAfterSeconds` the same rounded up (for a Retry-After header or a message).
+   */
+  consume(
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): { allowed: boolean; retryAfterSeconds: number; retryAfterMs: number } {
     const now = Date.now();
     const id = boundedKey(key);
     let entry = this.hits.get(id);
@@ -30,7 +37,8 @@ export class RateLimiter {
       this.hits.set(id, entry);
     }
     entry.count += 1;
-    return { allowed: entry.count <= limit, retryAfterSeconds: Math.ceil((entry.resetAt - now) / 1000) };
+    const retryAfterMs = entry.resetAt - now;
+    return { allowed: entry.count <= limit, retryAfterSeconds: Math.ceil(retryAfterMs / 1000), retryAfterMs };
   }
 
   reset(key: string): void {

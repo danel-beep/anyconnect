@@ -38,6 +38,10 @@ develop further. In practice:
   skips the live-update file. After a UI change run it on the affected pages before and after, and look
   at the changed screenshots (docs/TESTING.md)
 - `npm run db:generate` — create a migration after editing `src/db/schema.ts`; commit `drizzle/`
+- `npm run db:scale -- <url of an empty db>` — synthetic data for 1000 users, to EXPLAIN by hand.
+  `test/perf/` fails on N+1 (statements per page grow with accounts), on a statement that reads a
+  whole large table (pages, API, every background job) and on an unindexed foreign key; a new table
+  that grows with use goes into `test/perf/scale-data.ts` (docs/TESTING.md, «Нагрузка на базу»)
 - `npm run cli -- help` — admin CLI
 
 ## Working on a token budget
