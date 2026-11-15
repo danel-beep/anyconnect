@@ -9,6 +9,7 @@ import {
   type SubscriptionChange,
   type WebhookResult,
 } from '../provider.js';
+import { providerDate } from './dates.js';
 import { fresh, hexEqual, hmacHex, parseSignatureHeader } from './signature.js';
 
 /**
@@ -147,6 +148,8 @@ export class StripeProvider implements BillingProvider {
     } catch {
       return { ok: false, reason: 'malformed body' };
     }
+    const occurredAt = providerDate(event.created * 1000);
+    if (!occurredAt) return { ok: false, reason: 'malformed body' };
     if (!event.type.startsWith('customer.subscription.')) return { ok: true, changes: [] };
     const parsed = StripeSubscription.safeParse(event.data.object);
     if (!parsed.success) return { ok: true, changes: [] };
@@ -160,7 +163,7 @@ export class StripeProvider implements BillingProvider {
     const change: SubscriptionChange = {
       eventId: event.id,
       type: event.type,
-      occurredAt: new Date(event.created * 1000),
+      occurredAt,
       workspaceId: sub.metadata?.workspace_id,
       externalId: sub.id,
       customerId: typeof sub.customer === 'string' ? sub.customer : (sub.customer?.id ?? null),
@@ -168,7 +171,7 @@ export class StripeProvider implements BillingProvider {
       quantity: item?.quantity ?? null,
       interval: interval === 'month' || interval === 'year' ? (interval as BillingInterval) : null,
       status,
-      periodEnd: end ? new Date(end * 1000) : null,
+      periodEnd: end ? providerDate(end * 1000) : null,
       cancelAtPeriodEnd:
         Boolean(sub.cancel_at_period_end) || (sub.cancel_at != null && status !== 'canceled'),
     };

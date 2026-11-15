@@ -79,12 +79,20 @@ async function post(
   signal: AbortSignal,
   provider: string,
 ): Promise<any> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-    signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (error) {
+    // Stopped or out of time: the run decides what that means.
+    if (signal.aborted) throw error;
+    // The provider is down or unreachable: the user's to know, not a fault of the hub.
+    throw new AiProviderError(`${provider} could not be reached`);
+  }
   const text = await response.text();
   let json: any;
   try {
