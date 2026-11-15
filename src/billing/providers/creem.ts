@@ -10,6 +10,7 @@ import {
   type SubscriptionChange,
   type WebhookResult,
 } from '../provider.js';
+import { providerDate } from './dates.js';
 import { hexEqual, hmacHex } from './signature.js';
 
 /**
@@ -149,6 +150,8 @@ export class CreemProvider implements BillingProvider {
     } catch {
       return { ok: false, reason: 'malformed body' };
     }
+    const occurredAt = providerDate(event.created_at);
+    if (!occurredAt) return { ok: false, reason: 'malformed body' };
     let raw: unknown = event.object;
     let extra: {
       metadata?: Record<string, unknown> | null | undefined;
@@ -173,7 +176,7 @@ export class CreemProvider implements BillingProvider {
     const change: SubscriptionChange = {
       eventId: event.id,
       type: event.eventType,
-      occurredAt: new Date(event.created_at),
+      occurredAt,
       workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
       externalId: sub.id,
       customerId: sub.customer ?? extra.customer ?? null,
@@ -181,7 +184,7 @@ export class CreemProvider implements BillingProvider {
       quantity: sub.items?.[0]?.units ?? null,
       interval: INTERVAL[product.billing_period ?? ''] ?? null,
       status,
-      periodEnd: end ? new Date(end) : null,
+      periodEnd: providerDate(end),
       cancelAtPeriodEnd: sub.status === 'scheduled_cancel',
     };
     return { ok: true, changes: [change] };

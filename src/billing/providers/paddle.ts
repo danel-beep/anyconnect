@@ -10,6 +10,7 @@ import {
   type SubscriptionChange,
   type WebhookResult,
 } from '../provider.js';
+import { providerDate } from './dates.js';
 import { fresh, hexEqual, hmacHex, parseSignatureHeader } from './signature.js';
 
 /**
@@ -149,6 +150,8 @@ export class PaddleProvider implements BillingProvider {
     } catch {
       return { ok: false, reason: 'malformed body' };
     }
+    const occurredAt = providerDate(event.occurred_at);
+    if (!occurredAt) return { ok: false, reason: 'malformed body' };
     if (!event.event_type.startsWith('subscription.')) return { ok: true, changes: [] };
     const parsed = PaddleSubscription.safeParse(event.data);
     if (!parsed.success) return { ok: true, changes: [] };
@@ -162,7 +165,7 @@ export class PaddleProvider implements BillingProvider {
     const change: SubscriptionChange = {
       eventId: event.event_id,
       type: event.event_type,
-      occurredAt: new Date(event.occurred_at),
+      occurredAt,
       workspaceId: typeof workspaceId === 'string' ? workspaceId : undefined,
       externalId: sub.id,
       customerId: sub.customer_id ?? null,
@@ -170,7 +173,7 @@ export class PaddleProvider implements BillingProvider {
       quantity: item?.quantity ?? null,
       interval: interval === 'month' || interval === 'year' ? (interval as BillingInterval) : null,
       status,
-      periodEnd: end ? new Date(end) : null,
+      periodEnd: providerDate(end),
       cancelAtPeriodEnd: sub.scheduled_change?.action === 'cancel',
     };
     return { ok: true, changes: [change] };
