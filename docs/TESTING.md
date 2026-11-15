@@ -69,7 +69,8 @@ VISUAL_PAGES='^/app/services$' VISUAL_BASELINE=/tmp/vis-before VISUAL_SCREENSHOT
 **Покрытие.** Отчёт о покрытии не входит в CI (зависимость не установлена, чтобы не тянуть её в
 каждый прогон). Снять его разово:
 `npm i --no-save @vitest/coverage-v8@<версия vitest> && npx vitest run --coverage --coverage.include='src/**'`.
-На 11.11.2026: строки 87,6%, ветки 72,3%. Без тестов остаются в основном точки входа процессов
+На 15.11.2026: строки 89,9%, ветки 76,2%; в ядре (`hub/executor` и стадии, `oauth/`, `security/`,
+`messaging/`, `triggers/`, `billing/`) ветки 87%. Без тестов остаются в основном точки входа процессов
 (`src/index.ts`, `src/worker.ts`, `src/gateway/index.ts`, `src/cli/`). Изоляция данных между
 рабочими пространствами проверяется на каждом маршруте с id: тот же запрос с токеном чужого
 пространства должен получить 404 (`test/api-security.test.ts`, `test/security.e2e.test.ts`).
