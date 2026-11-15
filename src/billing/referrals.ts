@@ -142,6 +142,9 @@ export class ReferralService implements BillingListener {
     const pro = getPlan(REWARD_PLAN);
     let reward: ReferralReward;
     let until: Date;
+    // A Pro month from an earlier invite that is still running: this one adds a month to it.
+    const gifted =
+      sub?.provider === REFERRAL_PROVIDER && current.id === REWARD_PLAN ? sub.currentPeriodEnd : null;
     if (BillingService.isPaidByProvider(sub) && current.priceMonthly < pro.priceMonthly) {
       // Paying for a smaller plan: Pro limits on top of it for a month (the plan stays as it is).
       until = new Date(now.getTime() + REFERRAL_REWARD_DAYS * DAY);
@@ -154,12 +157,9 @@ export class ReferralService implements BillingListener {
         await ent.grant(workspace.id, { metric, amount, expiresAt: until, reason: 'referral' });
       }
       reward = 'pro_limits';
-    } else if (current.priceMonthly === 0 && current.public) {
+    } else if (gifted || (current.priceMonthly === 0 && current.public)) {
       // Free: a month of Pro; a Pro month from an earlier invite is extended.
-      const running =
-        sub?.provider === REFERRAL_PROVIDER && current.id === REWARD_PLAN && sub.currentPeriodEnd;
-      const from = running ? sub.currentPeriodEnd!.getTime() : now.getTime();
-      until = new Date(from + REFERRAL_REWARD_DAYS * DAY);
+      until = new Date((gifted ?? now).getTime() + REFERRAL_REWARD_DAYS * DAY);
       await ent.setPlan(workspace.id, REWARD_PLAN, {
         provider: REFERRAL_PROVIDER,
         periodEnd: until,
