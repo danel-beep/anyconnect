@@ -28,6 +28,8 @@ export const problemsEn = {
   'problem.checkAgain': 'Check again',
   'problem.form.unreachable':
     'Could not reach {host}. Check the server address and port, then try again. Nothing was saved.',
+  'problem.form.unreachableService':
+    'Could not reach {host}. The service may be down for a moment: try again in a few minutes. Nothing was saved.',
   'problem.form.signin':
     '{service} did not accept these details ({message}). Check them and try again. Nothing was saved.',
   'problem.form.denied':
@@ -63,6 +65,8 @@ export const problemsRu: Record<keyof typeof problemsEn, string> = {
   'problem.checkAgain': 'Проверить снова',
   'problem.form.unreachable':
     'Не удалось связаться с {host}. Проверьте адрес и порт сервера и попробуйте ещё раз. Ничего не сохранено.',
+  'problem.form.unreachableService':
+    'Не удалось связаться с {host}. Возможно, сервис ненадолго недоступен: попробуйте через несколько минут. Ничего не сохранено.',
   'problem.form.signin':
     '{service} не принял эти данные ({message}). Проверьте их и попробуйте ещё раз. Ничего не сохранено.',
   'problem.form.denied':

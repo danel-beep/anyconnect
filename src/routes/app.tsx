@@ -127,12 +127,13 @@ export function appRoutes() {
     page('/app', async (c, auth) => {
       const s = c.get('services');
       const ws = auth.workspace.id;
-      const [usage, accounts, grants, tokens, recentRows, open, shell] = await Promise.all([
+      const [usage, accounts, grants, tokens, recentRows, serviceCalls, open, shell] = await Promise.all([
         usageOf(c, ws),
         accountsOf(c, ws),
         s.oauth.listGrants(ws),
         s.apiTokens.list(ws),
         s.activity.recent(ws, { limit: 6 }),
+        s.activity.recent(ws, { limit: 1, filter: { onAccount: true } }),
         s.pendingCalls.listOpenFor(auth.user.id),
         shellInfo(c, ws),
       ]);
@@ -148,8 +149,9 @@ export function appRoutes() {
             steps: {
               ai: grants.length + tokens.length > 0,
               service: accounts.length > 0,
-              // Ticked by a real request from a connected app, not by a test from the dashboard.
-              call: grants.length + tokens.length > 0 && recentRows.length > 0,
+              // Ticked by a real request to a service from a connected app: not by a test from the
+              // dashboard, nor by setting the hub up from the chat ("Connect my email").
+              call: grants.length + tokens.length > 0 && serviceCalls.length > 0,
             },
             usage,
             apps: grants.length,

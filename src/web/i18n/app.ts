@@ -158,6 +158,7 @@ export const appEn = {
   'app.services.connected': 'Connected accounts',
   'app.services.add': 'Add',
   'app.services.none': 'Nothing connected yet. Pick a service below.',
+  'app.services.noneYet': 'Nothing connected yet. Ask your AI “Connect my email”, or click Add.',
   'app.services.sub': 'Your accounts and everything you can connect.',
   'app.services.full': 'All accounts on your plan are in use: {n} of {n}.',
   'app.services.addHint':
@@ -193,6 +194,7 @@ export const appEn = {
   'app.usage.exhausted':
     'This month’s actions are used up. The AI cannot work with your services until {date}.',
   'app.usage.plan': 'Plan: {plan}',
+  'app.usage.planTrial': 'Plan: {plan}, {trial} trial now',
   'app.services.useAlt': 'Connect through {alternative}',
   'app.services.setUp': 'Set up',
   'app.services.addService': 'Add a service',
@@ -867,6 +869,8 @@ export const appRu: Record<AppKey, string> = {
   'app.services.connected': 'Подключённые аккаунты',
   'app.services.add': 'Добавить',
   'app.services.none': 'Пока ничего не подключено. Выберите сервис ниже.',
+  'app.services.noneYet':
+    'Пока ничего не подключено. Попросите ИИ «Подключи мою почту» или нажмите «Добавить».',
   'app.services.sub': 'Ваши аккаунты и всё, что можно подключить.',
   'app.services.full': 'Все аккаунты по вашему тарифу заняты: {n} из {n}.',
   'app.services.addHint':
@@ -902,6 +906,7 @@ export const appRu: Record<AppKey, string> = {
   'app.prompt.inbox': 'Используй Manyplug: проверь мою почту и скажи, что сегодня важного.',
   'app.usage.exhausted': 'Действия на этот месяц закончились. ИИ не сможет работать с сервисами до {date}.',
   'app.usage.plan': 'Тариф: {plan}',
+  'app.usage.planTrial': 'Тариф: {plan}, сейчас пробный «{trial}»',
   'app.services.useAlt': 'Подключить как «{alternative}»',
   'app.services.setUp': 'Настроить',
   'app.services.addService': 'Добавить сервис',

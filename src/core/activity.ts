@@ -1,4 +1,4 @@
-import { and, count, desc, eq, exists, gte, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, exists, gte, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { toolCalls, workspaces } from '../db/schema.js';
 
@@ -19,6 +19,8 @@ export interface ActivityFilter {
   status?: 'ok' | 'error' | undefined;
   /** Calls made with these sign-ins or tokens (one AI app's, see `AiAppService.credentialIds`). */
   principalIds?: readonly string[] | undefined;
+  /** Only calls to a connected account: not the hub's own setup tools, which have none. */
+  onAccount?: boolean | undefined;
 }
 
 /**
@@ -141,13 +143,14 @@ export class ActivityService {
     now = new Date(),
   ) {
     const conditions = [eq(toolCalls.workspaceId, workspaceId)];
-    const { accountId, connectorId, status, principalIds } = opts.filter ?? {};
+    const { accountId, connectorId, status, principalIds, onAccount } = opts.filter ?? {};
     if (principalIds) {
       // An app that never connected has no calls (an empty IN list is not valid SQL).
       if (principalIds.length === 0) return [];
       conditions.push(inArray(toolCalls.principalId, [...principalIds]));
     }
     if (accountId) conditions.push(eq(toolCalls.accountId, accountId));
+    else if (onAccount) conditions.push(isNotNull(toolCalls.accountId));
     if (connectorId) conditions.push(eq(toolCalls.connectorId, connectorId));
     if (status) conditions.push(eq(toolCalls.status, status));
     if (opts.sinceDays)

@@ -1,7 +1,7 @@
 /**
  * Live updates in a real browser (`data-poll` in site.js): a request the AI makes while the
- * Confirmations or Activity page is open shows up without a reload, and copy buttons in a refreshed
- * block still work. Runs with `npm run test:visual` (needs Postgres and Chromium).
+ * Confirmations, Activity page or Overview is open shows up without a reload, copy buttons in a
+ * refreshed block still work and what the user picked outside the live blocks stays. Runs with `npm run test:visual` (needs Postgres and Chromium).
  */
 import { type Browser, chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -73,7 +73,9 @@ describe('live updates', () => {
       credentialId: 'grant_test',
       aiClientId,
     };
-    browser = await chromium.launch();
+    browser = await chromium.launch(
+      process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {},
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -104,4 +106,27 @@ describe('live updates', () => {
     await page.locator('#activity-live table.calls').waitFor({ timeout: 15_000 });
     await context.close();
   }, 30_000);
+
+  it('ticks the first steps on the open overview and keeps the AI app the user picked', async () => {
+    await hub.services.database.pool.query('delete from tool_calls');
+    const { page, context } = await openPage('/app');
+    const count = page.locator('#overview-status .onboard-count');
+    // A service is there (the demo accounts); the AI app is not yet, so the full AI card shows.
+    await expect(count.textContent()).resolves.toMatch(/\D1\D/);
+    const chatgpt = page.locator('#connect-ai [role=tab]', { hasText: 'ChatGPT' });
+    await chatgpt.click();
+    // The user adds the app elsewhere (here: a token), then the AI uses a service.
+    await hub.services.apiTokens.create({
+      workspaceId: principal.workspaceId,
+      userId: principal.userId,
+      name: 'Agent',
+    });
+    await expect.poll(() => count.textContent(), { timeout: 15_000 }).toMatch(/\D2\D/);
+    // The AI card is not a live block: the app the user picked is still picked.
+    await expect(chatgpt.getAttribute('aria-selected')).resolves.toBe('true');
+    await call('demo_echo', { account: 'main', message: 'hi' });
+    await page.locator('#overview-status .onboard').waitFor({ state: 'detached', timeout: 15_000 });
+    await page.locator('#overview-lists table.calls').waitFor();
+    await context.close();
+  }, 45_000);
 });

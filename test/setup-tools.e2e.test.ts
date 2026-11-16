@@ -173,13 +173,12 @@ describe('setup tools (manage the hub from the AI assistant)', () => {
     expect(declined.every((r) => r.risk === 'dangerous' && r.accountId === null)).toBe(true);
   });
 
-  it('counts executed calls as usage, but not refused ones', async () => {
+  it('does not count managing the hub as usage: the plans promise it is free', async () => {
     const usage = await hub.services.usage.list(workspaceId, '2000-01-01');
-    const actions = usage.filter((r) => r.connectorId === 'manyplug').map((r) => r.action);
-    expect(actions).toContain('update_account');
-    expect(actions).toContain('remove_account'); // ran once the user approved it
-    expect(actions).not.toContain('add_service');
-    expect(usage.every((r) => r.caller === `user:${principal.userId}`)).toBe(true);
+    expect(usage.filter((r) => r.connectorId === 'manyplug')).toEqual([]);
+    // They still are in the activity log.
+    const log = await hub.services.activity.recent(workspaceId, { limit: 200 });
+    expect(log.map((r) => r.action)).toEqual(expect.arrayContaining(['update_account', 'remove_account']));
   });
 
   describe('access rules from the chat', () => {

@@ -223,13 +223,25 @@ details.more-ways{margin-top:14px}
 .compare th:first-child,.compare td:first-child{width:30%}
 .plans-hint{margin-top:16px;max-width:720px}
 .compare tr.group th{text-align:left;font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:18px;border-top:1px solid var(--border)}
-/* Phones: the row names stay put while the plans scroll sideways */
+/* Phones: comparisons with other products keep the row names put while the columns scroll sideways */
 @media (max-width:640px){
-  .compare{min-width:560px}
-  .compare td{background:var(--card)}
-  .compare th:first-child,.compare td:first-child{position:sticky;left:0;z-index:1;width:132px;min-width:132px;background:var(--card);box-shadow:1px 0 0 var(--border)}
-  .compare thead th:first-child{background:var(--bg-subtle)}
-  .compare tr.group th{position:static;box-shadow:none}
+  .compare.vs{min-width:560px}
+  .compare.vs td{background:var(--card)}
+  .compare.vs th:first-child,.compare.vs td:first-child{position:sticky;left:0;z-index:1;width:132px;min-width:132px;background:var(--card);box-shadow:1px 0 0 var(--border)}
+  .compare.vs thead th:first-child{background:var(--bg-subtle)}
+  .compare.vs tr.group th{position:static;box-shadow:none}
+}
+/* Phones: the plan table stacks, so every plan stays in view without scrolling sideways: each row
+   name on its own line, the plans' values side by side under it, under the plan names on top. */
+@media (max-width:640px){
+  .table-wrap table.compare:not(.vs){min-width:0}
+  .compare:not(.vs),.compare:not(.vs) thead,.compare:not(.vs) tbody{display:block}
+  .compare:not(.vs) tr{display:flex;flex-wrap:wrap;border-top:1px solid var(--border)}
+  .compare:not(.vs) thead tr{border-top:0;background:var(--bg-subtle)}
+  .compare:not(.vs) th,.compare:not(.vs) td{flex:1 1 0;min-width:0;border-top:0;padding:8px 6px}
+  .compare:not(.vs) th:first-child,.compare:not(.vs) td:first-child{flex:1 0 100%;width:auto;padding:12px 16px 0;font-weight:560}
+  .compare:not(.vs) thead th:first-child{display:none}
+  .compare:not(.vs) tr.group th{flex-basis:100%;padding:18px 16px 10px;border-top:0;font-weight:500}
 }
 /* Docs and search pages (src/web/seo-pages.tsx) */
 .card.guide{padding:24px;margin:0;border-bottom:1px solid var(--border)}

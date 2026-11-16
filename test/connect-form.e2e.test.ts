@@ -176,6 +176,9 @@ describe('connect form for services without OAuth', () => {
     // A server that cannot be reached is named without the system code, and the key is not blamed.
     const away = await (await send('down')).text();
     expect(away).toContain('Не удалось связаться с api.picky.test');
+    // Picky has no address in the form, so the message does not send the user looking for one.
+    expect(away).toContain('Возможно, сервис ненадолго недоступен');
+    expect(away).not.toContain('адрес и порт');
     expect(away).not.toContain('ENOTFOUND');
     expect(away).not.toContain('aria-invalid="true"');
     expect(away).toContain('name="keep" value="1"');
