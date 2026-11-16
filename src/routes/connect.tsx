@@ -432,14 +432,20 @@ function testProblem(
   const message = (raw ?? t('error.internal')).replace(/\.+$/, '').slice(0, 300);
   const secrets = fields.filter((f) => f.group === 'credentials' && f.required).map((f) => f.name);
   switch (problem.kind) {
-    case 'unreachable':
+    case 'unreachable': {
+      // Only a form with an address to check (IMAP, a custom API) points at it; a cloud service
+      // with a fixed address (Todoist, Notion) is just away for a moment.
+      const address = fields
+        .filter((f) => f.group === 'config' && /host|server|url|port/i.test(f.name))
+        .map((f) => f.name);
       return {
-        message: t('problem.form.unreachable', { host: problem.host ?? service }),
-        invalid: fields
-          .filter((f) => f.group === 'config' && /host|server|url|port/i.test(f.name))
-          .map((f) => f.name),
+        message: t(address.length ? 'problem.form.unreachable' : 'problem.form.unreachableService', {
+          host: problem.host ?? service,
+        }),
+        invalid: address,
         keepable: true,
       };
+    }
     case 'signin':
     case 'denied':
       return {

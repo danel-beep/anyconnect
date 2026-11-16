@@ -284,7 +284,7 @@ describe('meter stage edges', () => {
   const meter = (record: UsageMeter['record']) => ({ record }) as unknown as UsageMeter;
   const logger = { warn: vi.fn() } as never;
 
-  it('charges the payer, skips free and refused units, and survives a failing meter', async () => {
+  it('charges the payer, skips free, setup and refused units, and survives a failing meter', async () => {
     const recorded: unknown[] = [];
     const stage = meterStage({
       meter: meter(async (e) => void recorded.push(e)),
@@ -305,6 +305,12 @@ describe('meter stage edges', () => {
       return dataResult(1);
     });
     await stage(call('read'), ok);
+    // The hub's own setup tools are free: managing the hub is not an action.
+    const setup = call('read', { scope: 'workspace', account: undefined });
+    await stage(setup, async () => {
+      setup.invoked = true;
+      return dataResult(1);
+    });
     expect(recorded).toHaveLength(1);
 
     const warn = vi.fn();

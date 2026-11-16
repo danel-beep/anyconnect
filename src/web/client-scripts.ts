@@ -167,12 +167,15 @@ d.addEventListener('change',function(e){var f=e.target&&e.target.form;if(f&&f.ha
 
 /* Live updates: blocks marked data-poll="<seconds>" (each with an id) refresh from the same address
    while the tab is visible, so a new confirmation or log row shows up without a reload. A block the
-   user is working in (focus inside) is left alone until they are done; open <details> stay open. */
+   user is working in (focus inside) is left alone until they are done; open <details> stay open.
+   A block is compared with what the server sent last, not with the page: what the user changed
+   on it (an open menu, a picked tab) never counts as news and is not reset. */
 (function(){var blocks=$$('[data-poll][id]');if(!blocks.length||!window.fetch||!window.DOMParser)return;
-var every=Math.max(3,Math.min.apply(null,blocks.map(function(b){return Number(b.getAttribute('data-poll'))||10})))*1000,busy=false;
+var every=Math.max(3,Math.min.apply(null,blocks.map(function(b){return Number(b.getAttribute('data-poll'))||10})))*1000,busy=false,last={};
+blocks.forEach(function(b){last[b.id]=b.innerHTML});
 function swap(html){var next=new DOMParser().parseFromString(html,'text/html');
-$$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===b.innerHTML)return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;
-var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]})})}
+$$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===last[b.id])return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;
+var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=last[b.id]=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]})})}
 function tick(){if(busy||d.hidden)return;busy=true;fetch(location.pathname+location.search,{credentials:'same-origin',headers:{'x-live-update':'1'}}).then(function(r){return r.ok&&!r.redirected?r.text():null}).then(function(html){busy=false;if(html)swap(html)},function(){busy=false})}
 setInterval(tick,every);d.addEventListener('visibilitychange',function(){if(!d.hidden)tick()})})();
 
@@ -205,7 +208,7 @@ function update(){out.setAttribute('placeholder',slug(src.value)||empty)}src.add
 /* A page waiting for something done elsewhere (a QR code scanned in Telegram) asks the server every
    few seconds and reloads once it changed: data-poll="<url answering {state}>", data-poll-state="<now>".
    It pauses while the tab is hidden and stops after about 40 minutes or when signed out. */
-$$('[data-poll]').forEach(function(el){var url=el.getAttribute('data-poll'),now=el.getAttribute('data-poll-state'),busy=false,left=960,timer;
+$$('[data-poll][data-poll-state]').forEach(function(el){var url=el.getAttribute('data-poll'),now=el.getAttribute('data-poll-state'),busy=false,left=960,timer;
 function tick(){if(busy||d.hidden)return;if(--left<0){clearInterval(timer);return}busy=true;
 fetch(url,{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}}).then(function(r){if(r.status===401||r.status===404){clearInterval(timer);return null}return r.ok?r.json():null})
 .then(function(j){busy=false;if(j&&j.state&&j.state!==now){clearInterval(timer);location.reload()}},function(){busy=false})}

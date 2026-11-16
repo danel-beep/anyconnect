@@ -6,7 +6,8 @@ import type { UsageMeter } from '../usage.js';
 /**
  * Counts every unit that reached the service (refused, held for confirmation, deduplicated,
  * answered from an earlier approved run or declared free by the action, e.g. a wait that saw
- * nothing new, are not usage) per workspace, day, caller and action, and
+ * nothing new, are not usage; nor are the hub's own setup tools, workspace scope: managing the hub
+ * is free, as the plans say) per workspace, day, caller and action, and
  * charges it to the plan that pays for it (`payer`, from the billing layer; in a team its payer's or
  * the member's own). It never blocks: stage `quota` reads what was charged and refuses before
  * `next()`. Counting failures are logged, never fatal for the call.
@@ -18,7 +19,7 @@ export function meterStage(deps: {
 }): Middleware {
   return async (call, next) => {
     const result = await next();
-    if (!call.invoked || call.free) return result;
+    if (!call.invoked || call.free || call.scope === 'workspace') return result;
     const { principal } = call;
     try {
       await deps.meter.record({

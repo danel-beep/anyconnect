@@ -29,6 +29,7 @@ import { billingActions, referralActions, type WorkspaceBilling } from './billin
 import type { CatalogAllow } from './catalog-types.js';
 import { profileActions, type WorkspaceProfiles } from './profile-tools.js';
 import { securityActions, type UserSecurity } from './security-tools.js';
+import { SETUP_LOCALE_RU } from './setup-locale.js';
 import { TEAM_ONLY_ACTIONS, teamActions } from './team-tools.js';
 import { triggerActions, type WorkspaceTriggers } from './trigger-tools.js';
 
@@ -563,5 +564,6 @@ export const SETUP_CONNECTOR: ConnectorDefinition = {
   version: '1.0.0',
   config: z.object({}),
   credentials: z.object({}),
+  ui: { locales: { ru: SETUP_LOCALE_RU } },
   actions: SETUP_ACTIONS,
 };

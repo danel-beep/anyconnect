@@ -444,7 +444,12 @@ const UsageStats: FC<{ ctx: PageCtx; usage: UsageView; extra?: Child; here?: boo
           lines={[
             here ? undefined : (
               <a href="/app/billing">
-                {t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
+                {usage.phase?.kind === 'trial'
+                  ? t('app.usage.planTrial', {
+                      plan: t(`plan.${usage.planId}.name` as 'plan.free.name'),
+                      trial: t(`plan.${usage.phase.asPlan ?? 'pro'}.name` as 'plan.free.name'),
+                    })
+                  : t('app.usage.plan', { plan: t(`plan.${usage.planId}.name` as 'plan.free.name') })}
               </a>
             ),
             usage.actions.limit === null
@@ -667,38 +672,45 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
         sub={allDone ? t('app.overview.sub') : t('app.overview.subNew')}
       />
       {view.welcome ? <div class="notice ok">{t('app.welcome')}</div> : null}
-      {view.waiting.count ? (
-        <div class="notice info waiting" role="status">
-          <span class="grow">
-            <strong>{t('app.waiting.title', { n: view.waiting.count })}</strong>{' '}
-            {view.waiting.soonest
-              ? t('app.waiting.expires', { when: fmtAgo(ctx.lang, view.waiting.soonest) })
-              : null}
-          </span>
-          <a class="btn sm primary" href="/confirm">
-            {t('app.waiting.review')}
-          </a>
-        </div>
-      ) : null}
-      <BrokenAccounts ctx={ctx} accounts={view.accounts} />
-      {allDone ? null : <SetupSteps ctx={ctx} steps={steps} />}
+      {/* Live blocks (data-poll): the steps, numbers and lists follow what the AI app does in the
+          meantime (connected, added an account, made a call) without a reload. The AI card is not
+          one of them: it keeps the app the user picked. */}
+      <div id="overview-status" data-poll="10">
+        {view.waiting.count ? (
+          <div class="notice info waiting" role="status">
+            <span class="grow">
+              <strong>{t('app.waiting.title', { n: view.waiting.count })}</strong>{' '}
+              {view.waiting.soonest
+                ? t('app.waiting.expires', { when: fmtAgo(ctx.lang, view.waiting.soonest) })
+                : null}
+            </span>
+            <a class="btn sm primary" href="/confirm">
+              {t('app.waiting.review')}
+            </a>
+          </div>
+        ) : null}
+        <BrokenAccounts ctx={ctx} accounts={view.accounts} />
+        {allDone ? null : <SetupSteps ctx={ctx} steps={steps} />}
+      </div>
       {/* Until an AI app is connected, its address is the main thing on this page. */}
       {view.steps.ai ? null : <ConnectAiCard ctx={ctx} />}
-      <UsageStats
-        ctx={ctx}
-        usage={view.usage}
-        extra={
-          <div class="stat">
-            <span class="label">{t('app.nav.apps')}</span>
-            <div class="value">{view.apps}</div>
-            <div class="sub">
-              <a href="/app/apps">{t('app.apps.manage')}</a>
+      <div id="overview-usage" data-poll="10">
+        <UsageStats
+          ctx={ctx}
+          usage={view.usage}
+          extra={
+            <div class="stat">
+              <span class="label">{t('app.nav.apps')}</span>
+              <div class="value">{view.apps}</div>
+              <div class="sub">
+                <a href="/app/apps">{t('app.apps.manage')}</a>
+              </div>
             </div>
-          </div>
-        }
-      />
+          }
+        />
+      </div>
       {view.steps.ai ? <ConnectAiCard ctx={ctx} compact /> : null}
-      <div class="grid-2">
+      <div class="grid-2" id="overview-lists" data-poll="10">
         <div class="card flush">
           <div class="card-head pad">
             <h2>{t('app.services.connected')}</h2>
@@ -707,7 +719,7 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
             </a>
           </div>
           {view.accounts.length === 0 ? (
-            <p class="muted pad-x">{t('app.services.none')}</p>
+            <p class="muted pad-x">{t('app.services.noneYet')}</p>
           ) : (
             <div class="acc-list">
               {brokenFirst(view.accounts)
@@ -1550,30 +1562,35 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
     <AppShell ctx={ctx} shell={shell} section="apps" title={t('app.nav.apps')}>
       <PageHead title={t('app.nav.apps')} sub={t('app.apps.sub')} />
       <Flash flash={view.flash} />
-      {apps ? (
-        <section class="card" id="connected-apps" aria-labelledby="connected-apps-h">
-          <div class="card-head">
-            <h2 id="connected-apps-h" class="apps-head">
-              {t('app.apps.yours')} <span class="badge tiny-badge">{view.grants.length}</span>
-            </h2>
-            <a class="btn sm" href="#connect-ai">
-              <Icon name="plus" /> {t('app.apps.addAnother')}
-            </a>
-          </div>
-          <ul class="app-grid">
-            {view.grants.map((g) => (
-              <AppTile ctx={ctx} g={g} />
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {/* Live (data-poll): an app the user is adding right now shows up here without a reload. */}
+      <div id="apps-live" data-poll="10">
+        {apps ? (
+          <section class="card" id="connected-apps" aria-labelledby="connected-apps-h">
+            <div class="card-head">
+              <h2 id="connected-apps-h" class="apps-head">
+                {t('app.apps.yours')} <span class="badge tiny-badge">{view.grants.length}</span>
+              </h2>
+              <a class="btn sm" href="#connect-ai">
+                <Icon name="plus" /> {t('app.apps.addAnother')}
+              </a>
+            </div>
+            <ul class="app-grid">
+              {view.grants.map((g) => (
+                <AppTile ctx={ctx} g={g} />
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </div>
       <ConnectAiCard ctx={ctx} />
-      {apps ? null : (
-        <section class="card apps-empty" id="connected-apps">
-          <h2>{t('app.apps.emptyTitle')}</h2>
-          <p class="muted">{t(view.tokens.length ? 'aiapp.noSignIns' : 'app.apps.emptyText')}</p>
-        </section>
-      )}
+      <div id="apps-empty-live" data-poll="10">
+        {apps ? null : (
+          <section class="card apps-empty" id="connected-apps">
+            <h2>{t('app.apps.emptyTitle')}</h2>
+            <p class="muted">{t(view.tokens.length ? 'aiapp.noSignIns' : 'app.apps.emptyText')}</p>
+          </section>
+        )}
+      </div>
       <h2 class="section-label">{t('app.apps.more')}</h2>
       <details class="card fold" id="profiles" open={view.profiles.length > 0}>
         <summary>
