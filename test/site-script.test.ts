@@ -2,7 +2,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { SITE_JS } from '../src/web/client-scripts.js';
 
-type Listener = () => void;
+type Listener = (e?: unknown) => void;
 interface Rect {
   top: number;
   bottom: number;
@@ -25,9 +25,7 @@ function openMenu(viewport: { width: number; height: number }, button: Rect, men
   const listeners: Record<string, Listener[]> = {};
   const menu = {
     open: false,
-    addEventListener: (type: string, fn: Listener) => {
-      listeners[type] = [...(listeners[type] ?? []), fn];
-    },
+    matches: (sel: string) => sel === 'details[data-menu]',
     querySelector: (sel: string) => (sel === '.menu-pop' ? pop : sel === 'summary' ? summary : null),
     contains: () => false,
   };
@@ -40,9 +38,12 @@ function openMenu(viewport: { width: number; height: number }, button: Rect, men
   };
   const document = {
     documentElement: root,
-    querySelectorAll: (sel: string) => (sel === 'details[data-menu]' ? [menu] : []),
+    querySelectorAll: (sel: string) => (sel === 'details[data-menu][open]' && menu.open ? [menu] : []),
     querySelector: () => null,
-    addEventListener: noop,
+    // Menus are handled on the document (so menus in refreshed live blocks work too).
+    addEventListener: (type: string, fn: Listener) => {
+      listeners[type] = [...(listeners[type] ?? []), fn];
+    },
   };
   const window = { innerHeight: viewport.height, scrollY: 0, addEventListener: noop };
   runInNewContext(SITE_JS, {
@@ -55,7 +56,7 @@ function openMenu(viewport: { width: number; height: number }, button: Rect, men
     setTimeout,
   });
   menu.open = true;
-  for (const fn of listeners.toggle ?? []) fn();
+  for (const fn of listeners.toggle ?? []) fn({ target: menu });
   return {
     floating: pop.classList.has('floating'),
     left: Number.parseFloat(pop.style.left ?? 'NaN'),

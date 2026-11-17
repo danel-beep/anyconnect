@@ -1,7 +1,7 @@
 /**
  * Live updates in a real browser (`data-poll` in site.js): a request the AI makes while the
- * Confirmations, Activity page or Overview is open shows up without a reload, copy buttons in a
- * refreshed block still work and what the user picked outside the live blocks stays. Runs with `npm run test:visual` (needs Postgres and Chromium).
+ * Confirmations, Activity, Overview or Services page is open shows up without a reload, copy buttons
+ * and row menus in a refreshed block still work and what the user picked outside the live blocks stays. Runs with `npm run test:visual` (needs Postgres and Chromium).
  */
 import { type Browser, chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -32,6 +32,7 @@ let hub: TestHub;
 let browser: Browser;
 let principal: Principal;
 let cookies: [string, string][];
+let workId: string;
 
 const call = async (tool: string, args: Record<string, unknown>) => {
   const caller = { ...principal };
@@ -62,7 +63,7 @@ describe('live updates', () => {
     const s = hub.services;
     const workspaceId = (await s.db.query.workspaces.findFirst())!.id;
     const userId = (await s.db.query.users.findFirst())!.id;
-    await s.accounts.create(workspaceId, { connectorId: 'inbox', name: 'work', label: 'Work' });
+    workId = (await s.accounts.create(workspaceId, { connectorId: 'inbox', name: 'work', label: 'Work' })).id;
     const aiClientId = (await s.aiClients.createUnique(workspaceId, 'Claude', 'oauth')).id;
     principal = {
       kind: 'oauth',
@@ -129,4 +130,35 @@ describe('live updates', () => {
     await page.locator('#overview-lists table.calls').waitFor();
     await context.close();
   }, 45_000);
+
+  it('shows an account connected elsewhere on the open Services page, and its menu works', async () => {
+    const { page, context } = await openPage('/app/services');
+    const rows = page.locator('#services-live .acc[id^="acc-"]');
+    await expect(rows.count()).resolves.toBe(1);
+    const menuOf = (id: string) => page.locator(`#acc-${id} details[data-menu]`);
+    // A menu the user has open is not pulled away by a refresh: the block waits for it to close.
+    await menuOf(workId).locator('summary').click();
+    const home = await hub.services.accounts.create(principal.workspaceId, {
+      connectorId: 'inbox',
+      name: 'home',
+      label: 'Home',
+    });
+    await page.waitForResponse((r) => r.request().headers()['x-live-update'] === '1', { timeout: 15_000 });
+    await expect(rows.count()).resolves.toBe(1);
+    await expect(menuOf(workId).getAttribute('open')).resolves.toBe('');
+    await page.keyboard.press('Escape');
+    await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(2);
+    await expect(page.locator('#svc-n-inbox').textContent()).resolves.toMatch(/2/);
+    // The rows the refresh brought in have working menus: one open at a time, outside click closes.
+    await menuOf(home.id).locator('summary').click();
+    // (toggle fires a moment after the click, hence the polls)
+    await expect
+      .poll(() => page.locator(`#acc-${home.id} .menu-pop`).getAttribute('class'))
+      .toContain('floating');
+    await menuOf(workId).locator('summary').click();
+    await expect.poll(() => menuOf(home.id).getAttribute('open')).toBeNull();
+    await page.locator('h1').click();
+    await expect.poll(() => menuOf(workId).getAttribute('open')).toBeNull();
+    await context.close();
+  }, 60_000);
 });

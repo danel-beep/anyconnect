@@ -78,19 +78,21 @@ $$('[data-interval-root]').forEach(function(box){$$('[data-interval-set]',box).f
 /* Confirm before destructive forms */
 d.addEventListener('submit',function(e){var f=e.target,msg=f.getAttribute&&f.getAttribute('data-confirm');if(msg&&!window.confirm(msg))e.preventDefault()},true);
 
-/* Dropdown menus: one open at a time, close on outside click or Escape */
-var menus=$$('details[data-menu]');
+/* Dropdown menus: one open at a time, close on outside click or Escape. Everything is delegated from the
+   document and looks the menus up when needed, so menus in blocks that live updates replace keep working. */
+function openMenus(){return $$('details[data-menu][open]')}
 /* The open menu floats above the page (position:fixed), so no card or scroll box clips it: it sits under
    its button, opens upwards when there is no room below and stays inside the window. */
 function placeMenu(m){var pop=m.querySelector('.menu-pop'),s=m.querySelector('summary');if(!pop||!s)return;
 pop.classList.add('floating');pop.style.left='0px';pop.style.top='0px';var r=s.getBoundingClientRect(),vw=root.clientWidth,vh=window.innerHeight,w=pop.offsetWidth,h=pop.offsetHeight,gap=6;
 var below=vh-r.bottom-gap,above=r.top-gap,top=(h<=below||below>=above)?r.bottom+gap:r.top-gap-h;
 pop.style.left=Math.max(8,Math.min(r.right-w,vw-w-8))+'px';pop.style.top=Math.max(8,Math.min(top,vh-h-8))+'px'}
-function placeOpen(){menus.forEach(function(m){if(m.open)placeMenu(m)})}
-menus.forEach(function(m){m.addEventListener('toggle',function(){if(m.open){menus.forEach(function(o){if(o!==m)o.open=false});placeMenu(m)}})});
+function placeOpen(){openMenus().forEach(placeMenu)}
+/* toggle does not bubble, so it is caught on the way down (capture) */
+d.addEventListener('toggle',function(e){var m=e.target;if(!m||!m.open||!m.matches||!m.matches('details[data-menu]'))return;openMenus().forEach(function(o){if(o!==m)o.open=false});placeMenu(m)},true);
 window.addEventListener('resize',placeOpen);window.addEventListener('scroll',placeOpen,{passive:true,capture:true});
-d.addEventListener('click',function(e){menus.forEach(function(m){if(m.open&&!m.contains(e.target))m.open=false})});
-d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;menus.forEach(function(m){if(m.open){m.open=false;var s=m.querySelector('summary');if(s)s.focus()}});if(root.classList.contains('nav-open')){setNav(false);var t=$$('[data-nav-toggle]').filter(function(b){return b.offsetParent})[0];if(t)t.focus()}});
+d.addEventListener('click',function(e){openMenus().forEach(function(m){if(!m.contains(e.target))m.open=false})});
+d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;openMenus().forEach(function(m){m.open=false;var s=m.querySelector('summary');if(s)s.focus()});if(root.classList.contains('nav-open')){setNav(false);var t=$$('[data-nav-toggle]').filter(function(b){return b.offsetParent})[0];if(t)t.focus()}});
 
 /* Live filter: every word typed must appear in an item's data-search. Optional attributes:
    data-filter-expand opens a <details> while searching (and restores it after), data-filter-hide hides a
@@ -167,14 +169,14 @@ d.addEventListener('change',function(e){var f=e.target&&e.target.form;if(f&&f.ha
 
 /* Live updates: blocks marked data-poll="<seconds>" (each with an id) refresh from the same address
    while the tab is visible, so a new confirmation or log row shows up without a reload. A block the
-   user is working in (focus inside) is left alone until they are done; open <details> stay open.
-   A block is compared with what the server sent last, not with the page: what the user changed
-   on it (an open menu, a picked tab) never counts as news and is not reset. */
+   user is working in (typing inside, or a dropdown menu open in it) is left alone until they are done;
+   open <details id> stay open. A block is compared with what the server sent last, not with the page:
+   what the user changed on it (an open menu, a picked tab) never counts as news and is not reset. */
 (function(){var blocks=$$('[data-poll][id]');if(!blocks.length||!window.fetch||!window.DOMParser)return;
 var every=Math.max(3,Math.min.apply(null,blocks.map(function(b){return Number(b.getAttribute('data-poll'))||10})))*1000,busy=false,last={};
 blocks.forEach(function(b){last[b.id]=b.innerHTML});
 function swap(html){var next=new DOMParser().parseFromString(html,'text/html');
-$$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===last[b.id])return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;
+$$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===last[b.id])return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;if(b.querySelector('details[data-menu][open]'))return;
 var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=last[b.id]=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]})})}
 function tick(){if(busy||d.hidden)return;busy=true;fetch(location.pathname+location.search,{credentials:'same-origin',headers:{'x-live-update':'1'}}).then(function(r){return r.ok&&!r.redirected?r.text():null}).then(function(html){busy=false;if(html)swap(html)},function(){busy=false})}
 setInterval(tick,every);d.addEventListener('visibilitychange',function(){if(!d.hidden)tick()})})();
