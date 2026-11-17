@@ -167,6 +167,7 @@ a.onboard-step.current:hover{border-color:var(--accent)}
 .svc-name a,.svc-name strong{font-weight:600;font-size:14.5px;color:var(--text);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .svc-name a:focus-visible{outline:none}
 .svc-name .tiny-badge{margin-left:0;flex:none}
+.live-slot{display:contents}
 a.stretch::after{content:"";position:absolute;inset:0;border-radius:inherit}
 .svc-tile p{margin:2px 0 0;font-size:12.5px;line-height:1.4;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .svc-go{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;color:var(--accent-ink);transition:background .15s}

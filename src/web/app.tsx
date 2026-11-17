@@ -1114,9 +1114,13 @@ const ServiceTile: FC<{ ctx: PageCtx; s: CatalogEntryView; full: boolean; anchor
           ) : (
             <strong>{s.name}</strong>
           )}
-          {s.accounts > 0 ? (
-            <span class="badge ok tiny-badge">{t('app.services.nConnected', { n: s.accounts })}</span>
-          ) : null}
+          {/* A small live block of its own: the tiles sit in the searchable list, which must not be
+              replaced (the search and the category chips hide tiles there). */}
+          <span class="live-slot" id={`svc-n-${s.service}${anchor ? '' : '-popular'}`} data-poll="10">
+            {s.accounts > 0 ? (
+              <span class="badge ok tiny-badge">{t('app.services.nConnected', { n: s.accounts })}</span>
+            ) : null}
+          </span>
         </div>
         <p>{desc}</p>
         {s.ready ? null : (
@@ -1189,44 +1193,49 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
     <AppShell ctx={ctx} shell={shell} section="services" title={t('app.nav.services')}>
       <PageHead title={t('app.nav.services')} sub={t('app.services.sub')} />
       {view.customDraft ? null : <Flash flash={view.flash} />}
-      <div class="card flush">
-        <div class="card-head pad">
-          <h2>
-            {t('app.services.connected')}{' '}
-            <span class="badge">
-              {view.usage.accounts.used}
-              {view.usage.accounts.limit === null ? '' : ` / ${view.usage.accounts.limit}`}
-            </span>
-          </h2>
-          {real.length ? (
-            <a class="btn sm ghost add-jump" href="#add" aria-label={t('app.services.addService')}>
-              <Icon name="plus" /> <span class="btn-label">{t('app.services.addService')}</span>
-            </a>
+      {/* Live (data-poll): an account connected or changed elsewhere (from the AI chat, another tab)
+          shows up without a reload. Row menus keep working after a refresh (site.js delegates them),
+          and the block waits while one of them is open or the user is renaming an account. */}
+      <div id="services-live" data-poll="10">
+        <div class="card flush">
+          <div class="card-head pad">
+            <h2>
+              {t('app.services.connected')}{' '}
+              <span class="badge">
+                {view.usage.accounts.used}
+                {view.usage.accounts.limit === null ? '' : ` / ${view.usage.accounts.limit}`}
+              </span>
+            </h2>
+            {real.length ? (
+              <a class="btn sm ghost add-jump" href="#add" aria-label={t('app.services.addService')}>
+                <Icon name="plus" /> <span class="btn-label">{t('app.services.addService')}</span>
+              </a>
+            ) : null}
+          </div>
+          {real.length === 0 ? <p class="muted pad-x">{t('app.services.none')}</p> : null}
+          {real.length || samples.length ? (
+            <div class="acc-list">
+              {groupByService(real).map(([service, accounts]) => (
+                <>
+                  <div class="acc-group">
+                    {service} <span class="muted">· {accounts.length}</span>
+                  </div>
+                  {accounts.map((a) => (
+                    <AccountRow ctx={ctx} a={a} />
+                  ))}
+                </>
+              ))}
+              <SampleAccounts ctx={ctx} accounts={samples} />
+            </div>
           ) : null}
         </div>
-        {real.length === 0 ? <p class="muted pad-x">{t('app.services.none')}</p> : null}
-        {real.length || samples.length ? (
-          <div class="acc-list">
-            {groupByService(real).map(([service, accounts]) => (
-              <>
-                <div class="acc-group">
-                  {service} <span class="muted">· {accounts.length}</span>
-                </div>
-                {accounts.map((a) => (
-                  <AccountRow ctx={ctx} a={a} />
-                ))}
-              </>
-            ))}
-            <SampleAccounts ctx={ctx} accounts={samples} />
+        {full ? (
+          <div class="notice">
+            {t('app.services.full', { n: view.usage.accounts.limit ?? 0 })}{' '}
+            <a href="/app/billing">{t('app.billing.upgrade')}</a>
           </div>
         ) : null}
       </div>
-      {full ? (
-        <div class="notice">
-          {t('app.services.full', { n: view.usage.accounts.limit ?? 0 })}{' '}
-          <a href="/app/billing">{t('app.billing.upgrade')}</a>
-        </div>
-      ) : null}
       <div class="card add-card" id="add">
         <div class="card-head add-head">
           <h2>{t('app.services.addService')}</h2>
