@@ -68,8 +68,9 @@ Map of `src/`: `routes/` HTTP (Hono) · `mcp/` MCP server · `oauth/` OAuth serv
 executor, call resolution · `core/` users, accounts, auth, teams, vaults · `connectors/` SDK + `builtin/` ·
 `messaging/` + `gateway/` messengers · `db/` schema + listener · `web/` pages (`app.tsx` dashboard,
 `admin*.tsx`, `site.tsx`/`landing.tsx`, `ui.tsx` components, `styles/`, `i18n/`, `seo/`) ·
-`billing/` · `mail/` · `analytics/` · `ops/` errors and health · `jobs/` background jobs ·
-`security/` policies, confirmations, pending calls · `triggers/` rules on new messages and mail, the user's own AI keys (docs/TRIGGERS.md) · `cli/` · `lib/` crypto, network, rate limits.
+`billing/` · `mail/` · `notices/` emails to owners, once per occasion · `analytics/` · `admin/` admin-panel data ·
+`distribution/` AI-app directory listings · `growth/` ad campaign tags · `ops/` errors and health · `jobs/` background jobs ·
+`security/` policies, confirmations, pending calls · `triggers/` rules on new messages, mail and calendar events, the user's own AI keys (docs/TRIGGERS.md) · `cli/` · `lib/` crypto, network, rate limits.
 
 ## Layout and rules
 
