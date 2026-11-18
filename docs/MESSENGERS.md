@@ -460,11 +460,12 @@ interface SessionDriver {
 | Переменная | Где | Назначение |
 | --- | --- | --- |
 | `GATEWAY_EMBEDDED` | хаб | `true` — шлюз в процессе хаба (см. выше); исключает `GATEWAY_URL`. `GATEWAY_EMBEDDED_PORT` — его порт на localhost (10001). |
+| `GATEWAY_DATABASE_POOL_MAX` | хаб (встроенный шлюз) | Размер отдельного пула соединений встроенного шлюза рядом с пулом хаба (по умолчанию 3). У отдельного шлюза — его `DATABASE_POOL_MAX` (10). |
 | `GATEWAY_URL` | хаб | Внутренний адрес шлюза, например `http://anyconnect-gateway:10000`. Без него аккаунты с постоянной сессией не работают, официальные API работают. |
 | `GATEWAY_TOKEN` | хаб и шлюз | Общий секрет, не короче 32 символов. |
 | `GATEWAY_ADVERTISE_URL` | шлюз | Адрес этого экземпляра для хаба (по умолчанию `http://<hostname>:<PORT>`). |
 | `GATEWAY_MAX_SESSIONS` | шлюз | Предел сессий на экземпляр. |
-| `DATABASE_URL`, `ENCRYPTION_KEY` | шлюз | Те же, что у хаба. |
+| `DATABASE_URL`, `ENCRYPTION_KEY`, `ENCRYPTION_KEYS_PREVIOUS` | шлюз | Те же, что у хаба (после ротации ключа — и прежние ключи). |
 | `TELEGRAM_BOT_TOKEN` | хаб | Бот хаба: подтверждения и подключение личных чатов через «Автоматизацию чатов» (`telegram_bot` с `bot: hub`, нужен Business Mode в @BotFather). |
 | `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | шлюз (со встроенным шлюзом — хаб) | Приложение Telegram с my.telegram.org для личных аккаунтов (задаются вместе, hash — 32 символа). |
 
