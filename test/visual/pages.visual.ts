@@ -192,6 +192,13 @@ async function seed(): Promise<void> {
   });
 }
 
+/**
+ * Seeded cookies a variant does not inherit: the language it sets itself, and a flash note left over
+ * from seeding (e.g. "Trigger created"), which would show on whichever page reads it first and make
+ * screenshots differ between runs.
+ */
+const VARIANT_COOKIES = new Set(['ac_lang', 'ac_flash']);
+
 async function contextFor(persona: Persona, lang: string, theme: string, viewport: keyof typeof VIEWPORTS) {
   const context = await browser.newContext({
     viewport: VIEWPORTS[viewport],
@@ -200,9 +207,10 @@ async function contextFor(persona: Persona, lang: string, theme: string, viewpor
   });
   const url = new URL(hub.baseUrl);
   await context.addCookies(
-    [...persona.cookies.filter(([name]) => name !== 'ac_lang'), ['ac_lang', lang] as [string, string]].map(
-      ([name, value]) => ({ name, value, domain: url.hostname, path: '/' }),
-    ),
+    [
+      ...persona.cookies.filter(([name]) => !VARIANT_COOKIES.has(name)),
+      ['ac_lang', lang] as [string, string],
+    ].map(([name, value]) => ({ name, value, domain: url.hostname, path: '/' })),
   );
   return context;
 }
