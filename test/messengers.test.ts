@@ -786,7 +786,9 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     const mine = read.messages.at(-1);
     const again = await call('telegram_bot_get_attachment', { message: mine.id, attachment: 'a0' });
     expect(again.content[0]?.type).toBe('image');
-    const handle = /file_id "(file_[0-9a-z]+)"/.exec(again.content.map((c) => ('text' in c ? c.text : '')).join(' '))?.[1];
+    const handle = /file_id "(file_[0-9a-z]+)"/.exec(
+      again.content.map((c) => ('text' in c ? c.text : '')).join(' '),
+    )?.[1];
     expect(handle).toBeDefined();
     // The same bytes are the same file: sending it again by id is recognized as a duplicate.
     const repeat = json(
