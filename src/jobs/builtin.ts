@@ -2,6 +2,7 @@ import type { Analytics } from '../analytics/index.js';
 import type { AccountAlerts } from '../core/account-alerts.js';
 import type { ActivityRetention, ActivityService } from '../core/activity.js';
 import type { CustomServiceManager } from '../core/custom-services.js';
+import type { FileStore } from '../core/files.js';
 import type { AccountHealthService } from '../core/health.js';
 import type { BillingNotices } from '../notices/billing-notices.js';
 import type { BackupService } from '../ops/backups.js';
@@ -21,10 +22,26 @@ export function builtinJobs(deps: {
   /** Present when a backup bucket is configured. */
   backups?: BackupService | undefined;
   analytics?: Analytics | undefined;
+  /** Files tools pass between each other (`ctx.files`). */
+  files?: Pick<FileStore, 'prune'> | undefined;
 }): JobDefinition[] {
   const analytics = deps.analytics;
   const backups = deps.backups;
+  const files = deps.files;
   return [
+    ...(files
+      ? [
+          {
+            name: 'files.prune',
+            description: 'Delete files the hub kept for tools once they expire',
+            cron: '*/30 * * * *',
+            expectEveryMs: 45 * 60_000,
+            run: async () => {
+              await files.prune();
+            },
+          },
+        ]
+      : []),
     ...(backups
       ? [
           {

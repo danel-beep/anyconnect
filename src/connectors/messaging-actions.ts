@@ -4,8 +4,8 @@
  * them without mapping. Part of the connector SDK: no application imports.
  */
 import { z } from 'zod';
-import type { ChatView, MessageView, MessagingPort } from './messaging.js';
-import { fileNameFromUrl } from './messaging-http.js';
+import { fileInputFields, hasFileInput, type ResolvedFile, resolveFileInput } from './file-input.js';
+import type { ChatView, MessageView, MessagingPort, OutboundFile } from './messaging.js';
 import {
   type ActionDefinition,
   type ActionFactory,
@@ -441,7 +441,7 @@ export function messengerActions<TConfig, TCredentials>(
       name: 'send',
       keywords: 'write message text dm reply',
       title: 'Send message',
-      description: `Sends a text, or a file by https link, from this ${serviceName} account via a paced queue that protects it. Result: "sent", or "queued" with an eta. An identical request within 10 minutes is not sent twice. A first message to someone who never wrote to this account needs the user's explicit approval.`,
+      description: `Sends a text and/or a photo or file from this ${serviceName} account via a paced queue that protects it. Result: "sent", or "queued" with an eta. An identical request within 10 minutes is not sent twice. A first message to someone who never wrote to this account needs the user's explicit approval.`,
       input: z.object({
         chat: z.string().max(64).optional().describe('Chat id from list_chats (preferred)'),
         to: z
@@ -456,16 +456,8 @@ export function messengerActions<TConfig, TCredentials>(
           .default('')
           .describe('Message text (with a file: its caption, max 1024)'),
         reply_to: z.string().max(64).optional().describe('Message id to reply to (same chat)'),
-        file_url: z
-          .url({ protocol: /^https$/ })
-          .max(2048)
-          .optional()
-          .describe('Public https link of a file to send'),
-        file_kind: z
-          .enum(['photo', 'video', 'audio', 'document'])
-          .optional()
-          .describe('Default: by extension'),
-        file_name: z.string().trim().min(1).max(200).optional().describe('Shown file name'),
+        ...fileInputFields,
+        file_kind: z.enum(['photo', 'video', 'audio', 'document']).optional(),
       }),
       hints: { readOnly: false, destructive: false, openWorld: true },
       // Sending is what the user approves by default (same as mail and Slack); see assessRisk below.
@@ -499,21 +491,17 @@ export function messengerActions<TConfig, TCredentials>(
       },
       run: async (input, ctx) => {
         if (!input.chat && !input.to) throw new ConnectorError('invalid_input', 'Pass chat or to.');
-        if (!input.text && !input.file_url)
-          throw new ConnectorError('invalid_input', 'Pass text or file_url.');
+        if (!input.text && !hasFileInput(input))
+          throw new ConnectorError(
+            'invalid_input',
+            'Pass text or a file (file_url, file_id or file_base64).',
+          );
+        const file = await resolveFileInput(input, ctx);
         const result = await port.forAccount(ctx.account.id).send({
           ...(input.chat ? { chatId: input.chat } : { to: input.to! }),
           text: input.text,
           ...(input.reply_to ? { replyTo: input.reply_to } : {}),
-          ...(input.file_url
-            ? {
-                file: {
-                  url: input.file_url,
-                  kind: input.file_kind ?? fileKindOf(input.file_url),
-                  name: input.file_name ?? fileNameFromUrl(input.file_url),
-                },
-              }
-            : {}),
+          ...(file ? { file: outboundFile(file, input.file_kind) } : {}),
         });
         if (result.status === 'failed')
           throw new ConnectorError('upstream', `Not sent: ${result.error ?? 'unknown error'}`);
@@ -544,7 +532,7 @@ export function messengerActions<TConfig, TCredentials>(
       name: 'get_attachment',
       keywords: 'download file photo document media',
       title: 'Get attachment',
-      description: `Downloads a file attached to a ${serviceName} message (photos and voice messages are returned so you can see or hear them).`,
+      description: `Downloads a file attached to a ${serviceName} message (photos and voice messages are returned so you can see or hear them) and gives a file_id to send it on.`,
       input: z.object({
         message: z.string().max(64).describe('Message id'),
         attachment: z.string().max(16).describe('Attachment id from the message, e.g. a0'),
@@ -553,20 +541,34 @@ export function messengerActions<TConfig, TCredentials>(
       run: async (input, ctx) => {
         const file = await port.forAccount(ctx.account.id).download(input.message, input.attachment);
         const name = file.name ?? input.attachment;
+        // The hub keeps a copy for a day, so the AI can send it on by id (to another chat or service).
+        const kept =
+          ctx.files && file.data.byteLength > 0 && file.data.byteLength <= ctx.files.maxBytes
+            ? await ctx.files.put({ data: file.data, name, mimeType: file.mimeType }).catch(() => undefined)
+            : undefined;
+        const handle = kept
+          ? ` To send it on, pass file_id "${kept.id}" to a send tool (kept until ${kept.expiresAt.toISOString()}).`
+          : '';
+        const note: { type: 'text'; text: string } = {
+          type: 'text',
+          text: `File "${name}" (${file.mimeType}, ${file.data.byteLength} bytes).${handle}`,
+        };
         if (file.data.byteLength > MAX_INLINE_BYTES) {
-          return `The file "${name}" is ${(file.data.byteLength / 1_048_576).toFixed(1)} MB (${file.mimeType}), too large to return here.`;
+          return `The file "${name}" is ${(file.data.byteLength / 1_048_576).toFixed(1)} MB (${file.mimeType}), too large to return here.${handle}`;
         }
         const base64 = Buffer.from(file.data).toString('base64');
         if (file.mimeType.startsWith('image/')) {
-          return rawResult({ content: [{ type: 'image', data: base64, mimeType: file.mimeType }] });
+          return rawResult({ content: [{ type: 'image', data: base64, mimeType: file.mimeType }, note] });
         }
         if (file.mimeType.startsWith('audio/')) {
-          return rawResult({ content: [{ type: 'audio', data: base64, mimeType: file.mimeType }] });
+          return rawResult({ content: [{ type: 'audio', data: base64, mimeType: file.mimeType }, note] });
         }
         if (file.mimeType.startsWith('text/') || file.mimeType === 'application/json') {
-          return rawResult({ content: [{ type: 'text', text: Buffer.from(file.data).toString('utf8') }] });
+          return rawResult({
+            content: [{ type: 'text', text: Buffer.from(file.data).toString('utf8') }, note],
+          });
         }
-        return `File "${name}" (${file.mimeType}, ${file.data.byteLength} bytes) cannot be shown as text or image.`;
+        return `File "${name}" (${file.mimeType}, ${file.data.byteLength} bytes) cannot be shown as text or image.${handle}`;
       },
     }),
   ];
@@ -612,7 +614,7 @@ export function messengerUiTexts(
         send: {
           title: 'Отправка сообщения',
           description:
-            'Пишет в чат через очередь: пауза и «печатает…», как у человека, без дублей. Можно приложить файл по ссылке. Первое сообщение новому человеку — только с вашего согласия.',
+            'Пишет в чат через очередь: пауза и «печатает…», как у человека, без дублей. Можно отправить фото или файл: по ссылке или переслать из другого чата. Первое сообщение новому человеку — только с вашего согласия.',
         },
         mark_read: {
           title: 'Отметить прочитанным',
@@ -620,7 +622,8 @@ export function messengerUiTexts(
         },
         get_attachment: {
           title: 'Вложение',
-          description: 'Скачивает файл из сообщения: фото и голосовые ИИ может посмотреть и послушать.',
+          description:
+            'Скачивает файл из сообщения: фото и голосовые ИИ может посмотреть и послушать, а файл переслать дальше.',
         },
       },
       pacing: {
@@ -663,13 +666,13 @@ export function messengerUiTexts(
         send: {
           title: 'Send a message',
           description:
-            'Writes to a chat through a queue: human-like pauses and typing, never twice. Files can be attached by link. A first message to someone new needs your OK.',
+            'Writes to a chat through a queue: human-like pauses and typing, never twice. Photos and files can be sent by link or forwarded from another chat. A first message to someone new needs your OK.',
         },
         mark_read: { title: 'Mark as read', description: 'Marks every message of a chat as read.' },
         get_attachment: {
           title: 'Attachment',
           description:
-            'Downloads a file from a message; the AI can look at photos and listen to voice messages.',
+            'Downloads a file from a message; the AI can look at photos, listen to voice messages and forward the file.',
         },
       },
       pacing: {
@@ -684,6 +687,24 @@ export function messengerUiTexts(
  * Guesses how to send a file from its link's extension. Only formats both Telegram and WhatsApp
  * show as photo, video or audio get those kinds; everything else goes as a document.
  */
+/** The message file for a resolved file input. */
+export function outboundFile(file: ResolvedFile, kind?: OutboundFile['kind']): OutboundFile {
+  const base = {
+    kind: kind ?? (file.source === 'url' ? fileKindOf(file.url) : fileKindOfMime(file.mimeType)),
+    name: file.name,
+    ...(file.mimeType ? { mimeType: file.mimeType } : {}),
+  };
+  return file.source === 'url' ? { ...base, url: file.url } : { ...base, fileId: file.fileId };
+}
+
+/** How a file of this type is sent: photos as photos, animated GIFs and the rest as files. */
+export function fileKindOfMime(mimeType: string): OutboundFile['kind'] {
+  if (['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) return 'photo';
+  if (mimeType === 'video/mp4' || mimeType === 'video/quicktime') return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
 export function fileKindOf(url: string): 'photo' | 'video' | 'audio' | 'document' {
   const ext = /\.([a-z0-9]{1,5})$/i.exec(new URL(url).pathname)?.[1]?.toLowerCase();
   if (ext && ['jpg', 'jpeg', 'png'].includes(ext)) return 'photo';

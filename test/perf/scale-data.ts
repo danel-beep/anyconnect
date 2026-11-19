@@ -168,6 +168,12 @@ export async function seedScale(pool: pg.Pool, profile: ScaleProfile): Promise<v
        select 'ob' || n || '_' || i, 'a' || lpad(n::text, 5, '0') || '_1', 'ch' || n || '_' || (1 + i % 10), 'message',
               'x', md5('ob' || n || i), 'sent', now(), now() - (i * interval '1 hour'), now() - (i * interval '1 hour')
        from generate_series(1, ${messengers}) n, generate_series(1, 50) i`,
+    // Files kept for tools: a few per user, most already expired (the clean-up job deletes them).
+    `insert into hub_files (id, workspace_id, content_key, name_encrypted, mime_type, size, data_key_encrypted,
+                            data, expires_at)
+       select 'f' || n || '_' || k, 'w' || lpad(n::text, 5, '0'), md5('file' || n || k), 'x', 'image/jpeg', 1024,
+              'x', '\\x00'::bytea, now() + ((k - 4) * interval '1 hour')
+       from generate_series(1, ${p.users}) n, generate_series(1, 5) k`,
     `insert into triggers (id, workspace_id, user_id, name, enabled, source, connector_id, account_ids,
                            action_kind, spec_encrypted)
        select 't' || n || '_' || k, 'w' || lpad(n::text, 5, '0'), 'u' || lpad(n::text, 5, '0'), 'Trigger ' || k,

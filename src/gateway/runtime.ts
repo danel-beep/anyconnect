@@ -4,6 +4,7 @@ import type { MessagingPort } from '../connectors/messaging.js';
 import type { ConnectorRegistry } from '../connectors/registry.js';
 import { AccountKeyring } from '../core/account-keys.js';
 import { AccountService } from '../core/accounts.js';
+import { FileStore } from '../core/files.js';
 import { createDatabase, type Database } from '../db/client.js';
 import { type DbListener, PgListener } from '../db/listener.js';
 import { SecretBox } from '../lib/crypto.js';
@@ -107,6 +108,7 @@ export function createGatewayRuntime(
     store: messaging.store,
     messengerAccounts: messaging.accounts,
     executor: host,
+    files: new FileStore(db, secrets),
     worker: instanceId,
     logger: logger.child({ component: 'gateway-outbox' }),
     ...(listener ? { listener } : {}),

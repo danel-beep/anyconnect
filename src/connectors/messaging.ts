@@ -138,12 +138,25 @@ export interface TemplateMessage {
   parameters?: { name?: string; value: string }[];
 }
 
-/** A file the messenger fetches itself from a public https URL (the hub never downloads it). */
+/**
+ * A file a message carries. It comes from one source: a public https link (`url`), or a file the
+ * hub keeps (`fileId`, see `HubFiles` in the SDK). The outbox stores only the reference; the
+ * dispatcher loads a kept file into `data` right before it hands the job to a transport. So a
+ * transport sees `url` or `data`, never `fileId`, and session drivers never see a link: the hub
+ * downloads links for them before queueing.
+ */
 export interface OutboundFile {
-  url: string;
   kind: 'photo' | 'video' | 'audio' | 'document';
   /** File name shown to the recipient, where the messenger allows one. */
   name?: string;
+  /** Known for kept files; transports that upload send it as the file's type. */
+  mimeType?: string;
+  /** Public https link: the messenger may fetch it itself, or the transport downloads it. */
+  url?: string;
+  /** A file the hub keeps; only in the outbox and the send request. */
+  fileId?: string;
+  /** The bytes of a kept file, loaded by the dispatcher. */
+  data?: Uint8Array;
 }
 
 /** Longest text that can travel with a file (Telegram and WhatsApp caption limit). */
@@ -254,6 +267,8 @@ export interface RoutedEventHandler<TConfig = unknown, TCredentials = unknown> {
 /** A transport served by a persistent session in the messenger gateway (MTProto, WhatsApp Web). */
 export interface SessionTransport {
   kind: 'session';
+  /** The session driver can send {@link OutboundJob.file} (always as bytes, see {@link OutboundFile}). */
+  files?: boolean;
 }
 
 export interface WebhookEndpoint {
@@ -382,7 +397,7 @@ export interface SendRequest {
   replyTo?: string;
   /** Send a pre-approved template; `text` is its rendered body, kept in the hub's copy of the chat. */
   template?: TemplateMessage;
-  /** Send a file by URL; `text` becomes its caption (may be empty). */
+  /** Send a file (by link or a file the hub keeps); `text` becomes its caption (may be empty). */
   file?: OutboundFile;
   /** How long to wait for delivery before returning `queued`. */
   waitMs?: number;

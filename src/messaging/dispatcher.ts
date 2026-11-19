@@ -4,6 +4,7 @@ import {
   type PacingLimits,
   type SentReceipt,
 } from '../connectors/messaging.js';
+import type { FileStore } from '../core/files.js';
 import { isDatabaseUnavailable } from '../db/errors.js';
 import type { DbListener } from '../db/listener.js';
 import { DueLoop } from '../lib/due-loop.js';
@@ -56,6 +57,8 @@ export class Dispatcher {
       store: MessageStore;
       messengerAccounts: MessengerAccounts;
       executor: DeliveryExecutor;
+      /** Loads files the hub keeps (`OutboundFile.fileId`); without it such jobs fail. */
+      files?: Pick<FileStore, 'getForAccount'>;
       worker: string;
       logger: Logger;
       /** Polling interval while database notifications are unavailable (default 1 s). */
@@ -196,8 +199,9 @@ export class Dispatcher {
         }
       }
 
+      const ready = await this.withFile(accountId, job);
       handedOver = true;
-      receipt = await executor.deliver(accountId, job);
+      receipt = await executor.deliver(accountId, ready);
     } catch (error) {
       if (!handedOver && !(error instanceof DeliveryError)) {
         // Nothing reached the messenger yet (e.g. the database did not answer the pacing read): it
@@ -210,6 +214,31 @@ export class Dispatcher {
     // From here the message is out: only writing that down can fail, and that must never make it
     // look unsent (a retry would send it twice).
     return this.recordDelivery(accountId, row, job, receipt);
+  }
+
+  /**
+   * The job as a transport takes it: a file the hub keeps is loaded into `data` (the outbox holds
+   * only its id). A file that expired while the message waited can never be sent.
+   */
+  private async withFile(accountId: string, job: OutboundJob): Promise<OutboundJob> {
+    const fileId = job.file?.fileId;
+    if (!job.file || !fileId) return job;
+    const file = await this.deps.files?.getForAccount(accountId, fileId);
+    if (!file) {
+      throw new DeliveryError(
+        'rejected',
+        'The file is no longer kept by the hub (files last about a day). Fetch it again and send it anew.',
+      );
+    }
+    return {
+      ...job,
+      file: {
+        ...job.file,
+        data: file.data,
+        name: job.file.name ?? file.name,
+        mimeType: job.file.mimeType ?? file.mimeType,
+      },
+    };
   }
 
   /**
@@ -265,8 +294,12 @@ export class Dispatcher {
                         externalId: `${receipt.externalId}:file`,
                         kind: job.file.kind,
                         ...(job.file.name ? { name: job.file.name } : {}),
-                        // Not kept by the messenger in a form the hub can fetch: get_attachment says so.
-                        locator: { sentLink: job.file.url },
+                        ...(job.file.mimeType ? { mimeType: job.file.mimeType } : {}),
+                        // Not kept by the messenger in a form the hub can fetch: get_attachment
+                        // returns the hub's copy while it lasts, or says where the link pointed.
+                        locator: job.file.fileId
+                          ? { hubFileId: job.file.fileId }
+                          : { sentLink: job.file.url },
                       },
                     ],
                   }

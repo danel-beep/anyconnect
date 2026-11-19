@@ -37,7 +37,7 @@ export function createTelegramConnector(port: MessagingPort) {
     credentials,
     messenger: {
       // The session lives in the gateway; personal accounts send at a person's pace (the hub's defaults).
-      transport: () => ({ kind: 'session' }),
+      transport: () => ({ kind: 'session', files: true }),
       pacing: () => ({}),
     },
     // The account is checked by logging in on the next page, through the gateway.

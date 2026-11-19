@@ -8,6 +8,7 @@ import {
   type InboundAttachment,
   type InboundMessage,
   type MessagingPort,
+  type OutboundFile,
   type OutboundJob,
   type TemplateMessage,
 } from '../messaging.js';
@@ -286,13 +287,39 @@ function verifySignature(body: string, header: string | undefined, appSecret: st
 
 const MEDIA_TYPES = { photo: 'image', video: 'video', audio: 'audio', document: 'document' } as const;
 
-function messageContent(job: OutboundJob) {
+/**
+ * Uploads a file the hub keeps to WhatsApp's media store (messages then refer to it by id; WhatsApp
+ * keeps it 30 days).
+ */
+async function uploadMedia(ctx: Ctx, file: OutboundFile & { data: Uint8Array }): Promise<string> {
+  const mimeType = file.mimeType ?? 'application/octet-stream';
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mimeType);
+  form.append(
+    'file',
+    new Blob([file.data as Uint8Array<ArrayBuffer>], { type: mimeType }),
+    file.name ?? 'file',
+  );
+  const response = await deliveryFetch(ctx.fetch, graph(ctx, `${phoneNumberId(ctx)}/media`), {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token(ctx)}` },
+    body: form,
+    signal: ctx.signal,
+  });
+  const json = (await readJson(response)) as { id?: string } & GraphError;
+  if (!response.ok) throw graphError(response.status, json);
+  if (!json.id) throw new DeliveryError('transient', 'WhatsApp did not return a media id');
+  return json.id;
+}
+
+function messageContent(job: OutboundJob, mediaId?: string) {
   if (job.file) {
     const type = MEDIA_TYPES[job.file.kind];
     return {
       type,
       [type]: {
-        link: job.file.url,
+        ...(mediaId ? { id: mediaId } : { link: job.file.url }),
         ...(job.text && type !== 'audio' ? { caption: job.text } : {}),
         ...(type === 'document' && job.file.name ? { filename: job.file.name } : {}),
       },
@@ -555,6 +582,8 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
       });
       return undefined;
     }
+    const file = job.file;
+    const mediaId = file?.data ? await uploadMedia(ctx, { ...file, data: file.data }) : undefined;
     const result = await callGraph<{ messages?: { id: string }[] }>(
       ctx,
       'POST',
@@ -563,7 +592,7 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: job.chat.externalId,
-        ...messageContent(job),
+        ...messageContent(job, mediaId),
         ...(job.replyToExternalId ? { context: { message_id: job.replyToExternalId } } : {}),
       },
     );

@@ -25,6 +25,7 @@ import { CustomConnectorStore, WorkspaceConnectorResolver } from './core/custom-
 import { CustomServiceManager } from './core/custom-services.js';
 import { DataExportService } from './core/data-export.js';
 import { ExternalLoginService, googleLoginSpec, OidcLoginProvider } from './core/external-login.js';
+import { FileStore } from './core/files.js';
 import { AccountHealthService } from './core/health.js';
 import { getWorkspace } from './core/identity.js';
 import { isMcpSubPath } from './core/mcp-paths.js';
@@ -365,7 +366,8 @@ export function createServices(
   entitlements.listen(billingNotices);
   billing.listen(billingNotices);
   billing.listen(referrals);
-  const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements, vaults);
+  const files = new FileStore(db, secrets);
+  const accounts = new AccountService(db, connectors, keyring, network, tokens, entitlements, vaults, files);
   const customServices = new CustomServiceManager({
     db,
     store: customStore,
@@ -437,6 +439,7 @@ export function createServices(
     accounts,
     connectors,
     builtin,
+    files,
     logger,
   });
   watchJobs(ops, jobs);
@@ -661,9 +664,11 @@ export function createServices(
       backups,
       billingNotices,
       analytics,
+      files,
     }),
     ...messaging.jobs,
     ...triggers.jobs,
+
     {
       name: 'security.prune_approvals',
       description: 'Delete standing approvals (conversations the AI carried on) a day after they ended',
