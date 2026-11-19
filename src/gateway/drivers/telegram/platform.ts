@@ -7,7 +7,7 @@
 import { createCipheriv, createHash, createHmac, pbkdf2, randomFillSync } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { deflateSync, gunzipSync } from 'node:zlib';
+import { deflateSync, gunzipSync, inflateSync } from 'node:zlib';
 import { connectTcp } from '@fuman/node';
 import { type ICorePlatform, IntermediatePacketCodec, type TelegramTransport } from '@mtcute/core';
 import {
@@ -54,6 +54,11 @@ export class NodeCryptoProvider extends BaseCryptoProvider implements ICryptoPro
 
   gunzip(data: Uint8Array): Uint8Array {
     return gunzipSync(data);
+  }
+
+  /** zlib payloads (e.g. widget HTML); `maxSize` caps the output so a compression bomb throws. */
+  inflate(data: Uint8Array, maxSize: number): Uint8Array {
+    return inflateSync(data, { maxOutputLength: maxSize });
   }
 
   randomFill(buf: Uint8Array): void {
