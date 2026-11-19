@@ -304,4 +304,33 @@ export class DataKey {
   decryptJson<T = unknown>(envelope: string, context: string): T {
     return JSON.parse(this.decrypt(envelope, context)) as T;
   }
+
+  /**
+   * Encrypts binary data (files) without the base64 of a text envelope: `0x01 | iv | ciphertext |
+   * tag`, AES-256-GCM with `context` as AAD.
+   */
+  encryptBytes(data: Uint8Array, context: string): Buffer {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.key, iv);
+    cipher.setAAD(Buffer.from(context, 'utf8'));
+    return Buffer.concat([
+      BYTES_ENVELOPE_VERSION,
+      iv,
+      cipher.update(data),
+      cipher.final(),
+      cipher.getAuthTag(),
+    ]);
+  }
+
+  decryptBytes(envelope: Uint8Array, context: string): Buffer {
+    const body = Buffer.from(envelope.buffer, envelope.byteOffset, envelope.byteLength);
+    if (body.length < 1 + 12 + 16 || body[0] !== BYTES_ENVELOPE_VERSION[0])
+      throw new Error('Unsupported binary envelope');
+    const decipher = createDecipheriv('aes-256-gcm', this.key, body.subarray(1, 13));
+    decipher.setAAD(Buffer.from(context, 'utf8'));
+    decipher.setAuthTag(body.subarray(body.length - 16));
+    return Buffer.concat([decipher.update(body.subarray(13, body.length - 16)), decipher.final()]);
+  }
 }
+
+const BYTES_ENVELOPE_VERSION = Buffer.from([1]);

@@ -72,6 +72,17 @@ export interface FakeTelegramState {
   clients: number;
   destroyed: number;
   sent: { peer: unknown; text: string; randomId?: string; replyTo?: number }[];
+  /** Files sent with sendMedia: what kind of upload, its name, type and bytes. */
+  media: {
+    peer: unknown;
+    type: string;
+    caption?: string;
+    fileName?: string;
+    fileMime?: string;
+    size: number;
+    randomId?: string;
+    replyTo?: number;
+  }[];
   read: { peer: unknown; maxId?: number }[];
   typing: number;
   /** Set to make the login ask for the cloud password ("secret-pass"). */
@@ -90,6 +101,7 @@ export function createFakeTelegram(): FakeTelegramState {
     clients: 0,
     destroyed: 0,
     sent: [],
+    media: [],
     read: [],
     typing: 0,
     twoFactor: false,
@@ -181,6 +193,40 @@ function fakeClient(state: FakeTelegramState, storage: StateStorage) {
         ...(params.replyTo ? { replyTo: params.replyTo } : {}),
       });
       return fakeMessage(++counter, text, { out: true });
+    },
+    async sendMedia(
+      peer: unknown,
+      media: { type: string; file: Uint8Array; fileName?: string; fileMime?: string },
+      params: { randomId?: Long; replyTo?: number; caption?: string },
+    ) {
+      state.media.push({
+        peer,
+        type: media.type,
+        size: media.file.byteLength,
+        ...(media.fileName ? { fileName: media.fileName } : {}),
+        ...(media.fileMime ? { fileMime: media.fileMime } : {}),
+        ...(params.caption ? { caption: params.caption } : {}),
+        ...(params.randomId ? { randomId: params.randomId.toString() } : {}),
+        ...(params.replyTo ? { replyTo: params.replyTo } : {}),
+      });
+      // Telegram answers with the stored message; a document here, so it maps with its name.
+      return fakeMessage(++counter, params.caption ?? '', {
+        out: true,
+        media: {
+          _: 'messageMediaDocument',
+          document: {
+            _: 'document',
+            id: Long.fromNumber(counter),
+            accessHash: Long.fromNumber(1),
+            fileReference: new Uint8Array(),
+            date: 0,
+            mimeType: media.fileMime ?? 'application/octet-stream',
+            size: media.file.byteLength,
+            dcId: 2,
+            attributes: [{ _: 'documentAttributeFilename', fileName: media.fileName ?? 'file' }],
+          },
+        } as tl.TypeMessageMedia,
+      });
     },
     async sendTyping() {
       state.typing++;

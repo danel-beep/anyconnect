@@ -287,6 +287,7 @@ describe('Telegram personal-account driver', () => {
       }),
     ).toBeUndefined();
 
+    // Files arrive as bytes (the hub downloads links and loads kept files); a bare link is refused.
     await expect(
       live.send({
         id: 'job_3',
@@ -297,6 +298,50 @@ describe('Telegram personal-account driver', () => {
         file: { url: 'https://example.com/a.pdf', kind: 'document' },
       }),
     ).rejects.toMatchObject({ kind: 'rejected' });
+    const photo = await live.send({
+      id: 'job_4',
+      attempt: 1,
+      kind: 'message',
+      chat: { externalId: String(ANNA_ID), kind: 'direct' },
+      text: 'The view from here',
+      replyToExternalId: '5',
+      file: {
+        kind: 'photo',
+        name: 'view.jpg',
+        mimeType: 'image/jpeg',
+        data: new Uint8Array([0xff, 0xd8, 0xff, 1]),
+      },
+    });
+    expect(fake.media.at(-1)).toEqual({
+      peer: ANNA_ID,
+      type: 'photo',
+      size: 4,
+      fileName: 'view.jpg',
+      fileMime: 'image/jpeg',
+      caption: 'The view from here',
+      replyTo: 5,
+      randomId: randomIdFor('job_4').toString(),
+    });
+    // The sent file is Telegram's now: the hub's copy of the message can download it again.
+    expect(photo?.attachments?.[0]).toMatchObject({
+      name: 'view.jpg',
+      locator: { messageId: Number(photo?.externalId) },
+    });
+    for (const [file, type] of [
+      [{ kind: 'audio', name: 'note.ogg', mimeType: 'audio/ogg' }, 'voice'],
+      [{ kind: 'audio', name: 'song.mp3', mimeType: 'audio/mpeg' }, 'audio'],
+      [{ kind: 'video', name: 'clip.mp4' }, 'video'],
+      [{ kind: 'document', name: 'notes.txt' }, 'document'],
+    ] as const) {
+      await live.send({
+        id: `job_${type}`,
+        attempt: 1,
+        kind: 'message',
+        chat: { externalId: String(ANNA_ID), kind: 'direct' },
+        file: { ...file, data: new Uint8Array([1]) },
+      });
+      expect(fake.media.at(-1)?.type).toBe(type);
+    }
 
     expect(await live.resolveRecipient!('@anna')).toMatchObject({
       externalId: String(ANNA_ID),

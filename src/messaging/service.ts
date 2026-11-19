@@ -1,17 +1,25 @@
 import { eq } from 'drizzle-orm';
 import {
   type AccountMessaging,
+  DeliveryError,
   type DirectTransport,
   type InboundChat,
   type InboundSink,
   MAX_CAPTION_LENGTH,
   type MessagingPort,
   type MessengerTransport,
+  type OutboundFile,
   type PacingLimits,
   type SendResult,
 } from '../connectors/messaging.js';
+import { downloadForUpload } from '../connectors/messaging-http.js';
 import type { ConnectorResolver } from '../connectors/registry.js';
-import { type AccountContext, type ConnectorDefinition, ConnectorError } from '../connectors/sdk.js';
+import {
+  type AccountContext,
+  type ConnectorDefinition,
+  ConnectorError,
+  requireFiles,
+} from '../connectors/sdk.js';
 import type { AccountRow, AccountService } from '../core/accounts.js';
 import type { Db } from '../db/client.js';
 import { accounts } from '../db/schema.js';
@@ -86,6 +94,26 @@ export class MessagingService implements MessagingPort {
       signal,
       logger: this.deps.logger.child({ connector: resolved.connector.id, account: resolved.row.id }),
     });
+  }
+
+  /** Downloads a file link into the hub's file store, for transports that take files as bytes. */
+  private async keepLink(resolved: ResolvedMessenger, file: OutboundFile): Promise<OutboundFile> {
+    const signal = AbortSignal.timeout(60_000);
+    const ctx = await this.context(resolved, signal);
+    const files = requireFiles(ctx);
+    let downloaded: Awaited<ReturnType<typeof downloadForUpload>>;
+    try {
+      downloaded = await downloadForUpload(ctx.fetch, file.url!, { maxBytes: files.maxBytes, signal });
+    } catch (error) {
+      throw new ConnectorError(
+        error instanceof DeliveryError && error.kind === 'transient' ? 'upstream' : 'invalid_input',
+        error instanceof DeliveryError ? `${error.message}.` : 'Could not download the file to send.',
+      );
+    }
+    const name = file.name ?? downloaded.name;
+    const kept = await files.put({ data: downloaded.data, name, mimeType: downloaded.mimeType });
+    // The same bytes kept earlier keep their first name: this message shows the name it was given.
+    return { kind: file.kind, name, mimeType: kept.mimeType, fileId: kept.id };
   }
 
   /** Where what a messenger reports about an account goes: the message store. */
@@ -203,7 +231,7 @@ export class MessagingService implements MessagingPort {
         if (request.template && (resolved.transport.kind !== 'direct' || !resolved.transport.templates)) {
           throw new ConnectorError('invalid_input', 'This account cannot send message templates.');
         }
-        if (request.file && (resolved.transport.kind !== 'direct' || !resolved.transport.files)) {
+        if (request.file && !resolved.transport.files) {
           throw new ConnectorError('invalid_input', 'This account cannot send files yet.');
         }
         if (request.file && request.template) {
@@ -261,6 +289,12 @@ export class MessagingService implements MessagingPort {
           }
           replyToExternalId = target.body.externalId;
         }
+        // Session drivers get files as bytes: a link is downloaded now, so a bad link fails here
+        // and not later in the queue.
+        const file =
+          request.file?.url && resolved.transport.kind === 'session'
+            ? await this.keepLink(resolved, request.file)
+            : request.file;
         const { row, deduplicated } = await outbox.enqueue({
           accountId,
           chatId: chat.id,
@@ -269,7 +303,7 @@ export class MessagingService implements MessagingPort {
             text: request.text,
             ...(replyToExternalId ? { replyToExternalId } : {}),
             ...(request.template ? { template: request.template } : {}),
-            ...(request.file ? { file: request.file } : {}),
+            ...(file ? { file } : {}),
           },
           newContact: !chat.hasInbound,
         });
@@ -288,7 +322,21 @@ export class MessagingService implements MessagingPort {
         const index = Number(/^a(\d+)$/.exec(attachmentId)?.[1] ?? Number.NaN);
         const attachment = message?.body.attachments[index];
         if (!message || !attachment) throw new ConnectorError('not_found', 'Attachment not found.');
-        const sentLink = (attachment.locator as { sentLink?: string } | undefined)?.sentLink;
+        const locator = attachment.locator as { sentLink?: string; hubFileId?: string } | undefined;
+        if (locator?.hubFileId) {
+          const resolved = await requireResolved();
+          const ctx = await this.context(resolved, AbortSignal.timeout(30_000));
+          const kept = await requireFiles(ctx)
+            .get(locator.hubFileId)
+            .catch(() => {
+              throw new ConnectorError(
+                'not_found',
+                'This file was sent from a copy the hub keeps for about a day only, and that copy is gone.',
+              );
+            });
+          return { data: kept.data, mimeType: kept.mimeType, name: kept.name };
+        }
+        const sentLink = locator?.sentLink;
         if (sentLink) {
           throw new ConnectorError(
             'not_found',

@@ -7,7 +7,14 @@ import { loadGatewayConfig } from '../src/gateway/config.js';
 import { telegramUserDriver } from '../src/gateway/drivers/telegram/driver.js';
 import { createGatewayRuntime } from '../src/gateway/runtime.js';
 import { createLogger } from '../src/logger.js';
-import { ANNA_ID, createFakeTelegram, type FakeTelegramState, fakeClientFactory } from './fake-telegram.js';
+import { FakeInternet } from './e2e/fake-internet.js';
+import {
+  ANNA_ID,
+  createFakeTelegram,
+  type FakeTelegramState,
+  fakeClientFactory,
+  GROUP_ID,
+} from './fake-telegram.js';
 import {
   resetDatabase,
   startTestHub,
@@ -88,11 +95,22 @@ describe('Telegram personal account: connect on the website, log in, use from th
   let browser: TestBrowser;
   let principal: Principal;
   const fake = createFakeTelegram();
+  // A photo on a public site, for sending by link.
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9, 9]);
+  const internet = new FakeInternet().serve('cdn.example.com', (request) =>
+    new URL(request.url).pathname === '/beach.jpg'
+      ? new Response(JPEG, { headers: { 'content-type': 'image/jpeg' } })
+      : new Response('not found', { status: 404 }),
+  );
 
   beforeAll(async () => {
     await resetDatabase();
     gateway = await startGateway(fake);
-    hub = await startTestHub({ seed: false, env: { GATEWAY_URL: gateway.url, GATEWAY_TOKEN: TOKEN } });
+    hub = await startTestHub({
+      seed: false,
+      env: { GATEWAY_URL: gateway.url, GATEWAY_TOKEN: TOKEN },
+      internet,
+    });
     const workspace = (await hub.services.db.query.workspaces.findFirst())!;
     const user = (await hub.services.db.query.users.findFirst())!;
     principal = { kind: 'session', userId: user.id, workspaceId: workspace.id, scopes: ['mcp', 'api'] };
@@ -112,6 +130,16 @@ describe('Telegram personal account: connect on the website, log in, use from th
     const text = (result.content[0] as { text?: string } | undefined)?.text ?? '';
     if (result.isError) throw new Error(text);
     return JSON.parse(unwrapUntrusted(text));
+  };
+
+  /** The raw result of a call: its content blocks and its text, errors included. */
+  const callRaw = async (tool: string, args: Record<string, unknown>) => {
+    const catalog = await hub.services.hub.getCatalog(principal);
+    const result = await hub.services.hub.callTool(principal, catalog, tool, args);
+    const text = result.content
+      .map((c) => ((c as { text?: string }).text ? unwrapUntrusted((c as { text: string }).text) : ''))
+      .join('\n');
+    return { ...result, content: result.content as { type: string }[], text };
   };
 
   it('walks the whole flow: form, QR login with cloud password, chats, sending', async () => {
@@ -180,6 +208,78 @@ describe('Telegram personal account: connect on the website, log in, use from th
     await call('telegram_send', { chat: anna.id, text: 'Running 5 minutes late' });
     await until(() => fake.sent.some((s) => s.text === 'Running 5 minutes late'), 'the message to go out');
     expect(fake.sent.at(-1)?.peer).toBe(ANNA_ID);
+  });
+
+  it('sends photos: as base64, by link and forwarded by file_id from another message', async () => {
+    const { chats } = await call('telegram_list_chats', {});
+    const anna = chats.find((c: { title: string }) => c.title === 'Anna');
+    const group = chats.find((c: { title: string }) => c.title === 'Team chat');
+
+    // Bytes from the AI: the type is read from the bytes, the caption travels with the photo.
+    await call('telegram_send', {
+      chat: anna.id,
+      text: 'Look at this',
+      file_base64: Buffer.from(JPEG).toString('base64'),
+      file_name: 'sunset.jpg',
+    });
+    const sent = await until(() => fake.media.find((m) => m.caption === 'Look at this'), 'the photo');
+    expect(sent).toMatchObject({
+      peer: ANNA_ID,
+      type: 'photo',
+      fileName: 'sunset.jpg',
+      fileMime: 'image/jpeg',
+      size: 8,
+    });
+
+    // A link: the hub downloads it (personal accounts upload bytes) through its network policy.
+    await call('telegram_send', { chat: anna.id, file_url: 'https://cdn.example.com/beach.jpg' });
+    const byLink = await until(() => fake.media.find((m) => m.fileName === 'beach.jpg'), 'the linked photo');
+    expect(byLink).toMatchObject({ type: 'photo', size: JPEG.byteLength });
+    expect(
+      (await callRaw('telegram_send', { chat: anna.id, file_url: 'https://cdn.example.com/gone.jpg' })).text,
+    ).toMatch(/HTTP 404/);
+
+    // The sent photo is in the chat; get_attachment shows it and gives a file_id to send it on.
+    const history = await until(async () => {
+      const result = await call('telegram_read_chat', { chat: anna.id });
+      return result.messages.find(
+        (m: { text?: string; attachments?: unknown[] }) => m.text === 'Look at this' && m.attachments?.length,
+      )
+        ? result
+        : undefined;
+    }, 'the photo in the chat');
+    const message = history.messages.find((m: { text?: string }) => m.text === 'Look at this');
+    const attachment = await callRaw('telegram_get_attachment', {
+      message: message.id,
+      attachment: message.attachments[0].id,
+    });
+    expect(attachment.content.map((c) => c.type)).toContain('image');
+    const fileId = /file_id "(file_[0-9a-z]+)"/.exec(attachment.text)?.[1];
+    expect(fileId).toBeDefined();
+
+    await call('telegram_send', { chat: group.id, file_id: fileId, text: 'From Anna' });
+    const forwarded = await until(
+      () => fake.media.find((m) => m.caption === 'From Anna'),
+      'the forwarded file',
+    );
+    expect(forwarded).toMatchObject({ peer: GROUP_ID, type: 'photo', fileName: 'sunset.jpg' });
+
+    // A wrong id, two sources at once, and nothing at all are refused before anything is queued.
+    expect((await callRaw('telegram_send', { chat: anna.id, file_id: 'file_unknown' })).text).toMatch(
+      /not found/,
+    );
+    expect(
+      (
+        await callRaw('telegram_send', {
+          chat: anna.id,
+          file_id: fileId,
+          file_url: 'https://cdn.example.com/beach.jpg',
+        })
+      ).text,
+    ).toMatch(/one of file_url, file_id or file_base64/);
+    expect((await callRaw('telegram_send', { chat: anna.id, file_base64: '***' })).text).toMatch(
+      /not valid base64/,
+    );
   });
 
   it('refuses another user and posts without the CSRF token', async () => {

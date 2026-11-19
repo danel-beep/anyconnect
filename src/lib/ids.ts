@@ -84,4 +84,5 @@ export type IdPrefix =
   | 'tgc' // Telegram business connection of the hub's bot (a person added it in Chat Automation)
   | 'trg' // trigger: a rule "when [event matches], do [action]"
   | 'tev' // trigger event: one event a trigger matched and what came of it
-  | 'aik'; // the user's own AI API key that triggers wake
+  | 'aik' // the user's own AI API key that triggers wake
+  | 'file'; // a file the hub keeps for a while so tools can pass it on (`file_id`)

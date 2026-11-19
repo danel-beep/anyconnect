@@ -1,6 +1,7 @@
 import type { ConnectorRegistry, ConnectorResolver } from '../connectors/registry.js';
 import type { AccountKeyring } from '../core/account-keys.js';
 import type { AccountService } from '../core/accounts.js';
+import type { FileStore } from '../core/files.js';
 import type { Db } from '../db/client.js';
 import type { DbListener } from '../db/listener.js';
 import type { JobDefinition } from '../jobs/queue.js';
@@ -57,6 +58,8 @@ export function createMessaging(deps: {
   connectors: ConnectorResolver;
   /** Built-in connectors: the only ones that can be messengers today. */
   builtin: ConnectorRegistry;
+  /** Files messages carry (`file_id`): the dispatcher loads them right before delivery. */
+  files?: FileStore;
   logger: Logger;
   /** Overrides the HTTP gateway client (tests). */
   gateway?: GatewayApi;
@@ -108,6 +111,7 @@ export function createMessaging(deps: {
     store,
     messengerAccounts,
     executor: directExecutor,
+    ...(deps.files ? { files: deps.files } : {}),
     worker: `hub:${process.pid}`,
     logger: logger.child({ component: 'outbox' }),
     ...(deps.listener ? { listener: deps.listener } : {}),

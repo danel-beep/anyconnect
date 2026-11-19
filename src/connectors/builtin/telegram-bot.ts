@@ -410,12 +410,14 @@ const MAX_UPLOAD_BYTES = 20 * 1_048_576;
  * name, is downloaded by the hub and uploaded.
  */
 export function telegramFileRoute(file: OutboundFile): { method: string; field: string; byLink: boolean } {
-  const ext = /\.([a-z0-9]{1,5})$/i.exec(safePath(file.url))?.[1]?.toLowerCase() ?? '';
-  const renamed = file.name !== undefined && file.name !== fileNameFromUrl(file.url);
+  const url = file.url;
+  const ext = /\.([a-z0-9]{1,5})$/i.exec(url ? safePath(url) : (file.name ?? ''))?.[1]?.toLowerCase() ?? '';
+  const renamed = url !== undefined && file.name !== undefined && file.name !== fileNameFromUrl(url);
   const route = (method: string, field: string, linkable: string[] | true) => ({
     method,
     field,
-    byLink: !renamed && (linkable === true || linkable.includes(ext)),
+    // A kept file (bytes, no link) is always uploaded.
+    byLink: url !== undefined && !renamed && (linkable === true || linkable.includes(ext)),
   });
   switch (file.kind) {
     case 'photo':
@@ -423,7 +425,7 @@ export function telegramFileRoute(file: OutboundFile): { method: string; field: 
     case 'video':
       return route('sendVideo', 'video', ['mp4']);
     case 'audio':
-      return ext === 'ogg' || ext === 'opus'
+      return ext === 'ogg' || ext === 'opus' || file.mimeType === 'audio/ogg'
         ? route('sendVoice', 'voice', true)
         : route('sendAudio', 'audio', ['mp3', 'm4a']);
     default:
@@ -448,10 +450,12 @@ async function sendFile(
 ): Promise<TgMessage> {
   const route = telegramFileRoute(file);
   if (route.byLink) return callBot<TgMessage>(api, route.method, { ...params, [route.field]: file.url });
-  const downloaded = await downloadForUpload(ctx.fetch, file.url, {
-    maxBytes: MAX_UPLOAD_BYTES,
-    ...(ctx.signal ? { signal: ctx.signal } : {}),
-  });
+  const downloaded = file.data
+    ? { data: file.data, mimeType: file.mimeType ?? 'application/octet-stream', name: file.name ?? 'file' }
+    : await downloadForUpload(ctx.fetch, file.url ?? '', {
+        maxBytes: MAX_UPLOAD_BYTES,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      });
   const form = new FormData();
   for (const [key, value] of Object.entries(params)) {
     form.append(key, typeof value === 'string' ? value : JSON.stringify(value));

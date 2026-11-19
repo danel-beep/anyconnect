@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -1314,6 +1315,43 @@ export const messengerOutbox = pgTable(
     index().on(t.accountId, t.contentKey, t.createdAt),
     // Removing a chat (or its account) deletes its queued messages (foreign key).
     index().on(t.chatId),
+  ],
+);
+
+/** Binary column (Drizzle 0.45 has no built-in `bytea`). */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+/**
+ * Files the hub keeps for a short while so the AI can pass them between tools: a photo from one
+ * chat sent on to another, a file the AI uploaded as base64, a link downloaded for a messenger that
+ * cannot fetch links (see `src/core/files.ts`, docs/FILES.md). Encrypted with a per-file data key;
+ * deleted when they expire.
+ */
+export const hubFiles = pgTable(
+  'hub_files',
+  {
+    /** `file_` + random: the handle the AI passes as `file_id`. */
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Keyed hash of the content: the same bytes put twice give the same file (and a stable id). */
+    contentKey: text().notNull(),
+    /** Encrypted file name. */
+    nameEncrypted: text().notNull(),
+    mimeType: text().notNull(),
+    size: integer().notNull(),
+    /** The file's data key, wrapped by the master key (AAD = file id). */
+    dataKeyEncrypted: text().notNull(),
+    data: bytea().notNull(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex().on(t.workspaceId, t.contentKey),
+    // Clean-up of expired files, and the per-workspace total.
+    index().on(t.expiresAt),
+    index().on(t.workspaceId, t.expiresAt),
   ],
 );
 

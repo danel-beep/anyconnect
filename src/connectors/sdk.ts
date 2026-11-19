@@ -145,6 +145,45 @@ export interface NetworkAccess {
   assertHostAllowed(host: string): void;
 }
 
+/** A file the hub keeps for a while (see {@link HubFiles}). */
+export interface HubFileInfo {
+  /** Handle the AI passes on as `file_id`, e.g. `file_3kq…`. */
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  expiresAt: Date;
+}
+
+/** A file with its bytes. */
+export interface HubFile extends HubFileInfo {
+  data: Uint8Array;
+}
+
+/**
+ * Short-lived file storage of the hub, shared by every account of the workspace: a connector puts
+ * a file it fetched (an attachment it downloaded) and returns its id; any tool that takes a
+ * `file_id` (sending a photo to a chat, attaching to an email) reads it back. So files travel
+ * between services without passing through the AI as base64. Files are encrypted and expire after
+ * about a day.
+ */
+export interface HubFiles {
+  /** Largest file it keeps, in bytes. */
+  readonly maxBytes: number;
+  /** Stores a file; the same bytes give the same id. Throws `invalid_input` when too large or the workspace is full. */
+  put(file: { data: Uint8Array; name: string; mimeType: string }): Promise<HubFileInfo>;
+  /** Throws `not_found` for an unknown or expired id. */
+  get(id: string): Promise<HubFile>;
+  /** Like {@link get} without the bytes. */
+  stat(id: string): Promise<HubFileInfo>;
+}
+
+/** The hub's file storage, or a clear error where the hub runs without one. */
+export function requireFiles(ctx: { files?: HubFiles | undefined }): HubFiles {
+  if (!ctx.files) throw new ConnectorError('invalid_input', 'This hub cannot keep files.');
+  return ctx.files;
+}
+
 /** The account's OAuth access token, kept fresh by the hub (see `ConnectorDefinition.oauth`). */
 export interface OAuthAccess {
   accessToken: string;
@@ -179,7 +218,10 @@ export interface AccountContext<TConfig, TCredentials> {
   /** For connectors that open raw sockets (IMAP, SMTP, databases). */
   network: NetworkAccess;
   /** Present for connectors that declare `oauth`, once the account is connected. */
-  oauth?: OAuthAccess | undefined;
+  oauth?:
+    | OAuthAccess
+    | undefined /** Files shared between tools (see {@link HubFiles}); absent in some test contexts. */;
+  files?: HubFiles | undefined;
 }
 
 export type ActionContext<TConfig, TCredentials> = AccountContext<TConfig, TCredentials>;

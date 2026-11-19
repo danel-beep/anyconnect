@@ -28,6 +28,7 @@ import { newId } from '../lib/ids.js';
 import type { NetworkPolicy } from '../lib/network.js';
 import { slugify } from '../lib/slug.js';
 import type { AccountKeyring } from './account-keys.js';
+import type { FileStore } from './files.js';
 import type { TokenManager } from './oauth-tokens.js';
 import { VaultLockedError, type VaultService } from './vaults.js';
 
@@ -191,6 +192,8 @@ export class AccountService {
      * it (see `docs/VAULTS.md`). Without it every account is wrapped by the master key.
      */
     private readonly vaults?: Pick<VaultService, 'publicKey'>,
+    /** Files tools pass between each other (`ctx.files`); without it connectors get none. */
+    private readonly files?: Pick<FileStore, 'forWorkspace'>,
   ) {}
 
   /** Throws when the plan that would pay for one more account (see `AccountLimits`) is full. */
@@ -720,6 +723,7 @@ export class AccountService {
       oauth: await this.oauthAccess(connector, row, options.signal),
       fetch: this.network.fetch,
       network: { lookup: this.network.lookup, assertHostAllowed: this.network.assertHostAllowed },
+      files: this.files?.forWorkspace(row.workspaceId),
     };
   }
 

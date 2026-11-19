@@ -9,11 +9,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import { Long, type Message, MtPeerNotFoundError } from '@mtcute/core';
+import { InputMedia, Long, type Message, MtPeerNotFoundError } from '@mtcute/core';
 import { TelegramClient } from '@mtcute/core/client.js';
 import {
   DeliveryError,
   type InboundChat,
+  type OutboundFile,
   type OutboundJob,
   type SentReceipt,
 } from '../../../connectors/messaging.js';
@@ -51,6 +52,7 @@ export type TelegramClientLike = Pick<
   | 'getPeerDialogs'
   | 'getMessages'
   | 'sendText'
+  | 'sendMedia'
   | 'sendTyping'
   | 'readHistory'
   | 'getPeer'
@@ -116,6 +118,30 @@ function defaultClient({
 export function randomIdFor(jobId: string): Long {
   const digest = createHash('sha256').update(`telegram-send:${jobId}`).digest();
   return Long.fromBytesLE([...digest.subarray(0, 8)]);
+}
+
+/**
+ * The upload for a file job. The hub hands session drivers files as bytes (it downloads links
+ * itself), so this never fetches anything.
+ */
+export function inputMedia(file: OutboundFile) {
+  if (!file.data) throw new DeliveryError('rejected', 'The file to send was not loaded.');
+  const params = {
+    ...(file.name ? { fileName: file.name } : {}),
+    ...(file.mimeType ? { fileMime: file.mimeType } : {}),
+  };
+  switch (file.kind) {
+    case 'photo':
+      return InputMedia.photo(file.data, params);
+    case 'video':
+      return InputMedia.video(file.data, params);
+    case 'audio':
+      return file.mimeType === 'audio/ogg' || /\.(ogg|opus)$/i.test(file.name ?? '')
+        ? InputMedia.voice(file.data, params)
+        : InputMedia.audio(file.data, params);
+    default:
+      return InputMedia.document(file.data, params);
+  }
 }
 
 function peerOf(chatExternalId: string): number {
@@ -237,13 +263,27 @@ export function telegramUserDriver(options: TelegramDriverOptions): SessionDrive
             });
             return undefined;
           }
-          if (job.file || job.template) {
-            throw new DeliveryError('rejected', 'This Telegram account sends text messages only.');
+          if (job.template) {
+            throw new DeliveryError('rejected', 'Telegram has no message templates: send text.');
           }
-          const sent = await client.sendText(peer, job.text ?? '', {
+          const common = {
             randomId: randomIdFor(job.id),
             ...(job.replyToExternalId ? { replyTo: Number(job.replyToExternalId) } : {}),
-          });
+          };
+          if (job.file) {
+            const sent = await client.sendMedia(peer, inputMedia(job.file), {
+              ...common,
+              ...(job.text ? { caption: job.text } : {}),
+            });
+            // Telegram keeps the sent file: the hub's copy of the message can download it again.
+            const attachments = toInboundMessage(sent, { selfId })?.attachments;
+            return {
+              externalId: String(sent.id),
+              sentAt: sent.date,
+              ...(attachments ? { attachments } : {}),
+            };
+          }
+          const sent = await client.sendText(peer, job.text ?? '', common);
           return { externalId: String(sent.id), sentAt: sent.date };
         } catch (error) {
           if (sessionProblem(error)) void end(toSessionError(error));

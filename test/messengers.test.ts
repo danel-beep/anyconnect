@@ -108,8 +108,18 @@ async function startFakeApis() {
     }
   });
   app.on(['GET', 'POST'], '/v23.0/*', async (c) => {
-    const body = c.req.method === 'POST' ? await c.req.json().catch(() => ({})) : undefined;
+    let body: any;
+    if (c.req.header('content-type')?.startsWith('multipart/form-data')) {
+      body = {};
+      for (const [key, value] of (await c.req.formData()).entries()) {
+        body[key] =
+          typeof value === 'string'
+            ? value
+            : { filename: value.name, type: value.type, size: (await value.arrayBuffer()).byteLength };
+      }
+    } else body = c.req.method === 'POST' ? await c.req.json().catch(() => ({})) : undefined;
     calls.push({ path: c.req.path, body, auth: c.req.header('authorization') });
+    if (c.req.path === '/v23.0/1111111111/media') return c.json({ id: 'MEDIA-1' });
     if (c.req.path === '/v23.0/1111111111/messages') {
       if (body?.status === 'read') return c.json({ success: true });
       return c.json({ messaging_product: 'whatsapp', messages: [{ id: `wamid.${nextMessageId++}` }] });
@@ -751,6 +761,47 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     expect(huge).toMatchObject({ status: 'failed', error: expect.stringContaining('larger than 20 MB') });
   });
 
+  it('sends photos the AI passes as bytes, and forwards a received file by its file_id', async () => {
+    const account = await addBot();
+    await postTelegram(account.id, botUpdate(9, 'Send me the photo'));
+    const [chat] = json(await call('telegram_bot_list_chats', {})).chats;
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+    const sent = json(
+      await call('telegram_bot_send', {
+        chat: chat.id,
+        text: 'Here you go',
+        file_base64: `data:image/png;base64,${png.toString('base64')}`,
+        file_name: 'chart.png',
+      }),
+    );
+    expect(sent.status).toBe('sent');
+    // Kept files are always uploaded: photos as photos, with the caption.
+    expect(apis.calls.filter((c) => c.path === 'sendPhoto').at(-1)?.body).toMatchObject({
+      chat_id: '42',
+      caption: 'Here you go',
+      photo: { filename: 'chart.png' },
+    });
+    // Without a received copy from Telegram the hub's own copy serves get_attachment for a day.
+    const read = json(await call('telegram_bot_read_chat', { chat: chat.id }));
+    const mine = read.messages.at(-1);
+    const again = await call('telegram_bot_get_attachment', { message: mine.id, attachment: 'a0' });
+    expect(again.content[0]?.type).toBe('image');
+    const handle = /file_id "(file_[0-9a-z]+)"/.exec(
+      again.content.map((c) => ('text' in c ? c.text : '')).join(' '),
+    )?.[1];
+    expect(handle).toBeDefined();
+    // The same bytes are the same file: sending it again by id is recognized as a duplicate.
+    const repeat = json(
+      await call('telegram_bot_send', {
+        chat: chat.id,
+        text: 'Here you go',
+        file_id: handle,
+        file_name: 'chart.png',
+      }),
+    );
+    expect(repeat.deduplicated).toBe(true);
+  });
+
   it('waits out Telegram flood limits instead of failing', async () => {
     const account = await addBot();
     await postTelegram(account.id, botUpdate(3, 'Привет'));
@@ -938,6 +989,29 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
           caption: 'Your invoice',
           filename: 'Invoice 123.pdf',
         },
+      });
+    });
+
+    it('uploads kept files to WhatsApp media and sends them by media id', async () => {
+      await addNumber();
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7, 7]);
+      const sent = json(
+        await call('whatsapp_send', {
+          to: '+15550199',
+          text: 'Your photo',
+          file_base64: jpeg.toString('base64'),
+          file_name: 'photo.jpg',
+        }),
+      );
+      expect(sent.status).toBe('sent');
+      expect(apis.calls.find((c) => c.path === '/v23.0/1111111111/media')?.body).toMatchObject({
+        messaging_product: 'whatsapp',
+        type: 'image/jpeg',
+        file: { filename: 'photo.jpg', type: 'image/jpeg', size: jpeg.byteLength },
+      });
+      expect(apis.calls.find((c) => c.body?.type === 'image')?.body).toMatchObject({
+        to: '15550199',
+        image: { id: 'MEDIA-1', caption: 'Your photo' },
       });
     });
 
