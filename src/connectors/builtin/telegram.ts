@@ -7,6 +7,7 @@ import {
   pacingConfig,
 } from '../messaging-actions.js';
 import { defineConnector } from '../sdk.js';
+import { TELEGRAM_USER_FILES } from './shared/telegram-files.js';
 
 /**
  * Telegram as the user's own account: every chat, group and channel, messages sent as the user.
@@ -37,7 +38,7 @@ export function createTelegramConnector(port: MessagingPort) {
     credentials,
     messenger: {
       // The session lives in the gateway; personal accounts send at a person's pace (the hub's defaults).
-      transport: () => ({ kind: 'session', files: true }),
+      transport: () => ({ kind: 'session', files: TELEGRAM_USER_FILES }),
       pacing: () => ({}),
     },
     // The account is checked by logging in on the next page, through the gateway.

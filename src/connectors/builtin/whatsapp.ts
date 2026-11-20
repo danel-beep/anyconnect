@@ -5,6 +5,7 @@ import {
   DeliveryError,
   type DeliveryUpdate,
   type DirectTransport,
+  type FileRules,
   type InboundAttachment,
   type InboundMessage,
   type MessagingPort,
@@ -284,6 +285,23 @@ function verifySignature(body: string, header: string | undefined, appSecret: st
   const expected = `sha256=${createHmac('sha256', appSecret).update(body, 'utf8').digest('hex')}`;
   return secretsEqual(header?.toLowerCase(), expected);
 }
+
+const MB = 1_048_576;
+
+/**
+ * What the Cloud API takes ("Supported media types" in Meta's docs): JPEG/PNG images up to 5 MB,
+ * MP4/3GPP video and common audio up to 16 MB, documents up to 100 MB. Smaller files of other
+ * types still go, as documents.
+ */
+const WHATSAPP_FILES: FileRules = {
+  maxBytes: 100 * MB,
+  photo: { maxBytes: 5 * MB, mimeTypes: ['image/jpeg', 'image/png'] },
+  video: { maxBytes: 16 * MB, mimeTypes: ['video/mp4', 'video/3gpp'] },
+  audio: {
+    maxBytes: 16 * MB,
+    mimeTypes: ['audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg'],
+  },
+};
 
 const MEDIA_TYPES = { photo: 'image', video: 'video', audio: 'audio', document: 'document' } as const;
 
@@ -569,7 +587,7 @@ const cloudTransport: DirectTransport<Config, Credentials> = {
   // No idempotency key in the Cloud API: an interrupted send is reported, never repeated.
   idempotentSend: false,
   templates: true,
-  files: true,
+  files: WHATSAPP_FILES,
   captionless: ['audio'],
 
   async send(job, ctx) {

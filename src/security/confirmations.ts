@@ -21,6 +21,8 @@ export interface CallDescription {
   risk: RiskLevel;
   /** Why the action is risky (e.g. "first message to a new contact"), if known. */
   reason?: string | undefined;
+  /** The call's arguments as the person reads them (files by name and size, see `describeFileArguments`). */
+  arguments: Record<string, unknown>;
 }
 
 /** Describes a call with service and action names in `locale` where the connector has them. */
@@ -146,7 +148,6 @@ export class ConfirmationCenter {
               ),
             })
           : t(`confirm.status.${row.status}` as const);
-    const args = this.deps.pending.args(row);
     const lines = [
       `<b>${escapeHtml(heading)}</b>`,
       '',
@@ -156,7 +157,7 @@ export class ConfirmationCenter {
       ...(d.reason ? [`${escapeHtml(t('confirm.reason'))}: ${escapeHtml(d.reason)}`] : []),
       '',
       `${escapeHtml(t('confirm.arguments'))}:`,
-      `<pre>${escapeHtml(previewArguments(args))}</pre>`,
+      `<pre>${escapeHtml(previewArguments(d.arguments))}</pre>`,
       `<a href="${escapeHtml(this.confirmUrl(row.id))}">${escapeHtml(t('confirm.open'))}</a>`,
     ];
     return lines.join('\n');

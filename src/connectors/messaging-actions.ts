@@ -542,13 +542,20 @@ export function messengerActions<TConfig, TCredentials>(
         const file = await port.forAccount(ctx.account.id).download(input.message, input.attachment);
         const name = file.name ?? input.attachment;
         // The hub keeps a copy for a day, so the AI can send it on by id (to another chat or service).
-        const kept =
-          ctx.files && file.data.byteLength > 0 && file.data.byteLength <= ctx.files.maxBytes
-            ? await ctx.files.put({ data: file.data, name, mimeType: file.mimeType }).catch(() => undefined)
-            : undefined;
-        const handle = kept
-          ? ` To send it on, pass file_id "${kept.id}" to a send tool (kept until ${kept.expiresAt.toISOString()}).`
-          : '';
+        // When no copy can be kept (too large, the workspace's file space is full), the AI is told
+        // why, so it does not look for a file_id that is not there.
+        let handle = '';
+        if (ctx.files && file.data.byteLength > 0) {
+          const kept = await ctx.files
+            .put({ data: file.data, name, mimeType: file.mimeType })
+            .catch((error: unknown) => (error instanceof ConnectorError ? error : undefined));
+          handle =
+            kept instanceof ConnectorError
+              ? ` It cannot be sent on by file_id: ${kept.message}`
+              : kept
+                ? ` To send it on, pass file_id "${kept.id}" to a send tool (kept until ${kept.expiresAt.toISOString()}).`
+                : '';
+        }
         const note: { type: 'text'; text: string } = {
           type: 'text',
           text: `File "${name}" (${file.mimeType}, ${file.data.byteLength} bytes).${handle}`,
@@ -684,17 +691,18 @@ export function messengerUiTexts(
 }
 
 /**
- * Guesses how to send a file from its link's extension. Only formats both Telegram and WhatsApp
- * show as photo, video or audio get those kinds; everything else goes as a document.
+ * The message file for a resolved file input. Its kind is a first guess (or what the AI asked
+ * for); the hub fits it to what the account's messenger shows before queueing (`FileRules`).
  */
-/** The message file for a resolved file input. */
 export function outboundFile(file: ResolvedFile, kind?: OutboundFile['kind']): OutboundFile {
   const base = {
     kind: kind ?? (file.source === 'url' ? fileKindOf(file.url) : fileKindOfMime(file.mimeType)),
     name: file.name,
     ...(file.mimeType ? { mimeType: file.mimeType } : {}),
   };
-  return file.source === 'url' ? { ...base, url: file.url } : { ...base, fileId: file.fileId };
+  return file.source === 'url'
+    ? { ...base, url: file.url }
+    : { ...base, size: file.size, fileId: file.fileId };
 }
 
 /** How a file of this type is sent: photos as photos, animated GIFs and the rest as files. */
@@ -705,6 +713,10 @@ export function fileKindOfMime(mimeType: string): OutboundFile['kind'] {
   return 'document';
 }
 
+/**
+ * Guesses how to send a file from its link's extension. Only formats both Telegram and WhatsApp
+ * show as photo, video or audio get those kinds; everything else goes as a document.
+ */
 export function fileKindOf(url: string): 'photo' | 'video' | 'audio' | 'document' {
   const ext = /\.([a-z0-9]{1,5})$/i.exec(new URL(url).pathname)?.[1]?.toLowerCase();
   if (ext && ['jpg', 'jpeg', 'png'].includes(ext)) return 'photo';

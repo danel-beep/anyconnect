@@ -151,12 +151,35 @@ export interface OutboundFile {
   name?: string;
   /** Known for kept files; transports that upload send it as the file's type. */
   mimeType?: string;
+  /** Size in bytes, known for kept files (checked against the transport's {@link FileRules}). */
+  size?: number;
   /** Public https link: the messenger may fetch it itself, or the transport downloads it. */
   url?: string;
   /** A file the hub keeps; only in the outbox and the send request. */
   fileId?: string;
   /** The bytes of a kept file, loaded by the dispatcher. */
   data?: Uint8Array;
+}
+
+/** What a messenger accepts as one kind of media (photo, video, audio). */
+export interface MediaRule {
+  /** Largest file the messenger shows as this kind. */
+  maxBytes: number;
+  /** Types it shows as this kind; any type when absent. */
+  mimeTypes?: readonly string[];
+}
+
+/**
+ * Which files a transport can send. Its presence means the transport sends files at all. A kept
+ * file (size and type known) that does not fit the rule of its kind goes as a document instead,
+ * which every messenger shows; one over `maxBytes` is refused before it is queued.
+ */
+export interface FileRules {
+  /** Largest file of any kind, in bytes. */
+  maxBytes: number;
+  photo?: MediaRule;
+  video?: MediaRule;
+  audio?: MediaRule;
 }
 
 /** Longest text that can travel with a file (Telegram and WhatsApp caption limit). */
@@ -226,8 +249,8 @@ export interface DirectTransport<TConfig = unknown, TCredentials = unknown> {
   idempotentSend: boolean;
   /** The transport can send {@link OutboundJob.template}. */
   templates?: boolean;
-  /** The transport can send {@link OutboundJob.file}. */
-  files?: boolean;
+  /** The transport can send {@link OutboundJob.file}, within these rules. */
+  files?: FileRules;
   /** File kinds this messenger sends without a caption (the text would be lost). */
   captionless?: OutboundFile['kind'][];
   send(job: OutboundJob, ctx: AccountContext<TConfig, TCredentials>): Promise<SentReceipt | undefined>;
@@ -267,8 +290,11 @@ export interface RoutedEventHandler<TConfig = unknown, TCredentials = unknown> {
 /** A transport served by a persistent session in the messenger gateway (MTProto, WhatsApp Web). */
 export interface SessionTransport {
   kind: 'session';
-  /** The session driver can send {@link OutboundJob.file} (always as bytes, see {@link OutboundFile}). */
-  files?: boolean;
+  /**
+   * The session driver can send {@link OutboundJob.file} within these rules (always as bytes, see
+   * {@link OutboundFile}).
+   */
+  files?: FileRules;
 }
 
 export interface WebhookEndpoint {

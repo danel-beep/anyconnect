@@ -76,11 +76,7 @@ export async function resolveFileInput(
   } else {
     const data = decodeBase64(input.file_base64!);
     const name = input.file_name ?? 'file';
-    kept = await files.put({
-      data,
-      name,
-      mimeType: sniffMime(data) ?? mimeOfName(name) ?? 'application/octet-stream',
-    });
+    kept = await files.put({ data, name, mimeType: contentType(data, mimeOfName(name)) });
   }
   return {
     source: 'kept',
@@ -128,6 +124,33 @@ export function mimeOfName(name: string): string | undefined {
   return ext ? MIME_BY_EXTENSION[ext] : undefined;
 }
 
+/**
+ * Types {@link sniffMime} always recognizes: for these the bytes, not a name or a header, decide.
+ * MP3 is not one (only files with ID3 tags are recognized), so a claimed MP3 is believed.
+ */
+const SNIFFED = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'video/mp4',
+  'audio/mp4',
+  'audio/ogg',
+]);
+
+/**
+ * The type of a file from its bytes, else the type it claims (a file name's extension, a server's
+ * Content-Type). A claimed photo, video or audio type the bytes do not show is not believed: an
+ * HTML error page served as "image/jpeg" would fail as a photo, so it goes as a plain file.
+ */
+export function contentType(data: Uint8Array, claimed?: string): string {
+  const sniffed = sniffMime(data);
+  if (sniffed) return sniffed;
+  const type = claimed?.split(';')[0]?.trim().toLowerCase();
+  return type && !SNIFFED.has(type) ? type : 'application/octet-stream';
+}
+
 /** The type of common formats by their first bytes (the AI rarely says what it passes). */
 export function sniffMime(data: Uint8Array): string | undefined {
   const starts = (...bytes: number[]) => bytes.every((b, i) => data[i] === b);
@@ -142,4 +165,44 @@ export function sniffMime(data: Uint8Array): string | undefined {
   if (ascii(0, 'OggS')) return 'audio/ogg';
   if (ascii(0, 'ID3')) return 'audio/mpeg';
   return undefined;
+}
+
+/**
+ * The file fields of tool arguments as a person reads them where they approve a call (confirmation
+ * page, Telegram, API): `file_base64` becomes its type and size instead of a wall of characters,
+ * and `file_id` the kept file's name, type and size, so the person sees what will be sent. Other
+ * arguments are returned as they are. Locale-neutral on purpose: the values sit in pages of both
+ * languages.
+ */
+export async function describeFileArguments(
+  args: Record<string, unknown>,
+  files?: Pick<HubFiles, 'stat'>,
+): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = { ...args };
+  const inline = args.file_base64;
+  if (typeof inline === 'string' && inline !== '') {
+    let data: Uint8Array | undefined;
+    try {
+      data = decodeBase64(inline);
+    } catch {
+      data = undefined;
+    }
+    out.file_base64 = data
+      ? fileSummary(sniffMime(data) ?? mimeOfName(String(args.file_name ?? '')), data.byteLength)
+      : 'not valid base64';
+  }
+  const id = args.file_id;
+  if (typeof id === 'string' && id !== '') {
+    const kept = await files?.stat(id.trim()).catch(() => undefined);
+    out.file_id = kept ? `${kept.name} · ${fileSummary(kept.mimeType, kept.size)}` : `${id} (not kept)`;
+  }
+  return out;
+}
+
+function fileSummary(mimeType: string | undefined, bytes: number): string {
+  const size =
+    bytes >= 1_048_576
+      ? `${(bytes / 1_048_576).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return mimeType ? `${mimeType} · ${size}` : size;
 }

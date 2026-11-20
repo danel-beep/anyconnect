@@ -27,6 +27,21 @@ const dataContext = (id: string) => `file:${id}:data`;
 const nameContext = (id: string) => `file:${id}:name`;
 
 type Row = typeof hubFiles.$inferSelect;
+/** A row without its bytes: what every read but {@link FileStore.open} needs. */
+type Meta = Omit<Row, 'data'>;
+
+/** Every column but `data`, so stat, dedupe and expiry reads never pull a file's bytes. */
+const META = {
+  id: hubFiles.id,
+  workspaceId: hubFiles.workspaceId,
+  contentKey: hubFiles.contentKey,
+  nameEncrypted: hubFiles.nameEncrypted,
+  mimeType: hubFiles.mimeType,
+  size: hubFiles.size,
+  dataKeyEncrypted: hubFiles.dataKeyEncrypted,
+  expiresAt: hubFiles.expiresAt,
+  createdAt: hubFiles.createdAt,
+} satisfies Record<keyof Meta, unknown>;
 
 /**
  * Short-lived encrypted files of a workspace, the store behind `ctx.files` (see {@link HubFiles}
@@ -54,8 +69,8 @@ export class FileStore {
     return {
       maxBytes: this.limits.maxBytes,
       put: (file) => this.put(workspaceId, file),
-      get: async (id) => this.open(await this.require(workspaceId, id)),
-      stat: async (id) => this.info(await this.require(workspaceId, id)),
+      get: async (id) => this.open(await this.require(workspaceId, id, true)),
+      stat: async (id) => this.info(await this.require(workspaceId, id, false)),
     };
   }
 
@@ -85,7 +100,7 @@ export class FileStore {
       // One writer per workspace at a time keeps the total below the limit.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`hub-files:${workspaceId}`}))`);
       const [existing] = await tx
-        .select()
+        .select({ id: hubFiles.id, expiresAt: hubFiles.expiresAt })
         .from(hubFiles)
         .where(and(eq(hubFiles.workspaceId, workspaceId), eq(hubFiles.contentKey, contentKey)))
         .limit(1);
@@ -94,7 +109,7 @@ export class FileStore {
           .update(hubFiles)
           .set({ expiresAt })
           .where(eq(hubFiles.id, existing.id))
-          .returning();
+          .returning(META);
         return this.info(row!);
       }
       if (existing) await tx.delete(hubFiles).where(eq(hubFiles.id, existing.id));
@@ -123,7 +138,7 @@ export class FileStore {
           data: key.encryptBytes(file.data, dataContext(id)),
           expiresAt,
         })
-        .returning();
+        .returning(META);
       return this.info(row!, name);
     });
   }
@@ -152,10 +167,12 @@ export class FileStore {
     return removed.length;
   }
 
-  private async require(workspaceId: string, id: string): Promise<Row> {
+  private async require(workspaceId: string, id: string, withData: true): Promise<Row>;
+  private async require(workspaceId: string, id: string, withData: false): Promise<Meta>;
+  private async require(workspaceId: string, id: string, withData: boolean): Promise<Meta> {
     const [row] = isId('file', id)
       ? await this.db
-          .select()
+          .select(withData ? { ...META, data: hubFiles.data } : META)
           .from(hubFiles)
           .where(
             and(
@@ -175,11 +192,11 @@ export class FileStore {
     return row;
   }
 
-  private key(row: Row): DataKey {
+  private key(row: Meta): DataKey {
     return DataKey.unwrap(this.secrets, row.dataKeyEncrypted, keyContext(row.id));
   }
 
-  private info(row: Row, name?: string): HubFileInfo {
+  private info(row: Meta, name?: string): HubFileInfo {
     return {
       id: row.id,
       name: name ?? this.key(row).decrypt(row.nameEncrypted, nameContext(row.id)),
@@ -191,13 +208,15 @@ export class FileStore {
 
   private open(row: Row): HubFile {
     const key = this.key(row);
+    const plain = key.decryptBytes(row.data, dataContext(row.id));
     return {
       id: row.id,
       name: key.decrypt(row.nameEncrypted, nameContext(row.id)),
       mimeType: row.mimeType,
       size: row.size,
       expiresAt: row.expiresAt,
-      data: new Uint8Array(key.decryptBytes(row.data, dataContext(row.id))),
+      // A plain view of the decrypted bytes, not a second copy of the file.
+      data: new Uint8Array(plain.buffer, plain.byteOffset, plain.byteLength),
     };
   }
 }
