@@ -22,7 +22,7 @@ async function pendingCallJson(s: AppEnv['Variables']['services'], row: PendingC
     tool: row.toolName,
     risk: row.risk,
     reason: row.reason,
-    arguments: previewArguments(s.pendingCalls.args(row)),
+    arguments: previewArguments(d.arguments),
     confirmUrl: s.confirmations.confirmUrl(row.id),
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,

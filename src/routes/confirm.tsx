@@ -37,7 +37,7 @@ export async function pendingCallView(c: AppContext, row: PendingCallRow): Promi
     action: d.action,
     risk: row.risk,
     reason: row.reason ?? undefined,
-    fields: argumentFields(s.pendingCalls.args(row)),
+    fields: argumentFields(d.arguments),
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     executeAt: row.executeAt,

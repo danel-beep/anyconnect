@@ -100,7 +100,10 @@ describe('Telegram personal account: connect on the website, log in, use from th
   const internet = new FakeInternet().serve('cdn.example.com', (request) =>
     new URL(request.url).pathname === '/beach.jpg'
       ? new Response(JPEG, { headers: { 'content-type': 'image/jpeg' } })
-      : new Response('not found', { status: 404 }),
+      : new URL(request.url).pathname === '/login.jpg'
+        ? // A sign-in page where a photo should be: it claims to be a JPEG.
+          new Response('<html>Sign in</html>', { headers: { 'content-type': 'image/jpeg' } })
+        : new Response('not found', { status: 404 }),
   );
 
   beforeAll(async () => {
@@ -238,6 +241,10 @@ describe('Telegram personal account: connect on the website, log in, use from th
     expect(
       (await callRaw('telegram_send', { chat: anna.id, file_url: 'https://cdn.example.com/gone.jpg' })).text,
     ).toMatch(/HTTP 404/);
+    // The bytes decide: a page served as a JPEG goes as a plain file, not as a broken photo.
+    await call('telegram_send', { chat: anna.id, file_url: 'https://cdn.example.com/login.jpg' });
+    const notPhoto = await until(() => fake.media.find((m) => m.fileName === 'login.jpg'), 'the fake photo');
+    expect(notPhoto).toMatchObject({ type: 'document', fileMime: 'application/octet-stream' });
 
     // The sent photo is in the chat; get_attachment shows it and gives a file_id to send it on.
     const history = await until(async () => {

@@ -7,7 +7,7 @@
  * dispatcher records the job as `uncertain` unless the transport can deduplicate.
  */
 import { DeliveryError } from './messaging.js';
-import type { FetchLike } from './sdk.js';
+import { ConnectorError, type FetchLike } from './sdk.js';
 
 const NOT_SENT_CODES = new Set([
   'ENOTFOUND',
@@ -83,6 +83,14 @@ export async function downloadForUpload(
   try {
     response = await fetch(url, { ...(options.signal ? { signal: options.signal } : {}) });
   } catch (error) {
+    // A link the hub's network policy refuses (a private address) never works: say so, no retries.
+    if (refusedByPolicy(error)) {
+      throw new DeliveryError(
+        'rejected',
+        'The file link points to a private network address; use a public https link',
+        { cause: error },
+      );
+    }
     throw new DeliveryError('transient', 'Could not download the file to send', { cause: error });
   }
   if (!response.ok) {
@@ -122,6 +130,20 @@ export async function downloadForUpload(
     mimeType: response.headers.get('content-type')?.split(';')[0]?.trim() || 'application/octet-stream',
     name: fileNameFromUrl(url),
   };
+}
+
+/**
+ * Whether a failed request was stopped by the hub's network policy: a `permission` ConnectorError
+ * (an IP-literal host) or the policy's DNS check (`UnsafeUrlError`, matched by name because the
+ * SDK cannot import the hub), anywhere in the error's cause chain (fetch wraps connect errors).
+ */
+function refusedByPolicy(error: unknown): boolean {
+  for (let current = error, depth = 0; current instanceof Error && depth < 5; depth++) {
+    if (current instanceof ConnectorError && current.kind === 'permission') return true;
+    if (current.name === 'UnsafeUrlError') return true;
+    current = current.cause;
+  }
+  return false;
 }
 
 /** The last path segment of a link, decoded, as a file name. */

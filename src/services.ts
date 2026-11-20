@@ -10,6 +10,7 @@ import { ReferralService } from './billing/referrals.js';
 import { BillingService } from './billing/service.js';
 import type { AppConfig } from './config.js';
 import { NO_HUB_BOT, type TelegramHubBot } from './connectors/builtin/telegram-bot.js';
+import { describeFileArguments } from './connectors/file-input.js';
 import { type BuiltinDeps, createBuiltinRegistry } from './connectors/index.js';
 import type { MessagingPort } from './connectors/messaging.js';
 import type { ConnectorRegistry } from './connectors/registry.js';
@@ -499,6 +500,7 @@ export function createServices(
       client: client?.name ?? (row.principal.kind === 'api_token' ? 'API token' : 'AI app'),
       risk: row.risk,
       reason: row.reason ?? undefined,
+      arguments: await describeFileArguments(pendingCalls.args(row), files.forWorkspace(row.workspaceId)),
     };
   };
   // People who open the bot from an ad or a plain link get a short pitch and a tagged site link.

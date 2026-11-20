@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { contentType } from '../connectors/file-input.js';
 import {
   type AccountMessaging,
   DeliveryError,
@@ -25,6 +26,7 @@ import type { Db } from '../db/client.js';
 import { accounts } from '../db/schema.js';
 import type { Logger } from '../logger.js';
 import { MessengerAccounts } from './accounts.js';
+import { fitFile } from './file-rules.js';
 import type { GatewayApi } from './gateway-client.js';
 import type { InboundSignal } from './inbound-signal.js';
 import type { MessengerKeys } from './keys.js';
@@ -111,9 +113,11 @@ export class MessagingService implements MessagingPort {
       );
     }
     const name = file.name ?? downloaded.name;
-    const kept = await files.put({ data: downloaded.data, name, mimeType: downloaded.mimeType });
+    // The bytes say what the file is; a server's Content-Type is only a fallback.
+    const mimeType = contentType(downloaded.data, downloaded.mimeType);
+    const kept = await files.put({ data: downloaded.data, name, mimeType });
     // The same bytes kept earlier keep their first name: this message shows the name it was given.
-    return { kind: file.kind, name, mimeType: kept.mimeType, fileId: kept.id };
+    return { kind: file.kind, name, mimeType: kept.mimeType, size: kept.size, fileId: kept.id };
   }
 
   /** Where what a messenger reports about an account goes: the message store. */
@@ -231,22 +235,12 @@ export class MessagingService implements MessagingPort {
         if (request.template && (resolved.transport.kind !== 'direct' || !resolved.transport.templates)) {
           throw new ConnectorError('invalid_input', 'This account cannot send message templates.');
         }
-        if (request.file && !resolved.transport.files) {
+        const fileRules = resolved.transport.files;
+        if (request.file && !fileRules) {
           throw new ConnectorError('invalid_input', 'This account cannot send files yet.');
         }
         if (request.file && request.template) {
           throw new ConnectorError('invalid_input', 'Send a template or a file, not both.');
-        }
-        if (
-          request.file &&
-          request.text &&
-          resolved.transport.kind === 'direct' &&
-          resolved.transport.captionless?.includes(request.file.kind)
-        ) {
-          throw new ConnectorError(
-            'invalid_input',
-            `This messenger sends ${request.file.kind} without text: send the text as a separate message.`,
-          );
         }
         if (request.file && request.text.length > MAX_CAPTION_LENGTH) {
           throw new ConnectorError(
@@ -290,11 +284,28 @@ export class MessagingService implements MessagingPort {
           replyToExternalId = target.body.externalId;
         }
         // Session drivers get files as bytes: a link is downloaded now, so a bad link fails here
-        // and not later in the queue.
+        // and not later in the queue. Then the file is fitted to what the messenger shows.
         const file =
-          request.file?.url && resolved.transport.kind === 'session'
-            ? await this.keepLink(resolved, request.file)
-            : request.file;
+          request.file && fileRules
+            ? fitFile(
+                request.file.url && resolved.transport.kind === 'session'
+                  ? await this.keepLink(resolved, request.file)
+                  : request.file,
+                fileRules,
+                resolved.connector.name,
+              )
+            : undefined;
+        if (
+          file &&
+          request.text &&
+          resolved.transport.kind === 'direct' &&
+          resolved.transport.captionless?.includes(file.kind)
+        ) {
+          throw new ConnectorError(
+            'invalid_input',
+            `This messenger sends ${file.kind} without text: send the text as a separate message.`,
+          );
+        }
         const { row, deduplicated } = await outbox.enqueue({
           accountId,
           chatId: chat.id,

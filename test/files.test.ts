@@ -1,10 +1,19 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resolveFileInput, sniffMime } from '../src/connectors/file-input.js';
+import {
+  contentType,
+  describeFileArguments,
+  resolveFileInput,
+  sniffMime,
+} from '../src/connectors/file-input.js';
+import { DeliveryError, type FileRules } from '../src/connectors/messaging.js';
+import { downloadForUpload } from '../src/connectors/messaging-http.js';
 import { cleanName, FileStore } from '../src/core/files.js';
 import { hubFiles, workspaces } from '../src/db/schema.js';
 import { builtinJobs } from '../src/jobs/builtin.js';
 import { newId } from '../src/lib/ids.js';
+import { createNetworkPolicy } from '../src/lib/network.js';
+import { fitFile } from '../src/messaging/file-rules.js';
 import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
 
 const bytes = (...values: number[]) => new Uint8Array(values);
@@ -124,5 +133,76 @@ describe('files the hub keeps for tools (ctx.files)', () => {
     expect(sniffMime(bytes(1, 2, 3))).toBeUndefined();
     expect(cleanName('C:\\Users\\me\\photo\u0007.jpg')).toBe('photo.jpg');
     expect(cleanName('   ')).toBe('file');
+  });
+
+  it('trusts the bytes over a claimed photo type', () => {
+    expect(contentType(bytes(0x89, 0x50, 0x4e, 0x47), 'image/jpeg')).toBe('image/png');
+    // An error page served as a JPEG is not a photo; types the bytes cannot show are believed.
+    expect(contentType(new TextEncoder().encode('<html>'), 'image/jpeg')).toBe('application/octet-stream');
+    expect(contentType(bytes(1, 2), 'text/csv; charset=utf-8')).toBe('text/csv');
+    expect(contentType(bytes(1, 2), 'audio/mpeg')).toBe('audio/mpeg');
+    expect(contentType(bytes(1, 2))).toBe('application/octet-stream');
+  });
+
+  it('shows file arguments to the person who approves a call by name, type and size', async () => {
+    const files = store.forWorkspace(mine);
+    const kept = await files.put({
+      data: bytes(0xff, 0xd8, 0xff, 4),
+      name: 'receipt.jpg',
+      mimeType: 'image/jpeg',
+    });
+    const pdf = Buffer.concat([Buffer.from('%PDF'), Buffer.alloc(3000)]).toString('base64');
+    expect(
+      await describeFileArguments({ chat: 'c1', text: 'Hi', file_id: kept.id, file_base64: pdf }, files),
+    ).toEqual({
+      chat: 'c1',
+      text: 'Hi',
+      file_id: 'receipt.jpg · image/jpeg · 1 KB',
+      file_base64: 'application/pdf · 3 KB',
+    });
+    expect(await describeFileArguments({ file_id: 'file_gone', file_base64: '***' }, files)).toEqual({
+      file_id: 'file_gone (not kept)',
+      file_base64: 'not valid base64',
+    });
+    expect(await describeFileArguments({ text: 'no files' })).toEqual({ text: 'no files' });
+  });
+
+  it('fits a file to what the messenger shows: other photos go as documents, too large is refused', () => {
+    const MB = 1_048_576;
+    const rules: FileRules = {
+      maxBytes: 100 * MB,
+      photo: { maxBytes: 5 * MB, mimeTypes: ['image/jpeg', 'image/png'] },
+      audio: { maxBytes: 16 * MB },
+    };
+    const photo = { kind: 'photo', mimeType: 'image/jpeg', size: MB, fileId: 'file_a' } as const;
+    expect(fitFile(photo, rules, 'WhatsApp')).toEqual(photo);
+    expect(fitFile({ ...photo, mimeType: 'image/webp' }, rules, 'WhatsApp').kind).toBe('document');
+    expect(fitFile({ ...photo, size: 6 * MB }, rules, 'WhatsApp').kind).toBe('document');
+    // A link the messenger fetches has no size yet: only its type is checked.
+    expect(
+      fitFile({ kind: 'photo', url: 'https://x.example/a.png', mimeType: 'image/png' }, rules, 'WhatsApp')
+        .kind,
+    ).toBe('photo');
+    // No rule for a kind, or no type in the rule: as asked.
+    expect(fitFile({ kind: 'video', size: 90 * MB }, rules, 'WhatsApp').kind).toBe('video');
+    expect(fitFile({ kind: 'audio', mimeType: 'audio/flac', size: MB }, rules, 'WhatsApp').kind).toBe(
+      'audio',
+    );
+    expect(() => fitFile({ kind: 'document', size: 101 * MB }, rules, 'WhatsApp')).toThrow(
+      'The file is 101 MB; WhatsApp sends files up to 100 MB.',
+    );
+  });
+
+  it('does not retry links to private addresses, which the network policy never allows', async () => {
+    const policy = createNetworkPolicy({ allowPrivateNetwork: false });
+    try {
+      for (const url of ['https://127.0.0.1/photo.jpg', 'https://localhost/photo.jpg']) {
+        const error = await downloadForUpload(policy.fetch, url, { maxBytes: 1000 }).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(DeliveryError);
+        expect(error).toMatchObject({ kind: 'rejected', message: expect.stringMatching(/private network/) });
+      }
+    } finally {
+      await policy.close();
+    }
   });
 });

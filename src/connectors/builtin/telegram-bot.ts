@@ -25,6 +25,7 @@ import {
   secretsEqual,
 } from '../messaging-http.js';
 import { type AccountContext, ConnectorError, defineConnector } from '../sdk.js';
+import { TELEGRAM_BOT_FILES } from './shared/telegram-files.js';
 
 /**
  * Telegram Bot: a bot through the official Bot API (webhook in, HTTPS out), plus the owner's own
@@ -534,7 +535,7 @@ const ownBotTransport: DirectTransport<Config, Credentials> = {
   kind: 'direct',
   // The Bot API has no idempotency key: an interrupted send is reported as uncertain, never repeated.
   idempotentSend: false,
-  files: true,
+  files: TELEGRAM_BOT_FILES,
   send: (job, ctx) => deliver(ownBot(ctx), job, ctx),
   download: (attachment, ctx) => download(ownBot(ctx), attachment),
 
@@ -565,7 +566,7 @@ function hubBotTransport(port: TelegramHubBot): DirectTransport<Config, Credenti
   return {
     kind: 'direct',
     idempotentSend: false,
-    files: true,
+    files: TELEGRAM_BOT_FILES,
     send: (job, ctx) => deliver(hubBot(port, ctx), job, ctx),
     download: (attachment, ctx) => download(hubBot(port, ctx), attachment),
     routed: {

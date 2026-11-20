@@ -1015,6 +1015,28 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
       });
     });
 
+    it('sends a picture WhatsApp does not show as a photo (WebP) as a document instead', async () => {
+      await addNumber();
+      const webp = new TextEncoder().encode('RIFF\0\0\0\0WEBPVP8 data');
+      const sent = json(
+        await call('whatsapp_send', {
+          to: '+15550199',
+          text: 'The sticker you asked for',
+          file_base64: Buffer.from(webp).toString('base64'),
+          file_name: 'sticker.webp',
+          file_kind: 'photo',
+        }),
+      );
+      expect(sent.status).toBe('sent');
+      expect(apis.calls.filter((c) => c.path === '/v23.0/1111111111/media').at(-1)?.body).toMatchObject({
+        type: 'image/webp',
+      });
+      expect(apis.calls.filter((c) => c.path === '/v23.0/1111111111/messages').at(-1)?.body).toMatchObject({
+        type: 'document',
+        document: { filename: 'sticker.webp', caption: 'The sticker you asked for' },
+      });
+    });
+
     it('tracks delivery of sent messages from status webhooks', async () => {
       const account = await addNumber();
       await postWhatsApp(account.id, inbound('wamid.Q', 'Is the order ready?'));
