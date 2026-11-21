@@ -7,6 +7,7 @@ import type { toolCalls } from '../db/schema.js';
 import { SETUP_CONNECTOR } from '../hub/setup-tools.js';
 import { AppError } from '../lib/errors.js';
 import { isSealedKey } from '../lib/vault.js';
+import { routePath } from '../ops/request-log.js';
 import {
   type AppSection,
   AppShell,
@@ -269,9 +270,19 @@ export const appAction =
         setFlash(c, 'bad', 'app.flash.invalid');
         return c.redirect(back, 303);
       }
-      if (!(error instanceof AppError))
-        c.get('services').logger.error({ err: error }, 'dashboard action failed');
-      setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
+      if (error instanceof AppError) {
+        setFlash(c, 'bad', 'app.flash.error', { message: errorText(c, error).slice(0, 400) });
+      } else {
+        // Not ours to explain: tracked as an error, and the user gets the reference to quote.
+        const ref = c.get('services').ops.errors.capture(error, {
+          source: 'http',
+          context: { method: c.req.method, path: routePath(c.req.path), action: 'dashboard' },
+        });
+        const t = c.get('t');
+        setFlash(c, 'bad', 'app.flash.error', {
+          message: `${t('error.internal')} ${t('error.reference', { ref })}`,
+        });
+      }
     }
     return c.redirect(back, 303);
   };

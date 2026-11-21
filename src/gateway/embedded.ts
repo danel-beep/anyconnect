@@ -13,6 +13,7 @@ import { serve } from '@hono/node-server';
 import { ConfigError } from '../config.js';
 import type { DbListener } from '../db/listener.js';
 import type { Logger } from '../logger.js';
+import type { CaptureError } from '../ops/errors.js';
 import { VERSION } from '../version.js';
 import { gatewayApi } from './api.js';
 import { loadGatewayConfig } from './config.js';
@@ -72,7 +73,7 @@ export async function startEmbeddedGateway(
   plan: EmbeddedGatewayPlan,
   logger: Logger,
   /** The hub's database notifications (same database), so the process keeps one listening connection. */
-  shared: { listener?: DbListener } = {},
+  shared: { listener?: DbListener; capture?: CaptureError } = {},
 ): Promise<EmbeddedGateway> {
   const config = loadGatewayConfig(plan.env);
   const log = logger.child({ service: 'gateway' });
@@ -82,7 +83,13 @@ export async function startEmbeddedGateway(
     ...(shared.listener ? { listener: shared.listener } : {}),
   });
   await runtime.start();
-  const app = gatewayApi({ host: runtime.host, token: config.token, logger: log, version: VERSION });
+  const app = gatewayApi({
+    host: runtime.host,
+    token: config.token,
+    logger: log,
+    version: VERSION,
+    ...(shared.capture ? { capture: shared.capture } : {}),
+  });
   const server: ServerType = await new Promise((resolve) => {
     const s = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, () => resolve(s));
   });

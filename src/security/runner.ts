@@ -1,6 +1,7 @@
 import type { DbListener } from '../db/listener.js';
 import { DueLoop } from '../lib/due-loop.js';
 import type { Logger } from '../logger.js';
+import type { CaptureError } from '../ops/errors.js';
 import type { ConfirmationCenter } from './confirmations.js';
 import {
   PENDING_CALLS_CHANNEL,
@@ -34,6 +35,8 @@ export class PendingCallRunner {
       center: ConfirmationCenter;
       run: RunPendingCall;
       logger: Logger;
+      /** Unexpected failures (a call that crashed, a result that could not be stored). */
+      capture?: CaptureError;
       /** Longest sleep of an idle runner. */
       backstopMs: number;
       /** Calls scheduled by other instances (absent: only this process schedules). */
@@ -51,7 +54,7 @@ export class PendingCallRunner {
         this.deps.listener && !this.deps.listener.connected
           ? (this.deps.pollMs ?? 5_000)
           : this.deps.backstopMs,
-      onError: (error) => this.deps.logger.warn({ err: error }, 'pending call runner failed'),
+      onError: (error) => this.failed(error, 'runner', 'pending call runner failed'),
     });
   }
 
@@ -95,7 +98,7 @@ export class PendingCallRunner {
   }
 
   private async runDue(): Promise<void> {
-    const { pending, center, run, logger } = this.deps;
+    const { pending, center, run } = this.deps;
     // A failed claim fails the run: the loop reports it and backs off, instead of seeing the
     // unclaimed call as due right now and trying again in a tight loop.
     const due: PendingCallRow[] = await pending.claimDue();
@@ -105,7 +108,7 @@ export class PendingCallRunner {
         try {
           result = await run(row, pending.args(row));
         } catch (error) {
-          logger.error({ err: error, pendingCall: row.id }, 'pending call failed');
+          this.failed(error, 'run', 'pending call failed');
           result = {
             content: [{ type: 'text', text: 'Internal error while running the call.' }],
             isError: true,
@@ -113,9 +116,15 @@ export class PendingCallRunner {
         }
         await pending
           .complete(row.id, result)
-          .catch((err) => logger.error({ err }, 'could not store result'));
+          .catch((err) => this.failed(err, 'store', 'could not store result'));
         await center.refresh(row.id);
       }),
     );
+  }
+
+  /** Goes to error tracking when the process has it, else to the log. */
+  private failed(error: unknown, step: string, message: string): void {
+    if (this.deps.capture) this.deps.capture(error, { step });
+    else this.deps.logger.error({ err: error, step }, message);
   }
 }

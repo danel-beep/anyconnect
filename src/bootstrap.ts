@@ -21,9 +21,12 @@ export async function bootstrap(services: Services): Promise<void> {
   const oauthTokens = await services.tokens.upgradeEncryption();
   if (oauthTokens.upgraded) logger.info(oauthTokens, 'account OAuth tokens moved to account keys');
   if (encryption.failed || oauthTokens.failed) {
-    logger.error(
-      { failed: encryption.failed + oauthTokens.failed },
-      'some account secrets cannot be decrypted with the configured keys (check ENCRYPTION_KEYS_PREVIOUS)',
+    // A key problem, not a crash: still tracked, so the admin panel shows it until it is fixed.
+    services.ops.errors.capture(
+      new Error(
+        'Some account secrets cannot be decrypted with the configured keys (check ENCRYPTION_KEYS_PREVIOUS)',
+      ),
+      { source: 'startup', context: { step: 'encryption', failed: encryption.failed + oauthTokens.failed } },
     );
   }
   await setupTelegram(services);
@@ -99,6 +102,7 @@ async function setupTelegram(services: Services): Promise<void> {
     await bot.setWebhook(`${config.publicUrl}/telegram/webhook`, services.telegramWebhookSecret);
     logger.info({ bot: await bot.getUsername() }, 'telegram bot connected');
   } catch (error) {
-    logger.error({ err: error }, 'telegram webhook setup failed; confirmations still work on the web page');
+    // Confirmations still work on the web page, but Telegram ones stay off until the next start.
+    services.ops.errors.capture(error, { source: 'startup', context: { step: 'telegram_webhook' } });
   }
 }

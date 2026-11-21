@@ -4,6 +4,8 @@ import { ConnectorError } from '../connectors/sdk.js';
 import { safeEqual } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
 import { LoginStepInput, StartLoginInput } from '../messaging/gateway-client.js';
+import type { CaptureError } from '../ops/errors.js';
+import { routePath } from '../ops/request-log.js';
 import type { SessionHost } from './host.js';
 
 const DownloadInput = z.object({
@@ -24,7 +26,14 @@ const DownloadInput = z.object({
  * GATEWAY_TOKEN. The hub calls it for operations that need the live session (login, files,
  * older history); everything else goes through the database.
  */
-export function gatewayApi(deps: { host: SessionHost; token: string; logger: Logger; version: string }) {
+export function gatewayApi(deps: {
+  host: SessionHost;
+  token: string;
+  logger: Logger;
+  version: string;
+  /** Error tracking, when the gateway runs inside the hub (see `embedded.ts`). */
+  capture?: CaptureError;
+}) {
   const app = new Hono();
 
   app.get('/healthz', (c) =>
@@ -108,7 +117,9 @@ export function gatewayApi(deps: { host: SessionHost; token: string; logger: Log
               : 502;
       return c.json({ error: { kind: error.kind, message: error.message } }, status);
     }
-    deps.logger.error({ err: error, path: c.req.path }, 'gateway request failed');
+    const path = routePath(c.req.path);
+    if (deps.capture) deps.capture(error, { method: c.req.method, path });
+    else deps.logger.error({ err: error, path }, 'gateway request failed');
     return c.json({ error: { kind: 'upstream', message: 'Gateway internal error' } }, 500);
   });
 

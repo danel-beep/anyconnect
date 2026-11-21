@@ -4,6 +4,7 @@ import { serve } from '@hono/node-server';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConnectorError } from '../src/connectors/sdk.js';
 import type { Principal } from '../src/core/principal.js';
 import { PgListener } from '../src/db/listener.js';
 import { messengerChats, messengerMessages, messengerOutbox } from '../src/db/schema.js';
@@ -238,6 +239,28 @@ describe('messengers over official APIs (Telegram Bot API, WhatsApp Cloud API)',
     }
     // Made-up ids must not fill the limiter and push out the counters that guard sign-in.
     expect(hub.services.rateLimiter.size).toBe(counters);
+  });
+
+  it('answers a failed webhook with a 500 for a retry, and tracks only the hub’s own failures', async () => {
+    const account = await addBot();
+    const service = hub.services.messaging.service;
+    const capture = vi.spyOn(hub.services.ops.errors, 'capture');
+    const inbound = vi.spyOn(service, 'inbound');
+    inbound.mockImplementationOnce(() => {
+      throw new ConnectorError('upstream', 'Telegram did not answer');
+    });
+    expect((await postTelegram(account.id, botUpdate(9001, 'hi'))).status).toBe(500);
+    expect(capture).not.toHaveBeenCalled();
+    inbound.mockImplementationOnce(() => {
+      throw new TypeError('cannot read properties of undefined');
+    });
+    expect((await postTelegram(account.id, botUpdate(9002, 'hi'))).status).toBe(500);
+    expect(capture).toHaveBeenCalledWith(expect.any(TypeError), {
+      source: 'webhook',
+      context: { method: 'POST', path: '/hooks/messenger/:id', connector: 'telegram_bot' },
+    });
+    inbound.mockRestore();
+    capture.mockRestore();
   });
 
   it('registers the webhook, stores incoming messages encrypted and answers from the store', async () => {

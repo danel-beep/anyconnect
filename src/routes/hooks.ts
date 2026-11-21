@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { ConnectorError } from '../connectors/sdk.js';
 import { isId } from '../lib/ids.js';
 import type { AppEnv } from './context.js';
 
@@ -51,7 +52,23 @@ export function hookRoutes() {
       });
     } catch (error) {
       // A 500 makes the messenger retry later, which is what we want: ingestion is idempotent.
-      s.logger.error({ err: error, account: accountId }, 'messenger webhook failed');
+      // A service's own failure (a media download that timed out) is retried that way and only
+      // logged; anything else is a hub bug and goes to error tracking.
+      if (error instanceof ConnectorError) {
+        s.logger.warn(
+          { account: accountId, kind: error.kind, reason: error.message.slice(0, 200) },
+          'messenger webhook failed; the messenger will retry',
+        );
+      } else {
+        s.ops.errors.capture(error, {
+          source: 'webhook',
+          context: {
+            method: c.req.method,
+            path: '/hooks/messenger/:id',
+            connector: resolved.row.connectorId,
+          },
+        });
+      }
       return c.text('Internal error', 500);
     }
   });

@@ -3,6 +3,7 @@ import type { Db } from '../db/client.js';
 import { billingEvents, subscriptions, workspaces } from '../db/schema.js';
 import { AppError } from '../lib/errors.js';
 import type { Logger } from '../logger.js';
+import type { CaptureError, ErrorContext } from '../ops/errors.js';
 import { type BillingConfig, PAID_PLANS, priceKey } from './config.js';
 import type { EntitlementService, SubscriptionRow } from './entitlements.js';
 import { findPlan } from './plans.js';
@@ -58,6 +59,8 @@ export class BillingService {
       /** Undefined = payments off. */
       provider: BillingProvider | undefined;
       logger: Logger;
+      /** Unexpected failures: an event we could not apply, a provider key that stopped working. */
+      capture?: CaptureError;
     },
   ) {}
 
@@ -276,8 +279,9 @@ export class BillingService {
     } catch (error) {
       outcome = 'failed';
       detail = (error as Error).message.slice(0, 300);
-      this.deps.logger.error(
-        { provider: providerId, eventId: change.eventId, err: error },
+      this.failed(
+        error,
+        { provider: providerId, step: 'event', eventId: change.eventId },
         'billing: event failed',
       );
     }
@@ -308,7 +312,7 @@ export class BillingService {
       try {
         await listener.subscriptionChanged(change);
       } catch (err) {
-        this.deps.logger.warn({ workspaceId: change.workspaceId, err }, 'billing: listener failed');
+        this.failed(err, { step: 'listener' }, 'billing: listener failed');
       }
     }
   }
@@ -401,15 +405,29 @@ export class BillingService {
     return { externalId: sub.externalId!, customerId: sub.customerId };
   }
 
+  /** Goes to error tracking when the process has it, else to the log. */
+  private failed(error: unknown, context: ErrorContext, message: string): void {
+    if (this.deps.capture) this.deps.capture(error, context);
+    else this.deps.logger.error({ err: error, ...context }, message);
+  }
+
   /** Provider calls: their own messages are logged, the user sees a plain one. */
   private async call<T>(fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
     } catch (error) {
-      this.deps.logger.error(
-        { provider: this.deps.provider?.id, err: error },
-        'billing: provider call failed',
-      );
+      const provider = this.deps.provider?.id;
+      // The provider refusing a request or being down is its answer, logged; a rejected key (401)
+      // or anything that is not a provider answer is ours to fix, and tracked.
+      if (error instanceof BillingProviderError && error.status !== 401) {
+        this.deps.logger.warn({ provider, err: error }, 'billing: provider call failed');
+      } else {
+        this.failed(
+          error,
+          { ...(provider ? { provider } : {}), step: 'provider' },
+          'billing: provider call failed',
+        );
+      }
       if (
         error instanceof BillingProviderError &&
         error.status &&
