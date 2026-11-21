@@ -1,8 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
+import { isProbe } from '../ops/request-log.js';
 import type { AppEnv } from './context.js';
-
-/** Paths the platform probes on whatever host it likes; they never redirect. */
-const PROBES = new Set(['/healthz', '/readyz']);
 
 /**
  * Redirects requests that arrive on a former public host (see LEGACY_PUBLIC_URLS) to the same path
@@ -13,7 +11,8 @@ const PROBES = new Set(['/healthz', '/readyz']);
 export function canonicalHost(publicUrl: string, legacyHosts: readonly string[]): MiddlewareHandler<AppEnv> {
   const legacy = new Set(legacyHosts.map((h) => h.toLowerCase()));
   return async (c, next) => {
-    if (legacy.size === 0 || PROBES.has(c.req.path)) return next();
+    // The platform probes health on whatever host it likes: those never redirect.
+    if (legacy.size === 0 || isProbe(c.req.path)) return next();
     const host = (c.req.header('host') ?? '').toLowerCase();
     if (!legacy.has(host)) return next();
     const url = new URL(c.req.url);

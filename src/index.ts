@@ -37,7 +37,11 @@ async function main() {
   services.messaging.start();
   services.triggers.start();
   let gateway: EmbeddedGateway | undefined;
-  if (embedded) gateway = await startEmbeddedGateway(embedded, logger, { listener: services.listener });
+  if (embedded)
+    gateway = await startEmbeddedGateway(embedded, logger, {
+      listener: services.listener,
+      capture: (error, context) => services.ops.errors.capture(error, { source: 'gateway', context }),
+    });
 
   const app = createApp(services);
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {

@@ -12,6 +12,7 @@ import { accountOauth, accounts } from '../db/schema.js';
 import type { Semaphore } from '../lib/concurrency.js';
 import type { DataKey } from '../lib/crypto.js';
 import type { Logger } from '../logger.js';
+import { scrubSecrets } from '../ops/scrub.js';
 import {
   type AccountKeyMaterial,
   type AccountKeyring,
@@ -194,7 +195,16 @@ export class TokenManager {
     signal: AbortSignal,
     connector: ConnectorDefinition,
   ): Promise<TokenSet> {
-    let failure: { error: ConnectorError; grantInvalid: boolean; message: string } | undefined;
+    let failure:
+      | {
+          error: ConnectorError;
+          grantInvalid: boolean;
+          message: string;
+          /** The provider's OAuth error code, or the error's class for network failures. */
+          code?: string;
+          status?: number;
+        }
+      | undefined;
     const result = await this.deps.db.transaction(async (tx) => {
       const [row] = await tx
         .select()
@@ -216,6 +226,7 @@ export class TokenManager {
           ),
           grantInvalid: true,
           message: 'OAuth app removed',
+          code: 'app_removed',
         };
         return undefined;
       }
@@ -226,6 +237,10 @@ export class TokenManager {
       } catch (error) {
         const protocol = error instanceof OAuthProtocolError ? error : undefined;
         const message = protocol?.message ?? (error as Error).message;
+        const detail = {
+          code: protocol?.code ?? (error as Error).name,
+          ...(protocol?.status ? { status: protocol.status } : {}),
+        };
         failure = protocol?.grantInvalid
           ? {
               error: new ConnectorError(
@@ -234,6 +249,7 @@ export class TokenManager {
               ),
               grantInvalid: true,
               message,
+              ...detail,
             }
           : {
               error: new ConnectorError(
@@ -242,12 +258,13 @@ export class TokenManager {
               ),
               grantInvalid: false,
               message,
+              ...detail,
             };
         return undefined;
       }
     });
     if (result) return result;
-    const { error, grantInvalid, message } = failure!;
+    const { error, grantInvalid, message, code, status } = failure!;
     await this.deps.db
       .update(accountOauth)
       .set({ lastError: message.slice(0, 500) })
@@ -258,8 +275,17 @@ export class TokenManager {
         .set({ status: 'needs_reauth', statusMessage: error.message.slice(0, 500) })
         .where(eq(accounts.id, account.id));
     }
+    // Why it failed, so a transient failure (a 5xx, a timeout) can be told from a broken grant
+    // in the logs. The provider's words carry no tokens, and are scrubbed all the same.
     this.deps.logger.warn(
-      { account: account.id, provider: provider.id, grantInvalid },
+      {
+        account: account.id,
+        provider: provider.id,
+        grantInvalid,
+        ...(code ? { code } : {}),
+        ...(status ? { status } : {}),
+        reason: scrubSecrets(message, 200),
+      },
       'OAuth token refresh failed',
     );
     throw error;

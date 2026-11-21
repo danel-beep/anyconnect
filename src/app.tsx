@@ -5,6 +5,7 @@ import { VaultLockedError } from './core/vaults.js';
 import { DATABASE_RETRY_AFTER_SECONDS, isDatabaseUnavailable } from './db/errors.js';
 import { AppError } from './lib/errors.js';
 import { requestIdFrom, runWithContext } from './ops/context.js';
+import { requestLogLine, routePath } from './ops/request-log.js';
 import { adminRoutes } from './routes/admin.js';
 import { aiAppRoutes } from './routes/ai-apps.js';
 import { pageAnalytics } from './routes/analytics.js';
@@ -60,12 +61,13 @@ export function createApp(services: Services) {
     await runWithContext({ requestId }, async () => {
       await next();
       c.header('X-Request-Id', requestId);
-      const path = c.req.path;
-      const level = PROBES.has(path) ? 'debug' : 'info';
-      services.logger[level](
-        { method: c.req.method, path, status: c.res.status, ms: Math.round(performance.now() - started) },
-        'request',
-      );
+      const { level, fields } = requestLogLine({
+        method: c.req.method,
+        path: c.req.path,
+        status: c.res.status,
+        ms: Math.round(performance.now() - started),
+      });
+      services.logger[level](fields, 'request');
     });
   });
   app.use('*', pageSecurityHeaders({ hsts: services.config.secureCookies }));
@@ -202,24 +204,6 @@ function unavailable(c: Context<AppEnv>) {
     503,
     headers,
   );
-}
-
-const PROBES = new Set(['/healthz', '/readyz']);
-
-/**
- * The path for error grouping: ids in it (`/admin/users/usr_01…`, `/connect/x/acc_…`) become `:id`,
- * so one bug on many pages is one group.
- */
-export function routePath(path: string): string {
-  return path
-    .split('/')
-    .map((part) =>
-      /^[a-z]{2,5}_[0-9a-z]{10,}$/.test(part) || /^[0-9a-f-]{16,}$/i.test(part) || /^\d+$/.test(part)
-        ? ':id'
-        : part,
-    )
-    .join('/')
-    .slice(0, 200);
 }
 
 /** Browsers ask for HTML; API clients and tools usually do not. */

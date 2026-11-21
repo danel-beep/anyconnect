@@ -190,9 +190,12 @@ describe('billing service: webhook decisions and provider failures', () => {
     expect(await billing().apply('test', change({ externalId: 'sub_fail' }))).toBe('applied');
     const provider = billing().provider!;
     const changeSub = vi.spyOn(provider, 'changeSubscription');
+    const capture = vi.spyOn(hub.services.ops.errors, 'capture');
 
     changeSub.mockRejectedValueOnce(new BillingProviderError('price is archived', 422));
     await expect(checkout('personal')).rejects.toMatchObject({ code: 'provider_refused', status: 502 });
+    // The provider's own answer is only logged ...
+    expect(capture).not.toHaveBeenCalled();
     // A bad key (401) and server errors are "not responding", never "refused": the user cannot fix them.
     changeSub.mockRejectedValueOnce(new BillingProviderError('bad api key', 401));
     await expect(checkout('personal')).rejects.toMatchObject({ code: 'provider_unavailable' });
@@ -200,6 +203,12 @@ describe('billing service: webhook decisions and provider failures', () => {
     const error = await checkout('personal').catch((e: Error) => e);
     expect(error).toMatchObject({ code: 'provider_unavailable' });
     expect((error as Error).message).not.toContain('socket');
+    // ... a rejected key and a failure that is not a provider answer are tracked as errors.
+    expect(capture.mock.calls.map(([e, o]) => [(e as Error).message, o.source])).toEqual([
+      ['bad api key', 'billing'],
+      ['socket hang up', 'billing'],
+    ]);
+    capture.mockRestore();
     expect(await plan()).toBe('pro');
   });
 });

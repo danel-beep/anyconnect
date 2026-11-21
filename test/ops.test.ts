@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { routePath } from '../src/app.js';
 import { createLogger } from '../src/logger.js';
 import { jobsCheck } from '../src/ops/builtin-checks.js';
 import { HealthRegistry } from '../src/ops/checks.js';
 import { requestIdFrom, runWithContext } from '../src/ops/context.js';
 import { type ErrorEvent, ErrorReporter, fingerprint, toEvent } from '../src/ops/errors.js';
+import { requestLogLine, routePath, SLOW_REQUEST_MS } from '../src/ops/request-log.js';
 import { scrubError, scrubSecrets } from '../src/ops/scrub.js';
 import { parseSentryDsn, SentrySink, sentryFrames } from '../src/ops/sentry.js';
 
@@ -166,6 +166,24 @@ describe('request ids', () => {
     expect(requestIdFrom('bad id\nwith newline')).toMatch(/^[0-9a-f]{16}$/);
     expect(requestIdFrom(undefined)).toMatch(/^[0-9a-f]{16}$/);
     expect(requestIdFrom('x'.repeat(200))).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
+describe('request log lines', () => {
+  const request = { method: 'GET', path: '/app', status: 200, ms: 12 };
+
+  it('writes probes at debug and ordinary requests at info', () => {
+    expect(requestLogLine({ ...request, path: '/healthz' }).level).toBe('debug');
+    expect(requestLogLine({ ...request, path: '/readyz', ms: SLOW_REQUEST_MS * 3 }).level).toBe('debug');
+    expect(requestLogLine(request)).toEqual({ level: 'info', fields: request });
+  });
+
+  it('marks a slow request, so it can be found in the logs', () => {
+    expect(requestLogLine({ ...request, ms: SLOW_REQUEST_MS - 1 }).level).toBe('info');
+    expect(requestLogLine({ ...request, ms: SLOW_REQUEST_MS })).toEqual({
+      level: 'warn',
+      fields: { ...request, ms: SLOW_REQUEST_MS, slow: true },
+    });
   });
 });
 

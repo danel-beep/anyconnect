@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import demo from '../src/connectors/builtin/demo.js';
 import gmail from '../src/connectors/builtin/gmail.js';
 import { defineManifestConnector } from '../src/connectors/manifest/compile.js';
@@ -322,8 +322,20 @@ describe('connecting accounts through OAuth (the hub as OAuth client)', () => {
     provider.accessExpiresIn = 30;
     await connect('?label=Work');
     provider.refreshToken = ''; // revoked at the provider
+    const warn = vi.spyOn(hub.services.logger, 'warn');
     const failed = await callMe();
     expect(failed.isError).toBe(true);
+    // The log says why, so a broken grant can be told from a provider outage.
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        grantInvalid: true,
+        code: 'invalid_grant',
+        status: 400,
+        reason: expect.stringContaining('expired or revoked'),
+      }),
+      'OAuth token refresh failed',
+    );
+    warn.mockRestore();
     expect(failed.content[0]).toMatchObject({
       text: expect.stringMatching(
         /stopped working: .*the user has to sign in again, here: http.*\/connect\/fake\?account=acc_/,

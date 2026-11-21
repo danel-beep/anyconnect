@@ -1,5 +1,5 @@
 import type { ConnectorResolver } from '../connectors/registry.js';
-import { connectorText, type FetchLike } from '../connectors/sdk.js';
+import { ConnectorError, connectorText, type FetchLike } from '../connectors/sdk.js';
 import type { AccountRow, AccountService } from '../core/accounts.js';
 import type { OwnerNotifier } from '../core/owner-notices.js';
 import type { Principal } from '../core/principal.js';
@@ -228,7 +228,7 @@ export class TriggerEngine {
       scanned.set(account.id, Date.now());
       await this.scanAccount(triggers, account, options.signal).catch((error) => {
         failed.add(account.id);
-        this.deps.onError?.(error, { source: 'trigger', step: 'scan', service: account.connectorId });
+        this.readFailed(error, { step: 'scan', service: account.connectorId, account: account.id });
       });
     });
     if (options.changedOnly && mark !== undefined) {
@@ -445,7 +445,7 @@ export class TriggerEngine {
     for (const account of await source.accounts(trigger.workspaceId)) {
       if (!this.watches(trigger, account) || options.signal.aborted) continue;
       const items = await source.recent(account, options.signal, readOptions).catch((error) => {
-        this.deps.onError?.(error, { source: 'trigger', step: 'test', service: account.connectorId });
+        this.readFailed(error, { step: 'test', service: account.connectorId, account: account.id });
         return [];
       });
       for (const item of items) found.push({ account, item });
@@ -659,6 +659,22 @@ export class TriggerEngine {
     } catch (error) {
       this.deps.onError?.(error, { source: 'trigger', step: 'confirmation' });
     }
+  }
+
+  /**
+   * Reading a source failed. The service's own failure (an outage, a 5xx, an expired sign-in: a
+   * `ConnectorError`) is not a hub bug: the account is read again on the next pass and account
+   * health reports a broken sign-in, so it is a warning, not an error group. Anything else is ours.
+   */
+  private readFailed(error: unknown, context: { step: string; service: string; account: string }): void {
+    if (error instanceof ConnectorError) {
+      this.deps.logger.warn(
+        { ...context, kind: error.kind, reason: error.message.slice(0, 200) },
+        'trigger source read failed; retried on the next pass',
+      );
+      return;
+    }
+    this.deps.onError?.(error, { source: 'trigger', step: context.step, service: context.service });
   }
 
   /**

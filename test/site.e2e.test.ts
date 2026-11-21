@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { base32Decode, totp } from '../src/lib/totp.js';
 import { FakeOidc } from './fake-oidc.js';
 import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
@@ -593,6 +593,22 @@ describe('website: Google sign-in, dashboard, limits and the admin panel', () =>
       form: { csrf: csrf!, label: 'Home mail', back: 'https://evil.example/' },
     });
     expect(renamed.headers.get('location')).toBe('/app/services');
+
+    // An action that crashes is tracked as an error, and the note shows its reference.
+    const capture = vi.spyOn(hub.services.ops.errors, 'capture');
+    const update = vi
+      .spyOn(hub.services.accounts, 'update')
+      .mockRejectedValueOnce(new TypeError('cannot read properties of undefined'));
+    const crashed = await browser.request(`${base}/rename`, { form: { csrf: csrf!, label: 'Again' } });
+    expect(crashed.status).toBe(303);
+    expect(capture).toHaveBeenCalledWith(expect.any(TypeError), {
+      source: 'http',
+      context: { method: 'POST', path: '/app/accounts/:id/rename', action: 'dashboard' },
+    });
+    const ref = capture.mock.results[0]!.value as string;
+    expect(await (await browser.request(crashed.headers.get('location')!)).text()).toContain(ref);
+    update.mockRestore();
+    capture.mockRestore();
 
     // The activity log filters by account, by service and by errors, and keeps the filter when paging.
     const log = async (query: string) => (await browser.request(`/app/activity${query}`)).text();

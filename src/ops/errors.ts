@@ -56,6 +56,13 @@ export interface ErrorSink {
   flush?(): Promise<void>;
 }
 
+/**
+ * What a module outside `src/ops/` takes to report an unexpected error, so it does not depend on
+ * the reporter itself (wired in `src/services.ts`, e.g. `(error, context) =>
+ * ops.errors.capture(error, { source: 'billing', context })`). Returns the reference, if any.
+ */
+export type CaptureError = (error: unknown, context?: ErrorContext) => string | undefined;
+
 export interface CaptureOptions {
   source: ErrorSource;
   context?: ErrorContext;

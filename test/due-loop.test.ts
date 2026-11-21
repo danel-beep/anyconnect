@@ -259,15 +259,18 @@ describe('PendingCallRunner', () => {
       pending,
       center: { refresh: async () => {} } as never,
       run: async () => ({ content: [] }),
-      logger: Object.assign(Object.create(logger), {
-        warn: (o: { err?: unknown }) => errors.push(o.err),
-      }) as typeof logger,
+      logger,
+      // A failed claim is unexpected: it goes to error tracking, once.
+      capture: (error) => {
+        errors.push(error);
+        return undefined;
+      },
       backstopMs: 60_000,
     });
     runner.start();
     await sleep(500);
     await runner.stop();
     expect(claims).toBe(1);
-    expect(errors).toHaveLength(1);
+    expect(errors).toEqual([expect.objectContaining({ message: 'read-only transaction' })]);
   });
 });

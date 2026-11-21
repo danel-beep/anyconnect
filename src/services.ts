@@ -353,6 +353,7 @@ export function createServices(
     config: config.billing,
     provider: billingProvider,
     logger,
+    capture: (error, context) => ops.errors.capture(error, { source: 'billing', context }),
   });
   if (billingProvider instanceof TestBillingProvider) {
     billingProvider.connect((body, headers) => billing.handleWebhook(billingProvider.id, body, headers));
@@ -732,6 +733,7 @@ export function createServices(
     run: (row, args) =>
       vaultScopes.runHeld(row.id, async () => toStored(await hub.runApproved(principalOf(row), row, args))),
     logger,
+    capture: (error, context) => ops.errors.capture(error, { source: 'pending-call', context }),
     backstopMs: config.confirmations.runnerBackstopMs,
     listener,
   });
