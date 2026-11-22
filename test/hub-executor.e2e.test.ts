@@ -87,9 +87,16 @@ describe('executor in the running hub', () => {
     const second = await run('outbox_send', { to: 'bob', text: 'hi' });
     expect(first.isError).toBeFalsy();
     expect(JSON.stringify(second.content)).toContain('Not repeated');
+    // In a batch the note stays with the call it belongs to (result-notices.test.ts: structured results).
+    const batch = await run('manyplug_call_tools', {
+      calls: [{ name: 'outbox_send', arguments: { to: 'bob', text: 'hi' } }],
+    });
+    expect(JSON.stringify(batch.content)).toContain('Not repeated');
+    expect(JSON.stringify(batch.content)).toContain('msg_1');
     expect(sent).toBe(1);
     const calls = await hub.services.hub.recentToolCalls(principal.workspaceId);
     expect(calls.map((c) => [c.toolName, c.status, c.outcome, c.risk])).toEqual([
+      ['outbox_send', 'ok', 'deduplicated', 'write'],
       ['outbox_send', 'ok', 'deduplicated', 'write'],
       ['outbox_send', 'ok', null, 'write'],
     ]);

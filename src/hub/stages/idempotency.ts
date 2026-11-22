@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { type CallContext, type Middleware, unitKey, unitLabel } from '../executor.js';
 import type { IdempotencyStore } from '../idempotency.js';
-import type { ExecResult } from '../result.js';
+import { type ExecResult, withNotice } from '../result.js';
 
 /** JSON with sorted keys, so `{a,b}` and `{b,a}` hash the same. */
 export function stableStringify(value: unknown): string {
@@ -32,16 +32,11 @@ export function idempotencyKey(call: CallContext): string {
 function duplicate(call: CallContext, result: ExecResult, secondsAgo: number | null): ExecResult {
   call.audit.outcome = 'deduplicated';
   const when = secondsAgo === null ? 'is running right now' : `succeeded ${secondsAgo} s ago`;
-  return {
-    ...result,
-    content: [
-      {
-        type: 'text',
-        text: `Not repeated: an identical ${call.connector.name} "${call.action.name}" call on ${unitLabel(call)} ${when}, so it was not executed again (duplicate protection). Its result is below. If the user explicitly wants it done a second time, tell them it was already done and ask them to confirm.`,
-      },
-      ...result.content,
-    ],
-  };
+  return withNotice(
+    result,
+    `Not repeated: an identical ${call.connector.name} "${call.action.name}" call on ${unitLabel(call)} ${when}, so it was not executed again (duplicate protection); this is its result. If the user explicitly wants it done a second time, tell them it was already done and ask them to confirm.`,
+    'start',
+  );
 }
 
 /**
