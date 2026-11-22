@@ -532,9 +532,13 @@ export class Hub {
           raw: result,
           name,
           ok: !result.isError,
+          // `structuredContent` says all the text says (hub notes included); a bare value may not.
           result: result.isError
             ? resultText(result)
             : (result.structuredContent ?? result.data ?? resultText(result)),
+          ...(result.notices && !result.structuredContent && !result.isError
+            ? { notices: result.notices }
+            : {}),
         };
       }),
     );

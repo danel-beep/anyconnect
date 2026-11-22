@@ -35,6 +35,8 @@ export interface ExecResult extends ToolCallResult {
   /** The action's value (JSON-serializable), when it returned one; `shape` works on it. */
   data?: unknown;
   error?: { kind: ExecErrorKind; retryAfterSeconds?: number };
+  /** Notes added with {@link withNotice}, kept apart for results merged into another (batches). */
+  notices?: string[];
 }
 
 export function errorResult(
@@ -81,8 +83,32 @@ export function resultText(result: ToolCallResult): string {
 
 /** Strips executor internals before a result leaves the hub. */
 export function toTransport(result: ExecResult): ToolCallResult {
-  const { data: _data, error: _error, ...rest } = result;
+  const { data: _data, error: _error, notices: _notices, ...rest } = result;
   return rest;
+}
+
+/** Key of the hub's notes for the AI inside `structuredContent` (see {@link withNotice}). */
+export const NOTICES_KEY = 'hub_notices';
+
+/**
+ * Adds a note for the AI to a result: a quota warning, a "not repeated" notice. Clients that read
+ * `structuredContent` (Claude, Claude Code, ChatGPT) show the model that value and not the text
+ * blocks next to it, so a note only in the text would never reach the model. It goes in both: a
+ * text block (where `at` says) and the `hub_notices` list in `structuredContent`, when there is one.
+ * The rule for every result that leaves the hub: `structuredContent` says all the text says.
+ */
+export function withNotice(result: ExecResult, text: string, at: 'start' | 'end' = 'end'): ExecResult {
+  const block = { type: 'text' as const, text };
+  const content = at === 'start' ? [block, ...result.content] : [...result.content, block];
+  const add = (list: string[] = []) => (at === 'start' ? [text, ...list] : [...list, text]);
+  const notices = add(result.notices);
+  if (!result.structuredContent) return { ...result, content, notices };
+  const existing = result.structuredContent[NOTICES_KEY];
+  const structuredContent = {
+    ...result.structuredContent,
+    [NOTICES_KEY]: add(Array.isArray(existing) ? existing : []),
+  };
+  return { ...result, content, structuredContent, notices };
 }
 
 /** `_meta` key set on results that carry third-party content. */

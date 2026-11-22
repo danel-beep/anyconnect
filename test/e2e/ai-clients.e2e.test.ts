@@ -1,5 +1,6 @@
 import { UnauthorizedError } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MAX_INSTRUCTIONS_CHARS } from '../../src/hub/catalog.js';
 import { translator } from '../../src/web/i18n.js';
 import { ADMIN, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { AI_CLIENTS, type AiClientProfile, SimulatedAiClient, serveClientDocuments } from './ai-clients.js';
@@ -157,6 +158,10 @@ describe('AI clients connect end to end', () => {
         : (await searched(client, 'search my email')).concat(names);
       expect(reachable).toContain('gmail_search');
       expect(client.mcp.getInstructions()).toContain('Gmail');
+      // Claude Code keeps 2048 characters of the instructions and of each description, and drops the rest.
+      expect(client.mcp.getInstructions()!.length).toBeLessThanOrEqual(MAX_INSTRUCTIONS_CHARS);
+      for (const tool of tools)
+        expect(tool.description!.length, tool.name).toBeLessThanOrEqual(MAX_INSTRUCTIONS_CHARS);
     });
 
     it('calls a connected service and gets its data back', async () => {
@@ -197,6 +202,9 @@ describe('AI clients connect end to end', () => {
         }
         const held = await callAnyway(client, 'gmail_send', args);
         expect(textOf(held)).toContain('/confirm/pcl_');
+        // The model gets the link and what to do next, whichever part of the result its client reads.
+        expect(held.seen).toContain('/confirm/pcl_');
+        expect(held.seen).toContain('exactly the same arguments');
         expect(mailbox.sent).toHaveLength(before);
         await approveOnWeb(owner, textOf(held));
         await hub.services.pendingRunner.tick();

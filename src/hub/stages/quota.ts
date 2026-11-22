@@ -1,6 +1,6 @@
 import type { Middleware } from '../executor.js';
 import type { QuotaGate } from '../quota.js';
-import { errorResult } from '../result.js';
+import { errorResult, withNotice } from '../result.js';
 
 /**
  * Refuses units over the workspace's plan limits (actions per month) before they reach the service,
@@ -18,7 +18,7 @@ export function quotaStage(gate: QuotaGate): Middleware {
     if (decision.allowed) {
       const result = await next();
       if (!decision.notice || result.isError) return result;
-      return { ...result, content: [...result.content, { type: 'text', text: decision.notice }] };
+      return withNotice(result, decision.notice);
     }
     call.audit.outcome = 'quota_exceeded';
     return errorResult(decision.message, 'hub');

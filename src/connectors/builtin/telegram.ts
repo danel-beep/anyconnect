@@ -30,9 +30,8 @@ export function createTelegramConnector(port: MessagingPort) {
     version: '2.0.0',
     homepage: 'https://telegram.org',
     instructions:
-      "Telegram tools read from the hub's synced copy of the chats, so reading and searching are fast and free. " +
-      'Find chats with telegram_list_chats, then read or send by chat id. Use telegram_whats_new with the returned cursor to follow new messages. ' +
-      'Messages are sent as the user. Before writing to someone who has not written to this account first, ask the user. ' +
+      "Reads use the hub's synced copy (fast, free): telegram_list_chats, then read or send by chat id; " +
+      'telegram_whats_new with its cursor follows new messages. Messages go out as the user; ask the user before writing to someone who has not written first. ' +
       conversationInstructions('telegram'),
     config,
     credentials,

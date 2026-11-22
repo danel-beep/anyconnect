@@ -44,6 +44,11 @@ export interface AiClientProfile {
   };
   /** Most tools the client accepts in tools/list. */
   maxTools?: number;
+  /**
+   * Shows the model `structuredContent` instead of the text blocks when a result has both (seen
+   * live from Claude and Claude Code; ChatGPT gives the model `structuredContent` as well).
+   */
+  readsStructured: boolean;
 }
 
 const CLAUDE_DOCUMENT = {
@@ -74,6 +79,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     protocol: 'legacy',
     elicitation: false,
     expectedName: 'Claude',
+    readsStructured: true,
     consent: { verifiedDomain: 'claude.ai', knownApp: true },
   },
   {
@@ -87,6 +93,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     protocol: 'modern',
     elicitation: true,
     expectedName: 'Claude Code',
+    readsStructured: true,
     consent: { verifiedDomain: 'claude.ai', knownApp: false, warning: 'loopback' },
   },
   {
@@ -106,6 +113,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     elicitation: false,
     callMeta: { 'openai/subject': 'chatgpt-user-7f3a', 'openai/locale': 'en-US' },
     expectedName: 'ChatGPT',
+    readsStructured: true,
     consent: { knownApp: true },
   },
   {
@@ -124,6 +132,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     protocol: 'legacy',
     elicitation: false,
     expectedName: 'Cursor',
+    readsStructured: false,
     consent: { knownApp: false, warning: 'unknown' },
     maxTools: 40,
   },
@@ -151,6 +160,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     protocol: 'modern',
     elicitation: true,
     expectedName: 'Visual Studio Code',
+    readsStructured: false,
     consent: { knownApp: false, warning: 'loopback' },
   },
   {
@@ -170,6 +180,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     protocol: 'legacy',
     elicitation: false,
     expectedName: 'Gemini CLI MCP Client',
+    readsStructured: false,
     consent: { knownApp: false, warning: 'loopback' },
   },
   {
@@ -189,6 +200,7 @@ export const AI_CLIENTS: AiClientProfile[] = [
     protocol: 'legacy',
     elicitation: false,
     expectedName: 'Codex',
+    readsStructured: false,
     consent: { knownApp: false, warning: 'loopback' },
   },
 ];
@@ -269,6 +281,34 @@ export class MemoryOAuthProvider implements OAuthClientProvider {
   }
   discoveryState() {
     return this.discovery as never;
+  }
+}
+
+type CallResult = { content?: unknown; structuredContent?: unknown };
+
+const textBlocks = (result: CallResult) =>
+  ((result.content ?? []) as { type: string; text?: string }[])
+    .filter((c) => c.type === 'text')
+    .map((c) => c.text ?? '');
+
+/** What the model reads of a result: `structuredContent` when the client prefers it, else the text. */
+export function seenByModel(profile: AiClientProfile, result: CallResult): string {
+  return profile.readsStructured && result.structuredContent
+    ? JSON.stringify(result.structuredContent)
+    : textBlocks(result).join('\n');
+}
+
+/**
+ * The hub's rule for every result: when it has `structuredContent`, that says everything the text
+ * blocks say (each block is its JSON, or appears in it), since some clients show the model only one.
+ */
+export function assertStructuredSaysAll(tool: string, result: CallResult): void {
+  if (!result.structuredContent) return;
+  const structured = JSON.stringify(result.structuredContent);
+  for (const text of textBlocks(result)) {
+    if (text === structured) continue;
+    if (structured.includes(JSON.stringify(text).slice(1, -1))) continue;
+    throw new Error(`${tool}: a text block is missing from structuredContent: ${text.slice(0, 200)}`);
   }
 }
 
@@ -354,7 +394,8 @@ export class SimulatedAiClient {
       arguments: args,
       ...(this.profile.callMeta ? { _meta: this.profile.callMeta } : {}),
     });
-    return { ...result, text: JSON.stringify(result.content ?? '') };
+    assertStructuredSaysAll(name, result);
+    return { ...result, text: JSON.stringify(result.content ?? ''), seen: seenByModel(this.profile, result) };
   }
 
   async close(): Promise<void> {

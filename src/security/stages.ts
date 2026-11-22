@@ -129,33 +129,32 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
 
   /**
    * What the AI is told about a call waiting for the user, in words and as `structuredContent`, so it
-   * knows whether to send the user to a link or to ask them in the chat.
+   * knows whether to send the user to a link or to ask them in the chat. The words go in
+   * `structuredContent` too (`message`): clients that read it (Claude) never see the text block.
    */
   const awaiting = async (row: PendingCallRow, how: string): Promise<ExecResult> => {
     if (row.channels.includes(CHAT_CHANNEL)) {
       const d = await center.describe(row);
       const reason = row.reason ? ` (${row.reason})` : '';
+      const message = `${how} The user confirms in this chat, there is no link to open. Ask them now whether to run “${d.action}” on ${d.service} (${d.account})${reason}, and show what exactly will be sent or changed. Only if they clearly say yes, call this tool again with exactly the same arguments: that call runs it. If they say no or do not answer, do not call it again. Never answer for the user, and do not claim it was done before that.`;
       return {
-        content: [
-          {
-            type: 'text',
-            text: `${how} The user confirms in this chat, there is no link to open. Ask them now whether to run “${d.action}” on ${d.service} (${d.account})${reason}, and show what exactly will be sent or changed. Only if they clearly say yes, call this tool again with exactly the same arguments: that call runs it. If they say no or do not answer, do not call it again. Never answer for the user, and do not claim it was done before that.`,
-          },
-        ],
+        content: [{ type: 'text', text: message }],
         structuredContent: {
-          confirmation: { id: row.id, status: 'awaiting_confirmation', confirm_in: 'chat', next: 'ask_user' },
+          confirmation: {
+            id: row.id,
+            status: 'awaiting_confirmation',
+            confirm_in: 'chat',
+            next: 'ask_user',
+            message,
+          },
         },
       };
     }
     const telegram = row.channels.includes('telegram');
     const url = center.confirmUrl(row.id);
+    const message = `${how} The user confirms outside this chat: give them the link ${url}${telegram ? ' (or the button in their Manyplug Telegram chat)' : ''}; a yes in the chat does not confirm it. After they confirm there, call this tool again with exactly the same arguments to get the result. Do not claim it was done before that.`;
     return {
-      content: [
-        {
-          type: 'text',
-          text: `${how} The user confirms outside this chat: give them the link ${url}${telegram ? ' (or the button in their Manyplug Telegram chat)' : ''}; a yes in the chat does not confirm it. After they confirm there, call this tool again with exactly the same arguments to get the result. Do not claim it was done before that.`,
-        },
-      ],
+      content: [{ type: 'text', text: message }],
       structuredContent: {
         confirmation: {
           id: row.id,
@@ -164,6 +163,7 @@ export function confirmStage(deps: ConfirmStageDeps): Middleware {
           url,
           ...(telegram ? { telegram: true } : {}),
           next: 'send_link',
+          message,
         },
       },
     };
