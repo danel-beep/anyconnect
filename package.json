@@ -55,7 +55,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.7",
+    "@biomejs/biome": "^2.6.8",
     "@fuman/utils": "0.0.23",
     "@types/mailparser": "^3.9.0",
     "@types/node": "^26.6.6",
@@ -66,9 +66,9 @@
     "drizzle-kit": "^0.31.11",
     "hoodiecrow-imap": "^3.3.1",
     "pino-pretty": "^13.2.0",
-    "playwright": "^1.65.0",
-    "simple-icons": "^16.37.0",
-    "smtp-server": "^3.21.4",
+    "playwright": "^1.65.1",
+    "simple-icons": "^16.38.0",
+    "smtp-server": "^3.21.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
