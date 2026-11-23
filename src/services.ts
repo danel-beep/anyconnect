@@ -415,6 +415,8 @@ export function createServices(
         key: config.backups.encryptionKey
           ? parseKey(config.backups.encryptionKey)
           : secrets.deriveKey('backup'),
+        // Backups made before a key rotation, or before BACKUP_ENCRYPTION_KEY was set.
+        previousKeys: secrets.deriveKeys('backup'),
         prefix: config.backups.prefix,
         retentionDays: config.backups.retentionDays,
         logger,

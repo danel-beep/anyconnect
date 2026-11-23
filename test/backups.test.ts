@@ -1,6 +1,4 @@
-import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,70 +15,12 @@ import {
   libpqEnv,
   pgDumpTools,
 } from '../src/ops/backups.js';
-import { TEST_DATABASE_URL } from './helpers.js';
+import { fakeS3 } from './fake-s3.js';
+import { pgToolsMatchServer, TEST_DATABASE_URL } from './helpers.js';
 import { databaseName, quoteIdent, siblingDatabaseUrl } from './setup/databases.js';
 
 const logger = createLogger({ level: 'silent' });
 const KEY = Buffer.alloc(32, 7);
-
-/** A tiny S3-compatible server: path-style put/get/delete/list, requires a signed request. */
-function fakeS3() {
-  const objects = new Map<string, { body: Buffer; modified: Date }>();
-  const requests: string[] = [];
-  const server: Server = createServer((req, res) => {
-    const url = new URL(req.url!, 'http://localhost');
-    requests.push(`${req.method} ${url.pathname}${url.search}`);
-    if (!String(req.headers.authorization).startsWith('AWS4-HMAC-SHA256 Credential=key/')) {
-      res.writeHead(403).end('<Error><Code>AccessDenied</Code><Message>No signature</Message></Error>');
-      return;
-    }
-    const [, bucket, ...rest] = url.pathname.split('/');
-    const key = decodeURIComponent(rest.join('/'));
-    if (bucket !== 'backups') {
-      res.writeHead(404).end('<Error><Code>NoSuchBucket</Code></Error>');
-      return;
-    }
-    if (req.method === 'PUT') {
-      const chunks: Buffer[] = [];
-      req.on('data', (c: Buffer) => chunks.push(c));
-      req.on('end', () => {
-        objects.set(key, { body: Buffer.concat(chunks), modified: new Date() });
-        res.writeHead(200).end();
-      });
-      return;
-    }
-    if (req.method === 'DELETE') {
-      objects.delete(key);
-      res.writeHead(204).end();
-      return;
-    }
-    if (req.method === 'GET' && key) {
-      const object = objects.get(key);
-      if (!object) res.writeHead(404).end('<Error><Code>NoSuchKey</Code></Error>');
-      else res.writeHead(200).end(object.body);
-      return;
-    }
-    // ListObjectsV2, two per page to exercise continuation.
-    const prefix = url.searchParams.get('prefix') ?? '';
-    const all = [...objects.keys()].filter((k) => k.startsWith(prefix)).sort();
-    const start = Number(url.searchParams.get('continuation-token') ?? 0);
-    const page = all.slice(start, start + 2);
-    const more = start + 2 < all.length;
-    res
-      .writeHead(200, { 'content-type': 'application/xml' })
-      .end(
-        `<?xml version="1.0"?><ListBucketResult><IsTruncated>${more}</IsTruncated>${page
-          .map(
-            (k) =>
-              `<Contents><Key>${k.replace(/&/g, '&amp;')}</Key><Size>${objects.get(k)!.body.length}</Size><LastModified>${objects.get(k)!.modified.toISOString()}</LastModified></Contents>`,
-          )
-          .join(
-            '',
-          )}${more ? `<NextContinuationToken>${start + 2}</NextContinuationToken>` : ''}</ListBucketResult>`,
-      );
-  });
-  return { server, objects, requests };
-}
 
 describe('S3 request signing', () => {
   it('matches the AWS Signature V4 example (GET object with a range)', () => {
@@ -240,24 +180,7 @@ describe('backup service', () => {
   });
 });
 
-/** pg_dump refuses servers newer than itself: the real round trip runs where versions allow. */
-function pgToolsMatchServer(): boolean {
-  try {
-    const client = Number(/(\d+)\./.exec(execFileSync('pg_dump', ['--version']).toString())?.[1]);
-    const server = Number(
-      execFileSync('psql', ['-tAc', 'show server_version_num'], {
-        env: { ...process.env, ...libpqEnv(TEST_DATABASE_URL) },
-      })
-        .toString()
-        .trim(),
-    );
-    return client * 10_000 >= server - (server % 10_000);
-  } catch {
-    return false;
-  }
-}
-
-describe.skipIf(!pgToolsMatchServer())('pg_dump and pg_restore', () => {
+describe.skipIf(!pgToolsMatchServer() && !process.env.CI)('pg_dump and pg_restore', () => {
   // Next to this worker's own test database, so parallel workers never share it.
   const target = siblingDatabaseUrl(TEST_DATABASE_URL, 'restore');
   const restoreDb = quoteIdent(databaseName(target));

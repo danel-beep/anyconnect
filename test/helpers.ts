@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { type AddressInfo, createServer } from 'node:net';
 import { serve } from '@hono/node-server';
 import pg from 'pg';
@@ -14,6 +15,7 @@ import type { safeFetch } from '../src/lib/safe-fetch.js';
 import { base32Decode, totp } from '../src/lib/totp.js';
 import { createLogger } from '../src/logger.js';
 import type { Mailer } from '../src/mail/mailer.js';
+import { libpqEnv } from '../src/ops/backups.js';
 import { createServices, type Services } from '../src/services.js';
 import type { FakeInternet } from './e2e/fake-internet.js';
 import { createDatabaseIfMissing, DEFAULT_TEST_DATABASE_URL, siblingDatabaseUrl } from './setup/databases.js';
@@ -40,6 +42,26 @@ export async function freePort(): Promise<number> {
   const { port } = server.address() as AddressInfo;
   await new Promise<void>((resolve) => server.close(() => resolve()));
   return port;
+}
+
+/**
+ * pg_dump refuses servers newer than itself: tests with the real tools run where versions allow
+ * (CI installs a matching client).
+ */
+export function pgToolsMatchServer(databaseUrl = TEST_DATABASE_URL): boolean {
+  try {
+    const client = Number(/(\d+)\./.exec(execFileSync('pg_dump', ['--version']).toString())?.[1]);
+    const server = Number(
+      execFileSync('psql', ['-tAc', 'show server_version_num'], {
+        env: { ...process.env, ...libpqEnv(databaseUrl) },
+      })
+        .toString()
+        .trim(),
+    );
+    return client * 10_000 >= server - (server % 10_000);
+  } catch {
+    return false;
+  }
 }
 
 /** Recreates the schema from migrations. Call once per test file. */
@@ -82,6 +104,10 @@ export async function startTestHub(
     connectors?: ConnectorRegistry | ((deps: BuiltinDeps) => ConnectorRegistry);
     fetchDocument?: typeof safeFetch;
     seed?: boolean;
+    /** Keep what the database holds (a hub started on a restored backup); default: start empty. */
+    keepData?: boolean;
+    /** Listen on this port (the same address as a hub that was closed); default: a free one. */
+    port?: number;
     stages?: StageMap;
     /** A fake Telegram Bot API (set TELEGRAM_BOT_TOKEN in `env` too). */
     telegramFetch?: typeof fetch;
@@ -103,7 +129,7 @@ export async function startTestHub(
   const server = serve({
     fetch: (req) => (handler ? handler(req) : new Response('starting', { status: 503 })),
     hostname: '127.0.0.1',
-    port: 0,
+    port: options.port ?? 0,
   });
   await new Promise<void>((resolve) => server.once('listening', () => resolve()));
   const port = (server.address() as AddressInfo).port;
@@ -137,7 +163,7 @@ export async function startTestHub(
     ...(options.mailer ? { mailer: options.mailer } : {}),
     ...(options.sentryFetch ? { sentryFetch: options.sentryFetch } : {}),
   });
-  await truncateAll(services);
+  if (!options.keepData) await truncateAll(services);
   await bootstrap(services);
   const app = createApp(services);
   handler = (req) => app.fetch(req);

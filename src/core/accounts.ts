@@ -27,7 +27,7 @@ import { AppError, badRequest, conflict, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
 import type { NetworkPolicy } from '../lib/network.js';
 import { slugify } from '../lib/slug.js';
-import type { AccountKeyring } from './account-keys.js';
+import { type AccountKeyring, oauthTokensContext } from './account-keys.js';
 import type { FileStore } from './files.js';
 import type { TokenManager } from './oauth-tokens.js';
 import { VaultLockedError, type VaultService } from './vaults.js';
@@ -635,6 +635,41 @@ export class AccountService {
       } catch {
         // Unreadable with the configured keys (e.g. a missing previous key): leave it as is.
         result.failed++;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Opens every account the server can open by itself (not sealed to a user's vault): its data
+   * key, credentials and stored OAuth tokens. Changes nothing; for checking a restored backup with
+   * the configured keys (`backup:verify`). Sealed accounts only open with their owner's vault.
+   */
+  async checkReadable(): Promise<{ readable: number; sealed: number; unreadable: string[] }> {
+    const result = { readable: 0, sealed: 0, unreadable: [] as string[] };
+    const rows = await this.db
+      .select({
+        id: accounts.id,
+        dataKeyEncrypted: accounts.dataKeyEncrypted,
+        credentialsEncrypted: accounts.credentialsEncrypted,
+        oauthTokensEncrypted: accountOauth.tokensEncrypted,
+      })
+      .from(accounts)
+      .leftJoin(accountOauth, eq(accountOauth.accountId, accounts.id))
+      .orderBy(asc(accounts.id));
+    for (const row of rows) {
+      if (this.keys.isSealed(row)) {
+        result.sealed++;
+        continue;
+      }
+      try {
+        if (row.dataKeyEncrypted) this.keys.openKey(row);
+        if (row.credentialsEncrypted) this.keys.decryptCredentials(row, row.credentialsEncrypted);
+        if (row.oauthTokensEncrypted)
+          this.keys.decryptSecret(row, row.oauthTokensEncrypted, oauthTokensContext(row.id));
+        result.readable++;
+      } catch {
+        result.unreadable.push(row.id);
       }
     }
     return result;

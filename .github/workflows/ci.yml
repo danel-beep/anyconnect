@@ -33,6 +33,13 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci --ignore-scripts
+      # The backup tests run the real pg_dump/pg_restore, which must not be older than the server
+      # (the runner ships an older client): same major as the service image above.
+      - name: PostgreSQL 17 client
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq postgresql-client-17 > /dev/null
+          pg_dump --version
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test

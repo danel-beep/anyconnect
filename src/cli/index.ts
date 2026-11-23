@@ -9,7 +9,9 @@ import { workspaces } from '../db/schema.js';
 import { generateKey } from '../lib/crypto.js';
 import { createLogger } from '../logger.js';
 import { migrationState } from '../ops/builtin-checks.js';
+import { formatRestoreReport } from '../ops/restore-check.js';
 import { createServices, type Services } from '../services.js';
+import { verifyBackup } from './backup-verify.js';
 
 const HELP = `Manyplug admin CLI
 
@@ -29,6 +31,9 @@ Usage: npm run cli -- <command> [options]
   backup:restore --key KEY --target-url URL --yes
                                          Restore a backup into the database at URL (replaces its
                                          tables; prefer a new, empty database)
+  backup:verify --key KEY --target-url URL --yes
+                                         Practice restore: restore into a scratch database, migrate
+                                         it and check its data opens with this server's keys
   users:create --email E --password P    Create a user with a personal workspace
   users:password --email E --password P  Set a user's password
   users:2fa:reset --email E              Remove a user's second factors (lost authenticator):
@@ -176,7 +181,8 @@ async function main() {
       }
       case 'backup:run':
       case 'backup:list':
-      case 'backup:restore': {
+      case 'backup:restore':
+      case 'backup:verify': {
         const backups = services.backups;
         if (!backups) throw new Error('Backups are not configured: set BACKUP_S3_* (see docs/OPERATIONS.md)');
         if (command === 'backup:run') {
@@ -199,10 +205,16 @@ async function main() {
               `This replaces the tables of database "${where.pathname.slice(1)}" on ${where.host}. Run again with --yes to go ahead.`,
             );
           }
-          await backups.restore(key, target);
-          console.log(
-            `Restored ${key} into ${where.host}${where.pathname}. Run db:migrate if this build is newer.`,
-          );
+          if (command === 'backup:verify') {
+            const report = await verifyBackup(services, key, target);
+            console.log(formatRestoreReport(report));
+            if (!report.ok) process.exitCode = 1;
+          } else {
+            await backups.restore(key, target);
+            console.log(
+              `Restored ${key} into ${where.host}${where.pathname}. Run db:migrate if this build is newer.`,
+            );
+          }
         }
         break;
       }
