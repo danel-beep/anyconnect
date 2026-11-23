@@ -1,10 +1,4 @@
-import {
-  Client,
-  type OAuthClientMetadata,
-  type OAuthClientProvider,
-  StreamableHTTPClientTransport,
-  UnauthorizedError,
-} from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport, UnauthorizedError } from '@modelcontextprotocol/client';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AccountKeyring } from '../src/core/account-keys.js';
@@ -13,47 +7,7 @@ import { oauthGrants, users, vaultWraps } from '../src/db/schema.js';
 import { hashToken, SecretBox } from '../src/lib/crypto.js';
 import { createLogger } from '../src/logger.js';
 import { ADMIN, resetDatabase, startTestHub, TEST_KEY, TestBrowser, type TestHub } from './helpers.js';
-
-type Stored = Parameters<NonNullable<OAuthClientProvider['saveClientInformation']>>[0];
-type Tokens = Parameters<OAuthClientProvider['saveTokens']>[0];
-
-class MemoryOAuthProvider implements OAuthClientProvider {
-  client?: Stored;
-  savedTokens?: Tokens;
-  verifier = '';
-  authorizationUrl?: URL;
-  readonly redirectUrl = 'http://localhost:7777/callback';
-  get clientMetadata(): OAuthClientMetadata {
-    return {
-      client_name: 'Vault Test Client',
-      redirect_uris: [this.redirectUrl],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-    };
-  }
-  clientInformation() {
-    return this.client;
-  }
-  saveClientInformation(info: Stored) {
-    this.client = info;
-  }
-  tokens() {
-    return this.savedTokens;
-  }
-  saveTokens(tokens: Tokens) {
-    this.savedTokens = tokens;
-  }
-  redirectToAuthorization(url: URL) {
-    this.authorizationUrl = url;
-  }
-  saveCodeVerifier(verifier: string) {
-    this.verifier = verifier;
-  }
-  codeVerifier() {
-    return this.verifier;
-  }
-}
+import { MemoryOAuthProvider, type Tokens } from './oauth-app.js';
 
 async function connect(hub: TestHub, provider: MemoryOAuthProvider, browser: TestBrowser): Promise<Client> {
   if (!provider.savedTokens) {
@@ -130,7 +84,7 @@ describe('sealed accounts (protected by default)', () => {
   });
 
   it('opens for the AI app the user approved, with the token it presents', async () => {
-    provider = new MemoryOAuthProvider();
+    provider = new MemoryOAuthProvider(undefined, { clientName: 'Vault Test Client' });
     client = await connect(hub, provider, signedIn);
     const result = await client.callTool({ name: 'demo_account_info', arguments: { account: 'sealed' } });
     expect(result.isError).toBeFalsy();
@@ -208,7 +162,7 @@ describe('sealed accounts (protected by default)', () => {
   it('an app without a way into the vault says what to do, and one Allow lets it in for good', async () => {
     // Approved from a browser where the vault is locked: like an app connected before the vault existed.
     const other = browser();
-    const otherProvider = new MemoryOAuthProvider();
+    const otherProvider = new MemoryOAuthProvider(undefined, { clientName: 'Vault Test Client' });
     let otherClient = await connect(hub, otherProvider, other);
     const ask = () => otherClient.callTool({ name: 'demo_account_info', arguments: { account: 'sealed' } });
     const locked = await ask();
@@ -280,7 +234,11 @@ describe('sealed accounts (protected by default)', () => {
     expect(await (await other.request('/security')).text()).toContain('Открыт в этом браузере');
 
     // An app approved there now opens sealed accounts too.
-    const otherClient = await connect(hub, new MemoryOAuthProvider(), other);
+    const otherClient = await connect(
+      hub,
+      new MemoryOAuthProvider(undefined, { clientName: 'Vault Test Client' }),
+      other,
+    );
     const result = await otherClient.callTool({
       name: 'demo_account_info',
       arguments: { account: 'sealed' },

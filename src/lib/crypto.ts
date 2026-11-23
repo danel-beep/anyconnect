@@ -169,6 +169,11 @@ export class SecretBox implements KeyWrapper {
     return this.primary.id;
   }
 
+  /** True when an envelope made with key `id` (the second part of `v1.<id>.…`) can be opened. */
+  knowsKey(id: string): boolean {
+    return this.keys.has(id);
+  }
+
   encrypt(plaintext: string, context: string): string {
     const iv = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', this.primary.key, iv);
@@ -227,8 +232,20 @@ export class SecretBox implements KeyWrapper {
 
   /** Derive an independent sub-key for another purpose (CSRF, signing, ...). */
   deriveKey(purpose: string): Buffer {
-    return Buffer.from(hkdfSync('sha256', this.derivationRoot, Buffer.alloc(0), `anyconnect/${purpose}`, 32));
+    return derive(this.derivationRoot, purpose);
   }
+
+  /**
+   * The sub-key for `purpose` from the primary key, then from each previous key: for data that
+   * outlives a key rotation and names the key it was made with (database backups).
+   */
+  deriveKeys(purpose: string): Buffer[] {
+    return [...this.keys.values()].map((entry) => derive(entry.master, purpose));
+  }
+}
+
+function derive(master: Buffer, purpose: string): Buffer {
+  return Buffer.from(hkdfSync('sha256', master, Buffer.alloc(0), `anyconnect/${purpose}`, 32));
 }
 
 // ---------------------------------------------------------------------------

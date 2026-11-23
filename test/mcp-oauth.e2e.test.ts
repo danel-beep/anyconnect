@@ -1,70 +1,8 @@
-import {
-  Client,
-  type OAuthClientMetadata,
-  type OAuthClientProvider,
-  StreamableHTTPClientTransport,
-  UnauthorizedError,
-} from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport, UnauthorizedError } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashToken } from '../src/lib/crypto.js';
 import { resetDatabase, startTestHub, TestBrowser, type TestHub } from './helpers.js';
-
-type Stored = Parameters<NonNullable<OAuthClientProvider['saveClientInformation']>>[0];
-type Tokens = Parameters<OAuthClientProvider['saveTokens']>[0];
-
-/** In-memory OAuth client, the way Claude Code or another MCP client would behave. */
-class MemoryOAuthProvider implements OAuthClientProvider {
-  client?: Stored;
-  savedTokens?: Tokens;
-  verifier = '';
-  authorizationUrl?: URL;
-  clientMetadataUrl?: string;
-
-  constructor(
-    readonly redirectUrl = 'http://localhost:7777/callback',
-    options: { clientMetadataUrl?: string } = {},
-  ) {
-    if (options.clientMetadataUrl) this.clientMetadataUrl = options.clientMetadataUrl;
-  }
-
-  get clientMetadata(): OAuthClientMetadata {
-    return {
-      client_name: 'Test MCP Client',
-      redirect_uris: [this.redirectUrl],
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-      token_endpoint_auth_method: 'none',
-    };
-  }
-  clientInformation() {
-    return this.client;
-  }
-  saveClientInformation(info: Stored) {
-    this.client = info;
-  }
-  tokens() {
-    return this.savedTokens;
-  }
-  saveTokens(tokens: Tokens) {
-    this.savedTokens = tokens;
-  }
-  redirectToAuthorization(url: URL) {
-    this.authorizationUrl = url;
-  }
-  saveCodeVerifier(verifier: string) {
-    this.verifier = verifier;
-  }
-  codeVerifier() {
-    return this.verifier;
-  }
-  discovery?: unknown;
-  saveDiscoveryState(state: unknown) {
-    this.discovery = state;
-  }
-  discoveryState() {
-    return this.discovery as never;
-  }
-}
+import { MemoryOAuthProvider } from './oauth-app.js';
 
 async function connectWithOAuth(
   hub: TestHub,

@@ -75,7 +75,12 @@ export async function encryptFile(source: string, target: string, key: Buffer): 
   await pipeline(createReadStream(source), encrypt, createWriteStream(target, { mode: 0o600 }));
 }
 
-export async function decryptFile(source: string, target: string, key: Buffer): Promise<void> {
+/**
+ * Decrypts a backup with whichever of `keys` it was made with (the header names the key), so
+ * backups from before a key rotation still restore.
+ */
+export async function decryptFile(source: string, target: string, keys: Buffer | Buffer[]): Promise<void> {
+  const candidates = Array.isArray(keys) ? keys : [keys];
   // One open file for the size, the header, the tag and the ciphertext: nothing can swap it between.
   const handle = await open(source, 'r');
   try {
@@ -89,9 +94,10 @@ export async function decryptFile(source: string, target: string, key: Buffer): 
     if (header[MAGIC.length] !== VERSION)
       throw new Error(`Unsupported backup format ${header[MAGIC.length]}`);
     const keyId = header.subarray(MAGIC.length + 1, MAGIC.length + 1 + KEY_ID_BYTES).toString('hex');
-    if (keyId !== backupKeyId(key)) {
+    const key = candidates.find((candidate) => backupKeyId(candidate) === keyId);
+    if (!key) {
       throw new Error(
-        `This backup was encrypted with another key (id ${keyId}, current ${backupKeyId(key)}): set BACKUP_ENCRYPTION_KEY, or the ENCRYPTION_KEY the backup was made with`,
+        `This backup was encrypted with another key (id ${keyId}, known ${candidates.map(backupKeyId).join(', ')}): set BACKUP_ENCRYPTION_KEY, or put the ENCRYPTION_KEY the backup was made with into ENCRYPTION_KEYS_PREVIOUS`,
       );
     }
     const decipher = createDecipheriv('aes-256-gcm', key, header.subarray(HEADER_BYTES - IV_BYTES));
@@ -205,7 +211,10 @@ export class BackupService {
     private readonly deps: {
       databaseUrl: string;
       store: BackupStore;
+      /** Encrypts new backups (and decrypts the ones made with it). */
       key: Buffer;
+      /** Also tried when restoring: keys older backups were made with (before a rotation). */
+      previousKeys?: Buffer[];
       /** Key prefix in the bucket, e.g. `manyplug/`. */
       prefix: string;
       retentionDays: number;
@@ -273,7 +282,7 @@ export class BackupService {
       const sealed = join(dir, 'db.dump.enc');
       const dump = join(dir, 'db.dump');
       await this.deps.store.getFile(key, sealed);
-      await decryptFile(sealed, dump, this.deps.key);
+      await decryptFile(sealed, dump, [this.deps.key, ...(this.deps.previousKeys ?? [])]);
       await rm(sealed);
       await this.tools.restore(targetUrl, dump, signal);
       this.deps.logger.info({ key }, 'database restored from backup');
