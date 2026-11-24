@@ -6,7 +6,15 @@ import { MemoryMailer } from '../../src/mail/mailer.js';
 import { FakeOidc } from '../fake-oidc.js';
 import { enableTotp, resetDatabase, startTestHub, TestBrowser, type TestHub } from '../helpers.js';
 import { SoftwareAuthenticator } from '../webauthn-authenticator.js';
-import { type A11yProblem, AXE_SOURCE, checkFocus, RUN_AXE } from './a11y-checks.js';
+import {
+  type A11yProblem,
+  AXE_SOURCE,
+  CLOSE_FOLDED,
+  checkFocus,
+  OPEN_FOLDED,
+  OPENED,
+  RUN_AXE,
+} from './a11y-checks.js';
 import { BOXES, checkLayout, type LayoutProblem } from './layout-checks.js';
 
 /**
@@ -289,13 +297,33 @@ describe('every page keeps its layout', () => {
               const problems = (await page.evaluate(
                 `(${checkLayout.toString()})(${JSON.stringify(BOXES)})`,
               )) as (LayoutProblem | A11yProblem)[];
-              // Accessibility: contrast depends on the theme, the rest on the markup, so one viewport
-              // and language per theme is enough (English and Russian share the templates).
-              if (viewport === 'desktop' && lang === 'en') {
+              // Accessibility: contrast depends on the theme, the rest on the markup and the layout, so
+              // English is enough (English and Russian share the templates). On a desktop the folded
+              // parts and a dropdown menu are opened and checked too; on a phone the page as it opens
+              // (its own layout: menu button, stacked tables, tap targets).
+              if (lang === 'en') {
                 // Evaluated, not a <script> tag, which the pages' CSP would block.
                 await page.evaluate(AXE_SOURCE);
-                problems.push(...((await page.evaluate(RUN_AXE)) as A11yProblem[]));
-                problems.push(...((await page.evaluate(`(${checkFocus.toString()})()`)) as A11yProblem[]));
+                const shown = (await page.evaluate(RUN_AXE)) as A11yProblem[];
+                problems.push(...shown);
+                if (viewport === 'desktop') {
+                  problems.push(...((await page.evaluate(`(${checkFocus.toString()})()`)) as A11yProblem[]));
+                  if (((await page.evaluate(OPEN_FOLDED)) as number) > 0) {
+                    const known = new Set(shown.map((p) => `${p.rule} ${p.where}`));
+                    const opened = [
+                      ...((await page.evaluate(RUN_AXE)) as A11yProblem[]),
+                      ...((await page.evaluate(
+                        `(${checkFocus.toString()})(${JSON.stringify(OPENED)})`,
+                      )) as A11yProblem[]),
+                    ];
+                    problems.push(
+                      ...opened
+                        .filter((p) => !known.has(`${p.rule} ${p.where}`))
+                        .map((p) => ({ ...p, detail: `when opened: ${p.detail}` })),
+                    );
+                    await page.evaluate(CLOSE_FOLDED);
+                  }
+                }
               }
               for (const p of problems) {
                 const key = `${persona.name} ${path} ${p.rule}: ${p.where}`;

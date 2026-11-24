@@ -604,7 +604,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
           <div class="section-head">
             <h2>{t('pricing.compare')}</h2>
           </div>
-          <div class="card flush table-wrap">
+          <div class="card flush table-wrap" data-scroll>
             <table class="compare">
               <thead>
                 <tr>
@@ -612,20 +612,20 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                     <span class="sr-only">{t('pricing.feature')}</span>
                   </th>
                   {plans.map((p) => (
-                    <th>{t(`plan.${p.id}.name` as 'plan.free.name')}</th>
+                    <th scope="col">{t(`plan.${p.id}.name` as 'plan.free.name')}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td>{t('pricing.price')}</td>
+                  <th scope="row">{t('pricing.price')}</th>
                   {plans.map((p) => (
                     <td class="num">{p.priceMonthly === 0 ? t('pricing.free') : `$${p.priceMonthly}`}</td>
                   ))}
                 </tr>
                 {COMPARE.map((metric) => (
                   <tr>
-                    <td>{t(`pricing.row.${metric}`)}</td>
+                    <th scope="row">{t(`pricing.row.${metric}`)}</th>
                     {plans.map((p) => (
                       <td class="num">
                         {cell(t, lang, metric, p)}
@@ -644,7 +644,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 ))}
                 {(['teams', 'security', 'unified', 'custom', 'personas'] as const).map((f) => (
                   <tr>
-                    <td>{t(`pricing.row.${f}`)}</td>
+                    <th scope="row">{t(`pricing.row.${f}`)}</th>
                     {plans.map(() => (
                       <td>
                         <Icon name="check" label={t('pricing.included')} />
@@ -659,7 +659,7 @@ export const PricingPage: FC<{ ctx: PageCtx }> = ({ ctx }) => {
                 </tr>
                 {COMPARE_SOON.map((metric) => (
                   <tr>
-                    <td>{t(`pricing.row.${metric}`)}</td>
+                    <th scope="row">{t(`pricing.row.${metric}`)}</th>
                     {plans.map((p) => (
                       <td class="num">{cell(t, lang, metric, p)}</td>
                     ))}
@@ -881,7 +881,7 @@ export const ServiceDetailPage: FC<{
               <h2>{t('service.tools', { n: service.actions.length })}</h2>
               <p class="small muted">{t('service.toolsNote')}</p>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap" data-scroll>
               <table class="tools-table stack-sm">
                 <thead>
                   <tr>

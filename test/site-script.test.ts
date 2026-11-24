@@ -40,6 +40,8 @@ function openMenu(viewport: { width: number; height: number }, button: Rect, men
     documentElement: root,
     querySelectorAll: (sel: string) => (sel === 'details[data-menu][open]' && menu.open ? [menu] : []),
     querySelector: () => null,
+    createElement: () => ({ setAttribute: noop }),
+    body: { appendChild: noop },
     // Menus are handled on the document (so menus in refreshed live blocks work too).
     addEventListener: (type: string, fn: Listener) => {
       listeners[type] = [...(listeners[type] ?? []), fn];
@@ -144,6 +146,8 @@ function serviceSearch() {
     querySelector: (sel: string) => byId[sel] ?? null,
     getElementById: () => null,
     addEventListener: noop,
+    createElement: () => ({ setAttribute: noop }),
+    body: { appendChild: noop },
   };
   class Event {
     constructor(readonly type: string) {}

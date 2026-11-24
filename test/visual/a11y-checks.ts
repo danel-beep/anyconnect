@@ -31,9 +31,10 @@ declare const document: any, getComputedStyle: (el: Element) => any;
  * Keyboard focus is visible (WCAG 2.4.7), which axe does not check: each visible link, button and
  * field, focused as if by Tab, must change how it or a nearby wrapper looks (outline, ring, border or
  * background). A wrapper counts because tiles show focus on the whole card (`:focus-within`).
+ * `within` limits the check to the elements inside what matches it (e.g. what `OPEN_FOLDED` opened).
  * Runs inside the page, so it stays self-contained.
  */
-export function checkFocus(): A11yProblem[] {
+export function checkFocus(within?: string): A11yProblem[] {
   const problems: A11yProblem[] = [];
   const FOCUSABLE =
     'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
@@ -65,7 +66,12 @@ export function checkFocus(): A11yProblem[] {
     return `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : cls} "${label}"`;
   };
   const seen = new Set<string>();
-  for (const el of Array.from(document.querySelectorAll(FOCUSABLE)) as Element[]) {
+  const elements: Element[] = within
+    ? (Array.from(document.querySelectorAll(within)) as Element[]).flatMap(
+        (root) => Array.from(root.querySelectorAll(FOCUSABLE)) as Element[],
+      )
+    : Array.from(document.querySelectorAll(FOCUSABLE));
+  for (const el of elements) {
     if (problems.length >= 5) break;
     if (!el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) continue;
     const r = el.getBoundingClientRect();
@@ -100,4 +106,32 @@ export const RUN_AXE = `(async () => {
       detail: (n.failureSummary || v.help).replace(/\\s+/g, ' ').slice(0, 300),
     })),
   );
+})()`;
+
+/** Marks what `OPEN_FOLDED` opened, for `checkFocus(OPENED)` and `CLOSE_FOLDED`. */
+export const OPENED = '[data-a11y-opened]';
+
+/**
+ * axe checks only what is shown, so folded content (sections, FAQ answers, "more ways" on sign-in)
+ * and dropdown menus would go unchecked. This opens every closed `<details>` and the first dropdown
+ * menu (one menu at a time is open, like for a user), waits for the page's scripts to place it and
+ * says how many it opened. `CLOSE_FOLDED` puts the page back before its screenshot.
+ */
+export const OPEN_FOLDED = `(async () => {
+  const folds = [...document.querySelectorAll('details:not([open]):not([data-menu])')];
+  const menu = document.querySelector('details[data-menu]:not([open])');
+  for (const el of menu ? [...folds, menu] : folds) {
+    el.setAttribute('data-a11y-opened', '');
+    el.open = true;
+  }
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  return folds.length + (menu ? 1 : 0);
+})()`;
+
+export const CLOSE_FOLDED = `(async () => {
+  for (const el of document.querySelectorAll('${OPENED}')) {
+    el.removeAttribute('data-a11y-opened');
+    el.open = false;
+  }
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
 })()`;

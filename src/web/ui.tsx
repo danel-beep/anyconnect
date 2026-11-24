@@ -183,7 +183,7 @@ export const CopyField: FC<{ t: Translate; id: string; value: string; label: str
 /** A code block with a copy button. */
 export const CodeBlock: FC<{ t: Translate; id: string; code: string }> = ({ t, id, code }) => (
   <div class="stack">
-    <pre class="block" id={id}>
+    <pre class="block" data-scroll id={id}>
       <code>{code}</code>
     </pre>
     <div class="row">

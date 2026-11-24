@@ -161,7 +161,8 @@ export const AppShell: FC<{
       <a class="skip" href="#main">
         {t('ui.skip')}
       </a>
-      <div class="mobile-bar">
+      {/* A phone's top bar is the page header (a landmark); on a desktop it is hidden. */}
+      <header class="mobile-bar">
         <Brand href="/app" />
         <button
           type="button"
@@ -173,7 +174,7 @@ export const AppShell: FC<{
         >
           <Icon name="menu" />
         </button>
-      </div>
+      </header>
       <div class="shell">
         <aside class="sidebar" id="app-nav" aria-label={t('app.nav.label')}>
           <Brand href="/app" />
@@ -369,7 +370,7 @@ export const CallsTable: FC<{
   return calls.length === 0 ? (
     <p class="muted pad-x">{empty}</p>
   ) : (
-    <div class="table-wrap">
+    <div class="table-wrap" data-scroll>
       <table class="calls">
         <thead>
           <tr>
@@ -547,8 +548,8 @@ export const BrokenAccounts: FC<{ ctx: PageCtx; accounts: AccountView[] }> = ({ 
   const broken = accounts.filter(needsFix);
   if (!broken.length) return null;
   return (
-    <div class="notice bad attention" role="status">
-      <strong>{t('app.attention.title', { n: broken.length })}</strong>
+    <div class="notice bad attention">
+      <strong data-live-summary>{t('app.attention.title', { n: broken.length })}</strong>
       <ul>
         {broken.slice(0, 5).map((a) => (
           <li>
@@ -595,7 +596,9 @@ export const SetupSteps: FC<{ ctx: PageCtx; steps: SetupStep[]; title?: string }
     <section class="onboard" aria-labelledby="onboard-title">
       <div class="onboard-head">
         <h2 id="onboard-title">{heading}</h2>
-        <span class="onboard-count">{t('app.onb.progress', { done, total: steps.length })}</span>
+        <span class="onboard-count" data-live-summary>
+          {t('app.onb.progress', { done, total: steps.length })}
+        </span>
         <Meter used={done} limit={steps.length} label={heading} />
       </div>
       <div class={`onboard-steps${steps.length === 2 ? ' two' : ''}`}>
@@ -677,9 +680,9 @@ export const OverviewPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: OverviewVi
           one of them: it keeps the app the user picked. */}
       <div id="overview-status" data-poll="10">
         {view.waiting.count ? (
-          <div class="notice info waiting" role="status">
+          <div class="notice info waiting">
             <span class="grow">
-              <strong>{t('app.waiting.title', { n: view.waiting.count })}</strong>{' '}
+              <strong data-live-summary>{t('app.waiting.title', { n: view.waiting.count })}</strong>{' '}
               {view.waiting.soonest
                 ? t('app.waiting.expires', { when: fmtAgo(ctx.lang, view.waiting.soonest) })
                 : null}
@@ -840,7 +843,7 @@ const ClientSetup: FC<{ ctx: PageCtx; guide: ClientGuide; url: string }> = ({ ct
           {prompt ? (
             <details class="ai-prompt">
               <summary>{t('app.ai.promptShow')}</summary>
-              <pre class="block" id={promptId}>
+              <pre class="block" data-scroll id={promptId}>
                 <code>{prompt}</code>
               </pre>
             </details>
@@ -1024,7 +1027,10 @@ const AccountRow: FC<{ ctx: PageCtx; a: AccountView }> = ({ ctx, a }) => {
           </form>
         )}
         <details class="menu" data-menu>
-          <summary aria-label={t('app.acc.more')} title={t('app.acc.more')}>
+          <summary
+            aria-label={t('app.acc.more', { label: a.label })}
+            title={t('app.acc.more', { label: a.label })}
+          >
             <Icon name="more" />
             <span class="menu-label">{t('app.acc.moreShort')}</span>
           </summary>
@@ -1199,7 +1205,7 @@ export const ServicesAppPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: Service
       <div id="services-live" data-poll="10">
         <div class="card flush">
           <div class="card-head pad">
-            <h2>
+            <h2 data-live-summary>
               {t('app.services.connected')}{' '}
               <span class="badge">
                 {view.usage.accounts.used}
@@ -1576,7 +1582,7 @@ export const AppsPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AppsView }> = 
         {apps ? (
           <section class="card" id="connected-apps" aria-labelledby="connected-apps-h">
             <div class="card-head">
-              <h2 id="connected-apps-h" class="apps-head">
+              <h2 id="connected-apps-h" class="apps-head" data-live-summary>
                 {t('app.apps.yours')} <span class="badge tiny-badge">{view.grants.length}</span>
               </h2>
               <a class="btn sm" href="#connect-ai">

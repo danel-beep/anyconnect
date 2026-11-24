@@ -222,11 +222,13 @@ details.more-ways{margin-top:14px}
 .compare th:not(:first-child){font-size:14px;font-weight:600;color:var(--text)}
 .compare th:first-child,.compare td:first-child{width:30%}
 .plans-hint{margin-top:16px;max-width:720px}
+.compare tbody th[scope=row]{color:var(--text);font-size:inherit;font-weight:inherit;background:none;white-space:normal;border-top:1px solid var(--border)}
+tbody tr:hover th[scope=row]{background:var(--bg-subtle)}
 .compare tr.group th{text-align:left;font:500 12px/1 ${MONO};letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:18px;border-top:1px solid var(--border)}
 /* Phones: comparisons with other products keep the row names put while the columns scroll sideways */
 @media (max-width:640px){
   .compare.vs{min-width:560px}
-  .compare.vs td{background:var(--card)}
+  .compare.vs td,.compare.vs tbody th{background:var(--card)}
   .compare.vs th:first-child,.compare.vs td:first-child{position:sticky;left:0;z-index:1;width:132px;min-width:132px;background:var(--card);box-shadow:1px 0 0 var(--border)}
   .compare.vs thead th:first-child{background:var(--bg-subtle)}
   .compare.vs tr.group th{position:static;box-shadow:none}
@@ -238,16 +240,16 @@ details.more-ways{margin-top:14px}
   .compare:not(.vs),.compare:not(.vs) thead,.compare:not(.vs) tbody{display:block}
   .compare:not(.vs) tr{display:flex;flex-wrap:wrap;border-top:1px solid var(--border)}
   .compare:not(.vs) thead tr{border-top:0;background:var(--bg-subtle)}
-  .compare:not(.vs) th,.compare:not(.vs) td{flex:1 1 0;min-width:0;border-top:0;padding:8px 6px}
+  .compare:not(.vs) th,.compare:not(.vs) td,.compare:not(.vs) tbody th{flex:1 1 0;min-width:0;border-top:0;padding:8px 6px}
   .compare:not(.vs) th:first-child,.compare:not(.vs) td:first-child{flex:1 0 100%;width:auto;padding:12px 16px 0;font-weight:560}
-  .compare:not(.vs) thead th:first-child{display:none}
+  .compare:not(.vs) thead th:first-child{flex:0 0 0;padding:0}
   .compare:not(.vs) tr.group th{flex-basis:100%;padding:18px 16px 10px;border-top:0;font-weight:500}
 }
 /* Docs and search pages (src/web/seo-pages.tsx) */
 .card.guide{padding:24px;margin:0;border-bottom:1px solid var(--border)}
 .card.guide h2,.step-card-plain h2{display:block;font-size:18px}
 .compare.vs th,.compare.vs td{text-align:left}
-.compare.vs td:first-child{font-weight:560}
+.compare.vs td:first-child,.compare.vs tbody th:first-child{font-weight:560}
 .faq-group{margin:0 0 32px}
 .faq-group h2{margin:0 0 8px}
 .prose .crumbs,.guide .crumbs{margin-bottom:16px}

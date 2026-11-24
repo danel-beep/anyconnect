@@ -50,7 +50,8 @@ export function checkLayout(boxesSelector: string): LayoutProblem[] {
     if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0)
       return false;
     const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
+    // Text for screen readers only (`sr-only`) is clipped to a 1px box: nothing to see.
+    return r.width > 1 || r.height > 1 ? r.width > 0 && r.height > 0 : false;
   };
   /** Inside a box that scrolls sideways (wide tables): its content may legitimately run off. */
   const scrolls = (el: Element, stop: Element): boolean => {

@@ -289,7 +289,7 @@ export const AdminUsersPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUse
         </button>
       </form>
       <div class="card flush">
-        <div class="table-wrap">
+        <div class="table-wrap" data-scroll>
           <table>
             <thead>
               <tr>
@@ -676,7 +676,7 @@ export const AdminUserPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminUser
         {view.grants.length === 0 ? (
           <p class="muted pad-x">{t('admin.user.noGrants')}</p>
         ) : (
-          <div class="table-wrap">
+          <div class="table-wrap" data-scroll>
             <table>
               <thead>
                 <tr>
@@ -928,7 +928,7 @@ export const AdminAuditPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminAud
     <AppShell ctx={ctx} shell={shell} section="admin-audit" title={t('admin.nav.audit')}>
       <PageHead title={t('admin.nav.audit')} sub={t('admin.audit.sub')} />
       <div class="card flush">
-        <div class="table-wrap">
+        <div class="table-wrap" data-scroll>
           <table>
             <thead>
               <tr>
@@ -1111,7 +1111,7 @@ export const AdminSystemPage: FC<{ ctx: PageCtx; shell: ShellInfo; view: AdminSy
             </p>
           </div>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" data-scroll>
           <table class="jobs-table">
             <thead>
               <tr>

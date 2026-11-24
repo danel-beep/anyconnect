@@ -449,7 +449,7 @@ const Funnel: FC<{ ctx: PageCtx; view: AnalyticsView; rows: FunnelRow[] }> = ({ 
         ))}
       </div>
       <div class="card flush">
-        <div class="table-wrap">
+        <div class="table-wrap" data-scroll>
           <table>
             <thead>
               <tr>
@@ -610,7 +610,7 @@ const Product: FC<{ ctx: PageCtx; view: AnalyticsView; report: ProductReport }> 
           <h2>{t('an.accounts')}</h2>
           <span class="small muted">{t('an.accountsHint')}</span>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" data-scroll>
           <table>
             <thead>
               <tr>
@@ -724,7 +724,7 @@ const Plans: FC<{ ctx: PageCtx; report: PlansReport }> = ({ ctx, report }) => {
             {t('an.plansMore')}
           </a>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" data-scroll>
           <table>
             <thead>
               <tr>
@@ -793,7 +793,7 @@ const Retention: FC<{ ctx: PageCtx; report: RetentionReport }> = ({ ctx, report 
         <h2>{t('an.retention.title')}</h2>
         <span class="small muted">{t('an.retention.hint')}</span>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap" data-scroll>
         <table class="an-cohorts">
           <thead>
             <tr>

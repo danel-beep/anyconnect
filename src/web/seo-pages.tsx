@@ -307,7 +307,7 @@ export const ServiceClientPage: FC<{
               <h2>{t('combo.tools', vars)}</h2>
               <p class="small muted">{t('service.toolsNote')}</p>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap" data-scroll>
               <table class="tools-table stack-sm">
                 <thead>
                   <tr>
@@ -536,19 +536,19 @@ export const CompareView: FC<{ ctx: PageCtx; page: ComparePage; services: Public
           <h1>{body.h1}</h1>
           <p class="muted">{t('article.updated', { date: formatDate(lang, page.checked) })}</p>
           <p class="lead">{fill(body.summary, vars)}</p>
-          <div class="card flush table-wrap">
+          <div class="card flush table-wrap" data-scroll>
             <table class="compare vs">
               <thead>
                 <tr>
-                  <th>{t('compare.feature')}</th>
-                  <th>{BRAND.name}</th>
-                  <th>{page.other}</th>
+                  <th scope="col">{t('compare.feature')}</th>
+                  <th scope="col">{BRAND.name}</th>
+                  <th scope="col">{page.other}</th>
                 </tr>
               </thead>
               <tbody>
                 {body.rows.map((r) => (
                   <tr>
-                    <td>{r.feature}</td>
+                    <th scope="row">{r.feature}</th>
                     <td>{fill(r.manyplug, vars)}</td>
                     <td>{r.other}</td>
                   </tr>
