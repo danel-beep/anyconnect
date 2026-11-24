@@ -19,8 +19,13 @@ function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localSto
 function dark(){var t=root.getAttribute('data-theme');if(t)return t==='dark';return window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches}
 $$('[data-theme-toggle]').forEach(function(b){b.hidden=false;b.addEventListener('click',function(){var next=dark()?'light':'dark';root.setAttribute('data-theme',next);store('ac-theme',next)})});
 
+/* Screen-reader news: one polite status region per page, made before anything is said into it (a region
+   inserted together with its text is often not read). say() empties it first, so the same words repeat. */
+var news=d.createElement('div');news.className='sr-only';news.id='live-news';news.setAttribute('role','status');d.body.appendChild(news);
+function say(text){text=(text||'').trim();if(!text)return;news.textContent='';setTimeout(function(){news.textContent=text},60)}
+
 /* Copy */
-function flash(btn){btn.setAttribute('data-copied','');setTimeout(function(){btn.removeAttribute('data-copied')},1600)}
+function flash(btn){btn.setAttribute('data-copied','');var done=btn.querySelector('.copy-done');if(done)say(done.textContent);setTimeout(function(){btn.removeAttribute('data-copied')},1600)}
 /* Delegated, so copy buttons in blocks that live updates replace keep working. */
 d.addEventListener('click',function(e){var btn=e.target&&e.target.closest?e.target.closest('[data-copy]'):null;if(!btn)return;var el=d.querySelector(btn.getAttribute('data-copy'));if(!el)return;var text=('value' in el&&el.value!==undefined)?el.value:el.textContent.trim();
 if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(function(){flash(btn)},function(){fallback(el,btn)})}else fallback(el,btn)});
@@ -78,6 +83,13 @@ $$('[data-interval-root]').forEach(function(box){$$('[data-interval-set]',box).f
 /* Confirm before destructive forms */
 d.addEventListener('submit',function(e){var f=e.target,msg=f.getAttribute&&f.getAttribute('data-confirm');if(msg&&!window.confirm(msg))e.preventDefault()},true);
 
+/* A box that scrolls (a wide table on a phone, a long code block: data-scroll) and holds nothing to focus
+   gets a tab stop while it scrolls, so it can be scrolled from the keyboard too. */
+function scrollStops(){$$('[data-scroll]').forEach(function(b){var over=b.scrollWidth>b.clientWidth+1||b.scrollHeight>b.clientHeight+1;
+if(over&&!b.hasAttribute('tabindex')&&!b.querySelector('a[href],button,input,select,textarea,summary,[tabindex]')){b.tabIndex=0;b.setAttribute('data-scroll-stop','')}
+else if(!over&&b.hasAttribute('data-scroll-stop')){b.removeAttribute('tabindex');b.removeAttribute('data-scroll-stop')}})}
+scrollStops();var scrollTimer;window.addEventListener('resize',function(){clearTimeout(scrollTimer);scrollTimer=setTimeout(scrollStops,150)});
+
 /* Dropdown menus: one open at a time, close on outside click or Escape. Everything is delegated from the
    document and looks the menus up when needed, so menus in blocks that live updates replace keep working. */
 function openMenus(){return $$('details[data-menu][open]')}
@@ -92,6 +104,8 @@ function placeOpen(){openMenus().forEach(placeMenu)}
 d.addEventListener('toggle',function(e){var m=e.target;if(!m||!m.open||!m.matches||!m.matches('details[data-menu]'))return;openMenus().forEach(function(o){if(o!==m)o.open=false});placeMenu(m)},true);
 window.addEventListener('resize',placeOpen);window.addEventListener('scroll',placeOpen,{passive:true,capture:true});
 d.addEventListener('click',function(e){openMenus().forEach(function(m){if(!m.contains(e.target))m.open=false})});
+/* Tabbing out of an open menu closes it, so it does not float over what the keyboard user moved to. */
+d.addEventListener('focusin',function(e){openMenus().forEach(function(m){if(!m.contains(e.target))m.open=false})});
 d.addEventListener('keydown',function(e){if(e.key!=='Escape')return;openMenus().forEach(function(m){m.open=false;var s=m.querySelector('summary');if(s)s.focus()});if(root.classList.contains('nav-open')){setNav(false);var t=$$('[data-nav-toggle]').filter(function(b){return b.offsetParent})[0];if(t)t.focus()}});
 
 /* Live filter: every word typed must appear in an item's data-search. Optional attributes:
@@ -171,13 +185,20 @@ d.addEventListener('change',function(e){var f=e.target&&e.target.form;if(f&&f.ha
    while the tab is visible, so a new confirmation or log row shows up without a reload. A block the
    user is working in (typing inside, or a dropdown menu open in it) is left alone until they are done;
    open <details id> stay open. A block is compared with what the server sent last, not with the page:
-   what the user changed on it (an open menu, a picked tab) never counts as news and is not reset. */
+   what the user changed on it (an open menu, a picked tab) never counts as news and is not reset.
+   Keyboard focus on a link or button inside stays on the same link or button in the new content (or on the
+   block, if it is gone), and the block's data-live-summary lines that are new are read out by screen readers. */
 (function(){var blocks=$$('[data-poll][id]');if(!blocks.length||!window.fetch||!window.DOMParser)return;
 var every=Math.max(3,Math.min.apply(null,blocks.map(function(b){return Number(b.getAttribute('data-poll'))||10})))*1000,busy=false,last={};
 blocks.forEach(function(b){last[b.id]=b.innerHTML});
+function sig(el){var f=el.closest('form');return [el.tagName,el.getAttribute('href')||'',f?f.getAttribute('action')||'':'',el.getAttribute('aria-label')||'',el.textContent.trim()].join('|')}
+function summaries(el){return $$('[data-live-summary]',el).map(function(x){return x.textContent.replace(/\\s+/g,' ').trim()})}
 function swap(html){var next=new DOMParser().parseFromString(html,'text/html');
 $$('[data-poll][id]').forEach(function(b){var fresh=next.getElementById(b.id);if(!fresh||fresh.innerHTML===last[b.id])return;var a=d.activeElement;if(a&&b.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName))return;if(b.querySelector('details[data-menu][open]'))return;
-var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=last[b.id]=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]})})}
+var had=summaries(b),focused=a&&a!==b&&b.contains(a)?{id:a.id,sig:sig(a)}:null;
+var open=$$('details[id]',b).map(function(x){return [x.id,x.open]});b.innerHTML=last[b.id]=fresh.innerHTML;open.forEach(function(o){var x=d.getElementById(o[0]);if(x)x.open=o[1]});
+if(focused){var to=(focused.id&&d.getElementById(focused.id))||$$('a[href],button,summary,[tabindex]',b).filter(function(x){return sig(x)===focused.sig})[0];if(!to||!b.contains(to)){to=b;b.tabIndex=-1}to.focus({preventScroll:true})}
+say(summaries(b).filter(function(x){return had.indexOf(x)<0}).join('. '))})}
 function tick(){if(busy||d.hidden)return;busy=true;fetch(location.pathname+location.search,{credentials:'same-origin',headers:{'x-live-update':'1'}}).then(function(r){return r.ok&&!r.redirected?r.text():null}).then(function(html){busy=false;if(html)swap(html)},function(){busy=false})}
 setInterval(tick,every);d.addEventListener('visibilitychange',function(){if(!d.hidden)tick()})})();
 

@@ -104,7 +104,7 @@ export const StatusPage: FC<{ ctx: PageCtx; data: StatusPageData }> = ({ ctx, da
           </div>
         ) : (
           <div class={`status-banner s-${overall}`}>
-            <strong>{t(OVERALL[overall])}</strong>
+            <strong data-live-summary>{t(OVERALL[overall])}</strong>
             <span class="small">
               {data.stale
                 ? t('status.stale', { when: fmtAgo(lang, data.updatedAt) })

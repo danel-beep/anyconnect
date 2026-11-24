@@ -555,6 +555,9 @@ select.narrow{max-width:320px}
 .filter-links a[aria-current]{border-color:var(--accent);color:var(--accent-ink)}
 .jobs-table td{vertical-align:top}
 @media (max-width:640px){.error-head{flex-direction:column}}
+.error-list>li>.problem-raw{display:inline-block;margin:10px 0 0}
+.error-list>li>.problem-raw[open]{display:block}
+.error-list>li>.problem-raw>summary{display:inline-block;padding:4px 30px 4px 0}
 /* Admin analytics */
 .nav-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;margin:0 0 16px}
 .nav-tabs::-webkit-scrollbar{display:none}

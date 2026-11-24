@@ -183,7 +183,7 @@ export const ConfirmListPage: FC<{
           <span class="empty-icon" aria-hidden="true">
             <Icon name="check" />
           </span>
-          <h2>{t('confirm.page.noneTitle')}</h2>
+          <h2 data-live-summary>{t('confirm.page.noneTitle')}</h2>
           <p class="muted">{t('confirm.page.noneText')}</p>
           <p class="small">
             {t('confirm.page.now', { rule })} <a href="/app/rules">{t('confirm.page.change')}</a>
@@ -191,7 +191,7 @@ export const ConfirmListPage: FC<{
         </div>
       ) : (
         <div class="stack">
-          <p class="pending-count" role="status">
+          <p class="pending-count" data-live-summary>
             {t('confirm.page.waiting', {
               n: calls.filter((c) => c.status === 'awaiting_confirmation').length,
             })}

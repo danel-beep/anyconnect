@@ -1,7 +1,9 @@
 /**
  * Live updates in a real browser (`data-poll` in site.js): a request the AI makes while the
  * Confirmations, Activity, Overview or Services page is open shows up without a reload, copy buttons
- * and row menus in a refreshed block still work and what the user picked outside the live blocks stays. Runs with `npm run test:visual` (needs Postgres and Chromium).
+ * and row menus in a refreshed block still work and what the user picked outside the live blocks stays.
+ * For keyboard and screen-reader users: focus stays where it was and the news is read out.
+ * Runs with `npm run test:visual` (needs Postgres and Chromium).
  */
 import { type Browser, chromium } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -87,9 +89,16 @@ describe('live updates', () => {
   it('shows a new confirmation request on the open page without a reload', async () => {
     const { page, context } = await openPage('/confirm');
     await page.locator('#pending-live .empty-state').waitFor();
+    // A keyboard user is on the link in the empty card, which the new request replaces.
+    await page.locator('#pending-live a[href="/app/rules"]').focus();
     await call('inbox_send', { account: 'work', to: 'anna@example.com', text: 'Q3 numbers' });
     await page.locator('#pending-live .pending-call').waitFor({ timeout: 15_000 });
     await expect(page.locator('#pending-live').textContent()).resolves.toContain('anna@example.com');
+    // Screen readers hear about it, and focus stays in the block instead of falling to the page top.
+    await expect.poll(() => page.locator('#live-news').textContent()).toMatch(/1/);
+    await expect(page.evaluate(() => (globalThis as any).document.activeElement.id)).resolves.toBe(
+      'pending-live',
+    );
     await context.close();
   }, 30_000);
 
@@ -159,6 +168,41 @@ describe('live updates', () => {
     await expect.poll(() => menuOf(home.id).getAttribute('open')).toBeNull();
     await page.locator('h1').click();
     await expect.poll(() => menuOf(workId).getAttribute('open')).toBeNull();
+    // From the keyboard: Escape closes the menu and returns to its button, tabbing out closes it too.
+    await menuOf(home.id).locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => menuOf(home.id).getAttribute('open')).toBe('');
+    await page.keyboard.press('Escape');
+    await expect.poll(() => menuOf(home.id).getAttribute('open')).toBeNull();
+    await expect(
+      menuOf(home.id)
+        .locator('summary')
+        .evaluate((s) => s === s.ownerDocument.activeElement),
+    ).resolves.toBe(true);
+    await page.keyboard.press('Enter');
+    await expect.poll(() => menuOf(home.id).getAttribute('open')).toBe('');
+    await page.locator(`#acc-${workId} .acc-link`).focus();
+    await expect.poll(() => menuOf(home.id).getAttribute('open')).toBeNull();
     await context.close();
   }, 60_000);
+
+  it('keeps keyboard focus on the same button when the Services list refreshes, and reads out the news', async () => {
+    const { page, context } = await openPage('/app/services');
+    const rows = page.locator('#services-live .acc[id^="acc-"]');
+    const before = await rows.count();
+    const test = page.locator(`#acc-${workId} form[action$="/test"] button`);
+    await test.focus();
+    await hub.services.accounts.create(principal.workspaceId, {
+      connectorId: 'inbox',
+      name: 'travel',
+      label: 'Travel',
+    });
+    await expect.poll(() => rows.count(), { timeout: 15_000 }).toBe(before + 1);
+    // The button is a new element after the refresh, but focus is on it, not on the page.
+    await expect(test.evaluate((b) => b === b.ownerDocument.activeElement)).resolves.toBe(true);
+    // The new count is read out: the list heading ("Connected 3"), as it reads now.
+    const heading = (await page.locator('#services-live h2').textContent())!.replace(/\s+/g, ' ').trim();
+    await expect.poll(() => page.locator('#live-news').textContent()).toBe(heading);
+    await context.close();
+  }, 30_000);
 });

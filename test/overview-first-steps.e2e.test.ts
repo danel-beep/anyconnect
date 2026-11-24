@@ -16,7 +16,7 @@ describe('overview: first steps', () => {
   let workspaceId: string;
 
   const overview = async () => (await browser.request('/app')).text();
-  const progress = (html: string) => /class="onboard-count">\D*(\d)/.exec(html)?.[1];
+  const progress = (html: string) => /class="onboard-count"[^>]*>\D*(\d)/.exec(html)?.[1];
   const charged = async () =>
     (
       await hub.services.database.pool.query<{ n: string }>(
