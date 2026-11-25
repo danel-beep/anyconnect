@@ -9,6 +9,7 @@ import {
   oauthGrants,
   pendingCalls,
   type ShareLevel,
+  triggers,
   users,
   workspaceInvitations,
   workspaceMembers,
@@ -558,7 +559,7 @@ export class TeamService implements ConnectPermissions {
   /**
    * Takes a member out: their own accounts go back to their personal workspace (or are removed
    * when they cannot work there), shares with them end, their AI apps and keys lose access, and
-   * their actions still waiting for confirmation are cancelled.
+   * their actions still waiting for confirmation are cancelled, and the triggers they made there go.
    */
   private async detach(workspaceId: string, userId: string): Promise<LeaveOutcome> {
     const personal = await getDefaultWorkspace(this.deps.db, userId);
@@ -616,6 +617,11 @@ export class TeamService implements ConnectPermissions {
             inArray(pendingCalls.status, ['awaiting_confirmation', 'scheduled']),
           ),
         );
+      // Their triggers acted for them (notices, tests): they would keep telling someone outside the
+      // team what reaches its accounts. The team's admins set up new ones if they are still wanted.
+      await tx
+        .delete(triggers)
+        .where(and(eq(triggers.workspaceId, workspaceId), eq(triggers.userId, userId)));
       await tx
         .delete(workspaceMembers)
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)));

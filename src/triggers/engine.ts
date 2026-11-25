@@ -13,7 +13,7 @@ import { type AgentHub, runAgent } from './ai/agent.js';
 import { AI_PROVIDERS, AiProviderError } from './ai/providers.js';
 import type { AiKeyStore } from './ai-keys.js';
 import { clip, matchesFilter, renderArgs } from './match.js';
-import type { EventSource, ReadOptions } from './sources.js';
+import { type EventSource, type ReadOptions, triggerWatchable } from './sources.js';
 import { counterpartOf, type TriggerItem } from './spec.js';
 import type { EventResult, Trigger, TriggerEvent, TriggerStore } from './store.js';
 
@@ -162,7 +162,8 @@ export class TriggerEngine {
 
   private async readInbound(accountId: string): Promise<void> {
     try {
-      const row = await this.deps.accounts.byId(accountId);
+      const found = await this.deps.accounts.byId(accountId);
+      const [row] = found ? await triggerWatchable(this.deps.accounts, [found]) : [];
       if (!row) return;
       const active = await this.deps.store.active('message', row.workspaceId);
       for (const trigger of active.filter((t) => this.watches(t, row))) await this.scan(trigger, row);
@@ -206,9 +207,12 @@ export class TriggerEngine {
     }
     const failed = new Set<string>();
 
-    const rows = only
-      ? await this.deps.accounts.byIds([...only])
-      : await this.deps.accounts.listMany([...byWorkspace.keys()]);
+    const rows = await triggerWatchable(
+      this.deps.accounts,
+      only
+        ? await this.deps.accounts.byIds([...only])
+        : await this.deps.accounts.listMany([...byWorkspace.keys()]),
+    );
     const work: Array<{ account: AccountRow; triggers: Trigger[] }> = [];
     for (const account of rows) {
       if (!account.enabled || !(await reader.reads(account))) continue;

@@ -531,6 +531,16 @@ export class AccountService {
   }
 
   /** Owner of each account (team workspaces: who may use and manage it, see `security/members.ts`). */
+  /** Which of these workspaces are teams (one read however many there are). */
+  async teamWorkspaces(workspaceIds: readonly string[]): Promise<Set<string>> {
+    if (workspaceIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(inArray(workspaces.id, [...new Set(workspaceIds)]), eq(workspaces.kind, 'team')));
+    return new Set(rows.map((r) => r.id));
+  }
+
   async owners(workspaceId: string, ids?: string[]): Promise<{ id: string; ownerUserId: string | null }[]> {
     return this.db
       .select({ id: accounts.id, ownerUserId: accounts.ownerUserId })
