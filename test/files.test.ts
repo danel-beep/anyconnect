@@ -65,13 +65,18 @@ describe('files the hub keeps for tools (ctx.files)', () => {
     await expect(files.get('file_../../x')).rejects.toMatchObject({ kind: 'not_found' });
   });
 
-  it('gives the same id to the same bytes and a fresh expiry', async () => {
+  it('gives the same id to the same bytes and name, and a fresh expiry', async () => {
     const files = store.forWorkspace(mine);
     const first = await files.put({ data: bytes(9, 9), name: 'a.png', mimeType: 'image/png' });
     now = new Date(now.getTime() + 30 * 60_000);
-    const second = await files.put({ data: bytes(9, 9), name: 'b.png', mimeType: 'image/png' });
+    const second = await files.put({ data: bytes(9, 9), name: 'a.png', mimeType: 'image/png' });
     expect(second.id).toBe(first.id);
     expect(second.expiresAt.getTime()).toBeGreaterThan(first.expiresAt.getTime());
+    // The same bytes under another name (another member of a team putting them) are another file:
+    // a put never shows someone else's name for the bytes.
+    const renamed = await files.put({ data: bytes(9, 9), name: 'b.png', mimeType: 'image/png' });
+    expect(renamed.id).not.toBe(first.id);
+    expect(await files.stat(renamed.id)).toMatchObject({ name: 'b.png' });
     // Other bytes, or the same bytes in another workspace, are other files.
     expect((await files.put({ data: bytes(9, 8), name: 'c.png', mimeType: 'image/png' })).id).not.toBe(
       first.id,

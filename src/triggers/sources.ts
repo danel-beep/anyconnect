@@ -86,9 +86,23 @@ async function readable(
   workspaceId: string,
 ): Promise<AccountRow[]> {
   const out: AccountRow[] = [];
-  for (const row of await accounts.list(workspaceId))
+  for (const row of await triggerWatchable(accounts, await accounts.list(workspaceId)))
     if (row.enabled && (await source.reads(row))) out.push(row);
   return out;
+}
+
+/**
+ * The accounts a trigger may watch. In a team only the team's own accounts: a member's own account
+ * is private to them (`memberAccess`, admins included), while a trigger hands what arrives to the
+ * member who made it (notices, tests, an AI run) and to the team's trigger log, which every member
+ * reads. Personal workspaces have one person: every account.
+ */
+export async function triggerWatchable(
+  accounts: Pick<AccountService, 'teamWorkspaces'>,
+  rows: AccountRow[],
+): Promise<AccountRow[]> {
+  const teams = await accounts.teamWorkspaces(rows.map((row) => row.workspaceId));
+  return teams.size ? rows.filter((row) => !teams.has(row.workspaceId) || row.ownerUserId === null) : rows;
 }
 
 /** Incoming messenger messages (Telegram, WhatsApp, bots…) from the hub's message store. */

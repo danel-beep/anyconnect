@@ -46,8 +46,9 @@ const META = {
 /**
  * Short-lived encrypted files of a workspace, the store behind `ctx.files` (see {@link HubFiles}
  * and docs/FILES.md). Each file has its own data key wrapped by the master key, so a deleted row
- * cannot be read from a backup copy of another. Putting the same bytes again returns the same file
- * with a fresh expiry: ids stay stable, so identical sends are still recognized as duplicates.
+ * cannot be read from a backup copy of another. Putting the same bytes under the same name again
+ * returns the same file with a fresh expiry: ids stay stable, so identical sends are still
+ * recognized as duplicates.
  */
 export class FileStore {
   readonly limits: FileStoreLimits;
@@ -88,8 +89,13 @@ export class FileStore {
     }
     const name = cleanName(file.name);
     const mimeType = cleanMime(file.mimeType);
+    // The name is part of the key: a copy is only shared with whoever already knows both the bytes
+    // and the name, so putting a file never tells someone else's name for it (members of a team
+    // share their workspace's store).
     const contentKey = createHmac('sha256', this.contentKey)
       .update(workspaceId)
+      .update('\0')
+      .update(name)
       .update('\0')
       .update(file.data)
       .digest('base64url');
