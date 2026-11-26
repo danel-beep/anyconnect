@@ -68,6 +68,28 @@ export const ManifestAuth = z.discriminatedUnion('type', [
      */
     token: z.string().optional(),
   }),
+  /**
+   * OAuth 2 client credentials grant with the account's own app (RFC 6749 §4.4): the hub trades
+   * the client id and secret for a short-lived access token, keeps it in memory until it expires
+   * and fetches a new one when the service answers 401. No browser step, so it suits services
+   * where each customer registers an app on their own instance (Zendesk, Zoom server-to-server).
+   */
+  z.object({
+    type: z.literal('client_credentials'),
+    /** Token endpoint; templates allowed, e.g. `https://{{config.subdomain}}.zendesk.com/oauth/tokens`. */
+    tokenUrl: z.string().min(1),
+    /** Default `{{credentials.clientId}}`. */
+    clientId: z.string().default('{{credentials.clientId}}'),
+    /** Default `{{credentials.clientSecret}}`. */
+    clientSecret: z.string().default('{{credentials.clientSecret}}'),
+    scopes: z.array(z.string()).default([]),
+    /** `body`: id and secret in the request body; `basic`: HTTP Basic (RFC 6749 §2.3.1). */
+    clientAuth: z.enum(['body', 'basic']).default('body'),
+    /** Body encoding of the token request. */
+    format: z.enum(['form', 'json']).default('form'),
+    /** Extra fields of the token request, e.g. `{ "expires_in": 7200 }`. */
+    params: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+  }),
 ]);
 export type ManifestAuth = z.output<typeof ManifestAuth>;
 

@@ -2,7 +2,11 @@ import { defineManifestConnector } from '../manifest/compile.js';
 import type { CapabilityBinding, CapabilityOutput } from '../sdk.js';
 import { type ConnectorUi, withUi } from '../sdk.js';
 
-/** Zendesk Support API with an agent's email and API token. */
+/**
+ * Zendesk Support API through the customer's own OAuth client (client credentials grant). Zendesk
+ * stopped issuing API tokens on 27 Oct 2026 and turns the remaining ones off on 30 Apr 2027, so
+ * the connector no longer takes them. The token acts as the admin who created the OAuth client.
+ */
 
 const ticketId = { type: 'integer', minimum: 1, description: 'Ticket number' };
 const TICKET_FIELDS = [
@@ -57,22 +61,29 @@ const manifest = defineManifestConnector(
           pattern: '^[a-zA-Z0-9][a-zA-Z0-9-]*$',
           description: 'The part before .zendesk.com, e.g. "acme"',
         },
-        email: { type: 'string', format: 'email', description: 'Your Zendesk agent email' },
       },
-      required: ['subdomain', 'email'],
+      required: ['subdomain'],
     },
     credentials: {
       type: 'object',
       properties: {
-        apiToken: {
+        clientId: {
           type: 'string',
-          minLength: 10,
-          description: 'Admin Center → Apps and integrations → Zendesk API',
+          minLength: 1,
+          description:
+            'Identifier of the OAuth client: Admin Center → Apps and integrations → APIs → OAuth clients',
         },
+        clientSecret: { type: 'string', minLength: 10, description: 'Secret of the same OAuth client' },
       },
-      required: ['apiToken'],
+      required: ['clientId', 'clientSecret'],
     },
-    auth: { type: 'basic', username: '{{config.email}}/token', password: '{{credentials.apiToken}}' },
+    auth: {
+      type: 'client_credentials',
+      tokenUrl: 'https://{{config.subdomain}}.zendesk.com/oauth/tokens',
+      scopes: ['read', 'write'],
+      // Clients made after 30 Apr 2026 default to 30-minute tokens; two hours means fewer exchanges.
+      params: { expires_in: 7200 },
+    },
     rateLimit: { requests: 200, perSeconds: 60 },
     errorMessagePaths: ['description', 'error.message', 'error.title', 'error'],
     pagination: { type: 'next_url', nextPath: 'next_page' },
@@ -219,7 +230,7 @@ const manifest = defineManifestConnector(
 );
 
 const ui: ConnectorUi = {
-  primaryFields: ['subdomain', 'email', 'apiToken'],
+  primaryFields: ['subdomain', 'clientId', 'clientSecret'],
   locales: {
     ru: {
       description:
@@ -227,36 +238,53 @@ const ui: ConnectorUi = {
       setup: {
         form: {
           summary:
-            'Вы создаёте токен API в Zendesk Admin Center и вставляете его сюда вместе с адресом Zendesk и почтой агента.',
-          minutes: 3,
-          needs: ['Аккаунт Zendesk с правами администратора: только администраторы создают токены API'],
+            'Вы создаёте OAuth-клиент в Zendesk Admin Center и вставляете сюда его идентификатор и секрет вместе с адресом Zendesk.',
+          notice:
+            'Токены API Zendesk больше не выдаёт и 30 апреля 2027 отключит совсем, поэтому Manyplug подключается через OAuth-клиент.',
+          minutes: 4,
+          needs: ['Аккаунт Zendesk с правами администратора: только администраторы создают OAuth-клиенты'],
           steps: [
             {
-              text: 'Откройте **Admin Center → Apps and integrations → APIs → API tokens**.',
+              text: 'Войдите в Zendesk и откройте **Admin Center → Apps and integrations → APIs → OAuth clients**.',
               link: { label: 'Открыть Zendesk', url: 'https://www.zendesk.com/login/' },
             },
-            { text: 'Включите **Token access**, если он выключен, затем нажмите **Add API token**.' },
+            { text: 'Нажмите **Add OAuth client** и в поле **Name** напишите Manyplug.' },
             {
-              text: 'Назовите токен Manyplug, скопируйте его и нажмите **Save**: Zendesk показывает токен только один раз.',
-              fills: ['apiToken'],
+              text: 'В **Client kind** выберите **Confidential**. Поле **Scopes** оставьте пустым, а **Redirect URLs** не заполняйте.',
             },
             {
-              text: 'В форме укажите поддомен (acme для acme.zendesk.com) и почту агента, от имени которого будет работать ИИ.',
-              fills: ['subdomain', 'email'],
+              text: 'Скопируйте значение поля **Identifier** и нажмите **Save**.',
+              fills: ['clientId'],
+            },
+            {
+              text: 'Скопируйте появившийся **Secret** и ещё раз нажмите **Save**: Zendesk показывает секрет целиком только один раз.',
+              fills: ['clientSecret'],
+            },
+            {
+              text: 'В форме укажите поддомен: acme для acme.zendesk.com.',
+              fills: ['subdomain'],
             },
           ],
           tips: [
-            'ИИ действует как агент с этой почтой. Ответы клиентам уходят только после вашего подтверждения.',
-            'Удалить токен можно на той же странице Admin Center.',
+            'ИИ действует от имени администратора, который создал OAuth-клиент. Ответы клиентам уходят только после вашего подтверждения.',
+            'Чтобы закрыть доступ, удалите клиент Manyplug на той же странице **OAuth clients**.',
           ],
           problems: [
             {
-              problem: 'Проверка пишет, что данные неверные (401)',
-              fix: 'Проверьте, что почта принадлежит агенту этого Zendesk, а токен скопирован целиком. **Token access** в Admin Center должен оставаться включённым.',
+              problem: 'Проверка пишет, что Zendesk не принял идентификатор и секрет',
+              fix: 'Скопируйте **Identifier** и **Secret** ещё раз. Если секрет потерян, создайте новый клиент и вставьте его данные через **Переподключить**.',
+            },
+            {
+              problem: 'Ошибка «invalid_scope» или 403',
+              fix: 'Откройте клиент Manyplug в **OAuth clients** и очистите поле **Scopes**, чтобы клиент мог читать и писать.',
             },
             {
               problem: 'Проверка не находит адрес Zendesk',
               fix: 'Укажите только поддомен: acme для acme.zendesk.com, без https:// и .zendesk.com.',
+            },
+            {
+              problem: 'Подключение перестало работать после смены прав',
+              fix: 'Клиент работает, пока у его создателя есть права администратора. Создайте новый клиент от имени действующего администратора.',
             },
           ],
         },
@@ -272,8 +300,8 @@ const ui: ConnectorUi = {
           label: 'Поддомен Zendesk',
           hint: 'Часть адреса до .zendesk.com: для acme.zendesk.com — acme.',
         },
-        email: { label: 'Почта агента', hint: 'С которой вы входите в Zendesk.' },
-        apiToken: { label: 'Токен API', hint: 'Admin Center → Apps and integrations → APIs → API tokens.' },
+        clientId: { label: 'Идентификатор клиента', hint: 'Поле Identifier OAuth-клиента.' },
+        clientSecret: { label: 'Секрет клиента', hint: 'Поле Secret, Zendesk показывает его после Save.' },
       },
       actions: {
         search_tickets: { title: 'Поиск тикетов', description: 'Ищет тикеты, сначала новые.' },
@@ -301,36 +329,53 @@ const ui: ConnectorUi = {
       setup: {
         form: {
           summary:
-            'You create an API token in Zendesk Admin Center and paste it here with your Zendesk address and agent email.',
-          minutes: 3,
-          needs: ['A Zendesk account with admin access: only admins can create API tokens'],
+            'You create an OAuth client in Zendesk Admin Center and paste its identifier and secret here with your Zendesk address.',
+          notice:
+            'Zendesk no longer issues API tokens and turns the remaining ones off on 30 April 2027, so Manyplug connects through an OAuth client.',
+          minutes: 4,
+          needs: ['A Zendesk account with admin access: only admins can create OAuth clients'],
           steps: [
             {
-              text: 'Open **Admin Center → Apps and integrations → APIs → API tokens**.',
+              text: 'Sign in to Zendesk and open **Admin Center → Apps and integrations → APIs → OAuth clients**.',
               link: { label: 'Open Zendesk', url: 'https://www.zendesk.com/login/' },
             },
-            { text: 'Turn on **Token access** if it is off, then click **Add API token**.' },
+            { text: 'Click **Add OAuth client** and type Manyplug in **Name**.' },
             {
-              text: 'Name it Manyplug, copy the token and click **Save**: Zendesk shows it only once.',
-              fills: ['apiToken'],
+              text: 'Under **Client kind**, choose **Confidential**. Leave **Scopes** empty and **Redirect URLs** blank.',
             },
             {
-              text: 'In the form, enter your subdomain (acme for acme.zendesk.com) and the email of the agent the AI acts as.',
-              fills: ['subdomain', 'email'],
+              text: 'Copy the value of **Identifier** and click **Save**.',
+              fills: ['clientId'],
+            },
+            {
+              text: 'Copy the **Secret** that appears and click **Save** again: Zendesk shows the whole secret only once.',
+              fills: ['clientSecret'],
+            },
+            {
+              text: 'In the form, enter your subdomain: acme for acme.zendesk.com.',
+              fills: ['subdomain'],
             },
           ],
           tips: [
-            'The AI acts as the agent with this email. Replies to customers go out only after you confirm.',
-            'You can delete the token on the same Admin Center page.',
+            'The AI acts as the admin who created the OAuth client. Replies to customers go out only after you confirm.',
+            'To cut access, delete the Manyplug client on the same **OAuth clients** page.',
           ],
           problems: [
             {
-              problem: 'The check says the credentials are wrong (401)',
-              fix: 'Check that the email belongs to an agent of this Zendesk and that the token is copied whole. **Token access** must stay on in Admin Center.',
+              problem: 'The check says Zendesk did not accept the client id and secret',
+              fix: 'Copy **Identifier** and **Secret** again. If the secret is lost, create a new client and paste its values with **Reconnect**.',
+            },
+            {
+              problem: 'An “invalid_scope” or 403 error',
+              fix: 'Open the Manyplug client in **OAuth clients** and clear **Scopes**, so the client can read and write.',
             },
             {
               problem: 'The check cannot find the Zendesk address',
               fix: 'Enter only the subdomain: acme for acme.zendesk.com, without https:// and .zendesk.com.',
+            },
+            {
+              problem: 'The connection stopped working after a role change',
+              fix: 'The client works while its creator stays an admin. Create a new client as a current admin.',
             },
           ],
         },
@@ -346,8 +391,8 @@ const ui: ConnectorUi = {
           label: 'Zendesk subdomain',
           hint: 'The part before .zendesk.com: for acme.zendesk.com, acme.',
         },
-        email: { label: 'Agent email', hint: 'The one you sign in to Zendesk with.' },
-        apiToken: { label: 'API token', hint: 'Admin Center → Apps and integrations → APIs → API tokens.' },
+        clientId: { label: 'Client identifier', hint: 'The Identifier field of the OAuth client.' },
+        clientSecret: { label: 'Client secret', hint: 'The Secret field, shown after Save.' },
       },
       actions: {
         search_tickets: { title: 'Search tickets', description: 'Finds tickets, newest first.' },

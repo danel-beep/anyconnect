@@ -2,7 +2,11 @@ import { defineManifestConnector } from '../manifest/compile.js';
 import type { CapabilityBinding, CapabilityOutput } from '../sdk.js';
 import { type ConnectorUi, withUi } from '../sdk.js';
 
-/** Pipedrive API v1 with a personal API token (sent in a header, not the URL). */
+/**
+ * Pipedrive API v2 with a personal API token (sent in a header, not the URL). The v1 versions of
+ * deals, persons, search and stages are out of support since 1 Aug 2026; notes and the current
+ * user have no v2 endpoint yet and stay on v1.
+ */
 
 const limit = { type: 'integer', minimum: 1, maximum: 100, default: 20 };
 const term = { type: 'string', minLength: 2, description: 'At least 2 characters' };
@@ -13,8 +17,8 @@ const DEAL_FIELDS = [
   'currency',
   'status',
   'stage_id',
-  'person_name',
-  'org_name',
+  'person_id',
+  'org_id',
   'expected_close_date',
   'update_time',
 ];
@@ -25,6 +29,18 @@ const dealFields = {
   stage_id: { type: 'integer', description: 'From pipedrive_list_stages' },
   expected_close_date: { type: 'string', description: 'YYYY-MM-DD' },
 };
+const contactPoint = (what: string) => ({
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      value: { type: 'string', minLength: 1 },
+      label: { type: 'string', description: 'work, home, mobile or other' },
+    },
+    required: ['value'],
+  },
+  description: what,
+});
 const dealBody = (extra: string[] = []) =>
   Object.fromEntries([...Object.keys(dealFields), ...extra].map((k) => [k, `{{input.${k}}}`]));
 
@@ -59,10 +75,10 @@ const manifest = defineManifestConnector(
     name: 'Pipedrive',
     description: 'Pipedrive CRM: find people, organizations and deals, create and move deals, add notes.',
     version: '1.0.0',
-    homepage: 'https://developers.pipedrive.com/docs/api/v1',
+    homepage: 'https://pipedrive.readme.io/docs/pipedrive-api-v2',
     instructions:
       'Deal stages are ids: get them from pipedrive_list_stages. Searches need at least 2 characters.',
-    baseUrl: 'https://api.pipedrive.com/v1',
+    baseUrl: 'https://api.pipedrive.com',
     credentials: {
       type: 'object',
       properties: {
@@ -75,10 +91,11 @@ const manifest = defineManifestConnector(
       required: ['apiToken'],
     },
     auth: { type: 'api_key', in: 'header', name: 'x-api-token', value: '{{credentials.apiToken}}' },
-    rateLimit: { requests: 80, perSeconds: 2 },
+    // Burst limit of the smallest plan (Lite: 20 requests per 2 s per token); larger plans allow more.
+    rateLimit: { requests: 20, perSeconds: 2 },
     errorMessagePaths: ['error', 'error_info'],
-    pagination: { type: 'cursor', param: 'start', nextPath: 'additional_data.pagination.next_start' },
-    test: { request: { method: 'GET', path: '/users/me' }, identity: '{{response.data.email}}' },
+    pagination: { type: 'cursor', param: 'cursor', nextPath: 'additional_data.next_cursor' },
+    test: { request: { method: 'GET', path: '/v1/users/me' }, identity: '{{response.data.email}}' },
     actions: [
       {
         name: 'search_persons',
@@ -86,7 +103,7 @@ const manifest = defineManifestConnector(
         description: 'Finds people by name, email or phone.',
         input: { type: 'object', properties: { term, limit }, required: ['term'] },
         hints: { readOnly: true, idempotent: true },
-        request: { method: 'GET', path: '/persons/search' },
+        request: { method: 'GET', path: '/api/v2/persons/search' },
         response: {
           root: 'data.items',
           fields: ['item.id', 'item.name', 'item.emails', 'item.phones', 'item.organization.name'],
@@ -99,7 +116,7 @@ const manifest = defineManifestConnector(
         description: 'Finds organizations by name or address.',
         input: { type: 'object', properties: { term, limit }, required: ['term'] },
         hints: { readOnly: true, idempotent: true },
-        request: { method: 'GET', path: '/organizations/search' },
+        request: { method: 'GET', path: '/api/v2/organizations/search' },
         response: { root: 'data.items', fields: ['item.id', 'item.name', 'item.address'] },
         pagination: true,
       },
@@ -113,7 +130,7 @@ const manifest = defineManifestConnector(
           required: ['term'],
         },
         hints: { readOnly: true, idempotent: true },
-        request: { method: 'GET', path: '/deals/search' },
+        request: { method: 'GET', path: '/api/v2/deals/search' },
         response: {
           root: 'data.items',
           fields: [
@@ -136,13 +153,17 @@ const manifest = defineManifestConnector(
         input: {
           type: 'object',
           properties: {
-            status: { type: 'string', enum: ['open', 'won', 'lost', 'all_not_deleted'], default: 'open' },
+            status: {
+              type: 'string',
+              enum: ['open', 'won', 'lost'],
+              description: 'Omit for every deal that is not deleted',
+            },
             stage_id: { type: 'integer' },
             limit,
           },
         },
         hints: { readOnly: true, idempotent: true },
-        request: { method: 'GET', path: '/deals' },
+        request: { method: 'GET', path: '/api/v2/deals' },
         response: { root: 'data', fields: DEAL_FIELDS },
         pagination: true,
       },
@@ -151,8 +172,10 @@ const manifest = defineManifestConnector(
         title: 'List stages',
         description: 'Pipeline stages with their ids, in order.',
         hints: { readOnly: true, idempotent: true },
-        request: { method: 'GET', path: '/stages' },
-        response: { root: 'data', fields: ['id', 'name', 'pipeline_id', 'pipeline_name', 'order_nr'] },
+        input: { type: 'object', properties: { pipeline_id: { type: 'integer' } } },
+        request: { method: 'GET', path: '/api/v2/stages' },
+        response: { root: 'data', fields: ['id', 'name', 'pipeline_id', 'order_nr'] },
+        pagination: true,
       },
       {
         name: 'create_person',
@@ -162,16 +185,16 @@ const manifest = defineManifestConnector(
           type: 'object',
           properties: {
             name: { type: 'string', minLength: 1 },
-            email: { type: 'string', format: 'email' },
-            phone: { type: 'string' },
+            emails: contactPoint('Email addresses'),
+            phones: contactPoint('Phone numbers'),
             org_id: { type: 'integer', description: 'Organization id' },
           },
           required: ['name'],
         },
         hints: { readOnly: false, destructive: false },
         risk: 'write',
-        request: { method: 'POST', path: '/persons' },
-        response: { root: 'data', fields: ['id', 'name', 'email', 'phone', 'org_id'] },
+        request: { method: 'POST', path: '/api/v2/persons' },
+        response: { root: 'data', fields: ['id', 'name', 'emails', 'phones', 'org_id'] },
       },
       {
         name: 'create_deal',
@@ -188,7 +211,7 @@ const manifest = defineManifestConnector(
         },
         hints: { readOnly: false, destructive: false },
         risk: 'write',
-        request: { method: 'POST', path: '/deals', body: dealBody(['person_id', 'org_id']) },
+        request: { method: 'POST', path: '/api/v2/deals', body: dealBody(['person_id', 'org_id']) },
         response: { root: 'data', fields: DEAL_FIELDS },
       },
       {
@@ -207,7 +230,11 @@ const manifest = defineManifestConnector(
         },
         hints: { readOnly: false, destructive: false, idempotent: true },
         risk: 'write',
-        request: { method: 'PUT', path: '/deals/{deal_id}', body: dealBody(['status', 'lost_reason']) },
+        request: {
+          method: 'PATCH',
+          path: '/api/v2/deals/{deal_id}',
+          body: dealBody(['status', 'lost_reason']),
+        },
         response: { root: 'data', fields: DEAL_FIELDS },
       },
       {
@@ -226,7 +253,7 @@ const manifest = defineManifestConnector(
         },
         hints: { readOnly: false, destructive: false },
         risk: 'write',
-        request: { method: 'POST', path: '/notes' },
+        request: { method: 'POST', path: '/v1/notes' },
         response: { root: 'data', fields: ['id', 'deal_id', 'person_id', 'org_id', 'add_time'] },
       },
     ],
