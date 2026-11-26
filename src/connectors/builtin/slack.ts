@@ -324,6 +324,10 @@ export default defineConnector({
                 problem: 'Подключилось не то пространство',
                 fix: 'Удалите аккаунт здесь, снова нажмите **Подключить** и смените пространство в правом верхнем углу до нажатия **Разрешить**.',
               },
+              {
+                problem: 'ИИ часто пишет, что Slack просит подождать, когда читает каналы',
+                fix: 'Slack даёт приложениям вне своего каталога читать историю канала раз в минуту. Подключите пространство через своё приложение Slack по инструкции для формы: у него такого ограничения нет.',
+              },
             ],
           },
           form: {
@@ -431,6 +435,10 @@ export default defineConnector({
               {
                 problem: 'The wrong workspace got connected',
                 fix: 'Delete the account here, click **Connect** again and switch the workspace in the top-right corner before you click **Allow**.',
+              },
+              {
+                problem: 'The AI often says Slack asks it to wait while reading channels',
+                fix: 'Slack lets apps outside its directory read a channel’s history once a minute. Connect the workspace with your own Slack app, as in the form guide: it has no such limit.',
               },
             ],
           },

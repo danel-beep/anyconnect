@@ -144,6 +144,14 @@ Permissions» redirect URL `https://<хаб>/connect/callback`, затем `OAUT
 
 Канал можно указать id, `#название` или `@пользователь` (личные сообщения).
 
+Лимиты (с 29 мая 2025): приложениям, которые ставятся в чужие пространства и не опубликованы в
+Slack Marketplace, `conversations.history` и `conversations.replies` дают 1 запрос в минуту и до 15
+сообщений за раз. Так работает вход через OAuth-приложение хаба, пока оно не в Marketplace; своё
+внутреннее приложение пользователя (форма) не ограничено (Tier 3, до 1000 сообщений). Коннектор
+листает курсором, так что меньший `limit` просто даёт больше страниц. `search.messages` Slack
+называет устаревшим (замена — Real-time Search API `assistant.search.context`), но даты отключения
+нет.
+
 ## Notion
 
 Проще всего — внутренняя интеграция: [notion.so/profile/integrations](https://www.notion.so/profile/integrations)
