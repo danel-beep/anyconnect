@@ -16,7 +16,11 @@ import {
  * without Notion's block JSON.
  */
 
-const NOTION_VERSION = '2022-06-28';
+/**
+ * 2025-09-03 split databases into data sources (a database can hold several); older versions fail
+ * on such databases. 2026-03-11 renamed `archived` to `in_trash`.
+ */
+const NOTION_VERSION = '2026-03-11';
 
 const Credentials = z.object({
   token: z
@@ -56,13 +60,12 @@ interface NotionList<T> {
 }
 
 interface NotionPage {
-  object: 'page' | 'database';
+  object: 'page' | 'database' | 'data_source';
   id: string;
   url?: string;
   last_edited_time?: string;
-  archived?: boolean;
   in_trash?: boolean;
-  parent?: { type: string; database_id?: string; page_id?: string };
+  parent?: { type: string; database_id?: string; data_source_id?: string; page_id?: string };
   properties?: Record<string, { type: string; id?: string } & Record<string, any>>;
   title?: RichText[];
 }
@@ -112,7 +115,8 @@ async function loadBlocks(client: HttpClient, id: string): Promise<{ blocks: Blo
 
 const summary = (object: NotionPage) => ({
   id: object.id,
-  type: object.object,
+  // A data source is what people call a database: its id works in query_database and create_page.
+  type: object.object === 'page' ? ('page' as const) : ('database' as const),
   title: titleOf(object) || '(untitled)',
   ...(object.url ? { url: object.url } : {}),
   ...(object.last_edited_time ? { edited: object.last_edited_time } : {}),
@@ -152,6 +156,40 @@ function buildProperties(
     out[key] = built;
   }
   return out;
+}
+
+interface DataSource {
+  id: string;
+  properties: Record<string, { type: string }>;
+}
+
+/**
+ * The data source behind an id: search returns data source ids, while database URLs carry the
+ * database id, whose data sources come from the database object. A database with several sources
+ * needs the AI to pick one.
+ */
+async function dataSource(client: HttpClient, idOrUrl: string): Promise<DataSource> {
+  const id = notionId(idOrUrl);
+  try {
+    return (await client.get<DataSource>(`data_sources/${id}`)).data;
+  } catch (error) {
+    if (!(error instanceof ConnectorError) || !['not_found', 'invalid_input'].includes(error.kind))
+      throw error;
+  }
+  const { data: database } = await client.get<{ data_sources?: { id: string; name?: string }[] }>(
+    `databases/${id}`,
+  );
+  const sources = database.data_sources ?? [];
+  if (sources.length === 0) throw new ConnectorError('not_found', 'This database has no data source');
+  if (sources.length > 1) {
+    throw new ConnectorError(
+      'invalid_input',
+      `This database has several data sources: ${sources
+        .map((s) => `${s.name || '(untitled)'} (${s.id})`)
+        .join(', ')}. Pass the id of one of them.`,
+    );
+  }
+  return (await client.get<DataSource>(`data_sources/${sources[0]!.id}`)).data;
 }
 
 const PageId = z.string().trim().min(32).max(300).describe('Page id or Notion URL');
@@ -433,7 +471,9 @@ export default defineConnector({
           query,
           page_size: limit,
           sort: { direction: 'descending', timestamp: 'last_edited_time' },
-          ...(type ? { filter: { property: 'object', value: type } } : {}),
+          ...(type
+            ? { filter: { property: 'object', value: type === 'database' ? 'data_source' : 'page' } }
+            : {}),
           ...(cursor ? { start_cursor: cursor } : {}),
         });
         return {
@@ -491,7 +531,7 @@ export default defineConnector({
       description:
         'Lists rows of a database with properties as plain values. Optional Notion filter and sorts.',
       input: z.object({
-        database_id: PageId.describe('Database id or URL'),
+        database_id: PageId.describe('Database id, URL or data source id'),
         filter: z
           .record(z.string(), z.unknown())
           .optional()
@@ -505,15 +545,14 @@ export default defineConnector({
       }),
       hints: { readOnly: true, idempotent: true },
       run: async ({ database_id, filter, sorts, limit, cursor }, ctx) => {
-        const { data } = await api(ctx).post<NotionList<NotionPage>>(
-          `databases/${notionId(database_id)}/query`,
-          {
-            page_size: limit,
-            ...(filter ? { filter } : {}),
-            ...(sorts ? { sorts } : {}),
-            ...(cursor ? { start_cursor: cursor } : {}),
-          },
-        );
+        const client = api(ctx);
+        const source = await dataSource(client, database_id);
+        const { data } = await client.post<NotionList<NotionPage>>(`data_sources/${source.id}/query`, {
+          page_size: limit,
+          ...(filter ? { filter } : {}),
+          ...(sorts ? { sorts } : {}),
+          ...(cursor ? { start_cursor: cursor } : {}),
+        });
         return {
           rows: data.results.map((row) => ({
             id: row.id,
@@ -551,12 +590,11 @@ export default defineConnector({
         const children = content ? markdownToBlocks(content).slice(0, 100) : [];
         let body: Record<string, unknown>;
         if (database_id) {
-          const id = notionId(database_id);
-          const { data: database } = await client.get<NotionPage>(`databases/${id}`);
-          const schema = database.properties ?? {};
+          const source = await dataSource(client, database_id);
+          const schema = source.properties ?? {};
           const titleName = Object.entries(schema).find(([, p]) => p.type === 'title')?.[0] ?? 'Name';
           body = {
-            parent: { database_id: id },
+            parent: { type: 'data_source_id', data_source_id: source.id },
             properties: buildProperties({ ...properties, [titleName]: title }, schema),
           };
         } else {
@@ -599,13 +637,13 @@ export default defineConnector({
           url: `pages/${id}`,
           json: {
             ...(built ? { properties: built } : {}),
-            ...(trash !== undefined ? { archived: trash } : {}),
+            ...(trash !== undefined ? { in_trash: trash } : {}),
           },
         });
         return {
           id: data.id,
           ...flattenProperties(data.properties),
-          ...(data.archived ? { trashed: true } : {}),
+          ...(data.in_trash ? { trashed: true } : {}),
         };
       },
     }),

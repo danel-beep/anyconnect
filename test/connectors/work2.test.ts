@@ -301,8 +301,23 @@ describe('calendly', () => {
 });
 
 describe('zendesk', () => {
+  let issued = 0;
+  let earlyIssued = false;
   const service = fakeRoutes({
-    'GET /api/v2/users/me.json': { user: { id: 1, email: 'agent@acme.com' } },
+    'POST /oauth/tokens': (req) => {
+      const grant = Object.fromEntries(new URLSearchParams(req.body!));
+      if (grant.client_secret !== 'secret-1234567') return json({ error: 'invalid_client' }, { status: 401 });
+      issued += 1;
+      // The first token of the "early" client is already revoked, the next one is fine.
+      const revoked = grant.client_id === 'early' && !earlyIssued;
+      if (grant.client_id === 'early') earlyIssued = true;
+      const token = revoked ? 'zd-revoked' : `zd-${issued}`;
+      return json({ access_token: token, token_type: 'bearer', scope: grant.scope, expires_in: 7200 });
+    },
+    'GET /api/v2/users/me.json': (req) =>
+      req.headers.get('authorization') === 'Bearer zd-revoked'
+        ? json({ error: 'Couldn’t authenticate you' }, { status: 401 })
+        : json({ user: { id: 1, email: 'admin@acme.com' } }),
     'GET /api/v2/search.json': (req) =>
       json(
         req.url.searchParams.get('page')
@@ -322,16 +337,53 @@ describe('zendesk', () => {
     },
   });
   const acc = testAccount(zendesk, {
-    config: { subdomain: 'acme', email: 'agent@acme.com' },
-    credentials: { apiToken: 'tok1234567' },
+    config: { subdomain: 'acme' },
+    credentials: { clientId: 'manyplug', clientSecret: 'secret-1234567' },
     fetch: service.fetch,
   });
 
-  it('uses the email/token form of basic auth', async () => {
-    expect(await zendesk.test!(acc.ctx as never)).toMatchObject({ ok: true, identity: 'agent@acme.com' });
-    expect(service.calls.at(-1)!.headers.get('authorization')).toBe(
-      basic('agent@acme.com/token', 'tok1234567'),
-    );
+  it('trades the OAuth client for a token once and reuses it (API tokens are gone)', async () => {
+    expect(await zendesk.test!(acc.ctx as never)).toMatchObject({ ok: true, identity: 'admin@acme.com' });
+    const [grant, call] = service.calls.slice(-2) as [RecordedRequest, RecordedRequest];
+    expect(grant.url.toString()).toBe('https://acme.zendesk.com/oauth/tokens');
+    expect(Object.fromEntries(new URLSearchParams(grant.body!))).toEqual({
+      grant_type: 'client_credentials',
+      scope: 'read write',
+      expires_in: '7200',
+      client_id: 'manyplug',
+      client_secret: 'secret-1234567',
+    });
+    expect(call.headers.get('authorization')).toBe('Bearer zd-1');
+    await zendesk.test!(acc.ctx as never);
+    expect(service.calls.filter((c) => c.url.pathname === '/oauth/tokens')).toHaveLength(1);
+  });
+
+  it('fetches a new token once when Zendesk rejects the cached one', async () => {
+    const early = testAccount(zendesk, {
+      config: { subdomain: 'acme' },
+      credentials: { clientId: 'early', clientSecret: 'secret-1234567' },
+      fetch: service.fetch,
+    });
+    expect(await zendesk.test!(early.ctx as never)).toMatchObject({ ok: true });
+    expect(service.calls.at(-1)!.headers.get('authorization')).toMatch(/^Bearer zd-\d+$/);
+    expect(service.calls.slice(-4).map((c) => c.url.pathname)).toEqual([
+      '/oauth/tokens',
+      '/api/v2/users/me.json',
+      '/oauth/tokens',
+      '/api/v2/users/me.json',
+    ]);
+  });
+
+  it('says what to fix when Zendesk refuses the client', async () => {
+    const wrong = testAccount(zendesk, {
+      config: { subdomain: 'acme' },
+      credentials: { clientId: 'manyplug', clientSecret: 'wrong-secret-99' },
+      fetch: service.fetch,
+    });
+    await expect(zendesk.test!(wrong.ctx as never)).rejects.toMatchObject({
+      kind: 'auth',
+      message: expect.stringContaining('did not accept the client id and secret'),
+    });
   });
 
   it('searches tickets only and follows next_page on the same site', async () => {
@@ -431,7 +483,9 @@ describe('pipedrive', () => {
   const token = 'a'.repeat(40);
   const service = fakeRoutes({
     'GET /v1/users/me': { success: true, data: { id: 1, email: 'ann@acme.com' } },
-    'GET /v1/persons/search': (req) =>
+    // API v2 shapes (developers.pipedrive.com, v2 migration guide): cursor pagination in
+    // additional_data.next_cursor, search hits under data.items[].item.
+    'GET /api/v2/persons/search': (req) =>
       json({
         success: true,
         data: {
@@ -440,21 +494,46 @@ describe('pipedrive', () => {
               result_score: 1,
               item: {
                 id: 5,
+                type: 'person',
                 name: 'Anna Smith',
                 emails: ['anna@acme.com'],
                 phones: [],
-                organization: { id: 2, name: 'ACME' },
+                organization: { id: 2, name: 'ACME', address: null },
               },
             },
           ],
         },
-        additional_data: {
-          pagination: req.url.searchParams.get('start')
-            ? { more_items_in_collection: false }
-            : { start: 0, limit: 20, more_items_in_collection: true, next_start: 20 },
-        },
+        additional_data: { next_cursor: req.url.searchParams.get('cursor') ? null : 'eyJmaWVsZCI6ImlkIn0' },
       }),
-    'PUT /v1/deals/9': (req) => json({ success: true, data: { id: 9, ...body(req) } }),
+    'GET /api/v2/deals': {
+      success: true,
+      data: [
+        {
+          id: 9,
+          title: 'ACME annual contract',
+          value: 1200,
+          currency: 'USD',
+          status: 'open',
+          stage_id: 2,
+          person_id: 5,
+          org_id: 2,
+          owner_id: 1,
+          is_deleted: false,
+          expected_close_date: '2026-12-15',
+          update_time: '2026-11-20T10:00:00Z',
+          custom_fields: {},
+        },
+      ],
+      additional_data: { next_cursor: null },
+    },
+    'GET /api/v2/stages': {
+      success: true,
+      data: [{ id: 2, order_nr: 1, name: 'Negotiation', is_deleted: false, pipeline_id: 1 }],
+      additional_data: { next_cursor: null },
+    },
+    'POST /api/v2/persons': (req) => json({ success: true, data: { id: 6, ...body(req) } }),
+    'PATCH /api/v2/deals/9': (req) => json({ success: true, data: { id: 9, ...body(req) } }),
+    'POST /v1/notes': (req) => json({ success: true, data: { id: 70, ...body(req) } }),
   });
   const acc = testAccount(pipedrive, { credentials: { apiToken: token }, fetch: service.fetch });
 
@@ -465,18 +544,65 @@ describe('pipedrive', () => {
     expect(call.url.search).not.toContain(token);
   });
 
-  it('pages searches with next_start and maps people to contacts', async () => {
+  it('searches through API v2, pages with next_cursor and maps people to contacts', async () => {
     const found = (await acc.run('search_persons', { term: 'anna' })) as { nextCursor?: string };
+    expect(service.calls.at(-1)!.url.pathname).toBe('/api/v2/persons/search');
     await acc.run('search_persons', { term: 'anna', cursor: found.nextCursor });
-    expect(service.calls.at(-1)!.url.searchParams.get('start')).toBe('20');
+    expect(service.calls.at(-1)!.url.searchParams.get('cursor')).toBe('eyJmaWVsZCI6ImlkIn0');
     expect(await acc.runCapability('contacts.search', { query: 'anna' })).toEqual([
       { id: '5', name: 'Anna Smith', emails: ['anna@acme.com'], company: 'ACME' },
     ]);
   });
 
-  it('moves deals with only the given fields', async () => {
+  it('lists deals and stages with v2 fields', async () => {
+    const deals = (await acc.run('list_deals', { status: 'open' })) as {
+      items: unknown[];
+      nextCursor?: string;
+    };
+    expect(service.calls.at(-1)!.url.searchParams.get('status')).toBe('open');
+    expect(deals).toEqual({
+      items: [
+        {
+          id: 9,
+          title: 'ACME annual contract',
+          value: 1200,
+          currency: 'USD',
+          status: 'open',
+          stage_id: 2,
+          person_id: 5,
+          org_id: 2,
+          expected_close_date: '2026-12-15',
+          update_time: '2026-11-20T10:00:00Z',
+        },
+      ],
+    });
+    const stages = (await acc.run('list_stages', {})) as { items: unknown[] };
+    expect(stages.items).toEqual([{ id: 2, name: 'Negotiation', pipeline_id: 1, order_nr: 1 }]);
+  });
+
+  it('creates people with v2 email and phone lists', async () => {
+    await acc.run('create_person', {
+      name: 'Bob Lee',
+      emails: [{ value: 'bob@acme.com', label: 'work' }],
+      org_id: 2,
+    });
+    expect(body(service.calls.at(-1)!)).toEqual({
+      name: 'Bob Lee',
+      emails: [{ value: 'bob@acme.com', label: 'work' }],
+      org_id: 2,
+    });
+  });
+
+  it('moves deals with PATCH and only the given fields', async () => {
     await acc.run('update_deal', { deal_id: 9, stage_id: 3, status: 'won' });
-    expect(body(service.calls.at(-1)!)).toEqual({ stage_id: 3, status: 'won' });
+    const call = service.calls.at(-1)!;
+    expect(call.method).toBe('PATCH');
+    expect(body(call)).toEqual({ stage_id: 3, status: 'won' });
+  });
+
+  it('keeps notes on v1, which has no v2 endpoint', async () => {
+    await acc.run('add_note', { content: 'Called today', deal_id: 9 });
+    expect(service.calls.at(-1)!.url.pathname).toBe('/v1/notes');
   });
 });
 

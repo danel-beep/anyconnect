@@ -353,6 +353,51 @@ describe('HTTP manifest connectors', () => {
     expect(unconnected).toMatchObject({ kind: 'auth' });
   });
 
+  it('trades client credentials for a cached token, per account and per secret', async () => {
+    const connector = defineManifestConnector({
+      id: 'machine',
+      name: 'Machine',
+      description: 'Server-to-server service',
+      baseUrl: 'https://api.machine.example',
+      config: { type: 'object', properties: { region: { type: 'string' } }, required: ['region'] },
+      auth: {
+        type: 'client_credentials',
+        tokenUrl: 'https://{{config.region}}.auth.machine.example/token',
+        scopes: ['read'],
+        clientAuth: 'basic',
+        format: 'json',
+      },
+      actions: [{ name: 'me', description: 'Who am I', request: { method: 'GET', path: '/me' } }],
+    });
+    expect(connector.oauth).toBeUndefined();
+    expect(connector.credentials.safeParse({}).success).toBe(false);
+    let issued = 0;
+    const { fetch, calls } = fakeFetch((req) => {
+      if (req.url.pathname === '/token') {
+        issued += 1;
+        return json({ access_token: `t${issued}`, expires_in: 3600 });
+      }
+      return json({ auth: req.headers.get('authorization') });
+    });
+    const ctx = (id: string, secret: string) =>
+      context(fetch, {
+        account: { id, name: id, label: id },
+        config: { region: 'eu' },
+        credentials: { clientId: 'app', clientSecret: secret },
+      });
+
+    expect(await run(connector, 'me', {}, ctx('acc_a', 's1'))).toEqual({ auth: 'Bearer t1' });
+    const grant = calls[0]!;
+    expect(grant.url.toString()).toBe('https://eu.auth.machine.example/token');
+    expect(grant.headers.get('authorization')).toBe(`Basic ${Buffer.from('app:s1').toString('base64')}`);
+    expect(JSON.parse(grant.body!)).toEqual({ grant_type: 'client_credentials', scope: 'read' });
+    // Cached for the same account and secret; a new secret or another account gets its own token.
+    expect(await run(connector, 'me', {}, ctx('acc_a', 's1'))).toEqual({ auth: 'Bearer t1' });
+    expect(await run(connector, 'me', {}, ctx('acc_a', 's2'))).toEqual({ auth: 'Bearer t2' });
+    expect(await run(connector, 'me', {}, ctx('acc_b', 's2'))).toEqual({ auth: 'Bearer t3' });
+    expect(issued).toBe(3);
+  });
+
   it('supports page, offset and Link-header pagination', async () => {
     const paged = defineManifestConnector({
       id: 'paged',

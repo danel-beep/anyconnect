@@ -117,6 +117,12 @@ export default defineManifestConnector(manifest, {
 | `bearer` | `Authorization: Bearer …` (`token`) | `credentials.token` |
 | `basic` | `username` / `password` — шаблоны | задать `credentials` |
 | `oauth2` | `provider` (id из реестра или описание), `scopes`; хаб проводит OAuth и обновляет токены | — |
+| `client_credentials` | OAuth 2 без браузера: свой клиент аккаунта меняется на короткий токен (`tokenUrl` — шаблон, `scopes`, `clientAuth` `body`/`basic`, `format` `form`/`json`, `params`) | `credentials.clientId`, `credentials.clientSecret` |
+
+`client_credentials` подходит сервисам, где каждый клиент регистрирует приложение у себя (Zendesk:
+поддомен в `tokenUrl`). Токен живёт в памяти процесса до `expires_in` (без него — сутки), один на
+аккаунт и набор данных клиента: новый секрет сразу получает новый токен. На 401 хаб один раз берёт
+новый токен и повторяет запрос; отказ сервиса выдать токен — ошибка `auth` с его текстом.
 
 ### Шаблоны
 

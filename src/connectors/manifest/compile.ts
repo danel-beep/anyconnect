@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getCapability } from '../capabilities.js';
 import { HttpClient, type QueryValue } from '../http/client.js';
@@ -13,12 +14,14 @@ import {
   type ConnectorDefinition,
   ConnectorError,
   type JsonSchema,
+  type OAuthAccess,
   requireOAuth,
 } from '../sdk.js';
 import {
   HttpManifest,
   type HttpManifestInput,
   type ManifestAction,
+  type ManifestAuth,
   type ManifestCapability,
   type ManifestPagination,
   type ManifestRequest,
@@ -62,6 +65,15 @@ function defaultCredentials(manifest: HttpManifest): JsonSchema | undefined {
       };
     case 'oauth2':
       return personalTokenSchema(manifest);
+    case 'client_credentials':
+      return {
+        type: 'object',
+        properties: {
+          clientId: { type: 'string', minLength: 1, description: `${manifest.name} OAuth client id` },
+          clientSecret: { type: 'string', minLength: 1, description: `${manifest.name} OAuth client secret` },
+        },
+        required: ['clientId', 'clientSecret'],
+      };
     default:
       return undefined;
   }
@@ -78,6 +90,13 @@ function personalTokenSchema(manifest: HttpManifest): JsonSchema | undefined {
       },
     },
   };
+}
+
+function renderSecret(template: string, scope: TemplateScope, what: string): string {
+  const value = renderString(template, scope);
+  if (value === undefined || value === '')
+    throw new ConnectorError('auth', `${what} is not set for this account`);
+  return String(value);
 }
 
 function encodeCursor(value: unknown): string {
@@ -119,8 +138,16 @@ interface CompiledAction {
   definition: ActionDefinition;
 }
 
+type ClientCredentialsAuth = Extract<ManifestAuth, { type: 'client_credentials' }>;
+
+/** Tokens live this much shorter than the service says, so a call never starts with a dying one. */
+const TOKEN_MARGIN_MS = 60_000;
+
 class ManifestRuntime {
   readonly limiter = new TokenBucketLimiter();
+  /** Client-credentials tokens by account; `key` ties a token to the credentials that made it. */
+  private readonly tokens = new Map<string, { key: string; token: string; expires: number }>();
+  private readonly pending = new Map<string, { key: string; promise: Promise<string> }>();
 
   constructor(readonly manifest: HttpManifest) {}
 
@@ -134,7 +161,7 @@ class ManifestRuntime {
     };
   }
 
-  client(ctx: Ctx, scope: TemplateScope): HttpClient {
+  async client(ctx: Ctx, scope: TemplateScope): Promise<HttpClient> {
     const { manifest } = this;
     const baseUrl = renderString(manifest.baseUrl, scope);
     if (typeof baseUrl !== 'string' || !baseUrl) {
@@ -151,12 +178,8 @@ class ManifestRuntime {
     }
     const query: Record<string, QueryValue> = {};
     const auth = manifest.auth;
-    const secret = (template: string, what: string): string => {
-      const value = renderString(template, scope);
-      if (value === undefined || value === '')
-        throw new ConnectorError('auth', `${what} is not set for this account`);
-      return String(value);
-    };
+    const secret = (template: string, what: string) => renderSecret(template, scope, what);
+    let access: OAuthAccess | undefined = ctx.oauth;
     switch (auth.type) {
       case 'api_key':
         if (auth.in === 'header') headers[auth.name] = secret(auth.value, 'The API key');
@@ -179,18 +202,119 @@ class ManifestRuntime {
             headers.authorization = `Bearer ${secret(auth.token, 'Neither an OAuth connection nor a token')}`;
         }
         break;
+      case 'client_credentials':
+        access = await this.clientCredentials(ctx, scope, auth);
+        break;
       case 'none':
         break;
     }
-    return new HttpClient(ctx, {
-      baseUrl,
-      headers,
-      query,
-      ...(manifest.errorMessagePaths ? { errorMessagePaths: manifest.errorMessagePaths } : {}),
-      ...(manifest.rateLimit
-        ? { rateLimit: { limiter: this.limiter, key: ctx.account.id, limit: manifest.rateLimit } }
+    return new HttpClient(
+      { fetch: ctx.fetch, signal: ctx.signal, oauth: access },
+      {
+        baseUrl,
+        headers,
+        query,
+        ...(manifest.errorMessagePaths ? { errorMessagePaths: manifest.errorMessagePaths } : {}),
+        ...(manifest.rateLimit
+          ? { rateLimit: { limiter: this.limiter, key: ctx.account.id, limit: manifest.rateLimit } }
+          : {}),
+      },
+    );
+  }
+
+  /**
+   * Access for the client credentials grant, shaped like a hub OAuth connection so `HttpClient`
+   * sends it and, on 401, fetches a fresh token once (the old one may have been revoked early).
+   */
+  private async clientCredentials(
+    ctx: Ctx,
+    scope: TemplateScope,
+    auth: ClientCredentialsAuth,
+  ): Promise<OAuthAccess> {
+    const tokenUrl = renderSecret(auth.tokenUrl, scope, 'The token URL');
+    const clientId = renderSecret(auth.clientId, scope, 'The client id');
+    const clientSecret = renderSecret(auth.clientSecret, scope, 'The client secret');
+    // A credential change (new secret, other app) must not reuse the old token.
+    const key = createHash('sha256').update(`${tokenUrl}\n${clientId}\n${clientSecret}`).digest('hex');
+    const accountId = ctx.account.id;
+    const fetchToken = (): Promise<string> => {
+      const running = this.pending.get(accountId);
+      if (running?.key === key) return running.promise;
+      const promise = this.requestToken(ctx, auth, { tokenUrl, clientId, clientSecret }).then(
+        ({ token, expiresIn }) => {
+          this.tokens.set(accountId, { key, token, expires: Date.now() + expiresIn * 1000 });
+          return token;
+        },
+      );
+      const entry = { key, promise };
+      this.pending.set(accountId, entry);
+      const clear = () => {
+        if (this.pending.get(accountId) === entry) this.pending.delete(accountId);
+      };
+      promise.then(clear, clear);
+      return promise;
+    };
+    const cached = this.tokens.get(accountId);
+    const valid = cached && cached.key === key && cached.expires > Date.now() + TOKEN_MARGIN_MS;
+    const access: OAuthAccess = {
+      accessToken: valid ? cached.token : await fetchToken(),
+      tokenType: 'Bearer',
+      scopes: auth.scopes,
+      extra: {},
+      refresh: async () => {
+        this.tokens.delete(accountId);
+        access.accessToken = await fetchToken();
+        return access.accessToken;
+      },
+    };
+    return access;
+  }
+
+  private async requestToken(
+    ctx: Ctx,
+    auth: ClientCredentialsAuth,
+    client: { tokenUrl: string; clientId: string; clientSecret: string },
+  ): Promise<{ token: string; expiresIn: number }> {
+    const fields: Record<string, QueryValue> = {
+      grant_type: 'client_credentials',
+      ...(auth.scopes.length ? { scope: auth.scopes.join(' ') } : {}),
+      ...auth.params,
+      ...(auth.clientAuth === 'body'
+        ? { client_id: client.clientId, client_secret: client.clientSecret }
         : {}),
-    });
+    };
+    const headers =
+      auth.clientAuth === 'basic'
+        ? {
+            authorization: `Basic ${Buffer.from(
+              `${encodeURIComponent(client.clientId)}:${encodeURIComponent(client.clientSecret)}`,
+            ).toString('base64')}`,
+          }
+        : undefined;
+    let data: { access_token?: unknown; expires_in?: unknown } | undefined;
+    try {
+      ({ data } = await new HttpClient({ fetch: ctx.fetch, signal: ctx.signal }).request<typeof data>({
+        method: 'POST',
+        url: client.tokenUrl,
+        ...(headers ? { headers } : {}),
+        ...(auth.format === 'json' ? { json: fields } : { form: fields }),
+      }));
+    } catch (error) {
+      // A wrong id or secret comes back as 400/401 invalid_client: say what to fix.
+      if (error instanceof ConnectorError && ['auth', 'invalid_input', 'permission'].includes(error.kind)) {
+        throw new ConnectorError(
+          'auth',
+          `${this.manifest.name} did not accept the client id and secret: ${error.message}`,
+        );
+      }
+      throw error;
+    }
+    if (typeof data?.access_token !== 'string' || !data.access_token) {
+      throw new ConnectorError('auth', `${this.manifest.name} did not return an access token`);
+    }
+    const expiresIn = Number(data.expires_in);
+    // Without expires_in the token does not expire; still re-check it daily.
+    return { token: data.access_token, expiresIn: expiresIn > 0 ? expiresIn : 86_400 };
   }
 
   async execute(
@@ -201,7 +325,7 @@ class ManifestRuntime {
     page?: { pagination: ManifestPagination; cursor: unknown },
   ) {
     const scope = this.scope(ctx, input);
-    const client = this.client(ctx, scope);
+    const client = await this.client(ctx, scope);
     const used = new Set<string>([CURSOR_ARGUMENT]);
     let path = request.path.replace(/\{(\w+)\}/g, (_m, name: string) => {
       used.add(name);
