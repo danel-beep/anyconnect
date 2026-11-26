@@ -6,6 +6,13 @@ import { fakeRoutes, json, testAccount } from './harness.js';
 const PAGE = '1a2b3c4d5e6f40718293a4b5c6d7e8f9';
 const PAGE_ID = '1a2b3c4d-5e6f-4071-8293-a4b5c6d7e8f9';
 const DB_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const DS_ID = 'dddddddd-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const MULTI_DB = 'cccccccc-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const notFound = (what: string) => () =>
+  json(
+    { object: 'error', status: 404, code: 'object_not_found', message: `Could not find ${what}.` },
+    { status: 404 },
+  );
 const rt = (text: string) => [{ type: 'text', plain_text: text, text: { content: text }, annotations: {} }];
 
 const row = {
@@ -13,7 +20,9 @@ const row = {
   id: PAGE_ID,
   url: `https://www.notion.so/Plan-${PAGE}`,
   last_edited_time: '2026-11-03T10:00:00.000Z',
-  parent: { type: 'database_id', database_id: DB_ID },
+  // API 2025-09-03+: rows belong to a data source inside the database.
+  parent: { type: 'data_source_id', data_source_id: DS_ID, database_id: DB_ID },
+  in_trash: false,
   properties: {
     Name: { id: 'title', type: 'title', title: rt('Plan Q4') },
     Status: { id: 's', type: 'status', status: { id: '1', name: 'In progress', color: 'blue' } },
@@ -39,7 +48,19 @@ const blocks = [
 function setup() {
   const service = fakeRoutes({
     'GET /v1/users/me': { object: 'user', type: 'bot', bot: { workspace_name: 'Danel HQ' } },
-    'POST /v1/search': { object: 'list', results: [row], next_cursor: 'cur2', has_more: true },
+    'POST /v1/search': (req) =>
+      json(
+        JSON.parse(req.body!).filter?.value === 'data_source'
+          ? {
+              object: 'list',
+              results: [
+                { object: 'data_source', id: DS_ID, title: rt('Projects'), properties: row.properties },
+              ],
+              next_cursor: null,
+              has_more: false,
+            }
+          : { object: 'list', results: [row], next_cursor: 'cur2', has_more: true },
+      ),
     [`GET /v1/pages/${PAGE_ID}`]: row,
     [`GET /v1/blocks/${PAGE_ID}/children`]: {
       object: 'list',
@@ -55,13 +76,32 @@ function setup() {
       has_more: false,
       next_cursor: null,
     },
+    // A database id is not a data source id: the connector falls back to the database's sources.
+    [`GET /v1/data_sources/${DB_ID}`]: notFound('data source'),
+    [`GET /v1/data_sources/${MULTI_DB}`]: notFound('data source'),
     [`GET /v1/databases/${DB_ID}`]: {
       object: 'database',
       id: DB_ID,
       title: rt('Projects'),
+      data_sources: [{ id: DS_ID, name: 'Projects' }],
+    },
+    [`GET /v1/databases/${MULTI_DB}`]: {
+      object: 'database',
+      id: MULTI_DB,
+      title: rt('Work'),
+      data_sources: [
+        { id: DS_ID, name: 'Tasks' },
+        { id: 'eeeeeeee-bbbb-4ccc-8ddd-eeeeeeeeeeee', name: 'Bugs' },
+      ],
+    },
+    [`GET /v1/data_sources/${DS_ID}`]: {
+      object: 'data_source',
+      id: DS_ID,
+      title: rt('Projects'),
+      parent: { type: 'database_id', database_id: DB_ID },
       properties: row.properties,
     },
-    [`POST /v1/databases/${DB_ID}/query`]: {
+    [`POST /v1/data_sources/${DS_ID}/query`]: {
       object: 'list',
       results: [row],
       next_cursor: null,
@@ -70,12 +110,12 @@ function setup() {
     'POST /v1/pages': (req) =>
       json({ ...row, id: 'new-page-id', url: 'https://www.notion.so/new', _sent: JSON.parse(req.body!) }),
     [`PATCH /v1/pages/${PAGE_ID}`]: (req) => {
-      const sent = JSON.parse(req.body!) as { properties: Record<string, object> };
+      const sent = JSON.parse(req.body!) as { properties?: Record<string, object>; in_trash?: boolean };
       const properties: Record<string, object> = { ...row.properties };
-      for (const [name, value] of Object.entries(sent.properties)) {
+      for (const [name, value] of Object.entries(sent.properties ?? {})) {
         properties[name] = { ...(properties[name] ?? {}), ...value };
       }
-      return json({ ...row, properties });
+      return json({ ...row, properties, in_trash: sent.in_trash ?? false });
     },
     [`PATCH /v1/blocks/${PAGE_ID}/children`]: { object: 'list', results: [] },
   });
@@ -113,7 +153,7 @@ describe('notion', () => {
   it('sends the token and API version, identifies the workspace', async () => {
     const { acc, service } = setup();
     expect(await notion.test!(acc.ctx as never)).toMatchObject({ identity: 'Danel HQ' });
-    expect(service.calls[0]!.headers.get('notion-version')).toBe('2022-06-28');
+    expect(service.calls[0]!.headers.get('notion-version')).toBe('2026-03-11');
     expect(service.calls[0]!.headers.get('authorization')).toBe('Bearer ntn_secret');
   });
 
@@ -133,6 +173,17 @@ describe('notion', () => {
     });
   });
 
+  it('searches databases as data sources and lists them as databases', async () => {
+    const { acc, service } = setup();
+    expect(await acc.run('search', { query: 'proj', type: 'database' })).toEqual({
+      results: [{ id: DS_ID, type: 'database', title: 'Projects' }],
+    });
+    expect(JSON.parse(service.calls.at(-1)!.body!).filter).toEqual({
+      property: 'object',
+      value: 'data_source',
+    });
+  });
+
   it('reads a page as Markdown with plain properties', async () => {
     const { acc } = setup();
     const page = (await acc.run('read_page', { page_id: row.url })) as Record<string, unknown>;
@@ -141,12 +192,23 @@ describe('notion', () => {
     expect(page.truncated).toBeUndefined();
   });
 
-  it('queries a database into flat rows', async () => {
+  it('queries a database by its id or URL and by a data source id', async () => {
+    const { acc, service } = setup();
+    for (const id of [DB_ID, DS_ID]) {
+      const result = (await acc.run('query_database', { database_id: id })) as {
+        rows: Record<string, unknown>[];
+      };
+      expect(result.rows[0]).toMatchObject({ id: PAGE_ID, Name: 'Plan Q4', Status: 'In progress' });
+      expect(service.calls.at(-1)!.url.pathname).toBe(`/v1/data_sources/${DS_ID}/query`);
+    }
+  });
+
+  it('asks which data source to use when a database has several', async () => {
     const { acc } = setup();
-    const result = (await acc.run('query_database', { database_id: DB_ID })) as {
-      rows: Record<string, unknown>[];
-    };
-    expect(result.rows[0]).toMatchObject({ id: PAGE_ID, Name: 'Plan Q4', Status: 'In progress' });
+    await expect(acc.run('query_database', { database_id: MULTI_DB })).rejects.toMatchObject({
+      kind: 'invalid_input',
+      message: expect.stringContaining(`Tasks (${DS_ID})`),
+    });
   });
 
   it('creates a database row from plain values using the schema', async () => {
@@ -158,7 +220,7 @@ describe('notion', () => {
       content: '- step one',
     });
     const sent = JSON.parse(service.calls.at(-1)!.body!);
-    expect(sent.parent).toEqual({ database_id: DB_ID });
+    expect(sent.parent).toEqual({ type: 'data_source_id', data_source_id: DS_ID });
     expect(sent.properties).toEqual({
       Status: { status: { name: 'Done' } },
       Tags: { multi_select: [{ name: 'home' }] },
@@ -182,6 +244,8 @@ describe('notion', () => {
       properties: { Status: { status: { name: 'Done' } } },
     });
     expect(updated.Status).toBe('Done');
+    expect(await acc.run('update_page', { page_id: PAGE_ID, trash: true })).toMatchObject({ trashed: true });
+    expect(JSON.parse(service.calls.at(-1)!.body!)).toEqual({ in_trash: true });
   });
 
   it('maps "not shared with the integration" to not_found with Notion\'s hint', async () => {

@@ -156,6 +156,13 @@ Permissions» redirect URL `https://<хаб>/connect/callback`, затем `OAUT
 Страницы читаются в Markdown, принимаются id и ссылки notion.so. Свойства базы задаются простыми
 значениями: `{"Status": "Готово", "Срок": "2026-11-05", "Теги": ["работа"]}`.
 
+Версия API — `Notion-Version: 2026-03-11`. С 2025-09-03 у базы может быть несколько источников
+данных (data sources), и старые версии на таких базах падают. Поиск по базам ищет источники
+(`filter.value = data_source`), а ИИ видит их как `database`. `query_database` и `create_page`
+принимают и id базы (из ссылки), и id источника (из поиска): по id базы коннектор берёт её
+единственный источник, а если их несколько — просит выбрать и перечисляет их. Корзина — поле
+`in_trash` (бывшее `archived`).
+
 ## GitHub
 
 Без OAuth: [личный токен](https://github.com/settings/personal-access-tokens) (fine-grained:
