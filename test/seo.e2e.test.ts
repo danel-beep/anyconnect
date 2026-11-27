@@ -241,13 +241,19 @@ describe('what crawlers read', () => {
 });
 
 describe('page speed', () => {
-  it('gzips pages and feeds but leaves MCP responses alone', async () => {
-    const res = await get('/', { 'Accept-Encoding': 'gzip' });
-    expect(res.headers.get('content-encoding')).toBe('gzip');
+  it('sends pages and feeds in brotli (gzip for older clients) but leaves MCP responses alone', async () => {
+    const res = await get('/', { 'Accept-Encoding': 'gzip, deflate, br, zstd' });
+    expect(res.headers.get('content-encoding')).toBe('br');
     expect(res.headers.get('vary')).toContain('Accept-Encoding');
     expect(await res.text()).toContain('<html');
-    expect((await get('/llms.txt', { 'Accept-Encoding': 'gzip' })).headers.get('content-encoding')).toBe(
+    const gzipped = await get('/', { 'Accept-Encoding': 'gzip' });
+    expect(gzipped.headers.get('content-encoding')).toBe('gzip');
+    expect(await gzipped.text()).toContain('<html');
+    expect((await get('/', { 'Accept-Encoding': 'br;q=0, gzip' })).headers.get('content-encoding')).toBe(
       'gzip',
+    );
+    expect((await get('/llms.txt', { 'Accept-Encoding': 'gzip, br' })).headers.get('content-encoding')).toBe(
+      'br',
     );
 
     const mcp = await fetch(`${hub.baseUrl}/mcp`, {
@@ -270,8 +276,15 @@ describe('page speed', () => {
     expect((await get('/assets/app.css')).headers.get('cache-control')).toBe('public, max-age=3600');
   });
 
-  it('preloads the text font of the page language', async () => {
-    expect(await page('/')).not.toContain('onest-cyrillic.woff2" as="font"');
-    expect(await page('/?lang=ru')).toContain('href="/assets/fonts/onest-cyrillic.woff2" as="font"');
+  it('preloads the text and code fonts of the page language', async () => {
+    const preloads = (html: string) =>
+      [...html.matchAll(/href="\/assets\/fonts\/([a-z-]+)\.woff2\?v=[a-f0-9]+" as="font"/g)].map((m) => m[1]);
+    expect(preloads(await page('/'))).toEqual(['onest-latin', 'mono-latin']);
+    expect(preloads(await page('/?lang=ru'))).toEqual([
+      'onest-latin',
+      'onest-cyrillic',
+      'mono-latin',
+      'mono-cyrillic',
+    ]);
   });
 });

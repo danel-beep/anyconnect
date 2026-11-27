@@ -2,6 +2,7 @@ import { raw } from 'hono/html';
 import type { Child, FC } from 'hono/jsx';
 import { BRAND } from '../brand.js';
 import { ASSET_URLS } from './asset-urls.js';
+import { fontUrl, preloadedFonts } from './assets.js';
 import { type JsonLd, serializeJsonLd } from './seo/structured-data.js';
 import type { Alternate } from './seo/urls.js';
 
@@ -111,19 +112,10 @@ export const Doc: FC<{
         ) : null}
         <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#232326" media="(prefers-color-scheme: dark)" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        {(lang === 'ru' ? ['onest-latin.woff2', 'onest-cyrillic.woff2'] : ['onest-latin.woff2']).map(
-          (file) => (
-            // The text font of the page's language, so the first paint does not wait for it.
-            <link
-              rel="preload"
-              href={`/assets/fonts/${file}`}
-              as="font"
-              type="font/woff2"
-              crossorigin="anonymous"
-            />
-          ),
-        )}
+        <link rel="icon" href={ASSET_URLS.favicon} type="image/svg+xml" />
+        {preloadedFonts(lang).map((file) => (
+          <link rel="preload" href={fontUrl(file)} as="font" type="font/woff2" crossorigin="anonymous" />
+        ))}
         <link rel="stylesheet" href={ASSET_URLS.css} />
         <script src={ASSET_URLS.theme} />
         <script src={ASSET_URLS.site} defer />

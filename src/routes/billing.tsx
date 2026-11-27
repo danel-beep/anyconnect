@@ -2,9 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { PaddleProvider } from '../billing/providers/paddle.js';
 import { TestBillingProvider } from '../billing/providers/test.js';
-import { ASSET_URLS, assetCacheControl } from '../web/asset-urls.js';
 import { PaddleCheckoutPage, TestCheckoutPage, TestPortalPage } from '../web/billing-pages.js';
-import { PADDLE_CHECKOUT_JS } from '../web/client-scripts.js';
 import { checkoutCsp, csrfToken } from '../web/http.js';
 import { type AppContext, type AppEnv, bodyParams } from './context.js';
 import { cookieOpts, csrfFailedPage, csrfOk } from './page-helpers.js';
@@ -32,14 +30,6 @@ export function billingRoutes() {
       .billing.handleWebhook(c.req.param('provider'), body, c.req.raw.headers);
     return c.body(null, status as 200);
   });
-
-  app.get('/assets/paddle-checkout.js', (c) =>
-    c.body(PADDLE_CHECKOUT_JS, 200, {
-      'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': assetCacheControl(ASSET_URLS.paddleCheckout, c.req.query('v')),
-      'X-Content-Type-Options': 'nosniff',
-    }),
-  );
 
   /**
    * Paddle's "default payment link": opens the overlay for a transaction. No sign-in needed, as

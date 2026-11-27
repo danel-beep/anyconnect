@@ -1,5 +1,4 @@
 import { type Context, Hono } from 'hono';
-import { compress } from 'hono/compress';
 import { BRAND } from './brand.js';
 import { VaultLockedError } from './core/vaults.js';
 import { DATABASE_RETRY_AFTER_SECONDS, isDatabaseUnavailable } from './db/errors.js';
@@ -11,9 +10,11 @@ import { aiAppRoutes } from './routes/ai-apps.js';
 import { pageAnalytics } from './routes/analytics.js';
 import { apiRoutes } from './routes/api.js';
 import { appRoutes } from './routes/app.js';
+import { assetRoutes } from './routes/assets.js';
 import { billingRoutes } from './routes/billing.js';
 import { requestBodyLimit } from './routes/body-limit.js';
 import { canonicalHost } from './routes/canonical-host.js';
+import { compression } from './routes/compression.js';
 import { confirmRoutes } from './routes/confirm.js';
 import { connectRoutes } from './routes/connect.js';
 import type { AppEnv } from './routes/context.js';
@@ -74,9 +75,10 @@ export function createApp(services: Services) {
   app.use('*', canonicalHost(services.config.publicUrl, services.config.legacyHosts));
   app.use('*', referralCapture());
   app.use('*', requestBodyLimit(services.config.maxRequestBodyBytes));
-  // Pages, styles, scripts, feeds and llms.txt go out gzipped (a page shrinks to about a fifth).
-  // MCP, API and OAuth responses are JSON or event streams and stay as they are.
-  app.use('*', compress({ encoding: 'gzip', contentTypeFilter: COMPRESSIBLE }));
+  // Pages, feeds and llms.txt go out in brotli or gzip (a page shrinks to about a fifth); static
+  // files come compressed already (`assetRoutes`). MCP, API and OAuth responses are JSON or event
+  // streams and stay as they are.
+  app.use('*', compression({ contentType: COMPRESSIBLE }));
   // Counts served pages into an in-memory buffer after they are rendered (docs/ANALYTICS.md).
   app.use('*', pageAnalytics());
   // Opens (or, the first time, creates) the signed-in user's vault from this browser's device key.
@@ -97,6 +99,7 @@ export function createApp(services: Services) {
     );
   });
 
+  app.route('/', assetRoutes());
   app.route('/', siteRoutes());
   app.route('/', seoRoutes());
   app.route('/', oauthRoutes());

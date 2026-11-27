@@ -11,7 +11,6 @@ import { COMPARE_PAGES, comparePage } from '../web/seo/compare-pages.js';
 import { robotsTxt, type SitemapEntry, sitemapXml } from '../web/seo/crawlers.js';
 import { rssFeed } from '../web/seo/feed.js';
 import { type LlmsInput, llmsFullTxt, llmsTxt } from '../web/seo/llms.js';
-import { OG_IMAGE_PNG } from '../web/seo/og-image.js';
 import { PERSONAS, persona } from '../web/seo/personas.js';
 import { useCase } from '../web/seo/use-cases.js';
 import {
@@ -138,14 +137,6 @@ export function seoRoutes() {
     const out = markdown(llmsFullTxt(await llmsInput(c, true)));
     return c.body(out.body, 200, out.headers);
   });
-
-  app.get('/assets/og.png', (c) =>
-    c.body(new Uint8Array(OG_IMAGE_PNG), 200, {
-      'Content-Type': 'image/png',
-      'Cache-Control': HOURLY,
-      'X-Content-Type-Options': 'nosniff',
-    }),
-  );
 
   // --- Pages ------------------------------------------------------------------
   app.get('/docs/:client', async (c) => {

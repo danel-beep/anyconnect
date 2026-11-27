@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { type StaticAsset, staticAsset } from './static-asset.js';
 
 /**
  * Self-hosted fonts (the CSP allows fonts only from the hub itself): Onest for text, JetBrains Mono
@@ -56,24 +57,37 @@ export const FONT_FILES: Record<string, FontFile> = {
   },
 };
 
+const require = createRequire(import.meta.url);
+
+/** Public file name → the font file served at `/assets/fonts/<name>` (read once, at start). */
+export const FONT_ASSETS: Readonly<Record<string, StaticAsset>> = Object.fromEntries(
+  Object.entries(FONT_FILES).map(([file, font]) => [
+    file,
+    staticAsset(
+      `/assets/fonts/${file}`,
+      'font/woff2',
+      new Uint8Array(readFileSync(require.resolve(font.module))),
+    ),
+  ]),
+);
+
+/** The address of a font file with its content version, for `@font-face` and preloads. */
+export const fontUrl = (file: keyof typeof FONT_FILES) => FONT_ASSETS[file]!.url;
+
 export const FONT_FACES = Object.entries(FONT_FILES)
   .map(
     ([file, f]) =>
-      `@font-face{font-family:"${f.family}";font-style:normal;font-display:swap;font-weight:${f.weight};src:url(/assets/fonts/${file}) format("woff2");unicode-range:${f.range}}`,
+      `@font-face{font-family:"${f.family}";font-style:normal;font-display:swap;font-weight:${f.weight};src:url(${fontUrl(file)}) format("woff2");unicode-range:${f.range}}`,
   )
   .join('\n');
 
-const require = createRequire(import.meta.url);
-const cache = new Map<string, Buffer>();
-
-/** The bytes of a public font file, or undefined for unknown names. */
-export function fontFile(name: string): Buffer | undefined {
-  if (!Object.hasOwn(FONT_FILES, name)) return undefined;
-  const font = FONT_FILES[name]!;
-  let bytes = cache.get(name);
-  if (!bytes) {
-    bytes = readFileSync(require.resolve(font.module));
-    cache.set(name, bytes);
-  }
-  return bytes;
+/**
+ * The font files every page shows in its first screen, for the page's language: the text font and
+ * the code font (header language switch, eyebrows, labels). Preloaded, so text in them does not wait
+ * for the stylesheet to be parsed before its font is even requested.
+ */
+export function preloadedFonts(lang: string): string[] {
+  return lang === 'ru'
+    ? ['onest-latin.woff2', 'onest-cyrillic.woff2', 'mono-latin.woff2', 'mono-cyrillic.woff2']
+    : ['onest-latin.woff2', 'mono-latin.woff2'];
 }
