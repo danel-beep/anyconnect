@@ -1,9 +1,5 @@
 import { Hono } from 'hono';
 import { isDatabaseUnavailable } from '../db/errors.js';
-import { ASSET_URLS, assetCacheControl } from '../web/asset-urls.js';
-import { fontFile } from '../web/assets.js';
-import { SITE_JS, THEME_JS } from '../web/client-scripts.js';
-import { FAVICON_SVG } from '../web/favicon.js';
 import { safeNextPath } from '../web/http.js';
 import { LandingPage } from '../web/landing.js';
 import { LEGAL_KINDS, legalDoc } from '../web/legal.js';
@@ -14,45 +10,20 @@ import { StatusPage } from '../web/status-page.js';
 import { supportDoc } from '../web/support.js';
 import { trustDoc } from '../web/trust.js';
 import { TrustPage } from '../web/trust-page.js';
-import type { AppContext, AppEnv } from './context.js';
+import type { AppEnv } from './context.js';
 import { currentUser } from './context.js';
 import { pageCtx, saveLocale } from './page-helpers.js';
 import { publicServices, serviceDetail } from './site-data.js';
 
-const IMMUTABLE = 'public, max-age=31536000, immutable';
-const HOURLY = 'public, max-age=3600';
-
 /**
- * The public website: landing, pricing, services, docs, legal pages, plus its static files
- * (fonts, scripts, favicon). Guides, comparisons, robots.txt, the sitemap and llms.txt live in
+ * The public website: landing, pricing, services, docs, legal pages (its static files are served
+ * by `assetRoutes`). Guides, comparisons, robots.txt, the sitemap and llms.txt live in
  * `seo.tsx`. Everything here works signed out.
  */
 export function siteRoutes() {
   const app = new Hono<AppEnv>();
 
-  // --- Static files ---------------------------------------------------------
-  app.get('/assets/fonts/:file', (c) => {
-    const bytes = fontFile(c.req.param('file'));
-    if (!bytes) return c.notFound();
-    return c.body(new Uint8Array(bytes), 200, {
-      'Content-Type': 'font/woff2',
-      'Cache-Control': IMMUTABLE,
-      'X-Content-Type-Options': 'nosniff',
-    });
-  });
-
-  const script = (body: string, url: string) => (c: AppContext) =>
-    c.body(body, 200, {
-      'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': assetCacheControl(url, c.req.query('v')),
-      'X-Content-Type-Options': 'nosniff',
-    });
-  app.get('/assets/theme.js', script(THEME_JS, ASSET_URLS.theme));
-  app.get('/assets/site.js', script(SITE_JS, ASSET_URLS.site));
-
-  app.get('/favicon.svg', (c) =>
-    c.body(FAVICON_SVG, 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': HOURLY }),
-  );
+  // Browsers that ask for the classic icon get the SVG one (served by `assetRoutes`).
   app.get('/favicon.ico', (c) => c.redirect('/favicon.svg', 301));
 
   // --- Status page ---------------------------------------------------------------

@@ -1,33 +1,35 @@
-import { createHash } from 'node:crypto';
+import { FONT_ASSETS } from './assets.js';
 import { PADDLE_CHECKOUT_JS, SITE_JS, THEME_JS } from './client-scripts.js';
+import { FAVICON_SVG } from './favicon.js';
+import { OG_IMAGE_PNG } from './seo/og-image.js';
+import { type StaticAsset, staticAsset } from './static-asset.js';
 import { APP_CSS } from './styles.js';
 import { WEBAUTHN_JS } from './webauthn-client.js';
 
-/**
- * Addresses of the site's own styles and scripts with a content version (`?v=<hash>`): a deploy
- * that changes a file changes its address, so browsers load the new file right away instead of
- * keeping the cached copy for an hour. The routes serve the file whatever the version says.
- */
-const versioned = (path: string, body: string) =>
-  `${path}?v=${createHash('sha256').update(body).digest('hex').slice(0, 12)}`;
-
-export const ASSET_URLS = {
-  css: versioned('/assets/app.css', APP_CSS),
-  theme: versioned('/assets/theme.js', THEME_JS),
-  site: versioned('/assets/site.js', SITE_JS),
-  webauthn: versioned('/assets/webauthn.js', WEBAUTHN_JS),
-  paddleCheckout: versioned('/assets/paddle-checkout.js', PADDLE_CHECKOUT_JS),
-} as const;
-
-const ONE_YEAR = 'public, max-age=31536000, immutable';
-const ONE_HOUR = 'public, max-age=3600';
+const JS = 'text/javascript; charset=utf-8';
 
 /**
- * `Cache-Control` for one of the files above: a request for the current version (`?v=` matches)
- * may be kept for a year, since a new deploy changes the address; anything else (an old or no
- * version) only for an hour.
+ * The site's own static files, each with a content-versioned address (see `StaticAsset`). A new
+ * file is one entry here: `assetRoutes()` serves every entry (compressed once, cached by version)
+ * and pages link `STATIC_ASSETS.<name>.url`.
  */
-export function assetCacheControl(url: string, requestedVersion: string | undefined): string {
-  const current = new URL(url, 'https://local.invalid').searchParams.get('v');
-  return current && requestedVersion === current ? ONE_YEAR : ONE_HOUR;
-}
+export const STATIC_ASSETS = {
+  css: staticAsset('/assets/app.css', 'text/css; charset=utf-8', APP_CSS),
+  theme: staticAsset('/assets/theme.js', JS, THEME_JS),
+  site: staticAsset('/assets/site.js', JS, SITE_JS),
+  webauthn: staticAsset('/assets/webauthn.js', JS, WEBAUTHN_JS),
+  paddleCheckout: staticAsset('/assets/paddle-checkout.js', JS, PADDLE_CHECKOUT_JS),
+  favicon: staticAsset('/favicon.svg', 'image/svg+xml', FAVICON_SVG),
+  ogImage: staticAsset('/assets/og.png', 'image/png', new Uint8Array(OG_IMAGE_PNG)),
+} as const satisfies Record<string, StaticAsset>;
+
+/** Every file `assetRoutes()` serves: the named ones above and the fonts. */
+export const ALL_STATIC_ASSETS: readonly StaticAsset[] = [
+  ...Object.values(STATIC_ASSETS),
+  ...Object.values(FONT_ASSETS),
+];
+
+/** Addresses of the named files, for `<link>` and `<script>` tags. */
+export const ASSET_URLS = Object.fromEntries(
+  Object.entries(STATIC_ASSETS).map(([name, asset]) => [name, asset.url]),
+) as { readonly [K in keyof typeof STATIC_ASSETS]: string };
