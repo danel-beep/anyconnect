@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { AccountMessaging, InboundMessage } from '../src/connectors/messaging.js';
 import { messengerAccounts, messengerChats, messengerMessages, messengerOutbox } from '../src/db/schema.js';
@@ -158,6 +159,12 @@ describe('messaging service edges', () => {
 
   it('returns early when the wait is cancelled, and limits waits per account', async () => {
     await hub.services.messaging.accounts.setState(accountId, { state: 'online' });
+    // Online counts only while a gateway holds the session's lease.
+    expect(await messaging.session()).toMatchObject({ state: 'connecting' });
+    await hub.services.db
+      .update(messengerAccounts)
+      .set({ leaseOwner: 'gw', leaseExpiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(messengerAccounts.accountId, accountId));
     expect(await messaging.session()).toMatchObject({ state: 'online' });
     const stop = new AbortController();
     const waits = Array.from({ length: 5 }, () =>

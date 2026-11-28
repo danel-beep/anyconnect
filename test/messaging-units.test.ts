@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { type MessengerAccountRow, MessengerAccounts } from '../src/messaging/accounts.js';
 import { DEFAULT_PACING, nextSendTime, resolvePacing, typingDurationMs } from '../src/messaging/pacing.js';
 import { indexTerms, matchesQuery, queryTerms, stem } from '../src/messaging/search-index.js';
 
@@ -93,5 +94,43 @@ describe('pacing', () => {
     });
     expect(typingDurationMs('ok', fixed)).toBe(1_000);
     expect(typingDurationMs('x'.repeat(1_000), fixed)).toBe(8_000);
+  });
+});
+
+describe('messenger session status', () => {
+  const row = (patch: Partial<MessengerAccountRow>): MessengerAccountRow => ({
+    accountId: 'acc_1',
+    leaseOwner: 'gw',
+    leaseOwnerUrl: null,
+    leaseExpiresAt: new Date(Date.now() + 60_000),
+    fencingToken: 1,
+    state: 'online',
+    problem: null,
+    problemMessage: null,
+    failures: 0,
+    nextAttemptAt: null,
+    lastOnlineAt: new Date(),
+    sendPausedUntil: null,
+    sendPauseReason: null,
+    updatedAt: new Date(),
+    ...patch,
+  });
+
+  it('is online only while the gateway that runs the session holds its lease', () => {
+    expect(MessengerAccounts.isOnline(row({}))).toBe(true);
+    expect(MessengerAccounts.view(row({})).state).toBe('online');
+    // The gateway died without saying so: its lease ran out, the row still says online.
+    const stale = row({ leaseExpiresAt: new Date(Date.now() - 1_000) });
+    expect(MessengerAccounts.isOnline(stale)).toBe(false);
+    expect(MessengerAccounts.view(stale).state).toBe('connecting');
+    expect(MessengerAccounts.view(row({ state: 'backoff', leaseExpiresAt: null })).state).toBe('backoff');
+  });
+
+  it('says that an open circuit keeps trying', () => {
+    const view = MessengerAccounts.view(
+      row({ state: 'backoff', problem: 'failing', problemMessage: '8 failed attempts' }),
+    );
+    expect(view.message).toContain('trying again');
+    expect(view.message).toContain('8 failed attempts');
   });
 });

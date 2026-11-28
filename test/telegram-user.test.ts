@@ -393,6 +393,37 @@ describe('Telegram personal-account driver', () => {
     await live.stop();
   });
 
+  it("loads what changed during a long downtime, which Telegram's own catch-up may skip", async () => {
+    const fake = createFakeTelegram();
+    const { session, state, ingested } = fakeSession();
+    const tg = driver(fake);
+    const flow = await tg.login!(session, { method: 'qr' });
+    await until(() => flow.view().qr, 'the QR code');
+    fake.scan();
+    const first = await flow.done;
+    await until(() => state.data.get('tg:synced'), 'the first sync');
+    expect(state.data.get('tg:alive')).toBeGreaterThan(Date.now() - 5_000);
+    await first.stop();
+
+    // Back after a short restart: Telegram's catch-up covers it, no extra history requests.
+    fake.history.length = 0;
+    const quick = await tg.connect(session);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fake.history).toEqual([]);
+    await quick.stop();
+
+    // Down for hours, since between the last messages of the two chats: only the group changed.
+    const fixture = fakeMessage(0, '').date.getTime();
+    state.data.set('tg:alive', fixture + 5_000);
+    ingested.length = 0;
+    const back = await tg.connect(session);
+    await until(() => fake.history.length > 0 && ingested.length > 0, 'the catch-up');
+    expect(fake.history).toEqual([GROUP_ID]);
+    expect(ingested.map((m) => m.text)).toEqual(['standup at 10']);
+    expect(state.data.get('tg:alive')).toBeGreaterThan(Date.now() - 5_000);
+    await back.stop();
+  });
+
   it('ends the session when Telegram revokes the login', async () => {
     const fake = createFakeTelegram();
     const { session } = fakeSession();

@@ -27,7 +27,7 @@ const PROBLEM_TEXT: Record<MessengerProblem, string> = {
   flood: 'The messenger asked to slow down; sending is paused for a while.',
   network: 'Cannot reach the messenger right now; reconnecting.',
   protocol: 'The messenger rejected the connection (protocol error); reconnecting.',
-  failing: 'The connection keeps failing; stopped after several attempts.',
+  failing: 'The connection keeps failing; trying again every half hour until it works.',
 };
 
 export function describeProblem(problem: MessengerProblem, detail?: string | null): string {
@@ -113,9 +113,17 @@ export class MessengerAccounts {
       .where(eq(messengerAccounts.accountId, accountId));
   }
 
+  /**
+   * Whether the session is really up: the gateway that runs it holds a live lease. A gateway that
+   * crashed leaves `online` behind, but its lease runs out within a minute or two.
+   */
+  static isOnline(row: MessengerAccountRow, now = new Date()): boolean {
+    return row.state === 'online' && Boolean(row.leaseExpiresAt && row.leaseExpiresAt > now);
+  }
+
   static view(row: MessengerAccountRow): SessionStatusView {
     return {
-      state: row.state,
+      state: row.state === 'online' && !MessengerAccounts.isOnline(row) ? 'connecting' : row.state,
       ...(row.problem
         ? { problem: row.problem, message: describeProblem(row.problem, row.problemMessage) }
         : {}),

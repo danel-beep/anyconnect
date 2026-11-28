@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, lte, min, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lte, min, or, sql } from 'drizzle-orm';
 import type { OutboundFile, OutboundJob, TemplateMessage } from '../connectors/messaging.js';
 import type { Db } from '../db/client.js';
 import { messengerChats, messengerOutbox, type OutboxStatus } from '../db/schema.js';
@@ -111,27 +111,46 @@ export class Outbox {
     return row;
   }
 
-  /** When the next queued job of these accounts is due (undefined: none is queued). */
+  /**
+   * When the next job of these accounts is due (undefined: none is waiting): a queued job's
+   * `notBefore`, or the end of the claim of a job whose worker may have died mid-send.
+   */
   async nextDue(accountIds: string[]): Promise<Date | undefined> {
     if (accountIds.length === 0) return undefined;
     const [row] = await this.db
-      .select({ at: min(messengerOutbox.notBefore) })
+      .select({
+        at: min(
+          sql`case when ${messengerOutbox.status} = 'queued' then ${messengerOutbox.notBefore} else ${messengerOutbox.claimExpiresAt} end`,
+        ).mapWith(messengerOutbox.notBefore),
+      })
       .from(messengerOutbox)
-      .where(and(inArray(messengerOutbox.accountId, accountIds), eq(messengerOutbox.status, 'queued')));
+      .where(
+        and(
+          inArray(messengerOutbox.accountId, accountIds),
+          inArray(messengerOutbox.status, ['queued', 'sending']),
+        ),
+      );
     return row?.at ?? undefined;
   }
 
-  /** Accounts (among `accountIds`) that have jobs due now. */
+  /**
+   * Accounts (among `accountIds`) that have jobs due now. That includes a job left `sending` by a
+   * worker that died (a crash or restart mid-send) once its claim ran out: the drain recovers it
+   * (`recoverInterrupted`) even when nothing else is queued for the account.
+   */
   async dueAccounts(accountIds: string[]): Promise<string[]> {
     if (accountIds.length === 0) return [];
+    const now = new Date();
     const rows = await this.db
       .selectDistinct({ accountId: messengerOutbox.accountId })
       .from(messengerOutbox)
       .where(
         and(
           inArray(messengerOutbox.accountId, accountIds),
-          eq(messengerOutbox.status, 'queued'),
-          lte(messengerOutbox.notBefore, new Date()),
+          or(
+            and(eq(messengerOutbox.status, 'queued'), lte(messengerOutbox.notBefore, now)),
+            and(eq(messengerOutbox.status, 'sending'), lte(messengerOutbox.claimExpiresAt, now)),
+          ),
         ),
       );
     return rows.map((r) => r.accountId);

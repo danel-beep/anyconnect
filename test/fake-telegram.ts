@@ -84,6 +84,8 @@ export interface FakeTelegramState {
     replyTo?: number;
   }[];
   read: { peer: unknown; maxId?: number }[];
+  /** Chats whose history was fetched (getHistory), in order. */
+  history: number[];
   typing: number;
   /** Set to make the login ask for the cloud password ("secret-pass"). */
   twoFactor: boolean;
@@ -103,6 +105,7 @@ export function createFakeTelegram(): FakeTelegramState {
     sent: [],
     media: [],
     read: [],
+    history: [],
     typing: 0,
     twoFactor: false,
     scan: () => {},
@@ -150,10 +153,19 @@ function fakeClient(state: FakeTelegramState, storage: StateStorage) {
     async startUpdatesLoop() {},
     async stopUpdatesLoop() {},
     async *iterDialogs() {
-      yield { peer: new User(anna), unreadCount: 2 };
-      yield { peer: new Chat(group), unreadCount: 0 };
+      yield {
+        peer: new User(anna),
+        unreadCount: 2,
+        lastMessage: fakeMessage(2, 'see you tomorrow?', { out: true }),
+      };
+      yield {
+        peer: new Chat(group),
+        unreadCount: 0,
+        lastMessage: fakeMessage(7, 'standup at 10', { group: true }),
+      };
     },
     async getHistory(peer: number) {
+      state.history.push(peer);
       if (peer === GROUP_ID) return [fakeMessage(7, 'standup at 10', { group: true })];
       return [fakeMessage(1, 'hello'), fakeMessage(2, 'see you tomorrow?', { out: true })];
     },

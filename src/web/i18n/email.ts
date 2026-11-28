@@ -42,6 +42,7 @@ export const emailEn = {
 
   'email.notice.telegramTip':
     'Link Telegram on the Confirmations page to get these as a message and approve with one tap.',
+  'email.reauth.accounts': '{accounts}',
   'email.confirm.subject': 'Your trigger waits for your OK',
   'email.confirm.body': 'A trigger wants to: {action} ({service} · {account}).',
   'email.confirm.expires':
@@ -124,6 +125,7 @@ export const emailRu: Record<EmailKey, string> = {
 
   'email.notice.telegramTip':
     'Подключите Telegram на странице подтверждений, чтобы получать это сообщением и подтверждать одной кнопкой.',
+  'email.reauth.accounts': '{accounts}',
   'email.confirm.subject': 'Триггер ждёт вашего подтверждения',
   'email.confirm.body': 'Триггер хочет: {action} ({service} · {account}).',
   'email.confirm.expires':
