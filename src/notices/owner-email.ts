@@ -20,7 +20,7 @@ export class EmailOwnerNotifier implements OwnerNotifier {
   async notify(userId: string, notice: OwnerNotice): Promise<NoticeDelivery> {
     const { mailer, db, logger } = this.deps;
     if (!mailer) return 'no_channel';
-    const content = emailOf(notice);
+    const content = emailOf(notice, this.deps.publicUrl);
     if (!content) return 'no_channel';
     const [user] = await db
       .select({ email: users.email, name: users.name, locale: users.locale, status: users.status })
@@ -43,8 +43,8 @@ export class EmailOwnerNotifier implements OwnerNotifier {
   }
 }
 
-/** The email for a notice; undefined for kinds that have their own email elsewhere. */
-export function emailOf(notice: OwnerNotice): EmailContent | undefined {
+/** The email for a notice. `publicUrl` builds links to the hub's own pages. */
+export function emailOf(notice: OwnerNotice, publicUrl = ''): EmailContent | undefined {
   switch (notice.kind) {
     case 'confirmation_waiting':
       return {
@@ -100,8 +100,25 @@ export function emailOf(notice: OwnerNotice): EmailContent | undefined {
         cta: { label: `notice.security.${notice.event}.cta`, url: notice.url },
         vars: { subject: notice.subject },
       };
-    case 'accounts_need_reauth':
-      return undefined;
+    case 'accounts_need_reauth': {
+      const [only] = notice.accounts;
+      return {
+        tag: 'notice.accounts_need_reauth',
+        subject: 'notice.reauth.title',
+        paragraphs: ['email.reauth.accounts', 'notice.reauth.why'],
+        // One account: straight to its sign-in. Several: the services page lists each with its button.
+        cta: {
+          label: 'notice.reauth.action',
+          url: notice.accounts.length === 1 && only ? only.url : `${publicUrl}/app/services`,
+        },
+        vars: {
+          n: notice.accounts.length,
+          accounts: notice.accounts
+            .map((a) => `${a.service} · ${a.account}${a.reason ? ` (${a.reason})` : ''}`)
+            .join('; '),
+        },
+      };
+    }
   }
 }
 

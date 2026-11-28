@@ -80,15 +80,24 @@ export interface TelegramDriverOptions {
   initialSync?: { chats: number; messagesPerChat: number; gapMs: number };
   /** Largest file the AI can download through the gateway. */
   maxDownloadBytes?: number;
+  /**
+   * After a downtime longer than this, recent history of the chats that changed meanwhile is
+   * loaded on connect: Telegram's catch-up (`getDifference`) gives up on long gaps ("too long")
+   * and the messages of that time would be missing otherwise.
+   */
+  catchUpAfterMs?: number;
 }
 
 const DEFAULTS = {
   watchdogMs: 4 * 60_000,
   initialSync: { chats: 40, messagesPerChat: 20, gapMs: 400 },
   maxDownloadBytes: 50 * 1024 * 1024,
+  catchUpAfterMs: 30 * 60_000,
 };
 
 const SYNCED_KEY = 'tg:synced';
+/** When the session was last seen working (ms since epoch): written on connect and by the watchdog. */
+const ALIVE_KEY = 'tg:alive';
 
 function defaultClient({
   app,
@@ -155,6 +164,7 @@ export function telegramUserDriver(options: TelegramDriverOptions): SessionDrive
   const watchdogMs = options.watchdogMs ?? DEFAULTS.watchdogMs;
   const initialSync = options.initialSync ?? DEFAULTS.initialSync;
   const maxDownloadBytes = options.maxDownloadBytes ?? DEFAULTS.maxDownloadBytes;
+  const catchUpAfterMs = options.catchUpAfterMs ?? DEFAULTS.catchUpAfterMs;
 
   const requireApp = (): TelegramApp => {
     if (options.app) return options.app;
@@ -227,12 +237,18 @@ export function telegramUserDriver(options: TelegramDriverOptions): SessionDrive
     client.onHistoryRead.add(onRead);
     session.signal.addEventListener('abort', () => void end(), { once: true });
 
+    const markAlive = () =>
+      session.state
+        .set(ALIVE_KEY, Date.now())
+        .catch((err) => logger.debug({ err }, 'could not note that the Telegram session is alive'));
+
     let failures = 0;
     watchdog = setInterval(() => {
       client
         .call({ _: 'updates.getState' })
         .then(() => {
           failures = 0;
+          void markAlive();
         })
         .catch((error) => {
           if (sessionProblem(error)) return void end(toSessionError(error));
@@ -242,9 +258,12 @@ export function telegramUserDriver(options: TelegramDriverOptions): SessionDrive
     }, watchdogMs);
     watchdog.unref();
 
+    const lastAlive = await session.state.get<number>(ALIVE_KEY).catch(() => undefined);
     await client.startUpdatesLoop();
     await storage.flush();
-    void syncChats(client, session, selfId, initialSync).catch((err) =>
+    await markAlive();
+    const since = lastAlive && Date.now() - lastAlive > catchUpAfterMs ? new Date(lastAlive) : undefined;
+    void syncChats(client, session, selfId, initialSync, since).catch((err) =>
       logger.warn({ err }, 'Telegram chat sync failed'),
     );
 
@@ -584,25 +603,49 @@ function historyMessages(messages: Message[], selfId: number, unread: number | u
   });
 }
 
-/** Loads recent chats (titles, unread counters) and, after the first login, their latest messages. */
+/**
+ * Loads recent chats (titles, unread counters) and their latest messages: all of them after the
+ * first login, and after a long downtime (`since`) those of chats with messages newer than that.
+ * The store skips messages it already has, so an overlap with Telegram's own catch-up is harmless.
+ */
 async function syncChats(
   client: TelegramClientLike,
   session: DriverSession,
   selfId: number,
   limits: { chats: number; messagesPerChat: number; gapMs: number },
+  since?: Date,
 ): Promise<void> {
   const chats: InboundChat[] = [];
+  const changed: InboundChat[] = [];
   for await (const dialog of client.iterDialogs({ limit: limits.chats })) {
     if (session.signal.aborted) return;
-    chats.push(toInboundChat(dialog.peer, { selfId, unread: dialog.unreadCount }));
+    const chat = toInboundChat(dialog.peer, { selfId, unread: dialog.unreadCount });
+    chats.push(chat);
+    const last = dialog.lastMessage?.date;
+    if (since && last && last > since) changed.push(chat);
   }
   await session.upsertChats(chats);
-  if (await session.state.get<boolean>(SYNCED_KEY)) return;
+  if (await session.state.get<boolean>(SYNCED_KEY)) {
+    if (changed.length)
+      session.logger.info({ chats: changed.length }, 'loading what Telegram missed while down');
+    await loadHistory(client, session, selfId, limits, changed);
+    return;
+  }
+  await loadHistory(client, session, selfId, limits, chats);
+  await session.state.set(SYNCED_KEY, true);
+}
+
+async function loadHistory(
+  client: TelegramClientLike,
+  session: DriverSession,
+  selfId: number,
+  limits: { messagesPerChat: number; gapMs: number },
+  chats: InboundChat[],
+): Promise<void> {
   for (const chat of chats) {
     if (session.signal.aborted) return;
     const messages = await client.getHistory(Number(chat.externalId), { limit: limits.messagesPerChat });
     await session.ingest(historyMessages(messages, selfId, chat.unread));
     await new Promise((resolve) => setTimeout(resolve, limits.gapMs));
   }
-  await session.state.set(SYNCED_KEY, true);
 }

@@ -1,7 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { accounts, workspaceMembers } from '../src/db/schema.js';
+import { emailOf } from '../src/notices/owner-email.js';
 import { renderNotice } from '../src/security/owner-notifier.js';
+import { composeEmail } from '../src/web/emails.js';
 import { translator } from '../src/web/i18n.js';
 import { resetDatabase, startTestHub, type TestHub } from './helpers.js';
 
@@ -104,6 +106,65 @@ describe('alerts about accounts that need a new sign-in', () => {
       .set({ status: 'needs_reauth', credentialsEncrypted: null })
       .where(eq(accounts.name, 'second'));
     expect(await alerts.notifyReauth()).toEqual({ notified: 0, waiting: 0 });
+  });
+
+  it('tells the owner when a messenger session they once had is logged out', async () => {
+    const { alerts, db, messaging } = hub.services;
+    // Personal Telegram keeps no credentials: only its session tells that it was connected.
+    const second = (await db.query.accounts.findFirst({ where: eq(accounts.name, 'second') }))!;
+    await db.update(accounts).set({ credentialsEncrypted: null }).where(eq(accounts.id, second.id));
+    await messaging.accounts.setState(second.id, { state: 'needs_login' });
+    expect(await alerts.notifyReauth()).toEqual({ notified: 0, waiting: 0 });
+
+    await messaging.accounts.setState(second.id, { state: 'online' });
+    await messaging.accounts.setState(second.id, {
+      state: 'stopped',
+      problem: 'logged_out',
+      message: 'Telegram: SESSION_REVOKED',
+    });
+    expect(await alerts.notifyReauth()).toEqual({ notified: 1, waiting: 0 });
+    expect(telegram.messages[0]!.text).toContain('SESSION_REVOKED');
+    expect(telegram.messages[0]!.text).toContain(`account=${second.id}`);
+  });
+
+  it('emails the notice to owners without Telegram', () => {
+    const one = emailOf(
+      {
+        kind: 'accounts_need_reauth',
+        accounts: [
+          {
+            service: 'Telegram',
+            account: 'Uliana',
+            reason: 'logged out',
+            url: 'https://x/connect/telegram?account=a',
+          },
+        ],
+      },
+      'https://x',
+    )!;
+    const mail = composeEmail({ email: 'o@example.com', name: 'Olga', locale: 'en' }, one, {
+      billingUrl: 'https://x/app/billing',
+    });
+    expect(mail.subject).toBe('An account needs you to sign in again');
+    expect(mail.text).toContain('Telegram · Uliana (logged out)');
+    expect(mail.text).toContain('Sign in again: https://x/connect/telegram?account=a');
+
+    const several = emailOf(
+      {
+        kind: 'accounts_need_reauth',
+        accounts: [
+          { service: 'Gmail', account: 'Work', reason: null, url: 'https://x/connect/gmail?account=a' },
+          { service: 'Telegram', account: 'Main', reason: null, url: 'https://x/connect/telegram?account=b' },
+        ],
+      },
+      'https://x',
+    )!;
+    const ru = composeEmail({ email: 'o@example.com', name: null, locale: 'ru' }, several, {
+      billingUrl: 'https://x/app/billing',
+    });
+    expect(ru.subject).toBe('Нужно войти заново: аккаунты перестали работать');
+    expect(ru.text).toContain('Gmail · Work; Telegram · Main');
+    expect(ru.text).toContain('https://x/app/services');
   });
 
   it('marks the account notified even when the owner has no channel', async () => {

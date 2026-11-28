@@ -51,7 +51,7 @@ export function messengerLoginRoutes() {
     const s = c.get('services');
     const { account, connector, team } = loaded;
     const row = await s.messaging.accounts.get(account.id);
-    const online = row?.state === 'online';
+    const online = Boolean(row && MessengerAccounts.isOnline(row));
     const statusView = row && !online ? MessengerAccounts.view(row) : undefined;
     // Logins need the gateway and its driver set up (Telegram's API keys); otherwise say so.
     const ready = Boolean(s.messaging.gateway) && !(await s.admin.setupGap(connector));

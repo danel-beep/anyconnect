@@ -1,5 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { InboundChat, OutboundJob, SentReceipt } from '../connectors/messaging.js';
+import {
+  DeliveryError,
+  type InboundChat,
+  type OutboundJob,
+  type SentReceipt,
+} from '../connectors/messaging.js';
 import type { ConnectorRegistry } from '../connectors/registry.js';
 import { ConnectorError } from '../connectors/sdk.js';
 import type { AccountService } from '../core/accounts.js';
@@ -32,8 +37,19 @@ export interface HostOptions {
   /** Reconnect backoff: base * 2^failures, capped, with full jitter. */
   backoffBaseMs: number;
   backoffMaxMs: number;
-  /** Consecutive failures after which the account stops until the user acts (circuit breaker). */
+  /**
+   * Consecutive failures after which the circuit opens: the account shows the problem to the user
+   * and is only tried every `circuitRetryMs` from then on, so a long outage of the messenger or
+   * the network heals by itself once it is over, without a new login.
+   */
   maxFailures: number;
+  circuitRetryMs: number;
+  /**
+   * How long a session must stay online to count as working again. One that drops sooner keeps
+   * its failure count, so a session that connects and falls over at once backs off instead of
+   * reconnecting every few seconds (which the messenger could take for abuse).
+   */
+  stableMs: number;
   loginTtlMs: number;
 }
 
@@ -44,6 +60,8 @@ export const DEFAULT_HOST_OPTIONS: HostOptions = {
   backoffBaseMs: 5_000,
   backoffMaxMs: 15 * 60_000,
   maxFailures: 8,
+  circuitRetryMs: 30 * 60_000,
+  stableMs: 2 * 60_000,
   loginTtlMs: 5 * 60_000,
 };
 
@@ -52,6 +70,10 @@ interface Running {
   token: number;
   abort: AbortController;
   live?: LiveSession;
+  /** When the session came online (for `stableMs`). */
+  onlineAt?: number;
+  /** Consecutive failures recorded before this attempt. */
+  failuresBefore: number;
   renewTimer?: NodeJS.Timeout;
   /**
    * When the last successful renewal (or the claim) was sent. The database set the expiry later
@@ -90,6 +112,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  */
 export class SessionHost implements DeliveryExecutor {
   private readonly running = new Map<string, Running>();
+  /**
+   * Whether the last session of each account deduplicated sends. Kept after the session ends: a
+   * job interrupted by the drop is judged by the transport that took it, not by the absence of one.
+   */
+  private readonly idempotent = new Map<string, boolean>();
   private scanTimer: NodeJS.Timeout | undefined;
   private stopping = false;
   private readonly options: HostOptions;
@@ -166,6 +193,7 @@ export class SessionHost implements DeliveryExecutor {
         connectorId: accounts.connectorId,
         config: accounts.config,
         state: messengerAccounts.state,
+        problem: messengerAccounts.problem,
         nextAttemptAt: messengerAccounts.nextAttemptAt,
         leaseExpiresAt: messengerAccounts.leaseExpiresAt,
       })
@@ -176,7 +204,10 @@ export class SessionHost implements DeliveryExecutor {
     return rows
       .filter((row) => {
         if (this.running.has(row.id)) return false;
-        if (row.state === 'needs_login' || row.state === 'stopped') return false;
+        if (row.state === 'needs_login') return false;
+        // Accounts stopped by an older gateway after too many failures are retried like an open
+        // circuit; the rest of the stopped ones wait for the user.
+        if (row.state === 'stopped' && row.problem !== 'failing') return false;
         if (row.nextAttemptAt && row.nextAttemptAt > now) return false;
         if (row.leaseExpiresAt && row.leaseExpiresAt > now) return false;
         const connector = this.deps.connectors.all().find((c) => c.id === row.connectorId);
@@ -228,6 +259,7 @@ export class SessionHost implements DeliveryExecutor {
       token,
       renewedAt: claimedAt,
       abort: new AbortController(),
+      failuresBefore: 0,
       done: Promise.resolve(),
     };
     this.running.set(accountId, running);
@@ -325,7 +357,15 @@ export class SessionHost implements DeliveryExecutor {
     const { accountId } = running;
     const state = this.deps.messaging.accounts;
     try {
-      await state.setState(accountId, { state: 'connecting' });
+      const before = await state.get(accountId);
+      running.failuresBefore = before?.failures ?? 0;
+      // An open circuit keeps showing its problem while it tries again.
+      await state.setState(
+        accountId,
+        before?.problem === 'failing'
+          ? { state: 'connecting', problem: 'failing', message: before.problemMessage }
+          : { state: 'connecting' },
+      );
       const { driver, session } = await this.session(running);
       const live = await driver.connect(session);
       await this.goOnline(running, live);
@@ -338,6 +378,8 @@ export class SessionHost implements DeliveryExecutor {
 
   private async goOnline(running: Running, live: LiveSession): Promise<void> {
     running.live = live;
+    running.onlineAt = Date.now();
+    this.idempotent.set(running.accountId, live.idempotentSend);
     await this.deps.messaging.accounts.setState(running.accountId, { state: 'online' });
     if (live.identity) {
       const [row] = await this.deps.db
@@ -379,19 +421,26 @@ export class SessionHost implements DeliveryExecutor {
         this.deps.logger.warn({ account: accountId, problem }, 'messenger session stopped');
         return;
       }
-      const row = await state.get(accountId);
-      const failures = (row?.failures ?? 0) + 1;
+      // A session that stayed up long enough proved the account works: count afresh.
+      const stable = running.onlineAt !== undefined && Date.now() - running.onlineAt >= this.options.stableMs;
+      const failures = (stable ? 0 : running.failuresBefore) + 1;
+      const retryAfter = error instanceof SessionError ? (error.options.retryAfterSeconds ?? 0) * 1_000 : 0;
       if (failures >= this.options.maxFailures) {
+        // Open circuit: the user sees the problem, and the account is tried again only rarely.
+        const retry = this.options.circuitRetryMs;
         await state.setState(accountId, {
-          state: 'stopped',
+          state: 'backoff',
           problem: 'failing',
           message: `${failures} failed attempts, last: ${describeProblem(problem, message)}`,
           failures,
+          nextAttemptAt: new Date(
+            Date.now() + Math.max(retryAfter, Math.round(retry * (0.75 + this.random() / 2))),
+          ),
         });
-        this.deps.logger.warn({ account: accountId, failures }, 'messenger session circuit opened');
+        if (failures === this.options.maxFailures)
+          this.deps.logger.warn({ account: accountId, failures }, 'messenger session circuit opened');
         return;
       }
-      const retryAfter = error instanceof SessionError ? (error.options.retryAfterSeconds ?? 0) * 1_000 : 0;
       const cap = Math.min(this.options.backoffMaxMs, this.options.backoffBaseMs * 2 ** (failures - 1));
       const delay = Math.max(retryAfter, Math.round(cap / 2 + this.random() * (cap / 2)));
       await state.setState(accountId, {
@@ -564,7 +613,22 @@ export class SessionHost implements DeliveryExecutor {
   }
 
   idempotentSend(accountId: string): boolean {
-    return this.running.get(accountId)?.live?.idempotentSend ?? false;
+    return this.running.get(accountId)?.live?.idempotentSend ?? this.idempotent.get(accountId) ?? false;
+  }
+
+  /**
+   * The session a job goes out through. Without one nothing was sent, so the job waits for the
+   * reconnect (a transient failure) instead of being reported as possibly sent.
+   */
+  private sender(accountId: string): LiveSession {
+    const live = this.running.get(accountId)?.live;
+    if (!live) {
+      throw new DeliveryError(
+        'transient',
+        'The session dropped before sending; the message waits for the reconnect.',
+      );
+    }
+    return live;
   }
 
   async pacing(accountId: string) {
@@ -574,12 +638,12 @@ export class SessionHost implements DeliveryExecutor {
   }
 
   async typing(accountId: string, job: OutboundJob, durationMs: number): Promise<void> {
-    const live = this.live(accountId);
+    const live = this.sender(accountId);
     if (live.typing) await live.typing(job.chat.externalId, durationMs);
     else await new Promise((resolve) => setTimeout(resolve, durationMs));
   }
 
   async deliver(accountId: string, job: OutboundJob): Promise<SentReceipt | undefined> {
-    return this.live(accountId).send(job);
+    return this.sender(accountId).send(job);
   }
 }

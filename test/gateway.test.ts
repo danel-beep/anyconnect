@@ -2,8 +2,9 @@ import type { AddressInfo } from 'node:net';
 import { serve } from '@hono/node-server';
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { DeliveryError } from '../src/connectors/messaging.js';
 import type { Principal } from '../src/core/principal.js';
-import { accounts, messengerAccounts } from '../src/db/schema.js';
+import { accounts, messengerAccounts, messengerOutbox } from '../src/db/schema.js';
 import { gatewayApi } from '../src/gateway/api.js';
 import { loadGatewayConfig } from '../src/gateway/config.js';
 import { SessionError } from '../src/gateway/drivers/types.js';
@@ -66,7 +67,14 @@ async function startGateway(instanceId: string, log: FakeLog, options: { leaseTt
       instanceId,
       leaseTtlMs: options.leaseTtlMs ?? 1_500,
       dispatchIntervalMs: 100,
-      host: { startJitterMs: 0, scanIntervalMs: 100, backoffBaseMs: 50, backoffMaxMs: 200, maxFailures: 3 },
+      host: {
+        startJitterMs: 0,
+        scanIntervalMs: 100,
+        backoffBaseMs: 50,
+        backoffMaxMs: 200,
+        maxFailures: 3,
+        circuitRetryMs: 600,
+      },
     },
   );
   await runtime.start();
@@ -258,27 +266,53 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
     leases.renew = renew;
   });
 
-  it('reconnects with backoff and opens the circuit after repeated failures', async () => {
+  it('reconnects with backoff, opens the circuit after repeated failures and heals after it', async () => {
     const account = await addLoggedInAccount();
     const connectsBefore = log.connects;
-    gatewayA.driver.failures.push(
-      new SessionError('network', 'connection reset'),
-      new SessionError('network', 'connection reset'),
+    gatewayA.driver.lives.get(account.id)!.drop(new SessionError('network', 'connection reset'));
+    // The reconnect works, but the session falls over at once: that does not count as working
+    // again, so the failures keep adding up instead of reconnecting every few seconds forever.
+    await until(
+      () => log.connects > connectsBefore && gatewayA.runtime.host.isOnline(account.id),
+      'reconnect',
     );
+    gatewayA.driver.failures.push(new SessionError('network', 'connection reset'));
     gatewayA.driver.lives.get(account.id)!.drop(new SessionError('network', 'connection reset'));
 
-    const stopped = await until(async () => {
+    const open = await until(async () => {
       const r = await row(account.id);
-      return r.state === 'stopped' ? r : undefined;
+      return r.problem === 'failing' ? r : undefined;
     }, 'circuit breaker');
-    expect(stopped).toMatchObject({ problem: 'failing', failures: 3 });
+    expect(open).toMatchObject({ state: 'backoff', failures: 3 });
     expect(log.connects).toBe(connectsBefore + 2);
+    // The user sees why in the account's status.
     const [status] = await hub.services.db.select().from(accounts).where(eq(accounts.id, account.id));
-    expect(status!.status).not.toBe('ok');
+    expect(status).toMatchObject({ status: 'error' });
+    expect(status!.statusMessage).toContain('keeps failing');
+    expect(status!.statusMessage).toContain('connection reset');
 
-    // Nothing reconnects a stopped account until the user logs in again.
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // No reconnects in the meantime, then one try after `circuitRetryMs`: the outage is over, the
+    // session comes back with its saved state, no new login needed.
+    await new Promise((resolve) => setTimeout(resolve, 250));
     expect(log.connects).toBe(connectsBefore + 2);
+    await until(async () => (await row(account.id)).state === 'online', 'online after the circuit retry');
+    expect(log.connects).toBe(connectsBefore + 3);
+    expect(await row(account.id)).toMatchObject({ failures: 0, problem: null });
+    const [healed] = await hub.services.db.select().from(accounts).where(eq(accounts.id, account.id));
+    expect(healed).toMatchObject({ status: 'active', statusMessage: null });
+  });
+
+  it('retries an account an older gateway stopped after too many failures', async () => {
+    const account = await addLoggedInAccount();
+    await gatewayA.close();
+    await hub.services.messaging.accounts.setState(account.id, {
+      state: 'stopped',
+      problem: 'failing',
+      message: '8 failed attempts',
+      failures: 8,
+    });
+    gatewayB = await startGateway('gw-b', log);
+    await until(async () => (await row(account.id)).state === 'online', 'online again');
   });
 
   it('recovers from one transient failure and stops at once on a ban', async () => {
@@ -328,5 +362,62 @@ describe('messenger gateway: one session per account, login, reconnects, deliver
       .send({ to: '+79991112233', text: 'Счёт отправлю сегодня вечером' });
     expect(again).toMatchObject({ status: 'sent', deduplicated: true });
     expect(log.sent.filter((j) => j.kind === 'message')).toHaveLength(1);
+  });
+
+  it('delivers a message left mid-send by a gateway that died, with nothing else queued', async () => {
+    const account = await addLoggedInAccount();
+    await call('fakechat_send', { to: '+79991112233', text: 'first' });
+    const chatId = (await call('fakechat_list_chats', {})).chats[0].id as string;
+    await gatewayA.close();
+
+    // The gateway crashed after claiming the job: it stays `sending` until its claim runs out.
+    const { outbox } = hub.services.messaging;
+    const { row: job } = await outbox.enqueue({
+      accountId: account.id,
+      chatId,
+      kind: 'message',
+      payload: { text: 'second' },
+    });
+    await hub.services.db
+      .update(messengerOutbox)
+      .set({
+        status: 'sending',
+        claimedBy: 'gw-a',
+        claimExpiresAt: new Date(Date.now() - 1_000),
+        attempts: 1,
+      })
+      .where(eq(messengerOutbox.id, job.id));
+
+    gatewayB = await startGateway('gw-b', log);
+    const sent = await until(async () => {
+      const r = await outbox.get(job.id);
+      return r?.status === 'sent' ? r : undefined;
+    }, 'recovered job delivered');
+    expect(sent.messageId).toBeTruthy();
+    expect(log.sent.filter((j) => j.text === 'second')).toHaveLength(1);
+  });
+
+  it('keeps a job whose session dropped before sending in the queue, not as possibly sent', async () => {
+    const account = await addLoggedInAccount();
+    const { host } = gatewayA.runtime;
+    expect(host.idempotentSend(account.id)).toBe(true);
+    // Two failed reconnects open the circuit: the account stays offline for a while.
+    gatewayA.driver.failures.push(new SessionError('network', 'down'), new SessionError('network', 'down'));
+    gatewayA.driver.lives.get(account.id)!.drop(new SessionError('network', 'connection reset'));
+    await until(() => !host.isOnline(account.id), 'session down');
+
+    const job = {
+      id: 'out_test',
+      attempt: 1,
+      kind: 'message' as const,
+      chat: { externalId: 'c', kind: 'direct' as const },
+      text: 'hi',
+    };
+    // Nothing reached the messenger: a transient failure, which the dispatcher retries.
+    const error = await host.deliver(account.id, job).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DeliveryError);
+    expect((error as DeliveryError).kind).toBe('transient');
+    // The transport of the account still deduplicates, so an interrupted job is safe to resend.
+    expect(host.idempotentSend(account.id)).toBe(true);
   });
 });

@@ -1,7 +1,7 @@
 import { and, eq, exists, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import type { ConnectorResolver } from '../connectors/registry.js';
 import type { Db } from '../db/client.js';
-import { accountOauth, accounts, workspaceMembers } from '../db/schema.js';
+import { accountOauth, accounts, messengerAccounts, workspaceMembers } from '../db/schema.js';
 import type { Logger } from '../logger.js';
 import { scrubSecrets } from '../ops/scrub.js';
 import type { OwnerNotice, OwnerNotifier } from './owner-notices.js';
@@ -52,11 +52,23 @@ export class AccountAlerts {
           eq(accounts.enabled, true),
           isNull(accounts.reauthNotifiedAt),
           // Only accounts that were connected once: one whose sign-in was never finished is not
-          // broken, the dashboard already asks to finish it.
+          // broken, the dashboard already asks to finish it. Messengers with a session (personal
+          // Telegram) keep no credentials: theirs counts once the session was online.
           or(
             isNotNull(accounts.credentialsEncrypted),
             exists(
               db.select({ one: sql`1` }).from(accountOauth).where(eq(accountOauth.accountId, accounts.id)),
+            ),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(messengerAccounts)
+                .where(
+                  and(
+                    eq(messengerAccounts.accountId, accounts.id),
+                    isNotNull(messengerAccounts.lastOnlineAt),
+                  ),
+                ),
             ),
           ),
         ),
